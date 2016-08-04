@@ -1,0 +1,121 @@
+<!DOCTYPE html><html><head><title>How to process geospatial data with Node.js and TURF</title></head><body>
+<h1>How to process geospatial data with Node.js and TURF</h1><p><a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/" target="_new">Original URL</a></p>
+<p><blockquote>In the last two years we created several map projects. When you do projects like this it&#x2019;s a common task that you have to process geospatial data before you can use it. You have to filter it,&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p>In the last two years we created <a href="http://interaktiv.morgenpost.de/laermkarte-berlin/" target="_blank" rel="external">several</a> <a href="http://interaktiv.morgenpost.de/europakarte/#5/48.415/11.294/de" target="_blank" rel="external">map</a> <a href="http://interaktiv.morgenpost.de/berlins-neue-skyline/" target="_blank" rel="external">projects</a>. When you do projects like this it&#x2019;s a common task that you have to process geospatial data before you can use it. You have to filter it, clean it up, aggregate it, analyze it, etc. There are tools like QGIS that help you to do these tasks, but for me as a web developer it was always a hassle to start this heavy UI when I just want to find and save points that are in a certain polygon for example. </p>
+<h4 id="TURF-js-to-the-rescue"><a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/#TURF-js-to-the-rescue" class="headerlink" title="TURF.js to the rescue"></a>TURF.js to the rescue</h4><p>At some point I stumbled upon <a href="http://turfjs.org" target="_blank" rel="external">TURF.js</a>. As they point out on their website TURF does &#x201C;advanced geospatial analysis for browsers and node&#x201D;. I use it a lot in my daily work and so I want to share some real world examples with you. If you are interested in using TURF in the browser there is a good <a href="https://www.mapbox.com/guides/intro-to-turf/" target="_blank" rel="external">introduction</a> you can check out. This article is about how to use TURF in combination with Node.js.</p>
+<h4 id="The-very-basics"><a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/#The-very-basics" class="headerlink" title="The very basics"></a>The very basics</h4><p>If you want to process some data with TURF you always have to convert it to GeoJSON, because TURF &#x201C;<a href="https://github.com/turfjs/turf/#data-in-turf" target="_blank" rel="external">expects the data to be standard WGS84 longitude, latitude coordinates</a>&#x201C;. Luckily TURF offers helper functions to convert all the different types (<code>LineString</code>, <code>Polygon</code>, <code>MultiPolygon</code>, and so on). In order to run the following examples you need node &gt;= 5 and these modules:</p>
+<pre><code class="language-sh">npm install turf d3-dsv --save
+</code></pre>
+
+
+<h2 id="Measure-distances"><a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/#Measure-distances" class="headerlink" title="Measure distances"></a>Measure distances</h2><p>In a recent <a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/interaktiv.morgenpost.de/berliner-zugezogenen-atlas">project</a> we started with a data set containing city names and their centers (longitude,latitude). We also wanted to show the distance of each city to Berlin so we used TURF to add these values. </p>
+<p>For this task we use the functions <code>point</code> and <code>distance</code>. The <code>point</code> function simply converts an array (longitude,latitude) to a GeoJSON representation. The <code>distance</code> function returns the distance in kilometers of the two passed points. It also takes a third parameter that can be degrees, radians, miles, or kilometers. So if you have a CSV file that contains the columns &#x201C;longitude&#x201D; and &#x201C;latitude&#x201D; and you want to add a &#x201C;distance&#x201D; column, you could do something like this:</p>
+<pre><code class="language-javascript">const Fs = require('fs');
+const Turf = require('turf');
+const D3Dsv = require('d3-dsv');
+
+// define center
+const CENTER = Turf.point([13.4, 52.52]);
+
+// read in csv 
+const csvInput = Fs.readFileSync('./cities.csv').toString();
+
+// parse csv
+const jsonData = D3Dsv.csvParse(csvInput);
+
+// add distance field for each entry
+jsonData.forEach(el =&gt; { 
+ const dataPoint = Turf.point([el.longitude, el.latitude]);
+ el.distance = Turf.distance(CENTER, dataPoint); 
+});
+
+// write csv result
+Fs.writeFile('./cities-with-distances.csv', D3Dsv.csvFormat(jsonData));
+
+// or if you need json ...
+Fs.writeFile('./cities-with-distances.json', JSON.stringify(jsonData));
+</code></pre>
+
+<h2 id="Aggregation"><a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/#Aggregation" class="headerlink" title="Aggregation"></a>Aggregation</h2><p>Let&#x2019;s say we have a data set with houses (points) and some districts (polygons). We don&#x2019;t know which house belongs to which district but we want to do some aggregation of the house data. For every district we want to calculate the minimum, maximum, sum and medium of the residents. For this we can use the <code>aggregate</code> function. The <code>aggregate</code> function takes three parameters. A feature collection of polygons, a feature collection of points and an array with definitions which type of aggregation we want to do for which field. Besides min, max, sum and median you can also calculate the average, deviation, variance and count.</p>
+<pre><code class="language-javascript">const Fs = require('fs');
+const Turf = require('turf');
+
+// read in json 
+// for this example a point needs the property "residents":
+// "properties": {
+// "residents": 23
+// }
+const houses = JSON.parse(Fs.readFileSync('./houses.geo.json')); // feature collection of points
+const districts = JSON.parse(Fs.readFileSync('./districts.geo.json')); // feature collection of polygons
+
+// define aggregations
+const inputField = 'residents';
+const aggregations = [{
+ aggregation: 'min',
+ inField: inputField,
+ outField: `${inputField}_min`
+ },{
+ aggregation: 'max',
+ inField: inputField,
+ outField: `${inputField}_max`
+ },{
+ aggregation: 'sum',
+ inField: inputField,
+ outField: `${inputField}_sum`
+ },{
+ aggregation: 'median',
+ inField: inputField,
+ outField: `${inputField}_median`
+}];
+
+const aggregated = Turf.aggregate(districts, houses, aggregations);
+
+// write aggregated result as geojson
+Fs.writeFile('./districts-aggregated.geo.json', JSON.stringify(Turf.featurecollection(aggregated)));
+</code></pre>
+<p>If you are lazy, you could also create the array with aggregations this way:</p>
+<pre><code class="language-javascript">const aggregations = ['min', 'max', 'sum', 'median']
+ .map(aggregationType =&gt; {
+ return {
+ aggregation: aggregationType,
+ inField: inputField,
+ outField: `${inputField}_${aggregationType}`
+ };
+ });
+</code></pre>
+
+<h2 id="Finding-points-in-polygons"><a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/#Finding-points-in-polygons" class="headerlink" title="Finding points in polygons"></a>Finding points in polygons</h2><p>Image you have several points of interest but you only want to look at points in a certain neighbourhood. In order to do this you can use the <code>within</code> function. This function takes a feature collection of points and a feature collection of polygons. It then returns all points that are in at least on of the passed polygons.</p>
+<pre><code class="language-javascript">const Fs = require('fs');
+const Turf = require('turf');
+
+// read in json 
+const points = JSON.parse(Fs.readFileSync('./points.geo.json')); // feature collection of points
+const neighbourhood = JSON.parse(Fs.readFileSync('./neighbourhood.geo.json')); // feature collection with one polygon
+
+const poisResult = Turf.within(points, neighbourhood);
+
+// write json
+Fs.writeFile('./points-within-neighbourhood.json', JSON.stringify(poisResult));
+</code></pre>
+
+<h2 id="What-else"><a href="http://blog.webkid.io/how-to-handle-geospatial-data-with-nodejs-and-turf/#What-else" class="headerlink" title="What else?"></a>What else?</h2><p>Be sure to check out the <a href="http://turfjs.org/static/docs" target="_blank" rel="external">TURF API docs</a>. There are lots of more things you can do with it! If you have any questions, just leave a comment below or contact me on <a href="https://twitter.com/moklick" target="_blank" rel="external">twitter</a>.</p>
+
+ </section>
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+
+ 
+
+
+
+ 
+ 
+ </div>
+</body></html>

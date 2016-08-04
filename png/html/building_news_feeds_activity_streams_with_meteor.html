@@ -1,0 +1,182 @@
+<!DOCTYPE html><html><head><title>Building news feeds & activity streams with Meteor</title></head><body>
+<h1>Building news feeds & activity streams with Meteor</h1><p><a href="http://blog.getstream.io/post/136611889848/building-news-feeds-activity-streams-with-meteor" target="_new">Original URL</a></p>
+<p><blockquote>Today we are happy to announce stream-meteor. This integration library makes it easy to build scalable newsfeeds and activity streams for your Meteor app. It&#x2019;s powered by getstream.io and&hellip;</blockquote></p>
+<div><div class="body-text">
+ <p>Today we are happy to announce <a href="http://github.com/getstream/stream-meteor">stream-meteor</a>. This integration library makes it easy to build scalable newsfeeds and activity streams for your <a href="http://www.meteor.com/">Meteor</a> app. It&#x2019;s powered by getstream.io and scales to millions of users.</p>
+
+<p>In this tutorial we will demonstrate how you can use the integration package. To keep this tutorial short and skip the boilerplate, we will use the awesome demo application <a href="https://www.meteor.com/localmarket">localmarket</a> as a starting point and use stream-meteor to build the &#x201C;What&#x2019;s cooking&#x201D; section.</p>
+
+<p><img src="http://i.imgur.com/XTb9SSg.jpg?1" alt="What's Cooking page"></p>
+
+<h3>Install</h3>
+
+<p>Lets start by installing the localmarket example app to your local machine. Run</p>
+
+<p><code>git clone git@github.com:matthisk/localmarket.git</code></p>
+
+<p>to install the example app. For the next step be sure to have <a href="https://www.meteor.com/install">Meteor installed</a> on your machine. Enter the created directory and install the integration package by running:</p>
+
+<p><code>cd localmarket</code> <br><code>meteor add getstream:stream-meteor</code></p>
+
+<h3>Settings</h3>
+
+<p>Before our Meteor backend can communicate with <a href="http://getstream.io">Stream</a> we need to set public and private keys in our settings.json. Create a file called <code>settings.json</code> in the root directory of your app and add the following code:</p>
+
+
+
+<p><a href="http://getstream.io">Stream</a>&#x2019;s free plan includes 3 million feed updates. You can login with Github and get your API key in the <a href="https://getstream.io/dashboard/">dashboard</a>.</p>
+
+<h3>Running</h3>
+
+<p>You can now run the example app by executing the command</p>
+
+<p><code>meteor run --settings settings.json</code></p>
+
+<p>from the app&#x2019;s directory. Notice that we need to supply the settings file explicitely to the meteor command. If you forget to specify the settings file API calls to Stream will fail.</p>
+
+<p>You can now open <a href="http://localhost:3000/" target="_blank"><code>http://localhost:3000</code></a> in your browser to have a look at the example app without the getstream.io integration. You will be able to authenticate using your Twitter account, bookmark recipes and add a photo of recipes you cooked. For the remainder of this post we will focus on the <code>What's Cooking</code> page which is the news feed page of the localmarket app.</p>
+
+<p>
+<img src="http://i.imgur.com/Sj2kuAw.jpg" alt="Localmarket homepage"></p>
+
+<h3>Following feeds</h3>
+
+<p>Real apps have many users, each following other users or topics. In this tutorial we don&#x2019;t have real users to follow so in order to see some activity on the &#x201C;What&#x2019;s cooking&#x201D; feed we will cheat a little and follow ourselves. This ensures that activities performed by the user show up on his own &#x201C;What&#x2019;s cooking&#x201D; feeds.</p>
+
+<p>To do this we have to call followUser on the feedManager after we have created a new user. Luckily the localmarket app already includes a hook that is executed after a user is created. Open up the file &#x2018;users.js&#x2019; and add the following lines to the method:</p>
+
+
+
+<p><em>remark</em>: In a real application the &#x201C;What&#x2019;s cooking&#x201D; feed would display the content from followed users.</p>
+
+<p>Be sure to create a new account if you already created an account for your localmarket app, otherwise the <em>What&#x2019;s Cooking</em> page will not display any activities.</p>
+
+<h3>Adding entries to the feed</h3>
+
+<p>Feeds contain activities. Activities are Stream&#x2019;s main type of data and follow the <a href="http://activitystrea.ms/specs/json/1.0/">activities specification</a>. An example activity on localmarket is &#x201C;Matt bookmarked the recipe &#x2018;Classic Ragu Bolognese&#x2019;&#x201D; or &#x201C;Eric shared the recipe 'Lasagne&#x2019;&#x201D;. We will explain more about this later on.</p>
+
+<p>There are two different types of activity in the localmarket app: Shares and Bookmarks. Whenever a bookmark is created or recipe is shared, our application will convert that into an activity and send it to Stream&#x2019;s APIs.</p>
+
+<h3>Activity collections</h3>
+
+<p>Let&#x2019;s start by implementing shares in the &#x201C;What&#x2019;s cooking feed&#x201D;. The localmarket example app already contains a Collection which stores shares. The integration package allows us to hook into Collections so that any document added to it is converted to an activity and send to Stream&#x2019;s API. To do this we call the method registerActivity on the Stream object, add the following code to 'activities.js&#x2019; after the Activities collection has been defined:</p>
+
+
+
+<p>To be able to send valid activities to the API we need to inform the hook of which fields/values to use for the required activity properties. We set the activities <em>verb</em> to 'cook&#x2019; and retrieve the <em>actor</em> from the 'userId&#x2019; property on the inserted document. <em>object</em> is in this case the serialized document we have inserted into our collection.</p>
+
+<p>You can now create an account for you localmarket app by linking it to Twitter. Try adding a picture to a recipe and see if the activity automatically shows up in Stream&#x2019;s <a href="http://getstream.io/dashboard/">databrowser</a>.</p>
+
+<h3>Manually adding activities</h3>
+
+<p>In the file <code>bookmarks.js</code> you will find a Meteor method <code>bookmarkRecipe</code> this method is called when a user clicks the bookmark icon on a recipe page. We do not have to alter the way the app stores the bookmark on the user&#x2019;s document we just have to add couple of lines to the end of the method to register an activity with Stream:</p>
+
+
+
+<p>The integration package exposes all its methods on the <code>Stream</code> object, one of the properties is an instance of the <code>FeedManager</code> named <code>feedManager</code>. The FeedManager exposes methods to retrieve the different news feeds from our current user. In this case we want to add an activity to the current users&#x2019; user feed.</p>
+
+<p>Activities registered should have atleast the following fields to be valid: <em>actor</em>, <em>object</em> and <em>verb</em>. Here we set <em>actor</em> to a document reference of the current user&#x2019;s user document (i.e. the name of the collection colon the id of the document). The <em>verb</em> of the action is 'bookmark&#x2019; and the object is the name of the recipe.</p>
+
+<p>At this point any documents added to the Activities collection and any bookmark created through the <code>createBookmark</code> method are added to the user feed. The next step is to define a way of retrieving the activities from getstream.io and showing them to the user on the 'What&#x2019;s cooking&#x2019; page.</p>
+
+<h3>Feed subscriptions</h3>
+
+<p>Feed activities are exposed through a publication in the 'Stream.feeds&#x2019; namespace. When we subscribe to this publication we receive the feed&#x2019;s last 20 activities and receive reactive updates on any new activities added to the feed. Lets have a look at how to set this up for the localmarket example app.</p>
+
+<p>In the file <code>router.js</code> there is already a variable called <code>feedSubscription</code>, we are going to update this subscription to point to <code>'Stream.feeds.flat'</code>:</p>
+
+
+
+<p>This will retrieve the last 20 activities registered with the user&#x2019;s flat feed. To actually show the activities on the &#x201C;What&#x2019;s cooking&#x201D; page we have to retrieve them from a different collection in 'whats-cooking.js&#x2019;:</p>
+
+
+
+<p>A subscription to a Stream feed stores its results in a collection on <code>Stream.feeds</code> with the name of the feed group you subscribed to.</p>
+
+<h3>Templates</h3>
+
+<p>To display the feed activities correctly we have to make a few changes to the existing templates and add one new template to display bookmarks inside the news feed.</p>
+
+<p>The feed will contain two different type of activities, 'bookmark&#x2019; and 'cook&#x2019;, we should update the 'activity&#x2019; template to be able to render both activities, change the template in 'activity.html&#x2019;:</p>
+
+
+
+<p>The <code>equals</code> method is not available by default in Handlebars so add it to &#x201C;helpers.js&#x201D;:</p>
+
+
+
+<p>The bookmark template does not exist yet, so we should add it to the 'activity.html&#x2019; file:</p>
+
+
+
+<p>The cook template is now our old 'activity&#x2019; template, add the following code to 'activity.html&#x2019;:</p>
+
+
+
+<p>And add the following template helpers for the 'bookmark&#x2019; template to 'activity.js&#x2019;:</p>
+
+
+
+<p>Since we renamed the 'activity&#x2019; template to 'cook&#x2019; we also need to replace the helpers associated to the 'activity&#x2019; template in 'activity.js&#x2019;. Replace the helpers associated to this template with the following code:</p>
+
+
+
+<p>Now any activities added on your account in the app should show up on the &#x201C;What&#x2019;s cooking&#x201D; page.</p>
+
+<p>
+<img src="http://i.imgur.com/q5ec6DP.jpg" alt="What's Cooking page"></p>
+
+<h3>Home page</h3>
+
+<p>As a bonus you can also show the last 3 activities of the user&#x2019;s flat feed on the homepage. First add the feed subscription to the page&#x2019;s router in <code>router.js</code> by replacing the <em>HomeController</em> with the following code:</p>
+
+
+
+<p>Then replace the <code>activities</code> method in 'home.js&#x2019; to retrieve items from the flat feed Collection:</p>
+
+
+
+<p>Now the last three activities will display on the home page.</p>
+
+<p>
+<img src="http://i.imgur.com/tgvFrFC.jpg" alt="Homepage"></p>
+
+<h3>Conclusion</h3>
+
+<p>Meteor is an amazing framework and I hope you enjoyed this tutorial on how to integrate Meteor with <a href="http://getstream.io">Stream</a>. Using getstream.io you can build, scale and personalize your newsfeeds and activity streams.</p>
+
+<p>This example still misses a few features. For one, there is no way to follow other users. Also we didn&#x2019;t add a notification feed. We&#x2019;ll leave that to you as an exercise.</p>
+
+<p>Be sure to read the full documentation on the <a href="https://github.com/getstream/stream-meteor">github page</a>. And have a look at the <a href="https://github.com/GetStream/Stream-Example-Meteor">Pinterest example app build with stream-meteor</a>, which does implement all of these features.</p>
+
+<p>If this is your first time using getstream.io you might also want to try this <a href="http://getstream.io/get_started/">quick 5m tutorial</a>.</p>
+ </div>
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+
+ 
+
+
+ 
+
+
+ 
+
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ </div>
+</body></html>

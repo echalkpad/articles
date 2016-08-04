@@ -1,0 +1,135 @@
+<!DOCTYPE html><html><head><title>Using the OS X 10.10 Hypervisor Framework: A Simple DOS Emulator</title></head><body>
+<h1>Using the OS X 10.10 Hypervisor Framework: A Simple DOS Emulator</h1><p><a href="http://www.pagetable.com/?p=764" target="_new">Original URL</a></p>
+<p><blockquote>Since Version 10.10 (Yosemite), OS X contains Hypervisor.framework, which provides a thin user mode abstraction of the Intel VT features. It enables apps to use virtualization without the need of a&hellip;</blockquote></p>
+<div><div class="entry-content">
+			<p>Since Version 10.10 (Yosemite), OS X contains <a href="https://developer.apple.com/library/mac/releasenotes/MacOSX/WhatsNewInOSX/Articles/MacOSX10_10.html">Hypervisor.framework</a>, which provides a thin user mode abstraction of the Intel VT features. It enables apps to use virtualization without the need of a kernel extension (KEXT) &#x2013; which makes them compatible with the <a href="https://developer.apple.com/app-store/review/guidelines/mac/">OS X App Store guidelines</a>.</p>
+<p>The idea is that the OS takes care of memory management (including nested paging) as well as scheduling virtual CPUs like normal threads. All we have to do is create a virtual CPU (or more!), set up all its state, assign it some memory, and run it&#x2026; and then handle all &#x201C;VM exits&#x201D; &#x2013; Intel lingo for hypervisor traps.</p>
+<p>There is no real documentation, but the headers contain a decent amount of information. Here are some declarations from <tt>Hypervisor/hv.h</tt>:</p>
+
+<p class="p1"><span class="s1">/*!</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@function</span><span class="s1"> hv_vm_create</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@abstract</span><span class="s1"> Creates a VM instance for the current task</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">flagsRESERVED</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@result</span><span class="s1"> 0 on success or error code</span></p>
+
+<p class="p2"><span class="s3">extern</span><span class="s1"> hv_return_t hv_vm_create(hv_vm_options_t flags) __HV_10_10;</span></p>
+
+<p class="p1"><span class="s1">/*!</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@function</span><span class="s1"> hv_vm_map</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@abstract</span><span class="s1"> Maps a region in the virtual address space of the current task</span></p>
+<p class="p1"><span class="s1">* into the guest physical address space of the VM</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">uvaPage aligned virtual address in the current task</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">gpaPage aligned address in the guest physical address space</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">size Size in bytes of the region to be mapped</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">flagsREAD, WRITE and EXECUTE permissions of the region</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@result</span><span class="s1"> 0 on success or error code</span></p>
+
+<p class="p2"><span class="s3">extern</span><span class="s1"> hv_return_t hv_vm_map(hv_uvaddr_t uva, hv_gpaddr_t gpa, size_t size,</span></p>
+<p class="p2"><span class="s1">hv_memory_flags_t flags) __HV_10_10;</span></p>
+
+<p class="p1"><span class="s1">/*!</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@function</span><span class="s1"> hv_vcpu_create</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@abstract</span><span class="s1"> Creates a vCPU instance for the current thread</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">vcpu Pointer to the vCPU ID (written on success)</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">flagsRESERVED</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@result</span><span class="s1"> 0 on success or error code</span></p>
+
+<p class="p2"><span class="s3">extern</span><span class="s1"> hv_return_t hv_vcpu_create(hv_vcpuid_t *vcpu,</span></p>
+<p class="p2"><span class="s1">hv_vcpu_options_t flags) __HV_10_10;</span></p>
+
+<p class="p1"><span class="s1">/*!</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@function</span><span class="s1"> hv_vcpu_run</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@abstract</span><span class="s1"> Executes a vCPU</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@param</span><span class="s1">vcpuvCPU ID</span></p>
+<p class="p1"><span class="s1">* </span><span class="s2">@result</span><span class="s1"> 0 on success or error code</span></p>
+<p class="p4"><span class="s4">* </span><span class="s1">@discussion</span></p>
+<p class="p1"><span class="s1">* Call blocks until the next VMEXIT of the vCPU</span></p>
+
+<p class="p1"><span class="s1">* Must be called by the owning thread</span></p>
+
+<p class="p2"><span class="s3">extern</span><span class="s1"> hv_return_t hv_vcpu_run(hv_vcpuid_t vcpu) __HV_10_10;</span></p>
+<p>So let&#x2019;s create a virtual machine that runs simple DOS applications in 16 bit real mode, and trap all &#x201C;<tt>int</tt>&#x201D; DOS system calls &#x2013; similar to <a href="http://www.dosbox.com">DOSBox</a>.</p>
+<p>First, we need to create a VM:</p>
+<pre>hv_vm_create(HV_VM_DEFAULT);</pre>
+<p>This creates a VM for the current Mach task (i.e. UNIX process). It&#x2019;s implicit, so it doesn&#x2019;t return anything. Then we allocate some memory and assign it to the VM:</p>
+<pre>#define VM_MEM_SIZE (1 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1024 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1024)
+void *vm_mem = valloc(VM_MEM_SIZE);
+hv_vm_map(vm_mem, 0, VM_MEM_SIZE, HV_MEMORY_READ | 
+ HV_MEMORY_WRITE | 
+ HV_MEMORY_EXEC);</pre>
+<p>And we need to create a virtual CPU:</p>
+<pre>hv_vcpuid_t vcpu;
+hv_vcpu_create(&amp;vcpu, HV_VCPU_DEFAULT);</pre>
+<p>Now comes the annoying part: Set up the CPU state. If the state is illegal or inconsistent, the CPU will refuse to run. You will need to refer to the <a href="http://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-3c-part-3-manual.pdf">Intel Manual 3C</a> for all the context. Luckily, most virtual machines start from 16 bit real mode, and mode changes will be done by the boot loader or operating system inside the VM, so you won&#x2019;t have to worry about setting up any other state than real mode state. Real mode state setup looks something like this:</p>
+<pre>
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_CS_SELECTOR, 0);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_CS_LIMIT, 0xffff);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_CS_ACCESS_RIGHTS, 0x9b);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_CS_BASE, 0);
+
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_DS_SELECTOR, 0);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_DS_LIMIT, 0xffff);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_DS_ACCESS_RIGHTS, 0x93);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_DS_BASE, 0);
+
+[...]
+
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_CR0, 0x20);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_CR3, 0x0);
+hv_vmx_vcpu_write_vmcs(vcpu, VMCS_GUEST_CR4, 0x2000);
+</pre>
+<p>After that, we should populate RAM with the code we want to execute:</p>
+<pre>
+FILE *f = fopen(argv[1], "r");
+fread((char *)vm_mem + 0x100, 1, 64 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1024, f);
+fclose(f);
+</pre>
+<p>&#x2026;and assign the GPRs the proper initial state &#x2013; including the instruction pointer, which will point to the code:</p>
+<pre>
+hv_vcpu_write_register(vcpu, HV_X86_RIP, 0x100);
+hv_vcpu_write_register(vcpu, HV_X86_RFLAGS, 0x2);
+hv_vcpu_write_register(vcpu, HV_X86_RSP, 0x0);
+</pre>
+<p>The virtual CPU is fully set up, we can now run it!</p>
+<pre>
+hv_vcpu_run(vcpu);
+</pre>
+<p>This call runs the virtual CPU (while blocking the calling thread) until its time slice expires or a &#x201C;VM exit&#x201D; happens. A VM exit is a hypervisor-class exception, i.e. an event in the VM that the hypervisor wants to trap. We can trap events like exceptions, certain privileged instructions (<tt>CPUID</tt>, <tt>HLT</tt>, <tt>RDTSC</tt>, <tt>RDMSR</tt>, &#x2026;) and control register (<a href="http://www.pagetable.com/?p=364">CR0, CR2, CR3, CR4, &#x2026;</a>) accesses.</p>
+<p>After <tt>hv_vcpu_run()</tt> returns, we need to read the exit reason and act upon it, and run the virtual CPU again. Here is a minimal loop to handle VM exits:</p>
+<pre>
+for (;;) {
+	hv_vcpu_run(vcpu);
+
+	uint64_t exit_reason = hv_vmx_vcpu_read_vmcs(vcpu, VMCS_EXIT_REASON);
+
+	switch (exit_reason) {
+		case EXIT_REASON_EXCEPTION:
+			[...]
+			break;
+		case EXIT_REASON_EXT_INTR:
+		case EXIT_REASON_EPT_FAULT:
+			break;
+		default:
+			exit(1);
+	}
+}
+</pre>
+<p><tt>EXIT_REASON_EXT_INTR</tt> is caused by host interrupts (usually it means that the time slice is up), so we will just ignore it. <tt>EXIT_REASON_EPT_FAULT</tt> happens every time the guest accesses a page for the first time, or when the guest accesses an unmapped page &#x2013; this way we can emulate MMIO. In our case, we can also ignore those.</p>
+<p>For emulating DOS, we are catching <tt>EXIT_REASON_EXCEPTION</tt>, which is caused by the <tt>int</tt> instruction (if caught). We can get the number of the interrupt from the virtual CPU state without decoding instructions:</p>
+<pre>
+uint8_t interrupt_number = hv_vmx_vcpu_read_vmcs(vcpu, VMCS_IDT_VECTORING_INFO) &amp; 0xFF;
+</pre>
+<p>&#x2026;and emulate the system call. We can read and write GPRs using the <tt>hv_vcpu_read_register()</tt> and <tt>hv_vcpu_write_register()</tt> calls.</p>
+<h2>hvdos &#x2013; a simple DOS Emulator for OS X</h2>
+<p>The full source of <i>hvdos</i>, a simple DOS emulator using the OS X Hypervisor framework, is available at <a href="https://github.com/mist64/hvdos">github.com/mist64/hvdos</a>.</p>
+<p>It contains an adapted version of the <a href="https://github.com/libcpu/libcpu">libcpu</a> DOS system call library and manages to run (parts of) some <tt>.COM</tt> files. A good demo is the <a href="https://github.com/libcpu/libcpu/blob/2fa4a9574a3320bd3953d1b238c36f55090405fb/test/bin/x86/pkunzjr.com?raw=true">pkunzjr.com</a> ZIP decompression tool.</p>
+<h2>Creating your own Hypervisor</h2>
+<p><i>hvdos</i> can serve as a template for your own Hypervisor.framework experiments. It contains wrapper functions for error handling, a header that defines all Intel VT constants (taken from FreeBSD), complete 16 bit real mode initialization, as well as a few helper functions to set up the fields <tt>VMCS_PIN_BASED_CTLS</tt>, <tt>VMCS_PRI_PROC_BASED_CTLS</tt>, <tt>VMCS_SEC_PROC_BASED_CTLS</tt> and <tt>VMCS_ENTRY_CTLS</tt> properly. These are needed to define, among other things, which events cause VM exits.</p>
+<p>You can easily add more CPUs by creating one POSIX thread per virtual CPU. For every thread, you create a virtual CPU and run a VM exit main loop.</p>
+<p>You can for example start writing an IBM PC emulator by running <a href="http://bochs.sourceforge.net/doc/docbook/user/rom-images.html">Bochs BIOS</a> and trapping I/O accesses, or running MS-DOS without BIOS by trapping BIOS <tt>int</tt> calls.</p>
+<p>Or you could bridge an existing open source solution (QEMU, QEMU+KVM, VirtualBox, DOSBox, &#x2026;) to use Hypervisor.framework&#x2026;</p>
+					</div>
+		
+		
+	</div>
+</body></html>

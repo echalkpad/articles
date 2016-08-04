@@ -1,0 +1,888 @@
+<!DOCTYPE html><html><head><title>Hey Kids! Grow giant open source IoT controllers in your own basement!</title></head><body>
+<h1>Hey Kids! Grow giant open source IoT controllers in your own basement!</h1><p><a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html" target="_new">Original URL</a></p>
+<p><blockquote>Introduction This is an open source project to connect a high durability yet inexpensive 8 opto-isolated input / 8 relay output WiFi and Ethernet enabled controller via an encrypted websocket&hellip;</blockquote></p>
+<div><div class="post-content">
+ 
+
+<h3 id="introduction">Introduction</h3>
+<p>This is an open source project to connect a high durability yet inexpensive 8 opto-isolated input / 8 relay output WiFi and Ethernet enabled controller via an encrypted websocket connection to the Internet. The configuration features an extremely low latency command and control architecture using Nginx or Redis based pub-sub. The result is a high quality yet extremely low cost solution with a huge number of IoT applications such as: simple on/off control, one-shot activation of devices like garage doors, state monitoring, Internet home thermostat, burglar alarm, and sprinkler system control to name only a few. The goal is to create an open source ecosystem of inexpensive commodity hardware and application software for a wide range of IoT command and control applications.</p>
+
+
+
+<p><strong>Physical Inspection</strong></p>
+
+<p>The device used in this project is available from <a href="http://www.aliexpress.com/item/Free-shipping-KR-0808WIFI-S5A-wifi-version-8-into-8-out-of-relay-module/1945279388.html" target="_blank">AliExpress</a> for approximately $57 at the time of this writing. It comes with no useful documentation and its factory configuration is of limited value. There is no model number, so I decided to call it the A140808 which encodes the fact that it was the first project device (A) that I bought in 2014 and it has 08 inputs and 08 outputs.</p>
+
+
+<table>
+<tr><td><img width="500px" src="http://www.rest-switch.com/images/f1_enclosure.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 1: The A140808 Device Enclosure with WiFi Antenna</td></tr>
+</table>
+
+
+<p>Upon examination of the outside of the device, the first clues that the device is built for industrial automation emerge. The first thing to note is that it supports a wide range of voltages from 7v to 28v (Figure 1) which is common for industrial automation equipment. Notice it does not specify AC or DC (examination of the buck converter later on shows that it is DC only).</p>
+
+<p>The back of the enclosure (Figure 2) reveals more signs of its industrial automation purpose with the EN 50022 DIN mounting hardware.</p>
+
+
+<table>
+<tr><td><img width="450px" src="http://www.rest-switch.com/images/f2_din.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 2: The A140808 DIN Mounting Clips</td></tr>
+</table>
+
+
+
+<p><strong>Teardown</strong></p>
+
+<p>Removing the cover of the A140808 reveals two major components (Figure 3). The first is the main IO board sporting an <a href="http://www.atmel.com/Images/Atmel-8155-8-bit-Microcontroller-AVR-ATmega32A_Datasheet.pdf" target="_blank">Atmel ATmega32A</a> microcontroller (Figure 4). The ATmega32A is used to monitor the 8 opto-isolated inputs and to control the 8 relay outputs. The second major component is the <a href="http://www.hlktech.net/product_detail.php?ProId=39" target="_blank">Hi-Link HLK-RM04</a> Ethernet/WiFi/Serial module which runs embedded Linux (Figure 3, Figure 5). The microcontroller for the HLK-RM04 is a Ralink RT5350 SOC clocked at 360MHz. Ralink was purchased by MediaTek in 2011 and documentation for the SOC became very difficult to find for some reason. Fortunately, Jiapeng Li has created <a href="https://github.com/JiapengLi" target="_blank">OpenWRT support</a> for the HLK-RM04 module we will lean on later in the article.</p>
+
+
+<table>
+<tr><td><img width="600px" src="http://www.rest-switch.com/images/f3_comp.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 3: Components of the A140808</td></tr>
+</table>
+
+
+<p>Removing the socketed HLK-RM04 reveals the Atmel ATmega32A microcontroller (Figure 4). Note that the microcontroller also has a six pin ICSP programming header for our convenience. Unfortunately the header pinout is NOT AVR-ICSP compatible, so we will be building a custom wiring harness later on. It is also worth noting that the ATmega32A is very similar to the ATmega328P used on the Arduino UNO and the ATmega32U4 used on the Arduino Leonardo. We will be using the Arduino SDK to program this chip later on.</p>
+
+
+<table>
+<tr><td><img width="650px" src="http://www.rest-switch.com/images/f4_prog.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 4: Atmel ATmega32A and Six Pin Programming Header</td></tr>
+</table>
+
+
+<p>Looking at what all is included in this commercial quality device with WiFi, Ethernet, Ralink RT5350 SOC, Atmel ATmega32A, 8 opto-isolated inputs, 8 relay outputs, screw terminal connectors, DIN mounts, and a wide input voltage range of 7-28VDC, the A140808 is an incredible platform for open source IoT projects. Let&#x2019;s get started converting this humble serial wifi relay into a full-fledged SSL websocket client of an Amazon Web Service based pub-sub service!</p>
+
+
+
+<h3 id="getting-started">Getting Started</h3>
+
+
+
+<p><br><strong>Linux Build Environment</strong></p>
+
+<p>The makefiles and shell scripts for this project are written for Linux. If you are not already setup to use Linux, the easiest way to do so is to either use <a href="https://www.virtualbox.org" target="_blank">VirtualBox</a> with <a href="https://www.vagrantup.com" target="_blank">Vagrant</a> or use the <a href="https://aws.amazon.com/free" target="_blank">Amazon AWS Free Tier</a> to build this project. Linux distributions such as Debian, Ubuntu, RedHat, CentOS, and Amazon Linux are all excellent choices and each are similarly easy to use for this project. It is beyond the scope of this document to provide information on setting up or using Linux. If you are unfamiliar with Linux, it is best to get a friend to help you out or read one of the <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html" target="_blank">excellent tutorials</a> found online.</p>
+
+
+
+<p>Ubuntu Trusty 14.04 requires the following prerequisites:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>sudo apt-get update <span class="o">&amp;&amp;</span> sudo apt-get upgrade
+<span class="nv">$ </span>sudo apt-get install make gcc g++ libncurses5-dev zlib1g-dev unzip pv git subversion docker
+<span class="nv">$ </span>sudo usermod -G docker <span class="nv">$USER</span>
+<span class="nv">$ </span>newgrp docker</code></pre></div>
+
+<p>Amazon Linux requires the following prerequisites:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>sudo yum update
+<span class="nv">$ </span>sudo yum install gcc gcc-c++ ncurses-devel zlib-devel pv patch perl<span class="se">\(</span>Data::Dumper<span class="se">\)</span> git subversion docker
+<span class="nv">$ </span>sudo usermod -G docker <span class="nv">$USER</span>
+<span class="nv">$ </span>newgrp docker</code></pre></div>
+
+<p><strong>Known Issues</strong></p>
+
+<ul>
+ <li>Ubuntu Wily Werewolf 15.10 is known to have issues building the forked version of OpenWRT used in this project. Use version 15.04 or another version of Linux.</li>
+</ul>
+
+
+
+<h3 id="security-first">Security First</h3>
+
+<p>Comprehensive security is a primary concern of IoT applications. This project utilizes well established RSA asymmetric encryption deployed with high strength 4096 bit keys. Additionally, the signed URL design combines HMAC hashing using the high security SHA256 algorithm (HMAC-SHA256) and are narrowly limited in time. In the near future, the signed URL implementation will also add adaptive complexity and salting similar to that which is found in the <a href="https://en.wikipedia.org/wiki/Bcrypt" target="_blank">bcrypt</a> key derivation function implementation.</p>
+
+<p>The first step is to generate a self-signed Certificate Authority (CA) which will be built into the A140808 client device, smart phone client devices, as well as the server. This approach allows us to sign our own certificates and establish a tight client-server security contract extremely resistant to <a href="https://en.wikipedia.org/wiki/Man-in-the-middle_attack" target="_blank">man-in-the-middle-attacks</a>. Not only is this approach free, if properly deployed, it can be more secure than using a 3rd party CA that is susceptible to <a href="https://en.wikipedia.org/wiki/DigiNotar" target="_blank">hacking</a> or <a href="https://googleonlinesecurity.blogspot.com/2015/03/maintaining-digital-certificate-security.html" target="_blank">improper management</a>, or <a href="http://www.pcworld.com/article/249510/trustwave_admits_issuing_maninthemiddle_digital_certificate_mozilla_debates_punishment.html" target="_blank">poor judgment</a>. However, it is important to note that the certificate strategy does not preclude the use of certificates signed by well-known CAs.</p>
+
+
+
+<p><strong>Generate the Certificate Authority</strong></p>
+
+<p>If you are comfortable generating your own self-signed CA and a certificate signed by this CA, do so now. Alternatively, you can use the two helper scripts gen_ca.sh and gen_cert.sh to simplify this process. Begin by downloading the scripts to a Linux machine:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>wget -O certs.tar.gz https://github.com/rest-switch/stuff/archive/master.tar.gz
+<span class="nv">$ </span>tar xzvf certs.tar.gz
+<span class="nv">$ </span><span class="nb">cd </span>stuff-master/certs</code></pre></div>
+
+<p>Generate the self-signed CA by specifying the CA organization name. The script will default to a key length setting of 4096 bits and a 10 year expiration. Use the &#x2013;help command line switch to view the syntax for overriding these default options.</p>
+
+
+
+<p>When the script completes, it will emit the name of the public and private CA keys that were generated. This CA will be used to sign the certificate in the next step.</p>
+
+<div class="highlight"><pre><code class="language-sh">--&gt; generated ca public cert: acme-co_ca_public.cer
+--&gt; generated ca private key: acme-co_ca_private</code></pre></div>
+
+
+
+<p><br><strong>Generate and Sign the Certificate</strong></p>
+
+<p>The certificate that will be used to encrypt the websocket and https traffic to the web server requires specific information. It is not necessary to generate the certificate public / private key pair at this time, but if the web server domain name(s) are known, it is a convenient time to do so now using the gen_cert.sh script.</p>
+
+<p>For example, to connect to the server using example.com, ws.example.com, and www.example.com, use the following syntax (see the &#x2013;help command line switch to view all of the command line options):</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>./gen_cert.sh -o <span class="s2">"Acme Co"</span> -d example.com -a <span class="s2">"example.com ws.example.com www.example.com"</span> -c <span class="s2">"San Diego"</span> -s CA -u acme-co_ca_public.cer -v acme-co_ca_private</code></pre></div>
+
+<p>When the script completes, it will emit the name of the public and private keys that were generated. For convenience, the script also emits a combined public certificate / CA chain file suitable for use with Nginx:</p>
+
+<div class="highlight"><pre><code class="language-sh">--&gt; generated cert public cert: acme-co_cert_public.cer
+--&gt; generated cert public cert chain: acme-co_cert_chain_public.cer
+--&gt; generated cert private key: acme-co_cert_private</code></pre></div>
+
+<p>The certificates needed for the entire project are now generated. It is easy to come back and generate new certificates as needed. It should also be noted that the A140808 device is setup to use multiple CAs and more than one can be generated at this point if so desired.</p>
+
+<p>In the next step, the A140808 device image will be built and the public CA file(s) generated in this step will become part of the device firmware image itself. The details are provided in the next section, but for reference the firmware root CA staging directory is:</p>
+
+<div class="highlight"><pre><code class="language-sh">device_a140808-master/hlk-rm04/ca_certs</code></pre></div>
+
+
+
+<p><br><strong>Certificate Review</strong></p>
+
+<p>In summary, the following certificate files and their use are as follows:</p>
+
+<blockquote>
+ <p><code>--&gt; generated ca public cert: acme-co_ca_public.cer</code></p>
+
+ <p>The public certificate for the CA. This is used to validate the identity of subordinate certificates in the trust chain. In the case of this project both the A140808 device and the web server need to have access to a genuine copy of this certificate file.</p>
+</blockquote>
+
+<blockquote>
+ <p><code>--&gt; generated ca private key: acme-co_ca_private</code></p>
+
+ <p>The private certificate for the CA. This certificate is only used to sign certificate signing requests (CSRs). The privacy of this key is paramount to the integrity of the entire certificate trust chain and should be securely stored <a href="https://www.thawte.com/code-signing/whitepaper/best-practices-for-code-signing-certificates.pdf" target="_blank">using best practices</a>.</p>
+</blockquote>
+
+<blockquote>
+ <p><code>--&gt; generated cert public cert: acme-co_cert_public.cer</code></p>
+
+ <p>This is the main public certificate is used to encrypt data between the client and the server. Clients need to trust the CA that signed this certificate or trust the certificate itself if it is a self-signed certificate.</p>
+</blockquote>
+
+<blockquote>
+ <p><code>--&gt; generated cert public cert chain: acme-co_cert_chain_public.cer</code></p>
+
+ <p>This file is a combination of the public certificate and the public root CA certificates suitable for loading in Nginx. The point of this file is to be able to supply the non-well-known public certificate trust chain to clients at connect time.</p>
+</blockquote>
+
+<blockquote>
+ <p><code>--&gt; generated cert private key: acme-co_cert_private</code></p>
+
+ <p>The private certificate key for decrypting SSL communication at the server. This file must be present and kept secret on the web server.</p>
+</blockquote>
+
+<p>Make a note of where these files are located as they will be used in the next steps to build the A140808 firmware and will be deployed with the Nginx web server Docker container.</p>
+
+
+
+<h3 id="building-the-firmware">Building the Firmware</h3>
+
+
+
+<p><br><strong>Project Repository</strong></p>
+
+<p>Download the A140808 github repository and extract it:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>wget -O device_a140808.tar.gz https://github.com/rest-switch/device_a140808/archive/master.tar.gz
+<span class="nv">$ </span>tar xzvf device_a140808.tar.gz
+<span class="nv">$ </span><span class="nb">cd </span>device_a140808-master</code></pre></div>
+
+<p>The repository contains two subdirectories. The avr directory contains the complete project for building the firmware for the Atmel ATmega32A. Likewise, the hlk-rm04 directory contains the complete project for building the firmware for the Hi-Link HLK-RM04 module.</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>device_a140808-master<span class="o">]</span><span class="nv">$ </span>ls -al
+drwxrwxr-x <span class="m">3</span> ec2-user ec2-user <span class="m">4096</span> Oct <span class="m">8</span> 14:26 avr
+drwxrwxr-x <span class="m">5</span> ec2-user ec2-user <span class="m">4096</span> Oct <span class="m">8</span> 14:26 hlk-rm04
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">1016</span> Oct <span class="m">8</span> 14:26 Makefile
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">1200</span> Oct <span class="m">8</span> 14:26 README.md</code></pre></div>
+
+<p>Executing make in the <code>device_a140808-master</code> directory will build both projects, or you can descend into either directory and execute <code>make</code> to build that project alone.</p>
+
+
+
+<p><br><strong>Building the Atmel ATmega32A Firmware</strong></p>
+
+<p>Switch to the <code>device_a140808-master/avr</code> directory and type <code>make</code>. The build will complete very quickly and the target binaries will be placed into the <code>bin</code> directory. The files of interest are <code>a140808.hex</code> or <code>a140808.bin</code> depending on the programmer used to flash the device.</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>avr<span class="o">]</span><span class="nv">$ </span>ls -al bin
+-rwxrwxr-x <span class="m">1</span> ec2-user ec2-user <span class="m">32768</span> Oct <span class="m">23</span> 19:14 a140808.bin
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">13</span> Oct <span class="m">23</span> 19:14 a140808.eep
+-rwxrwxr-x <span class="m">1</span> ec2-user ec2-user <span class="m">51387</span> Oct <span class="m">23</span> 19:14 a140808.elf
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">14999</span> Oct <span class="m">23</span> 19:14 a140808.hex
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">141167</span> Oct <span class="m">23</span> 19:14 a140808.lss
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">34626</span> Oct <span class="m">23</span> 19:14 a140808.map
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">36320</span> Oct <span class="m">23</span> 19:14 avr_impl.o
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">2825</span> Oct <span class="m">23</span> 19:14 avr_impl.o.dep
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">41412</span> Oct <span class="m">23</span> 19:14 avr_main.o
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">2996</span> Oct <span class="m">23</span> 19:14 avr_main.o.dep
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">55</span> Oct <span class="m">23</span> 19:14 fuses.conf
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">26808</span> Oct <span class="m">23</span> 19:14 serial.o
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">2452</span> Oct <span class="m">23</span> 19:14 serial.o.dep</code></pre></div>
+
+<p>In a subsequent section, the source files and theory of operation will be discussed in greater detail. However, at this point this is all that is needed to be able to flash the ATmega32A device. Building the HLK-RM04 device is up next.</p>
+
+
+
+<p><br><strong>Building the Atmel HLK-RM04 Firmware</strong></p>
+
+<p>The Hi-Link HLK-RM04 module runs OpenWRT Linux. Additional information on OpenWRT and the Hi-Link device can be found on the <a href="https://wiki.openwrt.org/toh/hilink/hlk-rm04" target="_blank">OpenWRT wiki</a>. Before building the firmware, the CA certificates build previously need to be copied to the project directory to be included in the resulting firmware image. Change to the <code>device_a140808-master/hlk-rm04</code> directory and list the files.</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>hlk-rm04<span class="o">]</span><span class="nv">$ </span>ls -al
+drwxrwxr-x <span class="m">2</span> ec2-user ec2-user <span class="m">4096</span> Oct <span class="m">23</span> 10:10 ca_certs
+drwxrwxr-x <span class="m">3</span> ec2-user ec2-user <span class="m">4096</span> Oct <span class="m">23</span> 10:03 files
+drwxrwxr-x <span class="m">2</span> ec2-user ec2-user <span class="m">4096</span> Oct <span class="m">23</span> 10:03 firmware
+-rw-rw-r-- <span class="m">1</span> ec2-user ec2-user <span class="m">8442</span> Oct <span class="m">23</span> 10:03 Makefile
+drwxrwxr-x <span class="m">15</span> ec2-user ec2-user <span class="m">4096</span> Oct <span class="m">23</span> 12:18 openwrt-master
+drwxrwxr-x <span class="m">5</span> ec2-user ec2-user <span class="m">4096</span> Oct <span class="m">23</span> 10:03 tools</code></pre></div>
+
+
+
+<p><strong>Copy CA Public Certificates</strong></p>
+
+<p>Take note of the <code>ca_certs</code> directory which is the location where the CA certificate that were generated earlier belong. Note that the firmware image only requires the public CA file(s). The build script will copy all files ending in <code>_ca_public.cer</code> to the firmware image so following this naming convention is required.</p>
+
+
+
+<p><br><strong>SSH Access</strong></p>
+
+<p>Next, the type of SSH access for the device needs to be considered. It is also possible to configure no SSH access. Certificates based SSH authentication is considered more secure, but password based authentication is also available. It is possible to configure both types of authentication then lockout the password based authentication mechanism at a later time as well. There is no great way to recover access if the certificate is lost or the password is forgotten, so regaining access would require reflashing the firmware. This is an open source project, and OpenWRT does make provisions for password recovery, so this could make a nice enhancement to the project. In general, questions regarding the HLK-RM04 device can easily be researched on the OpenWRT website.</p>
+
+<p>On the command line, include one or more of the options desired. For example, to compile with password access and have the build process prompt (pmt) for the password, type:</p>
+
+
+
+<p>To configure a password directly (&#x201C;mysecret&#x201D; in this example) and to bundle a newly generated SSH cert file, type:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>make <span class="nv">sshpw</span><span class="o">=</span>mysecret <span class="nv">sshcert</span><span class="o">=</span>gen</code></pre></div>
+
+<p>Note that some options are mutually exclusive with each other. The full listing of options is as follows:</p>
+
+<div class="highlight"><pre><code class="language-sh">no ssh access: <span class="nv">ssh</span><span class="o">=</span>none
+no ssh password access: <span class="nv">sshpw</span><span class="o">=</span>none
+ssh password access <span class="o">(</span>prompt<span class="o">)</span>: <span class="nv">sshpw</span><span class="o">=</span>pmt
+ssh password access: <span class="nv">sshpw</span><span class="o">=</span>&lt;password&gt;
+no ssh certificate access: <span class="nv">sshcert</span><span class="o">=</span>none
+ssh certificate access, create new cert: <span class="nv">sshcert</span><span class="o">=</span>gen
+ssh certificate access, use existing cert: <span class="nv">sshcert</span><span class="o">=</span>&lt;filespec&gt;</code></pre></div>
+
+<p><strong>Note:</strong> If the build fails early before the .config configuration file can be generated, it is possible to get stuck at the Linux kernel config (blue) menu. You should never see this menu in a normal build. If this happens run a <code>make distclean</code> and restart the build from scratch.</p>
+
+<p><strong>Tip:</strong> Long-running builds will fail if the terminal session gets disconnected. Launch the <code>screen</code> utility to allow the build to continue even of the terminal session becomes disconnected. If the terminal session does become detached, reconnect to the Linux host and execute <code>screen -r</code> to reattach to the running session.</p>
+
+<p>After the build finishes successfully, the firmware file <code>openwrt-ramips-rt305x-hlk-rm04-squashfs-sysupgrade.bin</code> will be placed into the <code>hlk-rm04/bin</code> directory. For details on the sysupgrade.bin file, refer to the <a href="http://wiki.openwrt.org/doc/howto/generic.sysupgrade" target="_blank">OpenWRT wiki</a>. The sysupgrade file does not include a bootloader, so it can only be used to update an already running A140808 device. In a later section of this article, instructions for doing so are included. In the case of a new device, it is necessary to build a full firmware image which takes a few more steps.</p>
+
+
+
+<p><br><strong>Adding u-boot</strong></p>
+
+<p>In order to be able to flash the device using a flash programmer, a complete firmware image file is required. In this case, the u-boot that ships with the HLK-RM04 can be used in conjunction with the MAC addresses printed on the front of the device (Figure 5).</p>
+
+
+<table>
+<tr><td><img width="350px" src="http://www.rest-switch.com/images/f5_hlkrm04.jpg"></td></tr>
+<tr><td>Figure 5: The HLK-RM04 Module with MAC Addresses</td></tr>
+</table>
+
+
+<p>Notice that the MAC addresses are consecutive. To specify a MAC address and generate the full image firmware, use the <code>make image mac=aabbccddeeff</code> command and specify the first MAC address listed on your device (the build script will assume the second address). For example:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>make image <span class="nv">mac</span><span class="o">=</span>aca213b54a3e</code></pre></div>
+
+<p>This will generate a full image firmware file with a unique serial number, for example:</p>
+
+<div class="highlight"><pre><code class="language-sh">hlk-rm04/bin/a140808_akbmkzh80.bin</code></pre></div>
+
+<p>The serial number (aka Device Id) is a nine character alphanumeric code following the underscore. In the case above, the serial number is <code>akbmkzh80</code>. Each time a firmware is emitted, a unique serial number will be generated. Yours will be different than the one shown in this example. Record this number and affix it to the outside of the device; it will be used later to uniquely identify the device when it connects to the cloud.</p>
+
+<p>The firmware generation for the HLK-RM04 is now complete. In the next section the firmware for the two chips will be written to their respective devices.</p>
+
+
+
+<h3 id="flashing-the-firmware">Flashing the Firmware</h3>
+
+
+
+<p><br><strong>Programmers</strong></p>
+
+<p>The firmware for both the Atmel ATmega32A chip and the Hi-Link HLK-RM04 module need to be reflashed for this project. A very popular programmer for Atmel chips is the <a href="http://www.atmel.com/tools/AVRISPMKII.aspx" target="_blank">AVRISP mkII programmer</a>. Flashing the firmware to the Atmel device is straightforward and can be done via the six pin programming header located on the circuit board (see Figure 4). Note that the pinout of the six pin programming header is different than the standard AVRISP pinout.</p>
+
+<p>Programming the HLK-RM04 is more difficult. Although it should be possible to reprogram the device via its programming header or by software, that route is not documented and the device is easy to brick. Empirical testing revealed that it was much easier and foolproof to write directly to the flash memory located on the bottom of the module using the <a href="http://www.autoelectric.cn/EN/TL866_main.html" target="_blank">Autoelectric MiniPro TL866A</a> universal programmer and an <a href="http://www.aliexpress.com/item/TL866A-Universal-Programmer-Support-Over-13000-Chips-USB-Programmer-with-4PCS-Socket-and-IC-Picker-Free/1378818625.html" target="_blank">8 pin SOIC test clip</a>. This technique is also agnostic to a bricked device so it will always work in all circumstances.</p>
+
+<p>An added bonus of the MiniPro TL866A model is that it has a six pin ICSP programming interface that can flash Atmel chips via the ICSP programming header located on the A140808 board (Figure 4). This makes it the only programmer needed for the entire project. Support for both the AVRISP mkII and the TL866A programmers are included in the supplied project makefiles.</p>
+
+<p><strong>Note:</strong> There are two models of the MiniPro TL866: The TL866A provides support for flashing Atmel chips via a six pin ICSP programming interface on the front. The less expensive TL866CS model does not include this ICSP interface and thus will require a second programmer for the Atmel device such as the AVRISP mkII.</p>
+
+
+
+<p><br><strong>AVRISP mkII Wiring Harness</strong></p>
+
+<p>The Atmel AVRISP mkII programmer pinout (Figure 6).</p>
+
+
+
+ <table border="1">
+ <col width="110"><col width="110">
+ <tr><td>&#xA0;&#xA0;1 &#x2013; MISO</td><td>&#xA0;&#xA0;2 &#x2013; VCC</td></tr>
+ <tr><td>&#xA0;&#xA0;3 &#x2013; SCK</td><td>&#xA0;&#xA0;4 &#x2013; MOSI</td></tr>
+ <tr><td>&#xA0;&#xA0;5 &#x2013; RESET</td><td>&#xA0;&#xA0;6 &#x2013; GND</td></tr>
+ </table>
+ <p><span>Figure 6: Atmel AVRISP Pinout</span></p>
+
+
+
+
+<p>The proprietary A140808 ICSP programming header pinout (Figure 7).</p>
+
+
+
+ <table border="1">
+ <col width="110"><col width="110">
+ <tr><td>&#xA0;&#xA0;1 &#x2013; GND</td><td>&#xA0;&#xA0;2 &#x2013; VCC</td></tr>
+ <tr><td>&#xA0;&#xA0;3 &#x2013; RESET</td><td>&#xA0;&#xA0;4 &#x2013; MOSI</td></tr>
+ <tr><td>&#xA0;&#xA0;5 &#x2013; MISO</td><td>&#xA0;&#xA0;6 &#x2013; SCK</td></tr>
+ </table>
+ <p><span>Figure 7: A140808 AVR Programming Header Pinout</span></p>
+
+
+
+
+<p>Programming the Atmel chip using the AVRISP mkII is very straightforward and easy to do. Ideally a custom male-male crossover cable would be built to remap the pins between the programmer and the A140808 programming header. However, since programming the A140808 is likely a one-time operation for most people, using jumper wires is going to make sense for most people. Both approaches are discussed below.</p>
+
+<p>The custom male-male crossover cable approach uses standard female-female jumper wires and a standard six pin IDC female housings to yield the desired pin remappings. This creates a cable with two female ends. Next, the genders at each end are inverted using male-to-male IDC headers which can be super glued into the crossover cable IDC housings. Tip: A metallic silver Sharpie pen can be used to mark pin 1 on each end of the housing.</p>
+
+
+
+ <table border="1">
+ <col width="210"><col width="310">
+ <tr><td>DigiKey Part Number</td><td>Description</td></tr>
+ <tr><td>&#xA0;&#xA0;929665-02-03-ND</td><td>&#xA0;&#xA0;6 Pin Male-Male IDC Header</td></tr>
+ <tr><td>&#xA0;&#xA0;952-2031-ND</td><td>&#xA0;&#xA0;6 Pin Female Crimp IDC Housing</td></tr>
+ <tr><td>&#xA0;&#xA0;1471-1230-ND</td><td>&#xA0;&#xA0;150mm Female-Female Jumper Wire</td></tr>
+ </table>
+ <p><span>Table 1: Crossover Cable DigiKey Part Numbers</span></p>
+
+
+
+<p>The completed conversion is shown in Figure 8. Notice that in this case heat shrink tubing has been used to secure the crossover cable to the programmer.</p>
+
+
+<table>
+<tr><td><img width="650px" src="http://www.rest-switch.com/images/f8_harn.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 8: AVRISP mkII Programmer and Custom Crossover Cable</td></tr>
+</table>
+
+
+<p>Another approach is to use jumper wires for a one-time patch connection. It is worth noting that most off-the-shelf jumper wires are designed for use with breadboards and their pins are very narrow in diameter. The sockets of the female headers are designed to mate with square pin IDC type pins. Schmartboard Inc. makes jumper wires with these IDC square pin connectors. <a href="http://schmartboard.com/schmartboard-qty-10-7-male-jumpers" target="_blank">Schmartboard part number 920-0099-01</a> is a 10 pack of 7&#x201D; jumpers that work very well in this application. This part can be sourced from <a href="http://www.mouser.com/search/ProductDetail.aspx?R=0virtualkey0virtualkey920-0099-01" target="_blank">Mouser Electronics</a>.</p>
+
+
+
+<p><br><strong>Autoelectric MiniPro TL866A Wiring Harness</strong></p>
+
+<p>The Autoelectric MiniPro TL866A programmer is two programmers in one. The TL866 &#x201C;A&#x201D; model has a six pin ICSP programming header that is very easy to reconfigure for programming the A140808. The pinout of the MiniPro ICSP interface (Figure 9) reveals that pins one and three are swapped between it and the A140808 device (compare with Figure 7). In this case, removing the connections from the MiniPro linear header and placing them in a 2x3 IDC housing (DigiKey 952-2031-ND) and changing the gender (DigiKey 929665-02-03-ND) is all that that is required.</p>
+
+
+
+ <table border="1">
+ <col width="110"><col width="110"><col width="110"><col width="110"><col width="110"><col width="110">
+ <tr>
+ <td>1 &#x2013; RESET</td><td>2 &#x2013; VCC</td>
+ <td>3 &#x2013; GND</td><td>4 &#x2013; MOSI</td>
+ <td>5 &#x2013; MISO</td><td>6 &#x2013; SCK</td>
+ </tr>
+ </table>
+ <p><span>Figure 9: MiniPro ICSP Pinout</span></p>
+
+
+
+<p>The completed cable modification is shown in Figure 10.</p>
+
+
+<table>
+<tr><td><img width="650px" src="http://www.rest-switch.com/images/f10_mini_isp.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 10: MiniPro ICSP Cable (Left: Original, Right: Modified)</td></tr>
+</table>
+
+
+
+<table>
+<tr><td><img width="650px" src="http://www.rest-switch.com/images/f11_mini.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 11: MiniPro TL866A with Modified Six Pin ICSP</td></tr>
+</table>
+
+
+
+
+<p><br><strong>USB Setup</strong></p>
+
+<p>A note about USB devices and Linux: To enable non-root access to the programmers in this article, a configuration file can be created defining the vendor and product ids for each device. To list devices connected to a Linux system, use the <code>lsusb</code> command.</p>
+
+<p>Create a file named <code>/etc/udev/rules.d/40-persistent-usb.rules</code> and add the following entries to the file:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="c"># autoelectric.cn minipro</span>
+<span class="nv">SUBSYSTEM</span><span class="o">==</span><span class="s2">"usb"</span>, ATTRS<span class="o">{</span>idVendor<span class="o">}==</span><span class="s2">"04d8"</span>, ATTRS<span class="o">{</span>idProduct<span class="o">}==</span><span class="s2">"e11c"</span>, <span class="nv">MODE</span><span class="o">=</span><span class="s2">"0666"</span>, <span class="nv">GROUP</span><span class="o">=</span><span class="s2">"plugdev"</span>
+
+<span class="c"># atmel avrisp-mkii</span>
+<span class="nv">SUBSYSTEM</span><span class="o">==</span><span class="s2">"usb"</span>, ATTRS<span class="o">{</span>idVendor<span class="o">}==</span><span class="s2">"03eb"</span>, ATTRS<span class="o">{</span>idProduct<span class="o">}==</span><span class="s2">"2104"</span>, <span class="nv">MODE</span><span class="o">=</span><span class="s2">"0666"</span>, <span class="nv">GROUP</span><span class="o">=</span><span class="s2">"plugdev"</span></code></pre></div>
+
+<p>Finally, add your user account to the <code>plugdev</code> group. It is necessary to log out and back in to pickup the rights from this new group membership.</p>
+
+<div class="highlight"><pre><code class="language-sh">sudo usermod -G plugdev <span class="nv">$USER</span></code></pre></div>
+
+
+
+<p><br><strong>Flashing the Atmel ATmega32A</strong></p>
+
+<p>Connect the desired Atmel programmer to the header closer to the relays taking care to orient pin 1 properly (see Figure 8). The A140808 device needs to be powered on via an external power source in order for programming to work. Once all connections are made and the device is powered on, use one of the following programming commands.</p>
+
+<p><strong>Note:</strong> The A140808 device must be powered on or programming will fail. Polarity for the device is indicated on the bottom of the board. If the barrel connector is present, the outside ring is negative.</p>
+
+
+<p>To Select the AVRISP mkII:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span><span class="nb">cd </span>device_a140808-master/avr
+<span class="nv">$ </span>make avr-program</code></pre></div>
+
+<p>To Select the MiniPro TL866A:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span><span class="nb">cd </span>device_a140808-master/avr
+<span class="nv">$ </span>make mp-program</code></pre></div>
+
+<p>When the command finishes successfully, the Atmel programming is complete.</p>
+
+
+
+<p><br><strong>Flashing the HiLink HLK-RM04</strong></p>
+
+<p>The next step is to program the HLK-RM04. This step requires MiniPro TL866A and an 8 pin SOIC test clip. Start by identifying the flash memory on the HLK-RM04 device. The make and model of the flash memory is required when writing to the part. The part number is written on the chip itself. In my case the flash memory was covered with paint and required acetone and a cotton swab to remove. Using a smartphone to take a picture and zooming in, the part was identified as <a href="http://www.winbond.com/hq/product/code-storage-flash-memory/serial-nor-flash/?__locale=en&amp;partNo=W25Q32BV" target="_blank">Winbond W25Q32BV</a>. Another flash memory used by HiLink for the HLK-RM04 device is <a href="http://www.macronix.com/en-us/Product/Pages/ProductDetail.aspx?PartNo=MX25L3206E" target="_blank">Macronix MX25L3206E</a>. Undoubtedly HiLink uses other flash memories than the two listed here. This is an open source project, if your device has another type of flash memory, please create a pull request or submit a patch file.</p>
+
+<p>To get a list of possible part numbers the MiniPro software can program, use the <code>-l</code> command line option (with a grep filter in this case):</p>
+
+
+<p>If required, build the minipro binary first:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span><span class="nb">cd </span>device_a140808/hlk-rm04
+<span class="nv">$ </span>make minipro</code></pre></div>
+
+<p>Winbond W25Q32BV:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>device_a140808-master/hlk-rm04/tools/minipro/minipro -l <span class="p">|</span> grep W25Q32
+W25Q32 @MLP8
+W25Q32 @SOIC16
+W25Q32BV
+W25Q32BV @SOIC16
+W25Q32BV @SOIC8
+W25Q32BV @WSON8
+W25Q32V @MLP8
+W25Q32V @SOIC16</code></pre></div>
+
+<p>Macronix MX25L3206E:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>device_a140808-master/hlk-rm04/tools/minipro/minipro -l <span class="p">|</span> grep MX25L3206
+MX25L3206E
+MX25L3206E @SOP16
+MX25L3206E @SOP8
+MX25L3206E @USON8
+MX25L3206E @WSON8</code></pre></div>
+
+<p>Multiple matching parts will likely be shown, but only the base part without the space will do the job. With the flash part number in-hand, it is time to proceed with programming. Clamp the test clip to the 8 pin flash memory module located on the bottom of the HLK-RM04 device taking care to orient pin 1 properly (see Figure 12).</p>
+
+
+<table>
+<tr><td><img width="380px" src="http://www.rest-switch.com/images/f12_clip.jpg"></td></tr>
+<tr><td>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Figure 12: SOIC Test Clip on Flash Memory Chip</td></tr>
+</table>
+
+
+<p>Once connected, the part is ready to program.</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span><span class="nb">cd </span>device_a140808-master/hlk-rm04
+<span class="nv">$ </span>make program <span class="nv">flash</span><span class="o">=</span>W25Q32BV <span class="nv">image</span><span class="o">=</span>bin/a140808_akbmkzh80.bin</code></pre></div>
+
+<p><strong>Note:</strong> The actual <code>image=</code> filename is build-specific and will be different than the one shown here.</p>
+
+<p>Once the command successfully completes, the device is ready to boot. Insert the HLK-RM04 daughter card back into the A140808 main board. The pins are offset which prevents the device from being put in backwards, however, take care as to not misalign the pins along the socket.</p>
+
+
+
+<h3 id="booting-and-ssh">Booting and SSH</h3>
+
+<p>Once powered on, the red LED light on the HLK-RM04 should begin to blink as Linux begins to boot. Once the kernel is loaded the network indicator lights will begin to flash. The device is setup to automatically accept a DHCP issued TCP/IP address, so it is a simple matter to scan the network to find it. Perhaps the easiest way to find the IP address associated with the MAC address used above (see Figure 5) is to search the logs of the network DHCP server. Other options include network scanning apps such as <a href="https://play.google.com/store/apps/details?id=com.overlook.android.fing" target="_blank">Fing for Android</a>, <a href="https://itunes.apple.com/us/app/lanscan/id472226235" target="_blank">LanScan for OSX</a>, or <a href="https://www.linux.com/learn/tutorials/290879-beginners-guide-to-nmap" target="_blank">nmap for Linux</a>.</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>nmap -sP 192.168.1.0/24 &gt;/dev/null <span class="o">&amp;&amp;</span> arp -an <span class="p">|</span> grep -i ac:a2:13:b5:4a:3e</code></pre></div>
+
+<p>Once the A140808 IP address is determined, use <code>ssh</code> to login to the device for final configuration. To login, use <code>root</code> for the userid and the password or certificate used in the <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#building-firmware">Building the Firmware</a> step above.</p>
+
+<figure class="highlight"><pre><code class="language-text">
+$ ssh root@192.168.1.136
+root@192.168.1.136's password:
+
+
+BusyBox v1.19.4 (2015-10-01 01:02:10 EDT) built-in shell (ash)
+Enter 'help' for a list of built-in commands.
+
+<span> ___ ___ ____ ___ ___ ___ ___
+ / _ |&lt; // / // _ \( _ )/ _ \( _ )
+ / __ |/ //_ _/ // / _ / // / _ |
+ /_/ |_/_/ /_/ \___/\___/\___/\___/
+ </span><span>powered by OpenWRT</span>
+
+
+root@a140808:~#
+
+</code></pre></figure>
+
+
+
+<h3 id="building-the-web-server">Building the Web Server</h3>
+
+<p>The web server used in this project is <a href="http://nginx.org" target="_blank">Nginx</a>. The modular nature of Nginx lends itself well not only to serving html content, but it can also provide a rock-solid publish-subscribe facility through the use of the <a href="http://highscalability.com/blog/2014/4/28/how-disqus-went-realtime-with-165k-messages-per-second-and-l.html" target="_blank">highly scalable</a> and reliable <a href="https://github.com/wandenberg/nginx-push-stream-module" target="_blank">push stream</a> module by <a href="https://br.linkedin.com/in/wandenberg-peixoto-52582a8" target="_blank">Wandenberg Peixoto</a>. Other benefits of Nginx include extremely easy SSL setup and configuration as well as a wide range of other integration modules. While the overall solution was also demonstrated to very work well with both <a href="https://nodejs.org" target="_blank">node.js</a> and <a href="http://redis.io/topics/pubsub" target="_blank">Redis</a>, the simplicity and overall completeness of the Nginx solution edged out the competition for the goals of this application. The entire Nginx deployment package is bundled using a <a href="http://docs.docker.com/engine/userguide/dockerimages" target="_blank">docker image</a> which greatly simplifies numerous potential configuration and installation pitfalls making the entire process nearly foolproof.</p>
+
+<p>To get started, we need to understand the mechanisms at play in the overall solution. When the A140808 client device boots up, a service starts on the device which attempts to establish an SSL websocket connection to a pub-sub host. The identity (host:port) of this cloud host is stored in the <code>/etc/config/cloudcfg</code> configuration file on the device. The SSL connection will be trusted as the public key of our own certificate authority (CA) was added to the <code>/etc/ssl/certs</code> directory when the device firmware was being built (see <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#security-first">Security First</a>). This design allows the device to become a command and control interface without any special firewall configuration, nor the need for any holes to be punched through the firewall. The result is a field configuration of the device that is no more difficult than establishing an ethernet connection and powering-on the device.</p>
+
+<p>In addition to the pub-sub capability described above, the Nginx solution serves an html based control panel secured with <a href="https://www.nginx.com/resources/admin-guide/restricting-access" target="_blank">auth basic</a> over SSL. While it is possible to configure a database to handle more complex authentication scenarios and multi-tenant capabilities, such solutions will not be presented here for the sake of simplicity.</p>
+
+<p><span>Note: Ubuntu Wily Werewolf 15.10 is known to have issues building this Docker image.</span></p>
+
+<p>Begin by downloading the server_nginx repository and unpack:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>wget -O server_nginx.tar.gz https://github.com/rest-switch/server_nginx/archive/master.tar.gz
+<span class="nv">$ </span>tar xzvf server_nginx.tar.gz
+<span class="nv">$ </span><span class="nb">cd </span>server_nginx-master</code></pre></div>
+
+<p>The Docker directory contains all of the files needed to build the deployment package and the <code>rs-docker-util.sh</code> utility script used to help package and deploy the generated Docker container (more on the use of this script later).</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>server_nginx-master<span class="o">]</span><span class="nv">$ </span>ls -al
+drwxrwxr-x <span class="m">3</span> johnc johnc 4.0K Sep <span class="m">30</span> 22:34 docker
+-rw-rw-r-- <span class="m">1</span> johnc johnc 6.3K Sep <span class="m">30</span> 22:34 Makefile
+-rwxrwxr-x <span class="m">1</span> johnc johnc 8.5K Sep <span class="m">30</span> 22:34 rs-docker-util.sh</code></pre></div>
+
+
+
+<p><br><strong>Configuring Certificates</strong></p>
+
+<p>Before building the project, the public certificate chain (which is the public root CA and the public certificate together) need to be placed in the Docker directory along with the private key of the certificate as shown below. These certificates were created in the <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#security-first">Security First</a> section above. This example assumes these certs are stored in the home directory:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>server_nginx-master<span class="o">]</span><span class="nv">$ </span>cp ~/certs/acme-co_cert_chain_public.cer docker/cert-chain-public.pem
+<span class="o">[</span>server_nginx-master<span class="o">]</span><span class="nv">$ </span>cp ~/certs/acme-co_cert_private docker/cert-private.pem</code></pre></div>
+
+
+
+<p><br><strong>Building the Docker Image</strong></p>
+
+<p>Once the certificates are in place, start building the Docker image by typing <code>make</code>. The build process begins by attempting to download the official <a href="https://www.centos.org/about" target="_blank">CentOS 7</a> image for Docker (CentOS is debranded, free Red Hat Linux). After the image is downloaded, it is automatically updated via a <code>yum update</code> command then Nginx and its modules are built. In this case, the Nginx modules are the wandenberg pushstream module, and a custom sha256-hmac <a href="https://github.com/rest-switch/server_nginx/tree/master/docker/docker_build/ngx_hmac_auth_module" target="_blank">signed url authentication module</a> which is used to authenticate requests from the web and Android clients.</p>
+
+<p>The benefit of single-use signed-urls in this application is that they allow for simple one-shot messages to be passed in the clear without all of the <a href="http://www.infoq.com/articles/HTTPS-Connection-Jeff-Moser" target="_blank">setup overhead</a> of an encrypted connection. Considering the latency of the mobile phone connection over a carrier or wifi network, shaving as many round-trips off really adds up quickly and provides for a more responsive user interface. More on this later.</p>
+
+<p>If everything goes well, the build will complete after a few minutes:</p>
+
+<div class="highlight"><pre><code class="language-sh">. . .
+
+Step <span class="m">19</span> : CMD /usr/sbin/nginx
+ ---&gt; Using cache
+ ---&gt; 20c096a1a447
+Successfully built 20c096a1a447
+
+the docker image is now built
+ - to run this image locally, run: <span class="s2">"make run"</span>
+ - to run this image remotely, run: <span class="s2">"make deploy"</span></code></pre></div>
+
+<p>At this point the Docker image is complete. Type <code>make show</code> to see result of the build process:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>server_nginx-master<span class="o">]</span><span class="nv">$ </span>make show
+
+REPOSITORY TAG IMAGE ID CREATED VIRTUAL SIZE
+restswitch/server_nginx latest 8e2dd31572da <span class="m">27</span> seconds ago 291.9 MB
+restswitch/server_nginx <span class="m">101</span> 8e2dd31572da <span class="m">27</span> seconds ago 291.9 MB
+centos centos7 ce20c473cd8a <span class="m">7</span> weeks ago 172.3 MB
+--------------------------------------------------------------------------------
+CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES</code></pre></div>
+
+<p>If the build fails, it may be necessary to clean up partially built artifacts that were left behind. The <code>make clean</code> command attempts to do just this, but it cannot be too aggressive as other Docker images and containers may exist on the build system which do not belong to this build process. A more aggressive option is the <code>make distclean</code> command. If manual cleanup is required, the Docker image removal command is <code>docker rmi &lt;image id&gt;</code> and the Docker container removal command is <code>docker rm &lt;container id&gt;</code>. If you experience repeated build failures, try deploying an <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html" target="_blank">Amazon Linux AMI</a> and build the image this way. Assuming all went well with the build, the image is ready to be run locally or packaged for deployment on a remote server.</p>
+
+
+
+<p><br><strong>Choose Docker HTTP Ports</strong></p>
+
+<p>The ports exposed from the Docker container can be remapped. The Nginx instance running within the container always uses the standard ports 80 for http and 443 for https. These ports can be mapped to any value by Docker when the container is created. These Docker port values can be changed by editing the <code>Makefile</code> or the <code>rs-docker-util.sh</code> file (depending on deploying locally or remotely).</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">EXPOSED_HTTP_PORT</span><span class="o">=</span>80
+<span class="nv">EXPOSED_HTTPS_PORT</span><span class="o">=</span>443</code></pre></div>
+
+
+
+<p><br><strong>Packaging the Docker Image</strong></p>
+
+<p>To run locally, execute the <code>make run</code> command now and skip ahead to the <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#bweb-config-pw">Configure Passwords</a> section below. Otherwise, to deploy to a remote server, the image must be packaged and deployed remotely. To package the image for remote deployment, use the <code>make deploy</code> command. The image deployment process will take a couple of minutes as the complete Linux filesystem is compressed into a tar archive:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>server_nginx-master<span class="o">]</span><span class="nv">$ </span>make deploy
+deploying the latest docker image, please wait...
+ 289MiB 0:02:40 <span class="o">[</span>1.81MiB/s<span class="o">]</span> <span class="o">[=====================================================</span>&gt;<span class="o">]</span> 100%
+docker image packaging now <span class="nb">complete</span>: restswitch_web_docker_8e2dd31572da.tar.xz
+use the rs-docker-util.sh script to <span class="nb">help </span>manage this image:
+-rwxrwxr-x <span class="m">1</span> ec2-user ec2-user <span class="m">8644</span> Oct <span class="m">1</span> 02:34 rs-docker-util.sh</code></pre></div>
+
+<p>As indicated in the output message above, the deployment file in this case is <code>restswitch_web_docker_8e2dd31572da.tar.xz</code> This file ius used in conjunction with the <code>rs-docker-util.sh</code> file. These are the only two files needed to deploy the Docker image remotely. Copy both of these files to the remote server.</p>
+
+<p>While waiting for the filesystem to compress, take a moment to see what all the <code>rs-docker-util.sh</code> script provides. Most of the commands found in the Makefile are duplicated in this script. This is so make is not required to be installed on the remote deployment machine. Use <code>./rs-docker-util.sh --help</code> to display the command-line options:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="o">[</span>server_nginx-master<span class="o">]</span><span class="nv">$ </span>./rs-docker-util.sh --help
+
+Usage:
+ rs-docker-util.sh &lt;<span class="nb">command</span>&gt;
+
+Commands:
+ clean remove everything but the restswitch_webserver docker image
+ create <span class="o">[</span>auto<span class="o">]</span> create <span class="o">[</span>an autostart on boot<span class="o">]</span> restswitch_webserver docker container
+ debug enter a the running container or start a container using bash
+ distclean remove everything
+ enter enter a running container <span class="o">(</span>will autocreate and start <span class="k">if</span> needed<span class="o">)</span>
+ load &lt;tar.xz&gt; load an existing image
+ run <span class="nb">alias </span><span class="k">for</span> start
+ sethash &lt;email&gt; &lt;pass&gt; <span class="nb">set </span>credentials <span class="k">for</span> nginx.conf auth <span class="nb">hash</span>
+setpass &lt;email&gt; &lt;pass&gt; <span class="nb">set </span>credentials <span class="k">for</span> /secure website
+ shell <span class="nb">alias </span><span class="k">for</span> enter
+ show show docker image and container information
+ start start restswitch_webserver docker container <span class="o">(</span>will autocreate <span class="k">if</span> needed<span class="o">)</span>
+ stop stop restswitch_webserver docker container
+ term <span class="nb">alias </span><span class="k">for</span> enter
+ terminal <span class="nb">alias </span><span class="k">for</span> enter
+ tidy similar to clean, but does not remove container</code></pre></div>
+
+<p>One command worth noting is the <code>./rs-docker-util.sh enter</code> command. This command will run a bash shell in the running container allowing ssh-like access to the instance. This is handy for getting inside to review log files or to change configuration. Also notice the <code>sethash</code> and <code>setpass</code> commands: these command are used to configure Nginx settings without entering the container (more on this later).</p>
+
+<p>After the <code>restswitch_web_docker_8e2dd31572da.tar.xz</code> and <code>rs-docker-util.sh</code> files have been copied to the remote deployment machine, create a Docker container from the compressed Docker image by typing: <code>./rs-docker-util.sh load restswitch_web_docker_8e2dd31572da.tar.xz</code></p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>./rs-docker-util.sh load restswitch_web_docker_8e2dd31572da.tar.xz
+loading image: restswitch_web_docker_8e2dd31572da.tar.xz
+please wait...
+
+REPOSITORY TAG IMAGE ID CREATED VIRTUAL SIZE
+restswitch/server_nginx latest 8e2dd31572da <span class="m">2</span> hours ago 291.9 MB</code></pre></div>
+
+<p>The image is now installed and ready to be launched in a new Docker container.</p>
+
+
+
+<p><br><strong>Creating and Running the Docker Container</strong></p>
+
+<p>The last step is to configure the userid and passwords used to secure the system. The system is secured via two different credential sets. The first credential set secures the web based control panel using standard auth-basic authentication over SSL. The second set of credentials are used to sign the single-use secure URLs clients will use to send commands to the system. It may seem a little confusing why two credential sets exist, but take a moment to understand them both. It is recommended to use an email address for the userid. Note that the userid need not be an email address, but each user of the system must use a unique userid. Using an email address for the userid ensures global uniqueness. Additionally, the UI for both the control panel web page and the Android client label this field as &#x201C;email address&#x201D; so it may reduce confusion down the road to use an email address now.</p>
+
+<p>To assign the password used to secure the control panel web page, use the <code>setpass</code> command supplying the email address and password to be used: <code>./rs-docker-util.sh setpass "myuser@domain.com" "my-secure-web-password"</code></p>
+
+<p>Likewise, to assign the password that will be used for signed URLs, use the <code>sethash</code> command supplying the email address and password to be used. To set the signed url userid and password, type: <code>./rs-docker-util.sh sethash "myuser@domain.com" "my-signed-url-password"</code></p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>./rs-docker-util.sh create
+creating restswitch_webserver container...
+7cd5b2c63c1649e99cc5b96df6cc0b254610866bac811408fde451b4d610788b
+
+<span class="nv">$ </span>./rs-docker-util.sh show
+REPOSITORY TAG IMAGE ID CREATED VIRTUAL SIZE
+restswitch/server_nginx latest 8e2dd31572da <span class="m">2</span> hours ago 291.9 MB
+-------------------------------------------------------------------------------------------------------------------------
+CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
+7cd5b2c63c16 restswitch/server_nginx:latest <span class="s2">"/usr/sbin/nginx"</span> <span class="m">6</span> seconds ago restswitch_webserver</code></pre></div>
+
+<p>The key thing to notice from the <code>./rs-docker-util.sh show</code> output above is that the STATUS column above does not indicate a status of EXITED. A status of exited indicates a failure of Nginx to start. One reason Nginx will refuse to start is if missing or invalid SSL certificates were supplied in the <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#bweb-certs">Configuring Certificates</a> step above. In order to make a better assessment of why Nginx is failing to start, it may be necessary to forcibly enter the Docker container and manually excute <code>nginx</code> at the command line. To start the Docker container forcibly, use the <code>./rs-docker-util.sh debug</code> command.</p>
+
+<p>If all went well and the container is now running, it is possible to enter the running container with the <code>./rs-docker-util.sh enter</code> command. Type <code>exit</code> to leave the container when finished browsing around.</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>./rs-docker-util.sh enter
+<span class="o">[</span>root@7cd5b2c63c16 /<span class="o">]</span><span class="c"># ls -al</span>
+total 48
+lrwxrwxrwx <span class="m">1</span> root root <span class="m">7</span> Aug <span class="m">14</span> 21:00 bin -&gt; usr/bin
+drwxr-xr-x <span class="m">5</span> root root <span class="m">360</span> Nov <span class="m">2</span> 18:32 dev
+drwxr-xr-x <span class="m">48</span> root root <span class="m">4096</span> Nov <span class="m">2</span> 17:54 etc
+drwxr-xr-x <span class="m">2</span> root root <span class="m">4096</span> Jun <span class="m">10</span> <span class="m">2014</span> home
+lrwxrwxrwx <span class="m">1</span> root root <span class="m">7</span> Aug <span class="m">14</span> 21:00 lib -&gt; usr/lib
+lrwxrwxrwx <span class="m">1</span> root root <span class="m">9</span> Aug <span class="m">14</span> 21:00 lib64 -&gt; usr/lib64
+drwx------ <span class="m">2</span> root root <span class="m">4096</span> Aug <span class="m">14</span> 21:00 lost+found
+drwxr-xr-x <span class="m">2</span> root root <span class="m">4096</span> Jun <span class="m">10</span> <span class="m">2014</span> media
+drwxr-xr-x <span class="m">2</span> root root <span class="m">4096</span> Jun <span class="m">10</span> <span class="m">2014</span> mnt
+drwxr-xr-x <span class="m">2</span> root root <span class="m">4096</span> Jun <span class="m">10</span> <span class="m">2014</span> opt
+dr-xr-xr-x <span class="m">113</span> root root <span class="m">0</span> Nov <span class="m">2</span> 18:32 proc
+dr-xr-x--- <span class="m">3</span> root root <span class="m">4096</span> Nov <span class="m">2</span> 18:32 root
+drwxr-xr-x <span class="m">5</span> root root <span class="m">4096</span> Nov <span class="m">2</span> 18:32 run
+lrwxrwxrwx <span class="m">1</span> root root <span class="m">8</span> Aug <span class="m">14</span> 21:00 sbin -&gt; usr/sbin
+drwxr-xr-x <span class="m">2</span> root root <span class="m">4096</span> Jun <span class="m">10</span> <span class="m">2014</span> srv
+dr-xr-xr-x <span class="m">13</span> root root <span class="m">0</span> Nov <span class="m">2</span> 18:32 sys
+drwxrwxrwt <span class="m">7</span> root root <span class="m">4096</span> Nov <span class="m">2</span> 18:34 tmp
+drwxr-xr-x <span class="m">13</span> root root <span class="m">4096</span> Aug <span class="m">14</span> 21:00 usr
+drwxr-xr-x <span class="m">20</span> root root <span class="m">4096</span> Nov <span class="m">1</span> 01:51 var
+
+<span class="o">[</span>root@7cd5b2c63c16 /<span class="o">]</span><span class="c"># exit</span></code></pre></div>
+
+
+
+<p><br><strong>Configure Passwords</strong></p>
+
+<p>The last step is to configure the email and password used to secure the site. Using an email address for the userid ensures global uniqueness. To assign the password used to secure the control panel web page, use the <code>setpass</code> command supplying the email address and password to be used: <code>./rs-docker-util.sh setpass "myuser@domain.com" "mysecret"</code></p>
+
+<p>Tip: If the password contains any special characters like \ or &amp; the BASH shell will try and interpret and consume these characters. It is always a good idea to quote protect passwords when passing on the command-line as shown above to prevent this from happening.</p>
+
+<p>The system is now ready to be used. The control panel web page can be accessed via the <code>/secure/</code> route: <code>https://mydomain.com/secure/</code> Note that if a custom port (other than 443) was selected, it is necessary to supply it after the host with a colon: <code>https://mydomain.com:8443/secure/</code> Also note that if a custom port is used, the trailing slash MUST be specified or the browser will attempt to 301 follow the URL using the default 443 port.</p>
+
+
+
+<h3 id="a140808-device-setup">A140808 Device Setup</h3>
+
+<p>At this point we are ready to configure an A140808 device for use with the system and run an end-to-end test! The first thing to do is to set the host name and port of the web server on the A140808 device. Access the device using ssh (see <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#booting-ssh">Booting and SSH</a>). Once connected, edit the <code>/etc/config/cloudcfg</code> file to set the host name and port (8443 in this example). The A140808 daemon will need to be restarted to pickup the new value.</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span><span class="nb">echo</span> <span class="s1">'52.1.48.84:8443'</span> &gt; /etc/config/cloudcfg
+ 
+<span class="nv">$ </span>/etc/init.d/a140808 restart
+stopping deamon...
+starting deamon...
+child process pid: <span class="o">[</span>783<span class="o">]</span>
+ 
+<span class="nv">$ </span>logread
+ . . .
+Nov <span class="m">2</span> 21:56:19 a140808 daemon.notice a140808<span class="o">[</span>2014<span class="o">]</span>: daemon started
+Nov <span class="m">2</span> 21:56:19 a140808 daemon.notice a140808<span class="o">[</span>2014<span class="o">]</span>: opening /dev/ttyS1 at <span class="m">57600</span> baud, E71
+Nov <span class="m">2</span> 21:56:19 a140808 daemon.notice a140808<span class="o">[</span>2014<span class="o">]</span>: connecting to host: <span class="o">[</span>52.1.48.84<span class="o">]</span>
+Nov <span class="m">2</span> 21:56:19 a140808 daemon.debug a140808<span class="o">[</span>2014<span class="o">]</span>: ws_connect
+Nov <span class="m">2</span> 21:56:19 a140808 daemon.debug a140808<span class="o">[</span>2014<span class="o">]</span>: ws_connect: creating context
+Nov <span class="m">2</span> 21:56:19 a140808 daemon.debug a140808<span class="o">[</span>2014<span class="o">]</span>: ws_connect: connect request succeeded
+Nov <span class="m">2</span> 21:56:20 a140808 daemon.notice a140808<span class="o">[</span>2014<span class="o">]</span>: ws_onevent: LWS_CALLBACK_CLIENT_ESTABLISHED
+Nov <span class="m">2</span> 21:56:20 a140808 daemon.info a140808<span class="o">[</span>2014<span class="o">]</span>: ws_onopen -- connection established --</code></pre></div>
+
+<p>Notice the last line in the log output. The &#x201C;connection established&#x201D; message indicates that everything went well. If the a140808 daemon is stuck in a reconnect loop instead, there is a very good chance the public root CA certificate is not properly installed on the device or the web server. This certificate should live in the <code>/etc/ssl/certs</code> directory on the A140808 device, and have a symbolic link named by taking the hash + .0 of the CA public certificate. To compute the hash of the public CA certificate, use a machine with openssl installed and issue the command <code>openssl x509 -hash -noout -in &lt;ca_filename.cer&gt;</code></p>
+
+<div class="highlight"><pre><code class="language-sh">root@a140808:~# ls -al /etc/ssl/certs
+drwxr-xr-x <span class="m">1</span> root root <span class="m">0</span> Oct <span class="m">3</span> 23:43 ./
+drwxr-xr-x <span class="m">1</span> root root <span class="m">0</span> Oct <span class="m">1</span> 05:05 ../
+lrwxrwxrwx <span class="m">1</span> root root <span class="m">13</span> Oct <span class="m">3</span> 23:43 7543b2d6.0 -&gt; acme-co_ca_public.cer
+-rw-r--r-- <span class="m">1</span> root root <span class="m">2118</span> Oct <span class="m">3</span> 23:43 acme-co_ca_public.cer</code></pre></div>
+
+<p>Once the A140808 device is able to connect with the web server, check the <code>/secure/stats</code> endpoint to see the devices registered with it. The endpoint is secured by the userid (email) and password specified above in the setpass step. Issue the following command to see the devices registered with the server (note that you must specify the userid after the <code>--user</code> command line option):</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>wget --user &lt;userid&gt; --ask-password -qO- --no-check-certificate <span class="s2">"https://52.1.48.84/secure/stats?id=ALL"</span>
+<span class="o">{</span> <span class="s2">"hostname"</span>: <span class="s2">"7cd5b2c63c16"</span>, 
+ <span class="s2">"time"</span>: <span class="s2">"2015-11-02T00:20:05"</span>, 
+ <span class="s2">"channels"</span>: <span class="s2">"1"</span>, 
+ <span class="s2">"wildcard_channels"</span>: <span class="s2">"0"</span>, 
+ <span class="s2">"uptime"</span>: <span class="s2">"20865"</span>, 
+ <span class="s2">"infos"</span>: <span class="o">[{</span> 
+ <span class="s2">"channel"</span>: <span class="s2">"akbmkzh80"</span>, 
+ <span class="s2">"published_messages"</span>: <span class="s2">"0"</span>, 
+ <span class="s2">"stored_messages"</span>: <span class="s2">"0"</span>, 
+ <span class="s2">"subscribers"</span>: <span class="s2">"1"</span>
+ <span class="o">}]</span>
+<span class="o">}</span></code></pre></div>
+
+
+
+<p><br><strong>Configure Control Panel</strong></p>
+
+<p>Now that the A140808 device has a connection to the web server, it is now possible to issue a command to it. To issue a command, the web page control panel needs to be configured with the serial number (aka Device ID) of the device to control, in this case <code>akbmkzh80</code> See <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#bfirm-uboot">Adding u-boot</a> above for details on the device serial number. The other configuration task is to enter the email address and password that was set for the signed url hash above (see <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#bweb-config-pw">Configure Passwords</a>).</p>
+
+<p>The Device Control Panel web page has two device sections for controlling two different unique devices. Paste the serial number in the upper-right edit field where it says &#x201C;Device ID&#x201D; of either one.</p>
+
+<p>Finally, in the upper-right corner of the web page, click the &#x201C;Sign In&#x201D; menu item, and enter the email address and password assigned previously (see <a href="http://www.rest-switch.com/a140808/iot/opensource/2015/11/02/a140808.html#bweb-config-pw">sethash</a> above), and then click the &#x201C;Sign In&#x201D; button.</p>
+
+<p>At this point the configuration is complete! Clicking &#x201C;Button 1&#x201D; should result in relay 1 clicking shut for 250 ms. Likewise, clicking &#x201C;Button 2&#x201D; should result in relay 2 clicking shut for 250 ms. Now that the system is working end-to-end, it is time to build the Android client.</p>
+
+
+
+<h3 id="building-android">Building Android</h3>
+
+<p>The Android client implements equivalent functionality to that of the web control panel as a native Android app. The app is designed with a quick access and quick dismissing overlay style to make it as convenient as possible to popup and dismiss quickly. Android is the only mobile app available for this project right now, so an iOS port pull request would be greatly appreciated.</p>
+
+
+
+<p><br><strong>Installing Android Studio</strong></p>
+
+<p>The <a href="https://developer.android.com/sdk/index.html" target="_blank">Android Studio IDE</a> needs to be installed to complie and deploy the app. This overview is not meant to be a tutorial on how to get up an running with Android Studio, many great articles are available. I personally used the <a href="http://www.ebookfrenzy.com/ebookpages/android_studio_ebook.html" target="_blank">Android Studio Development Essentials</a> eBook and got a lot out of it. Get started by downloading and installing the <a href="http://www.oracle.com/technetwork/java/javase/downloads/jdk7-downloads-1880260.html" target="_blank">Oracle Java JDK 7</a> and then the <a href="https://developer.android.com/sdk/index.html" target="_blank">Android Studio IDE</a>.</p>
+
+
+
+<p><br><strong>Download Android Project Files</strong></p>
+
+<p>Once Android Studio has been installed, download the A140808 github repository and extract it:</p>
+
+<div class="highlight"><pre><code class="language-sh"><span class="nv">$ </span>wget -O client_android_cp.tar.gz https://github.com/rest-switch/client_android_cp/archive/master.tar.gz
+<span class="nv">$ </span>tar xzvf client_android_cp.tar.gz
+<span class="nv">$ </span><span class="nb">cd </span>client_android_cp-master
+
+<span class="o">[</span>client_android_cp-master<span class="o">]</span><span class="nv">$ </span>ls -al
+total 32K
+drwxrwxr-x <span class="m">3</span> johnc johnc 4.0K Oct <span class="m">5</span> 07:39 app
+-rw-rw-r-- <span class="m">1</span> johnc johnc 1.4K Oct <span class="m">5</span> 07:39 build.gradle
+-rw-rw-r-- <span class="m">1</span> johnc johnc 1.9K Oct <span class="m">5</span> 07:39 client_android_cp.iml
+drwxrwxr-x <span class="m">3</span> johnc johnc 4.0K Oct <span class="m">5</span> 07:39 gradle
+-rw-rw-r-- <span class="m">1</span> johnc johnc 1.8K Oct <span class="m">5</span> 07:39 gradle.properties
+-rwxrwxr-x <span class="m">1</span> johnc johnc 5.9K Oct <span class="m">5</span> 07:39 gradlew
+-rw-rw-r-- <span class="m">1</span> johnc johnc <span class="m">925</span> Oct <span class="m">5</span> 07:39 settings.gradle</code></pre></div>
+
+<p>Using the Android Studio welcome dialog, select the &#x201C;Open an existing Android Studio project&#x201D; menu option and navigate to the <code>client_android_cp-master</code> directory. After a few moments the IDE should come up with the project loaded. Android Studio is extremely user friendly and it will prompt to download any missing components.</p>
+
+<p><br><a href="http://www.rest-switch.com/images/android_studio.png" target="_blank"><img width="680px" src="http://www.rest-switch.com/images/android_studio.png"></a></p>
+
+
+
+<p><br><strong>Build Android Project Files</strong></p>
+
+<p>Select &#x201C;Build -&gt; Make Project&#x201D; from the menu to confirm the project builds successfully. There are not many options to tune in the app at compile time. Two settings which may be of interest for compile time tuning are located in the <a href="https://github.com/rest-switch/client_android_cp/blob/master/app/src/main/java/com/restswitch/controlpanel/AjaxTask.java" target="_blank">AjaxTask.java</a> file: <code>CONNECT_TIMEOUT_MS</code> and <code>READ_TIMEOUT_MS</code></p>
+
+<p>The app can be tested from within Android Studio by selecting &#x201C;Run -&gt; Run &#x2018;app&#x2019;&#x201D; from the menu. The &#x201C;Device Chooser&#x201D; dialog will appear where an Android device emulator may be selected. If an Android virtual device is not available from the dropdown, it may be necessary to <a href="http://developer.android.com/tools/devices/index.html" target="_blank">create a new virtual device</a> first. Another option is to use a physical Android device as the target device.</p>
+
+<p>All relevant settings for connecting the app to the web server as well as device selection are set at runtime in from the app settings menu. Note that the raw password is not stored on the device and is HMAC hashed with the email address. Therefore, changing the email address invalidates the hash and the password will need to be reset afterward.</p>
+
+<p>Once you are satisfied with the functioning of the app, a signed apk can be generated for deploying to a physical device by selecting &#x201C;Build -&gt; Generate Signed APK&#x2026;&#x201D; and following the prompts. After the signed apk has been generated, transfer the file to the phone. One way of transferring the apk file to the phone is via email.</p>
+
+
+
+<h3 id="conclusion">Conclusion</h3>
+
+<p>The A140808 controller is a powerful, robust, and inexpensive platform. This article is mainly geared toward getting up and running. Later articles will dive deeper into the extensive facilities and command set of the device. For example, the outputs can be set on, off, or toggled for 0-255ms. Additionally, the inputs can be read or trigger a webhook. Digging into the <a href="https://github.com/rest-switch/device_a140808/tree/master/hlk-rm04/files/package/system/a140808/src" target="_blank">device firmware source</a> is a great place to start.</p>
+
+<p><br>The A140808 platform has several potential applications:</p>
+
+<p><strong>Garage Door Opener</strong></p>
+
+<iframe width="420" height="315" src="https://www.youtube.com/embed/GuuRBDjM3E4"></iframe>
+
+
+
+<p><strong>Thermostat</strong></p>
+
+<p>The potential exists for controlling an HVAC system much the same way the <a href="http://www.bayweb.com/media/2005/bw-wt4-1doc.pdf" target="_blank">BayWeb Thermostat</a> does. In this application a remote temperature sending device needs to be added either via serial (i.e. RS485) or WiFi connection. The number of relay outputs of the A140808 device are suitable and appropriate for controlling modern HVAC equipment.</p>
+
+
+
+<p><strong>Sprinkler System Control</strong></p>
+
+<p>The relay outputs of the A140808 device also make it highly siutable for controlling a sprinkler system the way <a href="https://opensprinkler.com" target="_blank">other projects</a> do, but at a much lower cost.</p>
+
+
+
+<p><strong>Home Alarm</strong></p>
+
+<p>Integration with an existing alarm system or alarm system components for an open source extensible alarm system.</p>
+
+
+
+<p><strong>Other Hardware</strong></p>
+
+<p>Other projects based on the Ralink RT5350 SOC include devices in the <a target="_blank" href="http://www.belkin.com/us/Products/home-automation/c/wemo-home-automation">WeMo</a> hardware line. Presumably, only minor modifications to this project would be needed to take advantage of this hardware.</p>
+
+
+
+<h3 id="how-to-help">How to Help</h3>
+
+<p>The goal of this effort is to create a highly secure open source IoT ecosystem. A primary problem with existing IoT products is weak security. Unfortunately high security and encryption create an opaque environment, and consumers have no good way of knowing what their IoT devices are doing. One way to remove this uncertainty is to open source the implementation.</p>
+
+<p>The goal of the hardware is to adapt off-the-shelf hardware for IoT projects. The goal is <em>not</em> to create a fragile connection from a Raspberry Pi to a garage door. All projects must be safe and suitable to run in an industrial, commercial, or residential application.</p>
+
+<p>This is an open source project and pull requests are greatly appreciated. This project is still in need of core committers, if you have an interest at this level, please contact me directly.</p>
+
+
+
+
+
+
+
+
+
+
+ </div>
+ </div>
+</body></html>

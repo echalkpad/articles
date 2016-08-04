@@ -1,0 +1,530 @@
+<!DOCTYPE html><html><head><title>Build a JavaScript Command Line Interface (CLI) with Node.js</title></head><body>
+<h1>Build a JavaScript Command Line Interface (CLI) with Node.js</h1><p><a href="https://www.sitepoint.com/javascript-command-line-interface-cli-node-js/" target="_new">Original URL</a></p>
+<p><blockquote>This article was peer reviewed by Dan Prince. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be! As great as Node.js is for&hellip;</blockquote></p>
+<div><div class="ArticleCopy language-">
+ 
+<p><img src="https://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2016/07/1468406617node-github1d-01-01.png" alt="Build a Node CLI" width="751" class="alignleft size-full wp-image-135109"></p>
+<p><em>This article was peer reviewed by <a href="https://www.sitepoint.com/author/dprince">Dan Prince</a>. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be!</em></p>
+<p>As great as Node.js is for &#x201C;traditional&#x201D; web applications, its potential uses are far broader. Microservices, REST APIs, tooling, working with the Internet of Things and even desktop applications&#x2014;it&#x2019;s got your back.</p>
+
+<p>Another area where Node.js is really useful is for building command-line applications&#x2014;and that&#x2019;s what we&#x2019;re going to be doing today. We&#x2019;re going to start by looking at a number of third-party packages designed to help work with the command-line, then build a real-world example from scratch.</p>
+<p>What we&#x2019;re going to build is a tool for initializing a Git repository. Sure, it&#x2019;ll run <code>git init</code> under the hood, but it&#x2019;ll do more than just that. It will also create a remote repository on Github right from the command line, allow the user to interactively create a <code>.gitignore</code> file and finally perform an initial commit and push.</p>
+<p>As ever, the code accompanying this tutorial can be found on our <a href="https://github.com/sitepoint-editors/ginit">GitHub repo</a>.</p>
+<h2 id="whybuildacommandlinetoolwithnodejs">Why Build a Command-line Tool with Node.js?</h2>
+<p>Before we dive in and start building, it&#x2019;s worth looking at why we might choose Node.js to build a command-line application.</p>
+<p>The most obvious advantage is that if you&#x2019;re reading this, you&#x2019;re probably already familiar with it&#x2014;and indeed, with JavaScript.</p>
+<p>Another key advantage, as we&#x2019;ll see as we go along, is that the strong Node.js ecosystem means that among the hundreds of thousands of packages available for all manner of purposes, there are a number which are specifically designed to help build powerful command-line tools.</p>
+<p>Finally, we can use <code>npm</code> to manage any dependencies, rather than have to worry about OS-specific package managers such as Aptitude, Yum or Homebrew.</p>
+<p class="tip">That said, that&#x2019;s not necessarily true, in that your command-line tool may have other external dependencies.</p>
+<h2 id="whatweregoingtobuildintroducingginit">What We&#x2019;re Going to Build&#x2014;Introducing ginit</h2>
+<p><img src="https://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2016/07/1467718020Ginit-in-action.png" alt="Ginit, our Node CLI in action"></p>
+<p>For this tutorial, We&#x2019;re going to create a command-line utility which I&#x2019;m calling <strong>ginit</strong>. It&#x2019;s <code>git init</code>, but on steroids.</p>
+<p>You&#x2019;re probably wondering what on earth that means.</p>
+<p>As you no doubt already know, <code>git init</code> initializes a git repository in the current folder. However, that&#x2019;s usually only one of a number of repetitive steps involved in the process of hooking up a new or existing project to Git. For example, as part of a typical workflow, you might well:</p>
+<ol>
+<li>Initialise the local repository by running <code>git init</code></li>
+<li>Create a remote repository, for example on Github or Bitbucket; typically by leaving the command-line and firing up a web browser</li>
+<li>Add the remote</li>
+<li>Create a <code>.gitignore</code> file</li>
+<li>Add your project files</li>
+<li>Commit the initial set of files</li>
+<li>Push up to the remote repository</li>
+</ol>
+<p>There are often more steps involved, but we&#x2019;ll stick to those for the purposes of our app. Nevertheless, these steps are pretty repetitive. Wouldn&#x2019;t it be better if we could do all this from the command-line, with no copying-and-pasting of Git URLs and such-like?</p>
+<p>So what ginit will do is create a Git repository in the current folder, create a remote repository&#x2014;we&#x2019;ll be using Github for this&#x2014;and then add it as a remote. Then it will provide a simple interactive &#x201C;wizard&#x201D; for creating a <code>.gitignore</code> file, add the contents of the folder and push it up to the remote repository. It might not save you hours, but it&#x2019;ll remove some of the initial friction when starting a new project.</p>
+<p>With that in mind, let&#x2019;s get started.</p>
+<h2 id="theapplicationdependencies">The Application Dependencies</h2>
+<p>One thing is for certain&#x2014;in terms of appearence, the console will never have the sophistication of a graphical user interface. Nevertheless, that doesn&#x2019;t mean it has to be plain, ugly, monochrome text. You might be surprised by just how much you can do visually, while at the same time keeping it functional. We&#x2019;ll be looking at a couple of libraries for enhancing the display: <a href="https://www.npmjs.com/package/chalk">chalk</a> for colorizing the output and <a href="https://www.npmjs.com/package/clui">clui</a> to add some additional visual components. Just for fun, we&#x2019;ll use <a href="https://www.npmjs.com/package/clui">figlet</a> to create a fancy ASCII-based banner and we&#x2019;ll also use <a href="https://www.npmjs.com/package/clear">clear</a> to clear the console.</p>
+<p>In terms of input and output, the low-level <a href="https://nodejs.org/api/readline.html">Readline</a> Node.js module could be used to prompt the user and request input, and in simple cases is more than adequate. But we&#x2019;re going to take advantage of a third-party package which adds a greater degree of sophistication&#x2014;<a href="https://www.npmjs.com/package/inquirer">Inquirer</a>. As well as providing a mechanism for asking questions, it also implements simple input controls; think radio buttons and checkboxes, but in the console.</p>
+<p>We&#x2019;ll also be using <a href="https://www.npmjs.com/package/minimist">minimist</a> to parse command-line arguments.</p>
+<p>Here&#x2019;s a complete list of the packages we&#x2019;ll use specifically for developing on the command-line:</p>
+<ul>
+<li><a href="https://www.npmjs.com/package/chalk">chalk</a> &#x2013; colorizes the output</li>
+<li><a href="https://www.npmjs.com/package/clear">clear</a> &#x2013; clears the terminal screen</li>
+<li><a href="https://www.npmjs.com/package/clui">clui</a> &#x2013; draws command line tables, gauges and spinners</li>
+<li><a href="https://www.npmjs.com/package/figlet">figlet</a> &#x2013; creates ASCII art from text</li>
+<li><a href="https://www.npmjs.com/package/inquirer">inquirer</a> &#x2013; creates interactive command line user interface</li>
+<li><a href="https://www.npmjs.com/package/minimist">minimist</a> &#x2013; parses argument options</li>
+<li><a href="https://www.npmjs.com/package/preferences">preferences</a> &#x2013; manage CLI application encrypted preferences</li>
+</ul>
+<p>Additionally, we&#x2019;ll also be using the following:</p>
+<ul>
+<li><a href="https://www.npmjs.com/package/github">github</a> &#x2013; Node wrapper for the GitHub API</li>
+<li><a href="https://www.npmjs.com/package/lodash">lodash</a> &#x2013; JavaScript utility library</li>
+<li><a href="https://www.npmjs.com/package/simple-git">simple-git</a> &#x2013; runs Git commands in a Node.js application</li>
+<li><a href="https://www.npmjs.com/package/touch">touch</a> &#x2013; implementation of the *Nix touch command</li>
+</ul>
+<h2 id="gettingstarted">Getting Started</h2>
+<p>Although we&#x2019;re going to create the application from scratch, don&#x2019;t forget that you can also grab a copy of the code from the <a href="https://github.com/sitepoint-editors/ginit">repository which accompanies this article</a>.</p>
+<p>Create a new directory for the project. You don&#x2019;t have to call it <code>ginit</code>, of course.</p>
+<pre><code class="bash language-bash">mkdir ginit
+cd ginit
+</code></pre>
+<p>Create a new <code>package.json</code> file:</p>
+<pre><code class="bash language-bash">npm init
+</code></pre>
+<p>Follow the simple wizard, for example:</p>
+<pre><code>name: (ginit)
+version: (1.0.0)
+description: "git init" on steroids
+entry point: (index.js)
+test command:
+git repository:
+keywords: Git CLI
+author: [YOUR NAME]
+license: (ISC)
+</code></pre>
+<p>Now install the depenencies:</p>
+<pre><code class="bash language-bash">npm install chalk clear clui figlet inquirer minimist preferences github lodash simple-git touch --save
+</code></pre>
+<p>Alternatively, simply copy-and-paste the following <code>package.json</code> file&#x2014;modifying the <code>author</code> appropriately&#x2014;or grab it from the <a href="https://github.com/sitepoint-editors/ginit/blob/master/package.json">repository which accompanies this article</a>:</p>
+<pre><code class="javascript language-javascript">{
+ "name": "ginit",
+ "version": "1.0.0",
+ "description": "\"git init\" on steroids",
+ "main": "index.js",
+ "keywords": [
+ "Git",
+ "CLI"
+ ],
+ "author": "Lukas White &lt;hello@lukaswhite.com&gt;",
+ "license": "ISC",
+ "dependencies": {
+ "chalk": "^1.1.3",
+ "clear": "0.0.1",
+ "clui": "^0.3.1",
+ "figlet": "^1.1.2",
+ "github": "^2.1.0",
+ "inquirer": "^1.1.0",
+ "lodash": "^4.13.1",
+ "minimist": "^1.2.0",
+ "preferences": "^0.2.1",
+ "simple-git": "^1.40.0",
+ "touch": "^1.0.0"
+ }
+}
+</code></pre>
+<p>Now create an <code>index.js</code> file in the same folder and <code>require</code> all of the dependencies:</p>
+<pre><code class="javascript language-javascript">var chalk = require('chalk');
+var clear = require('clear');
+var CLI = require('clui');
+var figlet = require('figlet');
+var inquirer = require('inquirer');
+var Preferences = require('preferences');
+var Spinner = CLI.Spinner;
+var GitHubApi = require('github');
+var _ = require('lodash');
+var git = require('simple-git')();
+var touch = require('touch');
+var fs = require('fs');
+</code></pre>
+<p class="tip">Note that the simple-git package exports a function which needs to be called.</p>
+<h2 id="addingsomehelpermethods">Adding Some Helper Methods</h2>
+<p>In the course of the application, we&#x2019;ll need to do the following:</p>
+<ul>
+<li>Get the current directory (to get a default repo name)</li>
+<li>Check whether a directory exists (to determine whether the current folder is already a Git repository by looking for a folder named <code>.git</code>).</li>
+</ul>
+<p>This sounds straight forward, but there are a couple of gotchyas to take into consideration.</p>
+<p>Firstly, you might be tempted to use the <code>fs</code> module&#x2019;s <a href="https://nodejs.org/api/fs.html#fs_fs_realpathsync_path_options">realpathSync</a> method to get the current directory:</p>
+<pre><code class="javascript language-javascript">path.basename(path.dirname(fs.realpathSync(__filename)));
+</code></pre>
+<p>This will work when we are calling the application from the same directory (e.g. using <code>node index.js</code>), but bear in mind that we&#x2019;re going to be making our console application available globally. This means we&#x2019;ll want the name of the directory we&#x2019;re working in, not the directory where the application resides. For this purpose it&#x2019;s better to use <a href="https://nodejs.org/api/process.html#process_process_cwd">process.cwd</a>:</p>
+<pre><code class="javascript language-javascript">path.basename(process.cwd());
+</code></pre>
+<p>Secondly, the preferred method of checking whether a file or directory exists <a href="http://stackoverflow.com/a/4482701">keeps changing</a>&#x2014;the current way is to use <code>fs.stat</code> / <code>fs.statSync</code>. These throw an error if there&#x2019;s no file, so we need to use a <code>try..catch</code> block.</p>
+<p>Finally, it&#x2019;s worth noting that when you&#x2019;re writing a command line application, using the synchronous version of these sorts of methods is just fine.</p>
+<p>Putting that all together, let&#x2019;s create a utilty package in <code>lib/files.js</code>:</p>
+<pre><code class="javascript language-javascript">var fs = require('fs');
+var path = require('path');
+
+module.exports = {
+ getCurrentDirectoryBase : function() {
+ return path.basename(process.cwd());
+ },
+
+ directoryExists : function(filePath) {
+ try {
+ return fs.statSync(filePath).isDirectory();
+ } catch (err) {
+ return false;
+ }
+ }
+};
+</code></pre>
+<p>Go back to <code>index.js</code> and ensure you <code>require</code> the new file:</p>
+<pre><code class="javascript language-javascript">var files = require('./lib/files');
+</code></pre>
+<p>With this in place, we can start developing the application.</p>
+<h2 id="initializingtheapp">Initializing the Node CLI</h2>
+<p>Now let&#x2019;s implement the start-up phase of our console application.</p>
+<p>In order to demonstrate some of the packages we&#x2019;ve installed to enhance the console output, let&#x2019;s clear the screen and then display a banner:</p>
+<pre><code class="javascript language-javascript">clear();
+console.log(
+ chalk.yellow(
+ figlet.textSync('Ginit', { horizontalLayout: 'full' })
+ )
+);
+</code></pre>
+<p>The output from this is shown below.</p>
+<p><img src="https://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2016/07/1467718857Ginit-logo.png" alt="The welcome banner on our Node CLI, created using Chalk and Figlet"></p>
+<p>Next up, let&#x2019;s run a simple check to ensure that the current folder isn&#x2019;t already a Git repository. That&#x2019;s easy&#x2014;we just check for the existence of a <code>.git</code> folder using the utility method we just created:</p>
+<pre><code class="javascript language-javascript">if (files.directoryExists('.git')) {
+ console.log(chalk.red('Already a git repository!'));
+ process.exit();
+}
+</code></pre>
+<p class="tip">Notice we&#x2019;re using the <a href="https://www.npmjs.com/package/chalk">chalk module</a> to show a red-colored message.</p>
+<h2 id="promptingtheuserforinput">Prompting the User for Input</h2>
+<p>The next thing we need to do is create a function which will prompt the user for their Github credentials.</p>
+<p>We can use <a href="https://www.npmjs.com/package/inquirer">Inquirer</a> for this. The module includes a number of methods for various types of prompts, which are roughly analogous to HTML form controls. In order to collect the user&#x2019;s Github username and password, we&#x2019;re going to use the <code>input</code> and <code>password</code> types respectively. Here is the code:</p>
+<pre><code class="javascript language-javascript">function getGithubCredentials(callback) {
+ var questions = [
+ {
+ name: 'username',
+ type: 'input',
+ message: 'Enter your Github username or e-mail address:',
+ validate: function( value ) {
+ if (value.length) {
+ return true;
+ } else {
+ return 'Please enter your username or e-mail address';
+ }
+ }
+ },
+ {
+ name: 'password',
+ type: 'password',
+ message: 'Enter your password:',
+ validate: function(value) {
+ if (value.length) {
+ return true;
+ } else {
+ return 'Please enter your password';
+ }
+ }
+ }
+ ];
+
+ inquirer.prompt(questions).then(callback);
+}
+</code></pre>
+<p>As you can see, <code>inquirer.prompt()</code> asks the user a series of questions, provided in the form of an array as the first argument. Each question is made up of an object which defines the <code>name</code> of the field, the <code>type</code> (we&#x2019;re just using <code>input</code> and <code>password</code> respectively here, but later we&#x2019;ll look at a more advanced example), the prompt (<code>message</code>) to display and a validation callback (<code>validate</code>).</p>
+<p>The input the user provides will be passed in to the callback, so we&#x2019;ll end up with simple object with two properties; <code>username</code> and <code>password</code>.</p>
+<p>You can test all of this out by adding the following to <code>index.js</code>:</p>
+<pre><code class="javascript language-javascript">getGithubCredentials(function(){
+ console.log(arguments);
+});
+</code></pre>
+<p>And then running the script using <code>node index.js</code>.</p>
+<p><img src="https://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2016/07/1467718862Prompting-the-user-for-input.png" alt="Getting user input with Inquirer"></p>
+<h2 id="dealingwithgithubauthentication">Dealing With GitHub Authentication</h2>
+<p>The next step is to create a function to retrieve an OAuth token for the Github API. Essentially we&#x2019;re going to &#x201C;exchange&#x201D; the username and password for a token.</p>
+<p>Of course we don&#x2019;t want users to have to enter their credentials every time they use the tool; instead, we&#x2019;ll store the OAuth token for subsequent requests. This is where the <a href="https://www.npmjs.com/package/preferences">preferences</a> package comes in.</p>
+<h3 id="storingpreferences">Storing Preferences</h3>
+<p>Storing preferences is outwardly quite straightforward; you can simply read and write to/from a JSON file, without the need for a third-party package. However the preferences package provides a few key advantages:</p>
+<ol>
+<li>It determines the most appropriate location for the file for you, taking into account your operating system and the current user.</li>
+<li>There&#x2019;s no need to explicitly read or write to the file, you simply modify a preferences object and that&#x2019;s taken care of for you in the background.</li>
+<li>The preferences data is encrypted. That&#x2019;s significant in the context of this example, since we&#x2019;re going to be storing sensitive user data.</li>
+</ol>
+<p>To use it, simply create an instance, passing it an application identifier, for example:</p>
+<pre><code class="javascript language-javascript">var prefs = new Preferences('ginit');
+</code></pre>
+<p>If the preferences file doesn&#x2019;t exist, it&#x2019;ll return an empty object and create the file in the background. If there&#x2019;s already a preferences file, the contents will be decoded into JSON and made available to your application. You can now use <code>prefs</code> as a simple object, getting or setting properties as required. As mentioned above, you don&#x2019;t need to worry about saving it afterwards&#x2014;that gets taken care of for you.</p>
+<p class="tip">On Mac OSX/Linux, you&#x2019;ll find the file in <code>/Users/[YOUR-USERNME]/.config/preferences/ginit.pref</code></p>
+<h2 id="communicatingwiththegithubapi">Communicating with the GitHub API</h2>
+<p>Let&#x2019;s create an instance of the Github API. We&#x2019;ll be using this in a couple of places, so we&#x2019;ll make it available to our script globally:</p>
+<pre><code class="javascript language-javascript">var github = new GitHubApi({
+ version: '3.0.0'
+});
+</code></pre>
+<p>Now comes the function which checks whether we&#x2019;ve already got an access token:</p>
+<pre><code class="javascript language-javascript">function getGithubToken(callback) {
+ var prefs = new Preferences('ginit');
+
+ if (prefs.github &amp;&amp; prefs.github.token) {
+ return callback(null, prefs.github.token);
+ }
+
+ // Fetch token
+ getGithubCredentials(function(credentials) {
+ ...
+ });
+}
+</code></pre>
+<p>If a <code>prefs</code> object exists and it has <code>github</code> and <code>github.token</code> properties, this means that there is already a token in storage. In this case the callback function (passed in as an argument) is executed and control returns to the invoking function. We&#x2019;ll get to that later on.</p>
+<p>If no token is detected, we need to fetch one. Of course getting an OAuth token involves a network request, which means a short wait for the user. This gives us an opportunity to look at the <a href="https://www.npmjs.com/package/clui">clui</a> package which provides some enhancements for console-based applications, among them an animated spinner.</p>
+<p>Creating a spinner is easy:</p>
+<pre><code class="javascript language-javascript">var status = new Spinner('Authenticating you, please wait...');
+status.start();
+</code></pre>
+<p>Once you&#x2019;re done, simply stop it and it will disappear from the screen:</p>
+<pre><code class="javascript language-javascript">status.stop();
+</code></pre>
+<p class="tip">You can also set the caption dynamically using the <code>update</code> method. This could be useful if you have some indication of progress, for example displaying the percentage complete.</p>
+<p>Here&#x2019;s the code to authenticate with Github:</p>
+<pre><code class="javascript language-javascript">getGithubCredentials(function(credentials) {
+ var status = new Spinner('Authenticating you, please wait...');
+ status.start();
+
+ github.authenticate(
+ _.extend(
+ {
+ type: 'basic',
+ },
+ credentials
+ )
+ );
+
+ github.authorization.create({
+ scopes: ['user', 'public_repo', 'repo', 'repo:status'],
+ note: 'ginit, the command-line tool for initalizing Git repos'
+ }, function(err, res) {
+ status.stop();
+ if ( err ) {
+ return callback( err );
+ }
+ if (res.token) {
+ prefs.github = {
+ token : res.token
+ };
+ return callback(null, res.token);
+ }
+ return callback();
+ });
+});
+</code></pre>
+<p>Let&#x2019;s step through this:</p>
+<ol>
+<li>We prompt the user for their credentials using the <code>getGithubCredentials</code> method we defined earlier.</li>
+<li>We use <a href="https://github.com/mikedeboer/node-github#authentication">basic authentication</a> prior to trying to obtain an OAuth token.</li>
+<li>We attempt to <a href="https://github.com/mikedeboer/node-github#creating-tokens-for-your-application">create an access token for our application</a>.</li>
+<li>If we manage to get an access token, we set it in the preferences for next time.</li>
+<li>We then return the token.</li>
+</ol>
+<p>Any access tokens you create, whether manually or via the API as we&#x2019;re doing here, you&#x2019;ll be able to <a href="https://github.com/settings/tokens">see them here</a>. During the course of development, you may find you need to delete ginit&#x2019;s access token&#x2014;identifiable by the <code>note</code> parameter supplied above&#x2014;so that you can re-generate it.</p>
+<p class="tip">If you have two-factor authentication enabled on your Github account, the process is slightly more complicated. You&#x2019;ll need to request the confirmation code&#x2014;for example one sent via SMS&#x2014;then supply it using the <code>X-Github-OTP</code> header. See <a href="https://developer.github.com/v3/auth/#working-with-two-factor-authentication">the documentation</a> for further information.</p>
+<p>If you&#x2019;ve been following along and would like to try out what we have so far, ensure that you still have the following to the bottom of <code>index.js</code> and run the code as before:</p>
+<h2 id="creatingarepository">Creating a Repository</h2>
+<p>Once we&#x2019;ve got an OAuth token, we can use it to create a remote repository with Github.</p>
+<p>Again we can use Inquirer to ask a series of questions. We need a name for the repo, we&#x2019;ll ask for an optional description and we also need to know whether it should be public or private.</p>
+<p>We&#x2019;ll use <a href="https://www.npmjs.com/package/minimist">minimist</a> to grab defaults for the name and description from optional command-line arguments. For example:</p>
+<pre><code class="bash language-bash">ginit my-repo "just a test repository"
+</code></pre>
+<p>This will set the default name to <code>my-repo</code> and the description to <code>just a test repository</code>.</p>
+<p>The following line will place the arguments in an array indexed by an underscore:</p>
+<pre><code class="javascript language-javascript">var argv = require('minimist')(process.argv.slice(2));
+// { _: [ 'my-repo', 'just a test repository' ] }
+</code></pre>
+<p class="tip">This only really scratches the surface of the minimist package. You can also use it to intepret flags, switches and name/value pairs. Check out the documentation for more information.</p>
+<p>Here&#x2019;s the code, to parse the command line arguments and ask a series of questions:</p>
+<pre><code class="javascript language-javascript">function createRepo(callback) {
+ var argv = require('minimist')(process.argv.slice(2));
+
+ var questions = [
+ {
+ type: 'input',
+ name: 'name',
+ message: 'Enter a name for the repository:',
+ default: argv._[0] || files.getCurrentDirectoryBase(),
+ validate: function( value ) {
+ if (value.length) {
+ return true;
+ } else {
+ return 'Please enter a name for the repository';
+ }
+ }
+ },
+ {
+ type: 'input',
+ name: 'description',
+ default: argv._[1] || null,
+ message: 'Optionally enter a description of the repository:'
+ },
+ {
+ type: 'list',
+ name: 'visibility',
+ message: 'Public or private:',
+ choices: [ 'public', 'private' ],
+ default: 'public'
+ }
+ ];
+
+ inquirer.prompt(questions).then(function(answers) {
+ var status = new Spinner('Creating repository...');
+ status.start();
+
+ var data = {
+ name : answers.name,
+ description : answers.description,
+ private : (answers.visibility === 'private')
+ };
+
+ github.repos.create(
+ data,
+ function(err, res) {
+ status.stop();
+ if (err) {
+ return callback(err);
+ }
+ return callback(null, res.ssh_url);
+ }
+ );
+ });
+}
+</code></pre>
+<p>Once we have that information, we can simply use the github package to <a href="https://mikedeboer.github.io/node-github/#api-repos-create">create a repo</a>, which will give us a URL for the newly created repository. We can then set that up as a remote in our local Git repository. First, however, let&#x2019;s interactively create a <code>.gitignore</code> file.</p>
+<h2 id="creatingagitignorefile">Creating a .gitignore File</h2>
+<p>For the next step, we&#x2019;ll to create a simple command-line &#x201C;wizard&#x201D; to generate a <code>.gitignore</code> file. If the user is running our application in an existing project directory, let&#x2019;s show them a list of files and directories already in the current working directory, and allow them to select which ones to ignore.</p>
+<p>The Inquirer package provides a <code>checkbox</code> input type for just that.</p>
+<p><img src="https://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2016/07/1467718853Inquirers-checkboxes-.png" alt="Inquirer's checkboxes in action"></p>
+<p>The first thing we need to do is scan the current directory, ignoring the <code>.git</code> folder and any existing <code>.gitignore</code> file (we do this by making use of lodash&#x2019;s <a href="https://lodash.com/docs#without">without</a> method):</p>
+<pre><code class="javascript language-javascript">function createGitignore(callback) {
+ var filelist = _.without(fs.readdirSync('.'), '.git', '.gitignore');
+ ...
+}
+</code></pre>
+<p>If there&#x2019;s nothing to add, there&#x2019;s no point in continuing so let&#x2019;s simply <code>touch</code> the current <code>.gitignore</code> file and bail out of the function:</p>
+<pre><code class="javascript language-javascript">function createGitignore(callback) {
+ var filelist = _.without(fs.readdirSync('.'), '.git', '.gitignore');
+
+ if (filelist.length) {
+ ...
+ } else {
+ touch( '.gitignore' );
+ return callback();
+ }
+}
+</code></pre>
+<p>Finally let&#x2019;s utilize Inquirer&#x2019;s checkbox &#x201C;widget&#x201D; to list the files. Once &#x201C;submitted&#x201D; we then generate a <code>.gitignore</code> by joining up the selected list of files, separated with a newline:</p>
+<pre><code class="javascript language-javascript">function createGitignore(callback) {
+ var filelist = _.without(fs.readdirSync('.'), '.git', '.gitignore');
+
+ if (filelist.length) {
+ inquirer.prompt(
+ [
+ {
+ type: 'checkbox',
+ name: 'ignore',
+ message: 'Select the files and/or folders you wish to ignore:',
+ choices: filelist,
+ default: ['node_modules', 'bower_components']
+ }
+ ]
+ ).then(function( answers ) {
+ if (answers.ignore.length) {
+ fs.writeFileSync( '.gitignore', answers.ignore.join( '\n' ) );
+ } else {
+ touch( '.gitignore' );
+ }
+ return callback();
+ }
+ );
+ } else {
+ touch('.gitignore');
+ return callback();
+ }
+}
+</code></pre>
+<p>Notice that we can also provide a list of defaults&#x2014;in this case we&#x2019;re pre-selecting <code>node_modules</code> and <code>bower_components</code>, should they exist.</p>
+<p>Our function now pretty much guarantees we&#x2019;ve got a <code>.gitignore</code> file, so we can proceed with initializing a Git repository.</p>
+<h2 id="interactingwithgitfromwithintheapp">Interacting with Git From Within the App</h2>
+<p>There are a number of ways to interact with Git but perhaps the simplest is to use the <a href="https://www.npmjs.com/package/simple-git">simple-git</a> package. This provides a set of chainable methods which, behind the scenes, run the Git executable.</p>
+<p>These are the repetitive tasks we will use it to automate:</p>
+<ol>
+<li>Run <code>git init</code></li>
+<li>Add the <code>.gitignore</code> file</li>
+<li>Add the remaining contents of the working directory</li>
+<li>Perform an initial commit</li>
+<li>Add the newly-created remote repository</li>
+<li>Push the working directory up to the remote</li>
+</ol>
+<p>Here&#x2019;s the code:</p>
+<pre><code class="javascript language-javascript">function setupRepo( url, callback ) {
+ var status = new Spinner('Setting up the repository...');
+ status.start();
+
+ git
+ .init()
+ .add('.gitignore')
+ .add('./*')
+ .commit('Initial commit')
+ .addRemote('origin', url)
+ .push('origin', 'master')
+ .then(function(){
+ status.stop();
+ return callback();
+ });
+}
+</code></pre>
+<h2 id="puttingitalltogether">Putting it all together</h2>
+<p>Finally, we&#x2019;ll create a function to obtain the token and authenticate the user:</p>
+<pre><code class="javascript language-javascript">function githubAuth(callback) {
+ getGithubToken(function(err, token) {
+ if (err) {
+ return callback(err);
+ }
+ github.authenticate({
+ type : 'oauth',
+ token : token
+ });
+ return callback(null, token);
+ });
+}
+</code></pre>
+<p>Before moving on to the code which handles the main logic of the app.</p>
+<pre><code class="javascript language-javascript">githubAuth(function(err, authed) {
+ if (err) {
+ switch (err.code) {
+ case 401:
+ console.log(chalk.red('Couldn\'t log you in. Please try again.'));
+ break;
+ case 422:
+ console.log(chalk.red('You already have an access token.'));
+ break;
+ }
+ }
+ if (authed) {
+ console.log(chalk.green('Sucessfully authenticated!'));
+ createRepo(function(err, url){
+ if (err) {
+ console.log('An error has occured');
+ }
+ if (url) {
+ createGitignore(function() {
+ setupRepo(url, function(err) {
+ if (!err) {
+ console.log(chalk.green('All done!'));
+ }
+ });
+ });
+ }
+ });
+ }
+});
+</code></pre>
+<p>As you can see, it ensures the user is authenticated, before calling all of our other functions (<code>createRepo</code>, <code>createGitignore</code>, <code>setupRepo</code>) sequentially. It also handles any errors and offers the user appropriate feedback.</p>
+<p>You can check out the completed <a href="https://github.com/sitepoint-editors/ginit/blob/master/index.js">index.js</a> file on our GitHub repo.</p>
+<h2 id="makingtheginitcommandavailableglobally">Making the ginit Command Available Globally</h2>
+<p>The one remaining thing to do is to make our command available globally. To do this, we&#x2019;ll need to add a <a href="https://en.wikipedia.org/wiki/Shebang_%28Unix%29">shebang</a> line to the top of <code>index.js</code>:</p>
+<pre><code class="javascript language-javascript">#!/usr/bin/env node
+</code></pre>
+<p>Next we need to add a <code>bin</code> property to our <code>package.json</code> file. This maps the command name (<code>ginit</code>) to the name of the file to be executed (relative to <code>package.json</code>).</p>
+<pre><code class="javascript language-javascript">"bin": {
+ "ginit": "./index.js"
+}
+</code></pre>
+<p>After that install the module globally and you will have a working shell command:</p>
+<pre><code class="bash language-bash">npm install -g
+</code></pre>
+<p class="tip">This will also work on Windows, as <a href="http://stackoverflow.com/a/10398567/1136887">npm will helpfully install a cmd wrapper alongside your script</a>.</p>
+<h2 id="takingitfurther">Taking it Further</h2>
+<p>We&#x2019;ve got a fairly nifty, albeit simple command-line app for initialising Git repositories. But there&#x2019;s plenty more you could do to enhance it further.</p>
+<p>If you&#x2019;re a Bitbucket user, you could adapt the program to use the Bitbucket API to create a repository&#x2014;there&#x2019;s a <a href="https://www.npmjs.com/package/bitbucket-api">Node.js API wrapper available</a> to help you get started. You may wish to add an additional command-line option or prompt to ask the user whether they want to use Github or Bitbucket&#x2014;Inquirer would be perfect for just that&#x2014;or merely replace the Github specific code with a Bitbucket alternative.</p>
+<p>You could also provide the facility to specify your own set of defaults for the <code>.gitgnore</code> file, instead of hard-coded list. The preferences package might be suitable here, or you could provide a set of &#x201C;templates&#x201D;&#x2014;perhaps prompting the user for the type of project. You might also want to look at integrating it with the <a href="https://www.gitignore.io/">.gitignore.io</a> command-line tool / API.</p>
+<p>Beyond all that you may also wish to add additional validation, provide the ability to skip certain sections, and more&#x2014;if you have any other ideas, do let me know in the comments.</p>
+ </div>
+
+ </div>
+</body></html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html><html><head><title>Designing a State Machine without conditionals</title></head><body>
+<h1>Designing a State Machine without conditionals</h1><p><a href="http://jjcorrea.github.io/2015/05/05/designing-a-state-machine-without-conditionals/" target="_new">Original URL</a></p>
+<p><blockquote>05 May 2015 I've recently worked in a project, where we had the opportunity to design and implement an SMS sending component, and I'd like to share our experience while elaborating the solution, and&hellip;</blockquote></p>
+<div><div class="post">
+ 
+ <span class="post-date">05 May 2015</span>
+ <p>I've recently worked in a project, where we had the opportunity to design and implement an <strong>SMS sending component</strong>, and I'd like to share our experience while elaborating the solution, and also a quick example. </p>
+
+<p>The general idea was to generate calls to an external SMS sending API when certain events occur on 3 distinct web applications (a.k.a Channels). Given an event, the state transition it generates, and also depending on some rules (<strong>State Machine</strong>) it may be the case to generate an SMS send or not. </p>
+
+<p>There were other internals which I'm going to bypass on this article. For sake of focus this article will go through the State machine internal design only, showing how we made it without handling any sort of conditionals directly.</p>
+
+<h2>What is wrong with my IFs?</h2>
+
+<blockquote>
+<p>Oh my god.
+First they avoided goto.
+Then they avoided switch.
+Then they started eliding pointers.
+Now they avoid ifs!
+- Quoted from StackOverflow</p>
+</blockquote>
+
+<p>Well, this brings another good discussion to the table... I might post it later. Meanwhile, here are some references around this topic:</p>
+
+
+
+<h2>The design components</h2>
+
+<p>Having a good design, properly <strong>separating the concerns</strong> and making them <strong>explicit</strong> for the team through a <strong>clear communication</strong> are some of the challenges around solving any kind of software problem, and it was not different on this case.</p>
+
+<h2>Our constraints</h2>
+
+<ul>
+<li>5 developers on the team which were supposed to work simultaneously on this codebase</li>
+<li>Not much time available</li>
+<li>Parallelize the development</li>
+<li>Components isolation</li>
+<li>Testability</li>
+<li>Readability</li>
+</ul>
+
+<p>In short, we wanted the things the more meaningfull and changeable as possible (Clean code).</p>
+
+<p><img src="http://jjcorrea.github.io/assets/State-Machine-Design-Components.png" alt="Design Components"></p>
+
+<p>These are the main components which were designed (the state machine <strong>core</strong>):</p>
+
+<ul>
+<li><strong>Transitions</strong>: Given the state machine nature, we need to someway perform state transitions.</li>
+<li><strong>Predicates</strong>: Having a complex input type which needed to be evaluated on several different aspects, there was also a concept of predicates, which indicates whether a transition should occur or not.</li>
+<li><strong>Rules</strong>: Predicate components.</li>
+</ul>
+
+<p><img src="http://jjcorrea.github.io/assets/State-Machine-Design-Interaction.png" alt="Design Components Interaction"></p>
+
+<h2>Show me the code (C# - Simplified version)</h2>
+
+<p>(Assuming the statuses as strings).</p>
+
+<h3>EntryPoint</h3>
+<div class="highlight"><pre><code class="language-csharp"><span class="k">public</span> <span class="k">class</span> <span class="nc">EntryPoint</span> <span class="p">{</span>
+ <span class="c1">// ...</span>
+ <span class="k">public</span> <span class="n">List</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">&gt;</span> <span class="n">UpdateStatus</span><span class="p">(</span><span class="n">Input</span> <span class="n">input</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="n">transitions</span><span class="p">.</span><span class="n">All</span><span class="p">(</span><span class="n">input</span><span class="p">).</span><span class="n">Where</span><span class="p">(</span><span class="n">x</span> <span class="p">=&gt;</span> <span class="n">x</span><span class="p">.</span><span class="n">Item1</span> <span class="p">==</span> <span class="k">true</span><span class="p">)</span>
+ <span class="p">.</span><span class="n">Select</span><span class="p">(</span><span class="n">x</span> <span class="p">=&gt;</span> <span class="n">x</span><span class="p">.</span><span class="n">Item2</span><span class="p">())</span>
+ <span class="p">.</span><span class="n">DefaultIfEmpty</span><span class="p">(</span><span class="k">new</span> <span class="n">List</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">&gt;());</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3>Transitions</h3>
+<div class="highlight"><pre><code class="language-csharp"><span class="k">public</span> <span class="k">class</span> <span class="nc">Transitions</span> <span class="p">{</span>
+ <span class="k">public</span> <span class="n">List</span><span class="p">&lt;</span><span class="n">Tuple</span><span class="p">&lt;</span><span class="kt">bool</span><span class="p">,</span> <span class="n">Func</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">&gt;&gt;&gt;</span> <span class="n">All</span><span class="p">(</span><span class="n">Input</span> <span class="n">input</span><span class="p">)</span> <span class="p">{</span>
+
+ <span class="k">return</span> <span class="k">new</span> <span class="n">List</span><span class="p">&lt;</span><span class="n">Tuple</span><span class="p">&lt;</span><span class="kt">bool</span><span class="p">,</span> <span class="n">Func</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">&gt;&gt;&gt;(){</span>
+ <span class="k">new</span> <span class="n">Tuple</span><span class="p">&lt;</span><span class="kt">bool</span><span class="p">,</span> <span class="n">Func</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">&gt;&gt;(</span> 
+ <span class="n">predicates</span><span class="p">.</span><span class="n">FirstCase</span><span class="p">(</span><span class="n">input</span><span class="p">),</span> <span class="n">Status</span><span class="p">.</span><span class="n">NextStateFn</span>
+ <span class="p">),</span>
+ <span class="k">new</span> <span class="n">Tuple</span><span class="p">&lt;</span><span class="kt">bool</span><span class="p">,</span> <span class="n">Func</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">&gt;&gt;(</span> 
+ <span class="n">predicates</span><span class="p">.</span><span class="n">SecondCase</span><span class="p">(</span><span class="n">input</span><span class="p">),</span> <span class="n">Status</span><span class="p">.</span><span class="n">PreviousStateFn</span>
+ <span class="p">)};</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3>Predicates</h3>
+<div class="highlight"><pre><code class="language-csharp"><span class="k">public</span> <span class="k">class</span> <span class="nc">Predicates</span> <span class="p">{</span>
+ <span class="c1">// ...</span>
+
+ <span class="k">public</span> <span class="kt">bool</span> <span class="nf">FirstCase</span><span class="p">(</span><span class="n">Input</span> <span class="n">input</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="n">rules</span><span class="p">.</span><span class="n">EmptyStatus</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">status</span><span class="p">)</span> <span class="p">&amp;&amp;</span> <span class="n">rules</span><span class="p">.</span><span class="n">IsFirstEventType</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">type</span><span class="p">);</span>
+ <span class="p">}</span>
+
+ <span class="k">public</span> <span class="kt">bool</span> <span class="nf">SecondCase</span><span class="p">(</span><span class="n">Input</span> <span class="n">input</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="n">rules</span><span class="p">.</span><span class="n">EmptyStatus</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">status</span><span class="p">)</span> <span class="p">&amp;&amp;</span> <span class="n">rules</span><span class="p">.</span><span class="n">IsSecondEventType</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">type</span><span class="p">);</span>
+ <span class="p">}</span>
+
+<span class="p">}</span>
+</code></pre></div>
+<h3>Rules</h3>
+<div class="highlight"><pre><code class="language-csharp"><span class="k">public</span> <span class="k">class</span> <span class="nc">Rules</span> <span class="p">{</span>
+ <span class="c1">// ... </span>
+
+ <span class="k">public</span> <span class="kt">bool</span> <span class="nf">EmptyStatus</span><span class="p">(</span><span class="kt">string</span> <span class="n">status</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="n">status</span><span class="p">.</span><span class="n">Equals</span><span class="p">(</span><span class="s">"-"</span><span class="p">);</span>
+ <span class="p">}</span>
+
+ <span class="k">public</span> <span class="kt">bool</span> <span class="nf">IsFirstEventType</span><span class="p">(</span><span class="kt">string</span> <span class="n">eventType</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="n">EventTypes</span><span class="p">.</span><span class="n">FirstType</span><span class="p">().</span><span class="n">Contains</span><span class="p">(</span><span class="n">eventType</span><span class="p">);</span>
+ <span class="p">}</span>
+
+ <span class="k">public</span> <span class="kt">bool</span> <span class="nf">IsSecondEventType</span><span class="p">(</span><span class="kt">string</span> <span class="n">eventType</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="n">EventTypes</span><span class="p">.</span><span class="n">SecondType</span><span class="p">().</span><span class="n">Contains</span><span class="p">(</span><span class="n">eventType</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3>The design outcomes</h3>
+
+<ul>
+<li>A <strong>good design</strong> helps the team to <strong>code better</strong> and more <strong>efficiently</strong></li>
+<li>A great <strong>communication</strong> is as important as a great design.</li>
+<li>As well as continuous <strong>involvement</strong> during the development</li>
+<li>We delivered the module with more than <strong>250 (real) unit tests</strong></li>
+<li>Giving meaningfull names through a <strong>centralized point-of-control</strong> made it a lot easier to handle changes and properly understanding the context.</li>
+<li>The <strong>time spent</strong> on development was much lower than we were expecting</li>
+<li>There were <strong>changes</strong> to the predicates &amp; rules, and all the team was pretty confident to perform them due to the test coverage.</li>
+</ul>
+
+<h2>But... This is not a silver bullet</h2>
+
+<p>If you thought something similar to:</p>
+
+<blockquote>
+<p>New pattern, cool I'll start using it everywhere</p>
+</blockquote>
+
+
+
+<blockquote>
+<p>This will guarantee my job security. I'll use it with my other <a href="https://www.thc.org/root/phun/unmaintain.html">Unmaintainable code</a> techniques</p>
+</blockquote>
+
+<p>You shouldn't. Its good to remind that this solution was created based on several considerations mainly driven by the problem nature &amp; constraints. </p>
+
+<p>On the other hand, if you look at this as a hammer, which make everything magically turn into a nail, you just got it all wrong.</p>
+
+</div>
+
+
+
+</div>
+</body></html>

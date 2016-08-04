@@ -1,0 +1,375 @@
+<!DOCTYPE html><html><head><title>Create A Custom Yeoman Generator in 4 Easy Steps</title></head><body>
+<h1>Create A Custom Yeoman Generator in 4 Easy Steps</h1><p><a href="https://scotch.io/tutorials/create-a-custom-yeoman-generator-in-4-easy-steps" target="_new">Original URL</a></p>
+<p><blockquote>Yeoman is one of the web&#x2019;s most popular tooling frameworks with over 400 contributed reusable plugins. The open source project led by Addy Osmani makes project scaffolding an easy step. This&hellip;</blockquote></p>
+<div><div class="page-content-primary">
+
+										
+										
+					<p><a href="http://yeoman.io/">Yeoman</a> is one of the web&#x2019;s most popular tooling frameworks with over 400 contributed reusable plugins. The open source project led by Addy Osmani makes project scaffolding an easy step.</p>
+<p>This means that basic project structures and dependencies can now be setup with just one or two commands from the CLI. Is that not amazing? You don&#x2019;t have to install <code>Express</code>, <code>Passport</code>, <code>Angular</code>, <code>Mongoose</code>, etc that your MEAN project require manually, you just need to create and configure once, and then use throughout your other projects.</p>
+<p><a href="https://scotch.io/wp-content/uploads/2015/11/yeoman-logo.png"><img src="https://scotch.io/wp-content/uploads/2015/11/yeoman-logo.png" alt="yeoman-logo" width="572" class="alignnone size-full wp-image-11882"></a></p>
+<blockquote>
+<p>Note that Yeoman is not just for JavaScript based projects but for anything you can make out of it.</p>
+</blockquote>
+<p>Yeoman&#x2019;s plugins are called <code>generators</code> and are made in such a way that they suite a particular project requirements or workflow. It is not a surprise that out of the 400 contributed generators, you might not find one that suits you.</p>
+<p>Today, I will guide you through 4 easy steps to create yours and also provide a demo at the end. We will end up with a MEAN generator for Scotch.</p>
+<h2>STEP 1: Installation and Setup</h2>
+<p>As always, the first step is to install the dependencies and create a new generator project. The concept is actually using a yeoman generator to generate a generator template. That sounds silly right?</p>
+<p>The Yeoman team built a generator plugin that makes building a Yeoman custom generator quite easy. So install both Yeoman (<code>yo</code>) and the generator (<code>generator-generator</code> is the name):</p>
+<pre class="language-bash"><code>
+npm install -g yo generator-generator
+</code></pre>
+<p>This command installs both Yeoman and the generator plugin. Installing these tools does not create a project, they just download them to your file system. To setup a generator project, run:</p>
+<pre class="language-bash"><code>
+yo generator
+</code></pre>
+<p>You will be asked two or more questions from the CLI including your GitHub username and your generator base name. Yeoman generators naming convention is in such a way that the generators are prefixed with <code>generator-</code> and the name of the custom generator (base name) added right after the <code>-</code>.</p>
+<p>In our case, I chose, <code>scotchmean</code> so that at the end, the generator will be used as <code>generator-scotchmean</code>.</p>
+<p>You do not have to be intimidated by the file structure. Actually we just need one folder which is the <code>generators</code> folder. The <code>generators</code> folder has an <code>app</code> directory with <code>templates</code> and <code>index.js</code>. The <code>templates</code> are files that will be generated when we use this generators to scaffold a project and the index.js folder holds all the logics involved in generating a template.</p>
+<p>Before we move to step 2, clear the contents of <code>app/templates/index.js</code> and replace with:</p>
+<pre class="language-javascript"><code>
+'use strict';
+//Require dependencies
+var yeoman = require('yeoman-generator');
+var chalk = require('chalk');
+var yosay = require('yosay');
+
+
+module.exports = yeoman.generators.Base.extend({
+//Configurations will be loaded here.
+});
+</code>
+</pre>
+<h2>STEP 2: Asking For Input</h2>
+<p>One awesome feature of Yeoman is it&#x2019;s ability to scaffold a project using the user&#x2019;s decision from inputs. This means that we can configure a lot of options like the project&#x2019;s name, dependencies we need, and much more. Yeoman uses <a href="https://github.com/SBoudrias/Inquirer.js">Inquire.js</a> to accomplish this feature. To keep it minimal, we just need to get the project&#x2019;s name from input:</p>
+<pre class="language-javascript"><code>
+//Configurations will be loaded here.
+//Ask for user input
+prompting: function() {
+ var done = this.async();
+ this.prompt({
+ type: 'input',
+ name: 'name',
+ message: 'Your project name',
+ //Defaults to the project's folder name if the input is skipped
+ default: this.appname
+ }, function(answers) {
+ this.props = answers
+ this.log(answers.name);
+ done();
+ }.bind(this));
+},
+//Writing Logic here
+</code>
+</pre>
+<p>We are using the <code>async()</code> method to make sure that the function does not exit before the actual work gets completed.</p>
+<p>The <code>prompt</code> method is used to get the user&#x2019;s input which is of type <code>input</code> as there are other <a href="https://github.com/SBoudrias/Inquirer.js#prompts-type">types</a>.</p>
+<p>The <code>name</code> property of the prompt is used to access the field&#x2019;s value from the project and the <code>message</code> is the instruction. We also want it to default to the folder name if we do not provide a name while scaffolding.</p>
+<p>The second argument of <code>prompt</code> is a callback which holds the values from the prompt(s). We have set <code>this.props</code> up with the answers so it can be accessed from the &#x201C;writing&#x201D; logic.</p>
+<h2>STEP 3: Scaffolding With Templates</h2>
+<p>Template files are files generated when you use Yeoman with your custom generator to generate a project. These files are located within the <code>templates</code> folder in the <code>app</code> directory. It works like common view engines like EJS. You can dynamically fill in data into the templates with the inputs that were generated. We will use a basic MEAN folder structure for our templates:</p>
+<pre class="language-bash"><code>
+|---public
+ |-----css
+ |-----app.css 
+ |-----js
+ |-----app.js
+|---routes
+ |-----all.js
+|---model
+ |-----todo.js
+|---views
+ |-----index.ejs
+|---server.js
+|---bower.json
+|---package.json
+|---etc
+</code>
+</pre>
+<p>Just like a normal application, replace the above project structure with the contents of the <code>templates</code> folder and then we will gradually populate them in a stepwise manner or create them along the process. All template logic are wrapped inside the <code>writing</code> object in index.js:</p>
+<pre class="language-javascript"><code>
+//Writing Logic here
+writing: {
+ //Copy the configuration files
+
+ //Copy application files
+
+ //Install Dependencies
+},
+</code>
+</pre>
+<p>The files to be generated are better classified into configuration files and application files. The config files include <code>package.json</code>, <code>bower.json</code>, and other utility files for our project while the app files include <code>server.js</code>, our routes, public directory and every other major files.</p>
+<p>We will first create the configuration files templates and then copy them. To create the files, open <code>app/templates/_package.json</code> and replace with:</p>
+<pre class="language-javascript"><code>
+{
+ "name": "&lt;%= name %&gt;", 
+ "scripts": {
+ "start": "node server.js"
+ },
+ "dependencies": {
+ "express": "^4.13.3",
+ "ejs": "^2.3.4",
+ "body-parser": "^1.14.0",
+ "cookie-parser": "~1.0.1",
+ "mongoose":"^4.2.4"
+ } 
+}
+</code>
+</pre>
+<p>Also replace <code>app/templates/_bower.json</code> with:</p>
+<pre class="language-javascript"><code>
+{
+ "name": "&lt;%= name %&gt;",
+ "version": "0.0.0",
+ "dependencies": {
+ "bootstrap": "3.3.5",
+ "angular": "1.4.6"
+ }
+}
+</code>
+</pre>
+<p>Now create a <code>bowerrc</code> in <code>app/templates/</code> and fill it with:</p>
+<pre class="language-bash"><code>
+{
+ "directory" : "app/public/libs"
+}
+</code>
+</pre>
+<p>Update <code>app/index.js</code>:</p>
+<pre class="language-javascript"><code>
+//Writing Logic here
+writing: {
+ //Copy the configuration files
+ config: function () {
+ this.fs.copyTpl(
+ this.templatePath('_package.json'),
+ this.destinationPath('package.json'), {
+ name: this.props.name
+ }
+ );
+ this.fs.copyTpl(
+ this.templatePath('_bower.json'),
+ this.destinationPath('bower.json'), {
+ name: this.props.name
+ }
+ );
+ this.fs.copy(
+ this.templatePath('bowerrc'),
+ this.destinationPath('.bowerrc')
+ );
+ },
+
+ //Copy application files
+
+ //Install Dependencies
+},
+</code>
+</pre>
+<p>Two methods, <code>copy()</code> and <code>copyTpl()</code> are used to the copy the templates from our template path to a destination path which Yeoman abstracts from us the implementation but helps determine the path we intend to copy the files to.</p>
+<p>The difference between the two methods is that <code>copyTpl()</code> takes a third parameter which is a list of data to be bound to the template file after it is generated while <code>copy()</code> is used when there are no bindings required in the template.</p>
+<p>Now we have the setup files prepared and we can now go ahead and create the application files. I suggest we begin with the <code>server.js</code> as it is our entry point:</p>
+<pre class="language-javascript"><code>
+//Dependencies
+var express = require('express');
+var app = express();
+var path = require('path');
+var cookieParser = require('cookie-parser');
+var bodyParser = require('body-parser');
+var mongoose = require('mongoose');
+
+//Create a mongoose connection
+mongoose.connect('mongodb://127.0.0.1:27017/scotchmean');
+//Load custom dependencies
+var routes = require('./routes/all');
+
+
+//View engine setup
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+
+//Configure Body Pareser and Cookie Parser
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded());
+app.use(cookieParser());
+
+//Use the public folder for static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+console.log(routes.getTodo)
+//Create the routes
+app.get('/', routes.index);
+app.get('/todo', routes.getTodo);
+app.post('/todo', routes.postTodo);
+
+//Set port to env.Port or default to 8080
+app.set('port', process.env.PORT || 8080);
+//Listen to port for connections
+app.listen(app.get('port'), function() {
+ console.log('App listening at port ' + app.get('port'));
+});
+</code>
+</pre>
+<p>The above snippet is a basic server file for Node. We just ended up loading routes (though yet to be implemented), configuring body and cookie parser, creating a connection to MongoDB and listening to a port.</p>
+<p>Next up is to create the routes which include: <code>index</code>, <code>getTodo</code> and <code>postTodo</code>. Create a <code>_routes</code> folder inside the <code>templates</code> directory. Add <code>_all.js</code> with the following content:</p>
+<pre class="language-javascript"><code>
+//_routes/_all.js
+var Todo = require('../model/todo').todo;
+exports.index = function(req, res){
+ res.render('index');
+};
+
+
+exports.getTodo = function(req, res){
+ Todo.find().exec(function(err, todo){
+ if (err)
+ return res.send(err);
+ return res.json(todo);
+ });
+};
+
+exports.postTodo = function(req, res){
+ Todo.create(req.body, function(err, todo){
+ if (err)
+ return res.send(err);
+ return res.json(todo);
+ });
+};
+
+</code>
+</pre>
+<p>We can now create the Todo model that the route loaded. Create a <code>_model</code> folder in <code>templates</code> directory and add a file named <code>_todo.js</code> in it with the following content:</p>
+<pre class="language-javascript"><code>
+//_model/_todo.js
+var mongoose = require('mongoose');
+var todo = mongoose.model('Todo', {
+ content: String
+ });
+
+exports.todo = todo;
+</code>
+</pre>
+<p>Time to develop our views and public files. We need just one EJS view which is <code>index</code> for our home page as seen in the routes. This file will live in the <code>_views</code> folder in the <code>templates</code> directory:</p>
+<pre class="language-markup"><code>
+&lt;html ng-app="app"&gt;
+ 
+ &lt;body ng-controller="TodoController"&gt;
+ &lt;div class="container"&gt;
+ &lt;div class="col-md-4 col-md-offset-4"&gt;
+ &lt;input type="text" ng-model="todo.content" class="form-control"&gt;
+ &lt;button type="button" ng-click="addTodo()" class="btn btn-primary"&gt;Add&lt;/button&gt;
+ &lt;hr&gt;
+ &lt;ul&gt;
+ &lt;li ng-repeat="todo in todos"&gt;{{todo.content}}&lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;script src="libs/angular/angular.js"&gt;&lt;/script&gt;
+ &lt;script src="js/app.js"&gt;&lt;/script&gt;
+ &lt;/body&gt;
+&lt;/html&gt;
+</code>
+</pre>
+<p>See how we are binding the <code>name</code> value to the view in the <code>title</code>. That is the most interesting part of this file. The rest is just basic HTML with Bootstrap and Angular codes.</p>
+<p>Moving further, create the <code>_public</code> folder with <code>_css</code> and <code>_js</code> directories. In the <code>_js</code> folder add a file <code>_app.js</code> to hold our Angular logic:</p>
+<pre class="language-javascript"><code>
+angular.module('app', [])
+ .controller('TodoController', function($scope, $http) {
+ $scope.todos = [];
+ $scope.todo = {};
+ $http.get('/todo').success(function(data) {
+ $scope.todos = data;
+ });
+ $scope.addTodo = function() {
+ $http.post('/todo', $scope.todo).success(function(data) {
+ $scope.todos.unshift(data);
+ });
+ $scope.todo = {};
+ };
+ });
+</code>
+</pre>
+<p>Now create a file in the <code>_css</code> directory named <code>_app.css</code> with this content:</p>
+<pre class="language-css"><code>
+body{
+ padding-top:50px;
+}
+</code>
+</pre>
+<p>We have created all the template files that our project need but yet to update the <code>index.js</code> to be able to scaffold and serve them at project scaffold. Let us do so:</p>
+<pre class="language-javascript"><code>
+//Copy application files
+app: function() {
+ //Server file
+ this.fs.copyTpl(
+ this.templatePath('_server.js'),
+ this.destinationPath('server.js'),
+ this.destinationPath('/views/index.ejs'), {
+ name: this.props.name
+ }
+ );
+ /////Routes
+ this.fs.copy(
+ this.templatePath('_routes/_all.js'),
+ this.destinationPath('routes/all.js'));
+
+
+ // Model
+ this.fs.copy(
+ this.templatePath('_model/_todo.js'),
+ this.destinationPath('model/todo.js'));
+
+ // Views
+ this.fs.copyTpl(
+ this.templatePath('_views/_index.ejs'),
+ this.destinationPath('/views/index.ejs'), {
+ name: this.props.name
+ }
+ );
+
+ // Public/
+ this.fs.copy(
+ this.templatePath('_public/_css/_app.css'),
+ this.destinationPath('public/css/app.css')
+ );
+ this.fs.copy(
+ this.templatePath('_public/_js/_app.js'),
+ this.destinationPath('public/js/app.js')
+ );
+}
+},
+//Install Dependencies
+</code>
+</pre>
+<p>Finally on step 3 is to install all the dependencies once the scaffold is completed by updating <code>index.js</code> to:</p>
+<pre class="language-javascript"><code>
+//Install Dependencies
+install: function() {
+ this.installDependencies();
+}
+</code>
+</pre>
+<h2>STEP 4: Testing</h2>
+<p>The most reasonable way to carry out integration test is not to publish to npm registry and then install before we can run <code>yo scotchmean</code> to create a project.</p>
+<p>We can utilize npm&#x2019;s <code>link</code> to assist us with linking the generator in the global node modules. To understand better, on the generator&#x2019;s project folder, run:</p>
+<pre class="language-bash"><code>
+npm link
+</code>
+</pre>
+<p>Navigate to a folder you would love to scaffold a new MEAN project and run:</p>
+<pre class="language-bash"><code>
+yo scotchmean
+</code>
+</pre>
+<p>Respond to the prompts and watch Yo do its magic. Do have in mind that you do not need to keep running <code>npm link</code> command to update changes before testing. Just edit and save then your project will be ready for another scaffold.</p>
+<p>When you are satisfied with what you have built, you can <a href="https://docs.npmjs.com/cli/publish">publish</a> to npm.</p>
+<h2>Conclusion</h2>
+<p>Hopefully, you can start making your life easier with Yeoman and it&#x2019;s generators. It doesn&#x2019;t end with a basic example; try something crazy, publish on npm, share on GitHub and earn some credits. Feel free to leave a comment below and Scotch will always give you all the attention yo deserve.</p>
+<p><a href="https://github.com/christiannwamba/generator-scotchmean">Demo</a></p>
+
+					
+					
+				</div>
+
+									
+					</div>
+</body></html>

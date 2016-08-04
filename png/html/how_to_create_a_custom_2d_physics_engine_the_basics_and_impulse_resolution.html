@@ -1,0 +1,436 @@
+<!DOCTYPE html><html><head><title>How to Create a Custom 2D Physics Engine: The Basics and Impulse Resolution</title></head><body>
+<h1>How to Create a Custom 2D Physics Engine: The Basics and Impulse Resolution</h1><p><a href="http://gamedevelopment.tutsplus.com/tutorials/how-to-create-a-custom-2d-physics-engine-the-basics-and-impulse-resolution--gamedev-6331" target="_new">Original URL</a></p>
+<p><blockquote>There are many reasons you might want to create a custom physics engine: first, learning and honing your skills in mathematics, physics and programming are great reasons to attempt such a project;&hellip;</blockquote></p>
+<div><div class="post-title-and-body__content"><p>There are many reasons you might want to create a custom physics engine: first, learning and honing your skills in mathematics, physics and programming are great reasons to attempt such a project; second, a custom physics engine can tackle any sort of technical effect the creator has the skill to create. In this article I would like to provide a solid introduction on how to create a custom physics engine entirely from scratch.</p>
+<p>Physics provides a wonderful means for allowing a player to immerse themselves within a game. It makes sense that a mastery of a physics engine would be a powerful asset for any programmer to have at their disposal. Optimizations and specializations can be made at any time due to a deep understanding of the inner workings of the physics engine.</p>
+<p>By the end of this tutorial the following topics will have been covered, in two dimensions:</p>
+<ul>
+<li>Simple collision detection</li>
+<li>Simple manifold generation</li>
+<li>Impulse resolution</li>
+</ul>
+<p>Here's a quick demo:</p>
+<figure class="tutorial_image"><iframe src="https://www.youtube.com/embed/bjmbh_0FzZ0" height="338" width="600"></iframe></figure>
+
+<p><em><strong>Note:</strong>&#xA0;Although this tutorial is written using C++, you should be able to use the same techniques and concepts in almost any game development environment.</em></p>
+
+<h2>Prerequisites</h2>
+<p>This article involves a fair amount of mathematics and geometry, and to a much lesser extent actual coding. A couple prerequisites for this article are:</p>
+<ul>
+<li>A basic understanding of simple vector math</li>
+<li>The ability to perform algebraic math</li>
+</ul>
+
+<h2>Collision Detection</h2>
+<p>There are quite a few articles and tutorials throughout the internet, including here on Tuts+, that cover collision detection. Knowing this, I would like to run through the topic very quickly as this section is not the focus of this article.</p>
+<h3>Axis Aligned Bounding Boxes</h3>
+<p>An Axis Aligned Bounding Box (AABB) is a box that has its four axes aligned with the coordinate system in which it resides. This means it is a box that cannot rotate, and is always squared off at 90 degrees (usually aligned with the screen). In general it is referred to as a "bounding box" because AABBs are used to bound other more complex shapes.</p>
+<figure class="tutorial_image"><img class="aligncenter size-full wp-image-6467" alt="An example AABB." src="https://cdn.tutsplus.com/gamedev/authors/randy-gaul/custom-physics-aabb.png" width="600">
+<figcaption>An example AABB.</figcaption>
+</figure>
+<p>The AABB of a complex shape can be used as a simple test to see if more complex shapes inside the AABBs can possibly be intersecting. However in the case of most games the AABB is used as a fundamental shape, and does not actually bound anything else. The structure of your AABB is important. There are a few different ways to represent an AABB, however this is my favorite:</p>
+<pre class="brush: cpp">
+struct AABB
+{
+ Vec2 min;
+ Vec2 max;
+};</pre>
+<p>This form allows an AABB to be represented by two points. The min point represents the lower bounds of the x and y axis, and max represents the higher bounds - in other words, they represent the top left and bottom right corners. In order to tell whether two AABB shapes are intersecting you will need to have a basic understanding of the <a href="http://gamedev.tutsplus.com/tutorials/implementation/collision-detection-with-the-separating-axis-theorem/">Separating Axis Theorem</a>&#xA0;(SAT).</p>
+<p>Here's a quick test taken from <a href="http://realtimecollisiondetection.net/">Real-Time Collision Detection</a> by Christer Ericson, which makes use of the SAT:</p>
+<pre class="brush: cpp">
+bool AABBvsAABB( AABB a, AABB b )
+{
+ // Exit with no intersection if found separated along an axis
+ if(a.max.x &lt; b.min.x or a.min.x &gt; b.max.x) return false
+ if(a.max.y &lt; b.min.y or a.min.y &gt; b.max.y) return false
+
+ // No separating axis found, therefor there is at least one overlapping axis
+ return true
+}</pre>
+<h3>Circles</h3>
+<p>A circle is represented by a radius and point. Here is what your circle structure ought to look like:</p>
+<pre class="brush: cpp">
+struct Circle
+{
+ float radius
+ Vec position
+};</pre>
+<p>Testing for whether or not two circles intersect is very simple: take the radii of the two circles and add them together, then check to see if this sum is greater than the distance between the two circles.</p>
+<p>An important optimization to make here is get rid of any need to use the square root operator:</p>
+<pre class="brush: cpp">
+float Distance( Vec2 a, Vec2 b )
+{
+ return sqrt( (a.x - b.x)^2 + (a.y - b.y)^2 )
+}
+
+bool CirclevsCircleUnoptimized( Circle a, Circle b )
+{
+ float r = a.radius + b.radius
+ return r &lt; Distance( a.position, b.position )
+}
+
+bool CirclevsCircleOptimized( Circle a, Circle b )
+{
+ float r = a.radius + b.radius
+ r *= r
+ return r &lt; (a.x + b.x)^2 + (a.y + b.y)^2
+}</pre>
+<p>In general multiplication is a much cheaper operation than taking the square root of a value.</p>
+
+<h2>Impulse Resolution</h2>
+<p>Impulse resolution is a particular type of collision resolution strategy. Collision resolution is the act of taking two objects who are found to be intersecting and modifying them in such a way as to not allow them to remain intersecting.</p>
+<p>In general an object within a physics engine has three main <a href="http://en.wikipedia.org/wiki/Degrees_of_freedom_(mechanics)">degrees of freedom</a> (in two dimensions): movement in the xy plane and rotation. In this article we&#xA0;implicitly&#xA0;restrict rotation and use just AABBs and Circles, so the only degree of freedom we really need to consider is movement along the xy plane.</p>
+<p>By resolving detected collisions we place a restriction upon movement such that objects cannot remain intersecting one another. The idea behind impulse resolution is to use an impulse (instantaneous change in velocity) to separate objects found colliding. In order to do this the mass, position, and velocity of each object must be taken into account somehow: we want large objects colliding with smaller ones to move a little bit during collision, and to send the small objects flying away. We also want objects with infinite mass to not move at all.</p>
+<figure class="tutorial_image"><img alt="Simple example of what impulse resolution can achieve." src="https://cdn.tutsplus.com/gamedev/authors/randy-gaul/custom-physics-resolution-example.png" width="600">
+<figcaption>Simple example of what impulse resolution can achieve.</figcaption>
+</figure>
+<p>In order to achieve such effects and follow along with natural intuition of how objects behave we'll use rigid bodies and a fair bit of math. A rigid body is just a shape defined by the user (that is, by you, the developer) that is implicitly defined to be non-deformable. Both AABBs and Circles in this article are non-deformable, and will always be either an AABB or Circle. No squashing or stretching allowed.</p>
+<p>Working with rigid bodies allows for a lot of math and derivations to be heavily simplified. This is why rigid bodies are commonly used in game simulations, and why we'll be using them in this article.</p>
+<h3>Our Objects Collided - Now What?</h3>
+<p>Assuming we have two shapes found to be intersecting, how does one actually separate the two? Lets assume our collision detection provided us with two important pieces of information:</p>
+<ul>
+<li>Collision normal</li>
+<li>Penetration depth</li>
+</ul>
+<p>In order to apply an impulse to both objects and move them apart, we need to know what direction to push them and by how much. The collision normal is the direction in which the impulse will be applied. The penetration depth (along with some other things) determine how large of an impulse will be used. This means the only value that needs to be solved for is the magnitude of our impulse.</p>
+<p>Now let's go on a long trek to discover how we can solve for this impulse magnitude. We'll start with our two objects that have been found to be intersecting:</p>
+<p><em>Equation 1</em></p>
+<p>\[ V^{AB} = V^B - V^A \] Note that in order to create a vector from position A to position B, you must do: <code>endpoint - startpoint</code>. \(V^{AB}\) is the relative velocity from A to B. This equation ought to be expressed in terms of the collision normal \(n\) - that is, we would like to know the relative velocity from A to B along the collision normal's direction:</p>
+<p><em>Equation 2</em></p>
+<p>\[ V^{AB} \cdot n = (V^B - V^A) \cdot n \]</p>
+<p>We are now making use of the <a href="http://en.wikipedia.org/wiki/Dot_product">dot product</a>. The dot product is simple; it is the sum of component-wise products:</p>
+<p><em>Equation 3</em></p>
+<p>\[ V_1 = \begin{bmatrix}x_1 \\y_1\end{bmatrix}, V_2 = \begin{bmatrix}x_2 \\y_2\end{bmatrix} \\ V_1 \cdot V_2 = x_1 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii x_2 + y_2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii y_2 \]</p>
+<p>The next step is to introduce what is called the <em>coefficient of restitution</em>. Restitution is a term that means elasticity, or bounciness. Each object in your physics engine will have a restitution represented as a decimal value. However only one decimal value will be used during the impulse calculation.</p>
+<p>To decide what restitution to use (denoted by \(e\) for epsilon), you should always use the lowest restitution involved in the collision for intuitive results:</p>
+<pre class="brush: cpp">
+// Given two objects A and B
+e = min( A.restitution, B.restitution )</pre>
+<p>Once \(e\) is acquired we can place it into our equation solving for the impulse magnitude.</p>
+<p>Newton's Law of Restitution states the following:</p>
+<p><em>Equation 4</em></p>
+<p>\[V' = e articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii V \]</p>
+<p>All this is saying is that the velocity after a collision is equal to the velocity before it, multiplied by some constant. This constant represents a "bounce factor". Knowing this, it becomes fairly simple to integrate restitution into our current derivation:</p>
+<p><em>Equation 5</em></p>
+<p>\[ V^{AB} \cdot n = -e articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (V^B - V^A) \cdot n \]</p>
+<p>Notice how we introduced a negative sign here. In Newton's Law of Restitution, \(V'\), the resulting vector after the bounce, is actually going in the opposite direction of V. So how do we represent opposite directions in our derivation? Introduce a negative sign.</p>
+<p>So far so good. Now we need to be able to express these velocities while under the influence of an impulse. Here's a simple equation for modify a vector by some impulse scalar \(j\) along a specific direction \(n\):</p>
+<p><em>Equation 6</em></p>
+<p>\[ V' = V + j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n \]</p>
+<p>Hopefully the above equation makes sense, as it is very important to understand. We have a unit vector \(n\) which represents a direction. We have a scalar \(j\) which represents how long our \(n\) vector will be. We then add our scaled \(n\) vector to \(V\) to result in \(V'\). This is just adding one vector onto another, and we can use this small equation to apply an impulse of one vector to another.</p>
+<p>There's a little more work to be done here. Formally, an impulse is defined as a change in momentum. Momentum is <code>mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii velocity</code>. Knowing this, we can represent an impulse as it is formally defined like so:</p>
+<p><em>Equation 7</em></p>
+<p>\[ Impulse = mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii Velocity \\ Velocity = \frac{Impulse}{mass} \therefore V' = V + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass}\]</p>
+<p class="tip-shortcode">The three dots in a small triangle (\(\therefore\)) can be read as "therefore". It is used to show that the thing beforehand can be used to conclude that whatever comes next is true.</p>
+<p>Good progress has been made so far! However we need to be able to express an impulse using \(j\) in terms of two different objects. During a collision with object A and B, A will be pushed in the opposite direction of B:</p>
+<p><em>Equation 8</em></p>
+<p>\[ V'^A = V^A + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^A} \\ V'^B = V^B - \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^B} \]</p>
+<p>These two equations will push A away from B along the direction unit vector \(n\) by impulse scalar (magnitude of \(n\)) \(j\).</p>
+<p>All that is now required is to merge Equations 8 and 5. Our resulting equation will look something like this:</p>
+<p><em>Equation 9</em></p>
+<p>\[ (V^A - V^V + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^A} + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^B}) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n = -e articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (V^B - V^A) \cdot n \\ \therefore \\ (V^A - V^V + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^A} + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^B}) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n + e articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (V^B - V^A) \cdot n = 0 \]</p>
+<p>If you recall, the original goal was to isolate our magnitude. This is because we know what direction to resolve the collision in (assumed given by the collision detection), and only have left to solve the magnitude of this direction. The magnitude which is an unknown in our case is \(j\); we must isolate \(j\) and solve for it.</p>
+<p><em>Equation 10</em></p>
+<p>\[ (V^B - V^A) \cdot n + j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (\frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^A} + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^B}) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n + e articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (V^B - V^A) \cdot n = 0 \\ \therefore \\ (1 + e)((V^B - V^A) \cdot n) + j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (\frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^A} + \frac{j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n}{mass^B}) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n = 0 \\ \therefore \\ j = \frac{-(1 + e)((V^B - V^A) \cdot n)}{\frac{1}{mass^A} + \frac{1}{mass^B}} \]</p>
+<p>Whew! That was a fair bit of math! It is all over for now though. It's important to notice that in the final version of Equation 10 we have \(j\) on the left (our magnitude) and everything on the right is all known. This means we can write a few lines of code to solve for our impulse scalar \(j\). And boy is the code a lot more readable than mathematical notation!</p>
+<pre class="brush: cpp">
+void ResolveCollision( Object A, Object B )
+{
+ // Calculate relative velocity
+ Vec2 rv = B.velocity - A.velocity
+
+ // Calculate relative velocity in terms of the normal direction
+ float velAlongNormal = DotProduct( rv, normal )
+
+ // Do not resolve if velocities are separating
+ if(velAlongNormal &gt; 0)
+ return;
+
+ // Calculate restitution
+ float e = min( A.restitution, B.restitution)
+
+ // Calculate impulse scalar
+ float j = -(1 + e) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii velAlongNormal
+ j /= 1 / A.mass + 1 / B.mass
+
+ // Apply impulse
+ Vec2 impulse = j articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii normal
+ A.velocity -= 1 / A.mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii impulse
+ B.velocity += 1 / B.mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii impulse
+}</pre>
+<p>There are a few key things to note in the above code sample. The first thing is the check on Line 10, <code>if(VelAlongNormal &gt; 0)</code>. This check is very important; it makes sure that you only resolve a collision if the objects are moving towards each other.</p>
+<figure class="tutorial_image"><img class="aligncenter size-full wp-image-6409" alt="Two objects collide, but velocity will separate them next frame. Do not resolve this type of collision." src="https://cdn.tutsplus.com/gamedev/authors/randy-gaul/custom-physics-separating-velocities.png" width="600">
+<figcaption>Two objects collide, but velocity will separate them next frame. Do not resolve this type of collision.</figcaption>
+</figure>
+<p>If objects are moving away from one another we want to do nothing. This will prevent objects that shouldn't actually be considered colliding from resolving away from one another. This is important for creating a simulation that follows human intuition on what should happen during object interaction.</p>
+<p>The second thing to note is that inverse mass is computed multiple times for no reason. It is best to just store your inverse mass within each object and pre-compute it one time:</p>
+<pre class="brush: cpp">
+A.inv_mass = 1 / A.mass</pre>
+<p class="tip-shortcode"> Many physics engines do not actually store raw mass. Physics engines often times store inverse mass and inverse mass alone. It just so happens that most math involving mass is in the form of <code>1/mass</code>. </p>
+<p>The last thing to note is that we intelligently distribute our impulse scalar \(j\) over the two objects. We want small objects to bounce off of big objects with a large portion of \(j\), and the big objects to have their velocities modified by a very small portion of \(j\).</p>
+<p>In order to do this you could do:</p>
+<pre class="brush: cpp">
+float mass_sum = A.mass + B.mass
+float ratio = A.mass / mass_sum
+A.velocity -= ratio articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii impulse
+
+ratio = B.mass / mass_sum
+B.velocity += ratio articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii impulse</pre>
+<p>It is important to realize that the above code is equivalent to the <code>ResolveCollision()</code> sample function from before. Like stated before, inverse masses are quite useful in a physics engine.</p>
+<h3>Sinking Objects</h3>
+<p>If we go ahead and use the code we have so far, objects will run into each other and bounce off. This is great, although what happens if one of the objects has infinite mass? Well we need a good way to represent infinite mass within our simulation.</p>
+<p>I suggest using zero as infinite mass - although if we try to compute inverse mass of an object with zero we will have a division by zero. The workaround to this is to do the following when computing inverse mass:</p>
+<pre class="brush: cpp">
+if(A.mass == 0)
+ A.inv_mass = 0
+else
+ A.inv_mass = 1 / A.mass</pre>
+<p>A value of zero will result in proper calculations during impulse resolution. This is still okay. The problem of sinking objects arises when something starts sinking into another object due to gravity. Perhaps something with low restitution hits a wall with infinite mass and begins to sink.</p>
+<p>This sinking is due to floating point errors. During each floating point calculation a small floating point error is introduced due to hardware. (For more information, Google [Floating point error IEEE754].) Over time this error accumulates in positional error, causing objects to sink into one another.</p>
+<p>In order to correct this error it must be accounted for. To correct this positional error I will show you a method called linear projection. Linear projection reduces the penetration of two objects by a small percentage, and this is performed after the impulse is applied. Positional correction is very simple: move each object along the collision normal \(n\) by a percentage of the penetration depth:</p>
+<pre class="brush: cpp">
+void PositionalCorrection( Object A, Object B )
+{
+ const float percent = 0.2 // usually 20% to 80%
+ Vec2 correction = penetrationDepth / (A.inv_mass + B.inv_mass)) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii percent articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n
+ A.position -= A.inv_mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii correction
+ B.position += B.inv_mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii correction
+}</pre>
+<p>Note that we scale the <code>penetrationDepth</code> by the total mass of the system. This will give a positional correction proportional to how much mass we are dealing with. Small objects push away faster than heavier objects.</p>
+<p>There is a slight problem with this implementation: if we are always resolving our positional error then objects will jitter back and forth while they rest upon one another. In order to prevent this some slack must be given. We only perform positional correction if the penetration is above some arbitrary threshold, referred to as "slop":</p>
+<pre class="brush: cpp">
+void PositionalCorrection( Object A, Object B )
+{
+ const float percent = 0.2 // usually 20% to 80%
+ const float slop = 0.01 // usually 0.01 to 0.1
+ Vec2 correction = max( penetration - k_slop, 0.0f ) / (A.inv_mass + B.inv_mass)) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii percent articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii n
+ A.position -= A.inv_mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii correction
+ B.position += B.inv_mass articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii correction
+}</pre>
+<p>This allows objects to penetrate ever so slightly without the position correction kicking in.</p>
+
+<h2>Simple Manifold Generation</h2>
+<p>The last topic to cover in this article is simple manifold generation. A <em>manifold</em> in mathematical terms is something along the lines of "a collection of points that represents an area in space". However, when I refer to the term manifold I am referring to a small object that contains information about a collision between two objects.</p>
+<p>Here is a typical manifold setup:</p>
+<pre class="brush: cpp">
+struct Manifold
+{
+ Object *A;
+ Object *B;
+ float penetration;
+ Vec2 normal;
+};</pre>
+<p>During collision detection, both penetration and the collision normal should be computed. In order to find this info the original collision detection algorithms from the top of this article must be extended.</p>
+<h3>Circle vs Circle</h3>
+<p>Lets start with the simplest collision algorithm: Circle vs Circle. This test is mostly trivial. Can you imagine what the direction to resolve the collision will be in? It is the vector from Circle A to Circle B. This can be obtained by subtracting B's position from A's.</p>
+<p>Penetration depth is related to the Circles' radii and distance from one another. The overlap of the Circles can be computed by subtracting the summed radii by the distance from each object.</p>
+<p>Here is a full sample algorithm for generating the manifold of a Circle vs Circle collision:</p>
+<pre class="brush: cpp">
+bool CirclevsCircle( Manifold *m )
+{
+ // Setup a couple pointers to each object
+ Object *A = m-&gt;A;
+ Object *B = m-&gt;B;
+
+ // Vector from A to B
+ Vec2 n = B-&gt;pos - A-&gt;pos
+
+ float r = A-&gt;radius + B-&gt;radius
+ r *= r
+
+ if(n.LengthSquared( ) &gt; r)
+ return false
+
+ // Circles have collided, now compute manifold
+ float d = n.Length( ) // perform actual sqrt
+
+ // If distance between circles is not zero
+ if(d != 0)
+ {
+ // Distance is difference between radius and distance
+ m-&gt;penetration = r - d
+
+ // Utilize our d since we performed sqrt on it already within Length( )
+ // Points from A to B, and is a unit vector
+ c-&gt;normal = t / d
+ return true
+ }
+
+ // Circles are on same position
+ else
+ {
+ // Choose random (but consistent) values
+ c-&gt;penetration = A-&gt;radius
+ c-&gt;normal = Vec( 1, 0 )
+ return true
+ }
+}</pre>
+<p>The most notable things here are: we do not perform any square roots until necessary (objects are found to be colliding), and we check to make sure the circles are not on the same exact position. If they are on the same position our distance would be zero, and we must avoid division by zero when we compute <code>t / d</code>.</p>
+<h3>AABB vs AABB</h3>
+<p>The AABB to AABB test is a little more complex than Circle vs Circle. The collision normal will not be the vector from A to B, but will be a face normal. An AABB is a box with four faces. Each face has a normal. This normal represents a unit vector that is perpendicular to the face.</p>
+<p>Examine the general equation of a line in 2D:</p>
+<p>\[ ax + by + c = 0 \\ normal = \begin{bmatrix}a \\b\end{bmatrix} \]</p>
+<figure class="tutorial_image"><img class="aligncenter size-full wp-image-6470" alt="custom-physics-line2d" src="https://cdn.tutsplus.com/gamedev/authors/randy-gaul/custom-physics-line2d.png" width="600"></figure>
+<p>In the above equation, <code>a</code> and <code>b</code> are the normal vector for a line, and the vector <code>(a, b)</code> is assumed to be normalized (length of vector is zero). Again, our collision normal (direction to resolve the collision) will be in the direction of one of the face normals.</p>
+<p class="tip-shortcode"> Do you know what <code>c</code> represents in the general equation of a line? <code>c</code> is the distance from the origin. This is very useful for testing to see if a point is on one side of a line or another, as you will see in the next article.</p>
+<p>Now all that is needed is to find out which face is colliding on one of the objects with the other object, and we have our normal. However sometimes multiple faces of two AABBs can intersect, such as when two corners intersect each other. This means we must find the <em>axis of least penetration</em>.</p>
+<figure class="tutorial_image"><img class="aligncenter size-full wp-image-6474" alt="Two axes of penetration; the horizontal x axis is axis of least penetration and this collision should be resolved along the x axis." src="https://cdn.tutsplus.com/gamedev/authors/randy-gaul/custom-physics-least-overlap.png" width="600">
+<figcaption>Two axes of penetration; the horizontal x axis is axis of least penetration and this collision should be resolved along the x axis.</figcaption>
+</figure>
+<p>Here is a full algorithm for AABB to AABB manifold generation and collision detection:</p>
+<figure class="tutorial_image"><img class="aligncenter size-full wp-image-6412" alt="custom-physics-aabb-diagram" src="https://cdn.tutsplus.com/gamedev/authors/randy-gaul/custom-physics-aabb-diagram.png" width="600"></figure>
+<pre class="brush: cpp">
+bool AABBvsAABB( Manifold *m )
+{
+ // Setup a couple pointers to each object
+ Object *A = m-&gt;A
+ Object *B = m-&gt;B
+ 
+ // Vector from A to B
+ Vec2 n = B-&gt;pos - A-&gt;pos
+ 
+ AABB abox = A-&gt;aabb
+ AABB bbox = B-&gt;aabb
+ 
+ // Calculate half extents along x axis for each object
+ float a_extent = (abox.max.x - abox.min.x) / 2
+ float b_extent = (bbox.max.x - bbox.min.x) / 2
+ 
+ // Calculate overlap on x axis
+ float x_overlap = a_extent + b_extent - abs( n.x )
+ 
+ // SAT test on x axis
+ if(x_overlap &gt; 0)
+ {
+ // Calculate half extents along x axis for each object
+ float a_extent = (abox.max.y - abox.min.y) / 2
+ float b_extent = (bbox.max.y - bbox.min.y) / 2
+ 
+ // Calculate overlap on y axis
+ float y_overlap = a_extent + b_extent - abs( n.y )
+ 
+ // SAT test on y axis
+ if(y_overlap &gt; 0)
+ {
+ // Find out which axis is axis of least penetration
+ if(x_overlap &gt; y_overlap)
+ {
+ // Point towards B knowing that n points from A to B
+ if(n.x &lt; 0)
+ m-&gt;normal = Vec2( -1, 0 )
+ else
+ m-&gt;normal = Vec2( 0, 0 )
+ m-&gt;penetration = x_overlap
+ return true
+ }
+ else
+ {
+ // Point toward B knowing that n points from A to B
+ if(n.y &lt; 0)
+ m-&gt;normal = Vec2( 0, -1 )
+ else
+ m-&gt;normal = Vec2( 0, 1 )
+ m-&gt;penetration = y_overlap
+ return true
+ }
+ }
+ }
+}</pre>
+<h3>Circle vs AABB</h3>
+<p>The last test I will cover is the Circle vs AABB test. The idea here is to compute the closest point on the AABB to the Circle; from there the test devolves into something similar to the Circle vs Circle test. Once the closest point is computed and a collision is detected the normal is the direction of the closest point to the circle's center. The penetration depth is the difference between the distance of the closest point to the circle and the radius of the circle.</p>
+<figure class="tutorial_image"><img class="aligncenter size-full wp-image-6496" alt="AABB to Circle intersection diagram." src="https://cdn.tutsplus.com/gamedev/authors/randy-gaul/custom-physics-aabb-to-circle.png" width="600"><br>
+<figcaption>AABB to Circle intersection diagram.</figcaption>
+</figure>
+<p>There is one tricky special case; if the circle's center is within the AABB then the center of the circle needs to be clipped to the closest edge of the AABB, and the normal needs to be flipped.</p>
+<pre class="brush: cpp">
+bool AABBvsCircle( Manifold *m )
+{
+ // Setup a couple pointers to each object
+ Object *A = m-&gt;A
+ Object *B = m-&gt;B
+
+ // Vector from A to B
+ Vec2 n = B-&gt;pos - A-&gt;pos
+
+ // Closest point on A to center of B
+ Vec2 closest = n
+
+ // Calculate half extents along each axis
+ float x_extent = (A-&gt;aabb.max.x - A-&gt;aabb.min.x) / 2
+ float y_extent = (A-&gt;aabb.max.y - A-&gt;aabb.min.y) / 2
+
+ // Clamp point to edges of the AABB
+ closest.x = Clamp( -x_extent, x_extent, closest.x )
+ closest.y = Clamp( -y_extent, y_extent, closest.y )
+
+ bool inside = false
+
+ // Circle is inside the AABB, so we need to clamp the circle's center
+ // to the closest edge
+ if(n == closest)
+ {
+ inside = true
+
+ // Find closest axis
+ if(abs( n.x ) &gt; abs( n.y ))
+ {
+ // Clamp to closest extent
+ if(closest.x &gt; 0)
+ closest.x = x_extent
+ else
+ closest.x = -x_extent
+ }
+
+ // y axis is shorter
+ else
+ {
+ // Clamp to closest extent
+ if(closest.y &gt; 0)
+ closest.y = y_extent
+ else
+ closest.y = -y_extent
+ }
+ }
+
+ Vec2 normal = n - closest
+ real d = normal.LengthSquared( )
+ real r = B-&gt;radius
+
+ // Early out of the radius is shorter than distance to closest point and
+ // Circle not inside the AABB
+ if(d &gt; r articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii r &amp;&amp; !inside)
+ return false
+
+ // Avoided sqrt until we needed
+ d = sqrt( d )
+
+ // Collision normal needs to be flipped to point outside if circle was
+ // inside the AABB
+ if(inside)
+ {
+ m-&gt;normal = -n
+ m-&gt;penetration = r + d
+ }
+ else
+ {
+ m-&gt;normal = n
+ m-&gt;penetration = r + d
+ }
+
+ return true
+}</pre>
+
+<h2>Conclusion</h2>
+<p>Hopefully by now you've learned a thing or two about physics simulation. This tutorial is enough to let you set up a simple custom physics engine made entirely from scratch. In the next part, we will be covering all the necessary extensions that all physics engines require, including:</p>
+<ul>
+<li>Contact pair sorting and culling</li>
+<li>Broadphase</li>
+<li>Layering</li>
+<li>Integration</li>
+<li>Timestepping</li>
+<li>Halfspace intersection</li>
+<li>Modular design (materials, mass and forces)</li>
+</ul>
+<p>I hope you enjoyed this article and I look forward to answering questions in the comments.</p>
+</div></div>
+</body></html>

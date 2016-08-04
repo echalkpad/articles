@@ -1,0 +1,689 @@
+<!DOCTYPE html><html><head><title>Building a Markdown Editor</title></head><body>
+<h1>Building a Markdown Editor</h1><p><a href="https://themeteorchef.com/recipes/building-a-markdown-editor/" target="_new">Original URL</a></p>
+<p><blockquote>What we're going to learn In this recipe we'll learn how to build a Markdown editor. We'll learn about saving and updating data on the fly in MongoDB, generating a live preview, and parsing Markdown&hellip;</blockquote></p>
+<div><div id="recipe" class="tab-content active">
+ <h3>What we're going to learn</h3>
+ <p>In this recipe we'll learn how to build a Markdown editor. We'll learn about saving and updating data on the fly in MongoDB, generating a live preview, and parsing Markdown on the server using the CommonMark parser.</p>
+
+ 
+ 
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/slack-logo.svg" alt="Slack">
+ <header>
+ <h4>Join The Meteor Chef on Slack</h4>
+ <p>If you get confused or stuck while reading&#x2014;or just want to talk about Meteor&#x2014;join us on Slack! <a href="http://slack.themeteorchef.com" target="_blank">Get an invite now</a>.</p>
+ </header>
+ </div>
+ 
+
+ <h3>Getting Started</h3>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add perak:codemirror
+</code></pre>
+
+<p>To give us a fancy text editor with syntax highlighting, we&#x2019;ll make use of the <a href="https://codemirror.net">CodeMirror</a> library which we can get access to from the <a href="https://atmospherejs.com/perak/codemirror"><code>perak:codemirror</code></a> package.</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add themeteorchef:commonmark
+</code></pre>
+
+<p>We&#x2019;ll be using the <a href="https://github.com/jgm/commonmark.js">commonmark.js</a> library to parse Markdown on the server. To get access to this (and a helper function for parsing Markdown), we&#x2019;ll install <a href="https://atmospherejs.com/themeteorchef/commonmark"><code>themeteorchef:commonmark</code></a>.</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add deanius:promise
+</code></pre>
+
+<p>Because we&#x2019;ll be chaining a few method calls, we&#x2019;ll use the <a href="https://atmospherejs.com/deanius/promise"><code>deanius:promise</code></a> package to help us make our method calls using the JavaScript Promises syntax.</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add reactive-var
+</code></pre>
+
+<p>To help us communicate the &#x201C;save state&#x201D; of our documents, we&#x2019;ll use <code>ReactiveVar</code> to reactively set state in our template.</p>
+
+<div class="note">
+ <h3>Additional Packages <i class="fa fa-warning"></i></h3>
+ <p>This recipe relies on several other packages that come as part of <a href="https://github.com/themeteorchef/base">Base</a>, the boilerplate kit used here on The Meteor Chef. The packages listed above are merely recipe-specific additions to the packages that are included by default in the kit. Make sure to reference the <a href="https://github.com/themeteorchef/base#packages-included">Packages Included list</a> for Base to ensure you have fulfilled all of the dependencies.</p>
+</div>
+
+<h3>What are we building?</h3>
+
+<p>So we&#x2019;re building a Markdown editor, but what exactly is that?</p>
+
+<figure>
+ <img src="http://cl.ly/image/1G3P0m1x2X14/markdown-editor-preview.gif" alt="Markdown editor preview">
+<figcaption>An example of the Markdown editor we&#x2019;ll be building.</figcaption>
+</figure>
+
+<p>A GIF is worth a million words, friend. Pretty neat, right? We&#x2019;re going to build a real-time editor with a text editor on one side, and a live preview of whatever we type <em>in that editor</em> rendered into HTML on the right. As a bonus, we&#x2019;ll see how to get what we&#x2019;ve typed synced up with the the database, too, so our work is ready to go when we load the page. Not too shabby.</p>
+
+<h3>What is Markdown?</h3>
+
+<p>Markdown is a pseudo-language for speeding up the process of writing HTML. Instead of writing out tags like <code>&lt;h4&gt;My title tag&lt;/h4&gt;</code>, it allows us to use a special syntax like <code>#### My title tag</code>. Markdown is really great for things like writing blog posts because it allows you to quickly integrate different types of markup using a lean syntax.</p>
+
+<p class="block-header">Markdown Example</p>
+
+<pre><code class="language-markdown">This is just regular text.
+
+This is **bolded text**.
+
+This is *italicized text* and _so is this_.
+
+This is [a link to something](http://google.com)
+
+This is some `inline code`.
+</code></pre>
+
+<p>In fact, Markdown is powering this post! But wait&#x2026;how does that work? Markdown isn&#x2019;t HTML, so how do browsers know how to display it?</p>
+
+<h4>Parsing Markdown</h4>
+
+<p>Just like any programming language needs to be converted into a more machine-friendly syntax, Markdown needs to be <em>parsed</em> (or converted) into HTML. To do this, we can use a special tool known as a parser that follows a set of rules for converting our Markdown into raw HTML. Neat! We&#x2019;ll learn about this a little later on when we build a live preview for our Markdown editor.</p>
+
+<h3>Creating documents</h3>
+
+<p>The first thing we need to do is setup our app to actually <em>create</em> documents. To do this, we&#x2019;re going to setup a quick modal and load it as part of our <code>documents</code> template.</p>
+
+<div class="note">
+ <h3>Skipping Ahead <i class="fa fa-warning"></i></h3>
+ <p>We&#x2019;re going to skip over some of the simpler parts of this recipe like setting up a collection, templates, and routes. All of this is included in the <a href="https://github.com/themeteorchef/building-a-markdown-editor">repo over on GitHub</a>, though, so take a peek and ask questions if you get stuck!</p>
+</div>
+
+<p>Let&#x2019;s hop over to the code for our <code>addNewDocumentsModal</code> template to wrap our head around it and then look at how we&#x2019;re accessing it from the <code>documents</code> template.</p>
+
+<p class="block-header">/clients/views/authenticated/add-new-document-modal.html</p>
+
+<pre><code class="language-javascript">&lt;template name="addNewDocumentModal"&gt;
+ &lt;div class="modal fade" id="new-document-modal" tabindex="-1" role="dialog" aria-labelledby="new-document-modal"&gt;
+ &lt;div class="modal-dialog" role="document"&gt;
+ &lt;div class="modal-content"&gt;
+ &lt;div class="modal-header"&gt;
+ &lt;button type="button" class="close" data-dismiss="modal" aria-label="Close"&gt;&lt;span aria-hidden="true"&gt;&amp;times;&lt;/span&gt;&lt;/button&gt;
+ &lt;h4 class="modal-title" id="myModalLabel"&gt;Start a New Document&lt;/h4&gt;
+ &lt;/div&gt;
+ &lt;form id="new-document"&gt;
+ &lt;div class="modal-body"&gt;
+ &lt;label for="documentTitle"&gt;Document Title&lt;/label&gt;
+ &lt;input type="text" name="documentTitle" class="form-control" placeholder="e.g. Plans for World Domination"&gt;
+ &lt;/div&gt;
+ &lt;div class="modal-footer"&gt;
+ &lt;button type="button" class="btn btn-default" data-dismiss="modal"&gt;Cancel&lt;/button&gt;
+ &lt;button type="submit" class="btn btn-success"&gt;Create Document&lt;/button&gt;
+ &lt;/div&gt;
+ &lt;/form&gt; &lt;!-- end #new-document --&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+
+<p>Here, we&#x2019;re using a <a href="https://getbootstrap.com/javascript/#modals">Bootstrap modal</a> to present a form for creating a new document. We&#x2019;re keeping things pretty spartan here and asking for just a title. There&#x2019;s a lot of markup here, but the part we&#x2019;ll focus on is the input field <code>&lt;input type="text" name="documentTitle" class="form-control" placeholder="e.g. Plans for World Domination"&gt;</code>. <a href="https://www.youtube.com/watch?v=oiOKh3odS4U">Document placeholder title</a> optional.</p>
+
+<p><img src="https://media.giphy.com/media/3mKBXLpYeLzUY/giphy.gif" alt="Pinky and the Brain"></p>
+
+<p>One thing to point out is that because this is a modal, we expect it to <em>overlay</em> something (as opposed to being a standalone template). Real quick, let&#x2019;s look at how we&#x2019;re including this in the <code>documents</code> template.</p>
+
+<p class="block-header">/client/views/authenticated/documents.html</p>
+
+<pre><code class="language-javascript">&lt;template name="documents"&gt;
+ {{&gt; addNewDocumentModal}}
+
+ &lt;h4 class="page-header"&gt;Documents&lt;/h4&gt;
+
+ &lt;a href="#" class="btn btn-success add-new-document" data-toggle="modal" data-target="#new-document-modal"&gt;Start a New Document&lt;/a&gt;
+
+ &lt;div class="list-group documents-list"&gt;
+ {{#each documents}}
+ &lt;a class="list-group-item" href="{{pathFor 'editor'}}"&gt;{{title}}&lt;/a&gt;
+ {{else}}
+ &lt;p class="alert alert-warning"&gt;No documents yet, friend.&lt;/p&gt;
+ {{/each}}
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+
+<p>See it up there at the top <code>{{&gt; addNewDocumentModal }}</code>? By the magic of Bootstrap, all we need to do is make sure the <em>markup</em> for our modal is on screen by including our template and set the <code>data-toggle="modal" data-target="#new-document-modal"</code> attributes on our &#x201C;Start a New Document&#x201D; button. After that, Bootstrap handles the hiding/showing for us. Let&#x2019;s look at the logic for our modal so we can get an idea of how this is wired up.</p>
+
+<p class="block-header">/clients/controllers/authenticated/add-new-document-modal.js</p>
+
+<pre><code class="language-javascript">Template.addNewDocumentModal.onRendered( function() {
+ $( "#new-document" ).validate({
+ rules: {
+ documentTitle: {
+ required: true
+ }
+ },
+ messages: {
+ documentTitle: {
+ required: "Woah there, slick. Add a title please."
+ }
+ },
+ submitHandler: function() {
+ var title = $( "[name='documentTitle']" ).val();
+
+ Meteor.call( 'insertDocument', title, function( error, response ) {
+ if ( error ) {
+ Bert.alert( error.reason, "danger" );
+ } else {
+ Router.go( "editor", { _id: response } );
+ $( '#new-document-modal' ).modal( 'hide' );
+ $( '.modal-backdrop' ).remove();
+ }
+ });
+ }
+ });
+});
+
+Template.addNewDocumentModal.events({
+ 'submit form': function( e ) {
+ e.preventDefault();
+ }
+});
+</code></pre>
+
+<p>From the bottom up! Down below, we make sure to call <code>preventDefault()</code> on our forms submission event. This blocks the form from submitting to the server, but also helps us defer the actual submission action to our validation&#x2019;s <code>submitHandler</code> function up above.</p>
+
+<p>Our validation here is simple: does a title exist? If not, we display our <code>"Woah there, slick. Add a title please."</code> message. If all is well, we move to our <code>submitHandler</code>. In there, we grab the document title from our form and then toss it up to our <code>insertDocument</code> method on the server. Let&#x2019;s hop over there real quick and see how this gets in the database.</p>
+
+<p class="block-header">/server/methods/insert/documents.js</p>
+
+<pre><code class="language-javascript">Meteor.methods({
+ insertDocument: function( title ){
+ check( title, String );
+
+ var doc = {
+ title: title,
+ owner: Meteor.userId(),
+ // Note: here we have a blank space to account for our editor's loading state.
+ markdown: " "
+ };
+
+ try {
+ var documentId = Documents.insert( doc );
+ return documentId;
+ } catch( exception ) {
+ return exception;
+ }
+ }
+});
+</code></pre>
+
+<p>Pretty&#x2026;underwhelming, eh? Nonetheless, very important. First, we check our <code>title</code> argument to make sure that it&#x2019;s a string. Next, we do something a little fancy. Instead of just inserting the document with a title only, we construct a <code>doc</code> object that we can insert. Notice, here, that we set the <code>title</code> key equal to the title we received from the client and then set two new fields: <code>owner</code> and <code>markdown</code>.</p>
+
+<p>That first one, <code>owner</code>, allows us to attach this document to the <em>currently logged in user</em>. What&#x2019;s nice about this is that notice we can get the user&#x2019;s ID on the server using <code>Meteor.userId()</code>. This helps us avoid passing the ID over from the client. We also add an empty <code>markdown</code> key with a value of a blank space. Why? This has to do with empty strings being identified as <code>undefined</code>. Later on, we&#x2019;ll need to set our editor&#x2019;s value when the page loads. Having this value as a blank space makes it a little easier for us to do this (don&#x2019;t worry, we&#x2019;ll explain later).</p>
+
+<p>Lastly, we wire up our insert in a <code>try/catch</code> block. This allows us to call our insert method without a callback. Why would we do that? Well, when we do this, Meteor simply returns the new document&#x2019;s ID. That means we can assign that value to a variable and return it. We use a <code>try/catch</code> because if that insert were to fail for some reason, that error would be deferred to the <code>catch</code> function and returned to the client. Simple. Let&#x2019;s see what happens back over on the client once we have our ID. Hint: tons of fun.</p>
+
+<p class="block-header">/client/controllers/authenticated/add-new-document-modal.js</p>
+
+<pre><code class="language-javascript">Meteor.call( 'insertDocument', title, function( error, response ) {
+ if ( error ) {
+ Bert.alert( error.reason, "danger" );
+ } else {
+ Router.go( "editor", { _id: response } );
+ $( '#new-document-modal' ).modal( 'hide' );
+ $( '.modal-backdrop' ).remove();
+ }
+});
+</code></pre>
+
+<p>If we get a pesky error, we toss it to <a href="https://github.com/themeteorchef/bert"><code>Bert.alert()</code></a> to let the user know what&#x2019;s up. If all is well, though, we grab the <code>response</code> argument from our method (this will be equal to our new document&#x2019;s ID) and pass it to Iron Router&#x2019;s <code>Router.go()</code> method. Notice how this first argument in that call is <code>"editor"</code>? This is letting Iron Router know which route we want to use by <em>it&#x2019;s name</em>. The latter part, where we pass an object with the <code>_id</code> key is telling Iron Router to set the route parameter for <code>_id</code> equal to our new document ID. What this does is redirect the user to our <code>editor</code> template for the new document. Confused? Let&#x2019;s take a look.</p>
+
+<p class="block-header">/client/routes/routes-authenticated.js</p>
+
+<pre><code class="language-javascript">Router.route( 'editor', {
+ name: "editor",
+ path: '/documents/:_id',
+ template: 'editor',
+ subscriptions: function(){
+ return Meteor.subscribe( 'document', this.params._id );
+ },
+ onBeforeAction: function(){
+ Session.set( "currentRoute", "editor" );
+ Session.set( "currentDocument", this.params._id );
+ this.next();
+ }
+});
+</code></pre>
+
+<p>This is a little odd because even though our route and template are called <code>editor</code>, our path is pointed to <code>/documents/:_id</code>. Right! To keep our URL structure a little more predictable, we&#x2019;ve opted for this path because it maps well to the list of documents. So we have <code>/documents</code> our list of documents, and <code>/documents/:_id</code> for a <em>single</em> document. Make sense? This is purely stylistic and you could call your route whatever you wanted, like <code>/ryan/seriously/why/:_id</code>. Up to you!</p>
+
+<p>Notice, though, that we want to set that <code>:_id</code> value back in our <code>Router.go()</code> call because Iron Router then passes that to our subscription for single documents, as well as sets our <code>currentDocument</code> Session variable so we can access it later. Phew.</p>
+
+<p>With this done, we should be able to insert a new document and be redirected to the editor view! Yeah! Now for the sticky part: building out our editor.</p>
+
+<h3>Setting up the editor</h3>
+
+<p>Now that we have documents stored in our database, we need to actually make them editable. How do we do it? First, let&#x2019;s look at our <code>editor</code> template and then build up the different pieces from there.</p>
+
+<h4>The editor template</h4>
+
+<p class="block-header">/client/views/authenticated/editor.html</p>
+
+<pre><code class="language-javascript">&lt;template name="editor"&gt;
+ &lt;header class="editor-header"&gt;
+ &lt;label for="documentTitle"&gt;Title&lt;/label&gt;
+ &lt;input type="text" name="documentTitle" value="{{document.title}}"&gt;
+ &lt;/header&gt;
+ &lt;div class="editor-preview"&gt;
+ &lt;div class="editor-wrap"&gt;
+ &lt;textarea id="editor"&gt;&lt;/textarea&gt;
+ &lt;/div&gt;
+ &lt;div class="preview-wrap"&gt;
+ &lt;div id="preview"&gt;&lt;/div&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+
+<p>Now we get into the thick of it. Here, we&#x2019;re simply setting three things:</p>
+
+<ol>
+<li>An input where we can both display and make changes to our document title.</li>
+<li>A textarea with an id of <code>edtior</code> (where we&#x2019;ll load our CodeMirror editor).</li>
+<li>An empty div with an id of <code>preview</code>.</li>
+</ol>
+
+<p>These three parts make up our editor. We&#x2019;ve got a good bit of work ahead of us to get them wired up. Don&#x2019;t worry, we&#x2019;ll look at all the tricky parts. First, though, let&#x2019;s chat about CSS.</p>
+
+<h4>The <code>.editor-view</code> class</h4>
+
+<p>We want our editor to look nice and spiffy and give us plenty of room for writing. To do this, we&#x2019;re going to add a little bit of CSS to our app, but, we only want to add that CSS when we&#x2019;re on the <em>editor</em> view. How do we do that?</p>
+
+<p>In Iron Router, we get access to a function called <code>onBeforeAction()</code> that can be called before every single route, or, a list of routes that we specify (or vice versa). We&#x2019;re going to make use of this to toggle a class on our <code>&lt;body&gt;</code> element whenever we&#x2019;re on the editor page and remove it when we&#x2019;re not. Let&#x2019;s take a peek.</p>
+
+<p class="block-header">/client/routes/hooks.js</p>
+
+<pre><code class="language-javascript">var editorView = function(){
+ var currentRoute = Router.current().route._path;
+ if ( currentRoute === "/documents/:_id" ) {
+ $( "body" ).addClass( "editor-view" );
+ this.next();
+ } else {
+ $( "body" ).removeClass( "editor-view" );
+ this.next();
+ }
+};
+</code></pre>
+
+<p>First, we create a function that we can call later. This is pretty simple, but quite powerful. We grab the current route&#x2019;s path by calling <code>Router.current().route._path</code>. In other words, this gives us the current page&#x2019;s path, or, everything <em>after</em> the site&#x2019;s domain <code>http://localhost:3000</code>. Once we have this, we compare it against the path we&#x2019;re looking for as we defined it in our route: <code>/documents/:_id</code>. When the current path equals this value, it&#x2019;s as good as saying &#x201C;we&#x2019;re on the editor view.&#x201D; Nice!</p>
+
+<p>If we confirm we&#x2019;re in the editor view, we use a spot of jQuery to help us add a class <code>editor-view</code> to our <code>&lt;body&gt;</code> tag. Conversely, if we find we&#x2019;re <em>not</em> on the editor path, we just go ahead and remove it.</p>
+
+<div class="note">
+ <h3>this.next <i class="fa fa-warning"></i></h3>
+ <p>Because we&#x2019;ll be calling this function in Iron Router&#x2019;s onBeforeAction method, we need to produce a signal when our work is complete so that the router knows to continue. If we don&#x2019;t provide this, we&#x2019;ll set our class but our route won&#x2019;t execute leaving our page blank.</p>
+</div> 
+
+<p>Calling this is quite simple:</p>
+
+<p class="block-header">/client/routes/hooks.js</p>
+
+<pre><code class="language-javascript">Router.onBeforeAction( editorView );
+</code></pre>
+
+<p>A one liner! Here we just call <code>Router.onBeforeAction()</code>, passing our function we defined above. See how our function is the only argument? This is telling Iron Router to call this function before <em>every single route</em>. If we were to provide another argument containing an object with a key of either <code>except</code> or <code>only</code>, we could pass an array to that key with a list of route names we wanted to <em>avoid</em> calling our function on, or isolate calling our function to, respectively. For reference:</p>
+
+<pre><code class="language-javascript">Router.onBeforeAction( editorView, {
+ only: [
+ 'routeName',
+ 'anotherRouteName'
+ ]
+});
+</code></pre>
+
+<p>But wait, don&#x2019;t we only want to call this function on the editor view? Why not just specify that? Well, because we&#x2019;re setting a class name on our body, we need a way to remove it. If we were to specify <code>only</code> our editor view, when we moved away from that route the <code>editor-view</code> class would still be on the body! To get around that, we simply call our function on <em>all</em> routes and specify the logic in our function.</p>
+
+<figure>
+ <img src="http://cl.ly/image/3l17020m1711/markdown-editor-body-class.gif" alt="Example of editor-view class being applied while changing routes."> 
+ <figcaption>Example of editor-view class being applied while changing routes.</figcaption>
+</figure>
+
+<p>Cool! Notice how now, we can use our <code>editor-view</code> class to expand our layout to be 100% of the page to maximize our editing experience.</p>
+
+
+
+<h3>Adding CodeMirror</h3>
+
+<p>At this point, we&#x2019;ve got the basic building blocks for our editor all set. Now, we want to wire up our CodeMirror editor so we can get a fancy text editor. It&#x2019;s surprisingly simple.</p>
+
+<p class="block-header">/client/controllers/authenticated/editor.js</p>
+
+<pre><code class="language-javascript">Template.editor.onRendered( function() {
+ this.editor = CodeMirror.fromTextArea( this.find( "#editor" ), {
+ lineNumbers: false,
+ fixedGutter: false,
+ mode: "markdown",
+ lineWrapping: true,
+ cursorHeight: 0.85
+ });
+});
+</code></pre>
+
+<p>Wasn&#x2019;t kidding, was I? To initialize CodeMirror in our <code>editor</code> template, this is all of the code we need. Let&#x2019;s talk through it, though, as we&#x2019;re using an interesting technique.</p>
+
+<p>Remember back in our <code>editor</code> template? Let&#x2019;s pull that back up again and look at how we&#x2019;ve defined the space where we want our CodeMirror editor to go.</p>
+
+<p class="block-header">/client/views/authenticated/editor.html</p>
+
+<pre><code class="language-javascript">&lt;template name="editor"&gt;
+ [...]
+ &lt;div class="editor-preview"&gt;
+ &lt;div class="editor-wrap"&gt;
+ &lt;textarea id="editor"&gt;&lt;/textarea&gt;
+ &lt;/div&gt;
+ [...]
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+
+<p>We want to pay attention to the <code>&lt;textarea id="editor"&gt;&lt;/textarea&gt;</code> part. In order to load our editor, we&#x2019;re going to make use of CodeMirror&#x2019;s <code>fromTextArea</code> method. Why? Because this gives us more control over placement. Because we&#x2019;ve got some interesting CSS going on to position everything, it makes more sense to put the element where we want it. This way we can pass the selector <code>#editor</code> to CodeMirror and let it swap in the actual editor. Cool!</p>
+
+<p>Back in our <code>onRendered</code> function, there are two things to note: how we&#x2019;re selecting our <code>&lt;textarea&gt;</code> and how we&#x2019;re passing configuration to CodeMirror. First, we&#x2019;re passing <code>this.find( "#editor" )</code> in as our first argument. Because we&#x2019;re inside of an <code>onRendered</code> callback, <code>this</code> is equal to the current template instance. This is similar to saying <code>template.find( '#editor' )</code> in one of your event handlers.</p>
+
+<p>Next, we pass an object with some configuration. The good news: 99% of this isn&#x2019;t required and is only offered as personal preference. The one setting you <em>do</em> want to pay attention to, though, is the <code>mode</code>. Here, we&#x2019;ve set this to <code>"markdown"</code> so CodeMirror knows to expect Markdown and apply the correct syntax highlighting.</p>
+
+<p>With this in place, we have a functioning text editor. Now, we want to wire up our text editor so that when we make changes, it does two things:</p>
+
+<ol>
+<li>Generates a live preview on the right.</li>
+<li>Saves the contents of the editor to the database.</li>
+</ol>
+
+<h3>Wiring up the preview and saving to the database</h3>
+
+<p>Remember toward the beginning of our recipe when we talked about parsing Markdown? This is where it comes into play. In order to generate our preview, we need to get the contents of the editor, convert it to HTML, and then apply it to the preview area.</p>
+
+<p class="block-header">/client/controllers/authenticated/editor.js</p>
+
+<pre><code class="language-javascript">Template.editor.events({
+ 'keyup .CodeMirror': function( event, template ) {
+ var text = template.editor.getValue();
+
+ if ( text !== "" ) {
+ Meteor.promise( "convertMarkdown", text )
+ .then( function( html ) {
+ $( "#preview" ).html( html );
+ return Meteor.promise( "updateDocument", { _id: template.docId, markdown: text } );
+ })
+ .catch( function( error ) {
+ Bert.alert( error.reason, "danger" );
+ });
+ }
+ }
+});
+</code></pre>
+
+<p>Woah! Lots of stuff, but it&#x2019;s all pretty harmless. What we&#x2019;re doing here is watching for the <code>keyup</code> event on our CodeMirror editor. This means that whenever our user presses a key and it (literally) goes up, we want this event to fire. Let&#x2019;s look at what we want it to <em>do</em> on that event.</p>
+
+<p>First, we want to grab the current value of our CodeMirror instance. To do this, we can call <code>template.editor.getValue();</code> (we get <code>getValue()</code> as a helper method from CodeMirror). Notice, here, we&#x2019;re grabbing our <em>template</em> instance and accessing our CodeMirror editor from it. This is possible because when we defined our CodeMirror earlier, we bound it to <code>this.editor</code> in our <code>editor</code> template&#x2019;s <code>onRendered</code> callback.</p>
+
+<p>After we have our value, we need to do three things (if our editor has a value/isn&#x2019;t empty):</p>
+
+<ol>
+<li>Convert that value from Markdown to HTML on the server.</li>
+<li>Take the HTML and &#x201C;set&#x201D; it in our preview area.</li>
+<li>Update the database with markdown.</li>
+</ol>
+
+<p>To do all of this, we&#x2019;re going to make use of a handy package called <code>deanius:promise</code>. This package will help us to convert our regular Meteor method calls <code>Method.call()</code> into chainable, <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise">JavaScript promises</a>. Promises are neat because they allow us to call asynchronous functions in a synchronous manner. In essence, they allow us to say &#x201C;do this, and then do this, and then do this, and if any errors happen&#x2026;do this.&#x201D; Because of this, too, we get a much cleaner syntax saving us from &#x201C;callback hell.&#x201D; Shall we?</p>
+
+<p>First, we call <code>Meteor.promise( "convertMarkdown", text )</code>, which is like saying <code>Meteor.call( "convertMarkdown", text, function(){} );</code> Notice, though, that we leave off a semicolon (this is so we can chain our calls) as well as a third argument in the form of a callback function. This starts our chain. We&#x2019;re saying, &#x201C;okay, Meteor, call our <code>convertMarkdown</code> method and pass it the text from our CodeMirror editor.&#x201D; Let&#x2019;s hop over to the server to check out our <code>convertMarkdown</code> method and then come back to see how the chaining works.</p>
+
+<p class="block-header">/server/methods/utility/markdown.js</p>
+
+<pre><code class="language-javascript">Meteor.methods({
+ convertMarkdown: function( markdown ){
+ check( markdown, String );
+ return parseMarkdown( markdown );
+ }
+});
+</code></pre>
+
+<p>Seriously?! Yep. Thanks to your pal The Meteor Chef and his package <code>themeteorchef:commonmark</code>, this all the code we need to convert our Markdown into HTML and return it back to the server. Note: I can&#x2019;t take full credit here, as the <em>real</em> work was done by the <a href="https://github.com/jgm/commonmark.js">commonmark.js</a> folks. The &#x201C;package&#x201D; is just a function that calls the right methods to spit out some HTML. <em>Wipes brow</em>. All in a hard days work, amiright?</p>
+
+
+
+<p>With our HTML ready to rock, back on the client we can take that HTML and inject it into our <code>#preview</code> div. Let&#x2019;s take a look.</p>
+
+<p class="block-header">/client/controllers/authenticated/editor.js</p>
+
+<pre><code class="language-javascript">Meteor.promise( "convertMarkdown", text )
+ .then( function( html ) {
+ $( "#preview" ).html( html );
+ return Meteor.promise( "updateDocument", { _id: template.docId, markdown: text } );
+ })
+</code></pre>
+
+<p>See what&#x2019;s happening here? Using the Promises syntax, we&#x2019;re &#x201C;chaining&#x201D; on a callback function to be called <em>after</em> our <code>convertMarkdown</code> method has returned a value. That value, then, becomes accessible as part of the callback function. Here, we&#x2019;ve denoted the value as the <code>html</code> argument in the callback. Pretty cool, right? To get our live preview, it&#x2019;s just a one liner: <code>$( "#preview" ).html( html );</code>. Neat! With this, we can now type in the editor in Markdown and get a <em>live preview</em> rendered in HTML.</p>
+
+<p><img src="https://media0.giphy.com/media/i9nkolRQgbN9C/giphy.gif" alt="Whaaaat"></p>
+
+<p>We&#x2019;re not done yet! Notice that return value? Here, we&#x2019;re calling to another method <code>updateDocument</code>, again, with a promise. Let&#x2019;s jump up to the server to see what we&#x2019;re working with.</p>
+
+<p class="block-header">/server/methods/update/documents.js</p>
+
+<pre><code class="language-javascript">Meteor.methods({
+ updateDocument: function( changes ){
+ check( changes, {
+ _id: String,
+ markdown: Match.Optional( String ),
+ title: Match.Optional( String )
+ });
+
+ var doc = changes._id;
+ delete changes._id;
+
+ try {
+ var documentId = Documents.update( doc, {
+ $set: changes
+ });
+ return documentId;
+ } catch(exception) {
+ return exception;
+ }
+ }
+});
+</code></pre>
+
+<p>Very similar to our <code>insertDocument</code> method from earlier. We need to call attention to our <code>check()</code> method. Here, we&#x2019;re being a little bit crafty and making our method super flexible. Notice how we&#x2019;re pulling in our <code>changes</code> argument and comparing it to an object? Normally, this would mean that every time we call an update, we&#x2019;d need all of the keys in that object to be present. Aha! Instead of doing that, we can make use of the <code>Match.Optional()</code> method. This tells our <code>check()</code> that these fields are optional, but if they <em>are</em> included, they should be a <code>String</code> type. Ok, what&#x2019;s the point?</p>
+
+<p>This affords us the ability to reuse this method in multiple spots. Really in our app we only have two: our Markdown editor and our title (we&#x2019;ve skipped over this but our editor and our title fields use this method to update the document). Instead of two separate methods, this technique lets us keep everything light. Great! Notice, too, that instead of having to pluck specific fields to pass to our <code>Documents.update()</code> method&#x2019;s <code>$set</code> value, we can simply pass our entire <code>changes</code> argument because we know it&#x2019;s only ever going to contain the fields we need to update (except for the <code>_id</code> field, we go ahead and snip that off first). Nerd points x1000.</p>
+
+<p>Once this is in place, we can hop back to the client. Hint: get your party hat ready.</p>
+
+<p class="block-header">/client/controllers/authenticated/editor.js</p>
+
+<pre><code class="language-javascript">Template.editor.events({
+ 'keyup .CodeMirror': function( event, template ) {
+ var text = template.editor.getValue();
+
+ if ( text !== "" ) {
+ Meteor.promise( "convertMarkdown", text )
+ .then( function( html ) {
+ $( "#preview" ).html( html );
+ return Meteor.promise( "updateDocument", { _id: template.docId, markdown: text } );
+ })
+ .catch( function( error ) {
+ Bert.alert( error.reason, "danger" );
+ });
+ }
+ }
+});
+</code></pre>
+
+<p>Done! We now have a working text editor complete with live preview. This means that whenever we type in our editor on the left, we&#x2019;ll see the live, rendered result on the right. Pretty rad. Here&#x2019;s a zinger for you, though. What happens when we refresh the page?</p>
+
+<p>Oh no!</p>
+
+<h3>Setting content on page load</h3>
+
+<p>You may be wondering why we don&#x2019;t just set the value of our editor and our preview with template helpers. Fair question!</p>
+
+<p>On the editor side, we don&#x2019;t want to do this because it would be like sitting in a chair and having someone constantly pulling it out from under us. Think about it. If the value of our editor is equal to whatever is in the database, when the database updates (on every <code>keyup</code> event), we&#x2019;re resetting the contents of the editor. The problem with this arises around cursor position. We find that a few edits are fine, but so many cause the cursor to jump to the end of the editor or even the start. Weird!</p>
+
+<p>On the preview side, this is more of a &#x201C;less is more&#x201D; type of setup. Again, because we&#x2019;re updating our database on each <code>keyup</code> event, it could get pretty gnarly if we were also <em>reading</em> that on each keyup event. It&#x2019;s not the end of the world, but it&#x2019;s also not necessary to constantly poll the database because we know our preview is based on whatever is in our editor (which is synced with the database). Make sense?</p>
+
+<p>To help us solve this, we&#x2019;ve created a little helper function called <code>initEditor()</code> that we can call in our <code>editor</code> template&#x2019;s <code>onRendered</code> callback:</p>
+
+<p class="block-header">/client/</p>
+
+<pre><code class="language-javascript">Template.editor.onRendered( function() {
+ [...]
+ initEditor( this );
+});
+</code></pre>
+
+<p>Hot damn! Nice and simple. Here we call our <code>initEditor()</code> function passing <code>this</code> (the current template instance) as an argument. Easy. Let&#x2019;s look at the code behind <code>initEditor</code> to see how it works.</p>
+
+<p class="block-header">/client/helpers/helpers-editor.js</p>
+
+<pre><code class="language-javascript">initEditor = function( template ) {
+ Tracker.autorun( function( computation ) {
+ var doc = Documents.findOne( {}, { fields: { "markdown": 1 } } );
+
+ if ( doc &amp;&amp; doc.markdown ) {
+
+ Meteor.call( "convertMarkdown", doc.markdown, function( error, html ) {
+ if ( error ) {
+ console.log( error.reason );
+ } else {
+ $( "#preview" ).html( html );
+ }
+ });
+
+ template.editor.setValue( doc.markdown.trim() );
+
+ computation.stop();
+ }
+ });
+};
+</code></pre>
+
+<p>Nothing <em>too</em> crazy. First, our function opens with a <code>Tracker.autorun()</code> call. What&#x2019;s that about? Well, because we may not have access to any data yet when our template renders (remember this is being called from within <code>onRendered</code>), we need to keep trying until we do. Tracker.autorun() makes this possible outside of our normal helpers context which <em>is</em> reactive.</p>
+
+<p>Inside, we do a <code>Documents.findOne()</code> to locate the current document. Because we&#x2019;re only publishing a single document equal to the current document ID in the URL, we can get away with this. Notice, too, that we set up a projection to only give us the <code>markdown</code> field.</p>
+
+<p>This is where our autorun becomes handy. With our query set up, now we need to wait until we&#x2019;re sure we have a value. We make sure by saying if <code>doc</code> and <code>doc.markdown</code>: go nuts.</p>
+
+<p>Once we&#x2019;ve confirmed we have some sort of Markdown string, we call to our <code>convertMarkdown</code> method to convert to HTML and on success we set our preview&#x2019;s HTML equal to the freshly converted Markdown. Note, too, just before we stop our computation that we set the value of our editor equal to the raw Markdown. Why the <code>trim()</code>?</p>
+
+<p>Remember earlier when we inserted our document and set the markdown field&#x2019;s initial value to <code>" "</code>? This is where it comes into play. If when we first created a document and <em>didn&#x2019;t</em> have this, our editor would be set with a blank space, meaning our documents would always start with a gap. No good! This simply &#x201C;trims&#x201D; off any blank space at the end of a string, or, our single blank space.</p>
+
+<div class="note">
+ <h3>Undefined With Strings</h3>
+ <p>This caught me off guard. Unfortunately, if a string is simply empty, or, &#x201C;&#x201D;, JavaScript will evaluate it to a falsy value. Because we need to check for its existence on the client, we get around this by setting the default value to a blank space to &#x201C;trick&#x201D; our if statement into running properly. Funky, I know.</p>
+</div>
+
+<p>Ultimately this little trick saves us some headaches with the editor&#x2019;s cursor jumping around when we first start editing and getting some weird <code>Tracker</code> errors saying our <code>markdown</code> field is undefined. So it goes.</p>
+
+<p>One last thing to point out: <code>computation.stop()</code>. Notice that we get our <code>computation</code> value as an argument in our <code>Tracker.autorun()</code>&#x2019;s callback function. Recall that we only want this to run until we have a value. After it&#x2019;s set, we don&#x2019;t want this code running again so we use the <code>.stop()</code> method to completely cancel out our computation. Now, even if changes are made to our document in the DB, nothing will happen.</p>
+
+<p>If we refresh now (or move between pages), we&#x2019;ll see that our editor <em>and</em> preview populate as expected on page load. High five!</p>
+
+<h3>Saving state</h3>
+
+<p>Technically we&#x2019;re done. But we&#x2019;re never done. One little touch that we can add to this is a saving state. If you&#x2019;ve ever used Google docs, you may have noticed that they show a little <code>Saving...</code> state if you&#x2019;re typing and <code>Saved</code> if you&#x2019;ve stopped. This is a nice touch to have because technically our user doesn&#x2019;t know if their work is being saved without it. Let&#x2019;s put our UX cap and get this added in.</p>
+
+<p class="block-header">/client/views/authenticated/editor.html</p>
+
+<pre><code class="language-markup">&lt;template name="editor"&gt;
+ &lt;header class="editor-header"&gt;
+ [...]
+ {{#if saving}}
+ &lt;span class="save-state"&gt;&lt;i class="fa fa-frefresh fa-spin"&gt;&lt;/i&gt; Saving...&lt;/span&gt;
+ {{else}}
+ &lt;span class="save-state text-success"&gt;&lt;i class="fa fa-check"&gt;&lt;/i&gt; Saved!&lt;/span&gt;
+ {{/if}}
+ &lt;/header&gt;
+ [...]
+&lt;/template&gt;
+</code></pre>
+
+<p>Back in our <code>editor</code> template, we add a little block to our <code>&lt;header class="editor-header"&gt;</code> element. Here, we add a simple if/else statement that spits out an icon depending on which &#x201C;state&#x201D; we&#x2019;re in. If we&#x2019;re saving, we show <code>Saving...</code> with an icon. If not, we show <code>Saved!</code> with an icon. To handle the state, we&#x2019;re going to make use of <code>ReactiveVar</code>s.</p>
+
+<h4>Adding ReactiveVar to our template</h4>
+
+<p>To get this working, we need to change a few things. First, we need to <em>create</em> a <code>ReactiveVar</code> when our template is created. Let&#x2019;s take a peek.</p>
+
+<p class="block-header">/client/controllers/authenticated/editor.js</p>
+
+<pre><code class="language-javascript">Template.editor.onCreated( function() {
+ this.saveState = new ReactiveVar();
+});
+</code></pre>
+
+<p>Nice and simple! Here, we just attach our ReactiveVar to a variable <a href="https://themeteorchef.com/snippets/reactive-dict-reactive-vars-and-session-variables/#tmc-reactive-variables">on our template&#x2019;s instance</a>. Now, within any of our template logic, we can get access to the value of <code>saveState</code>. As the name suggests, too, it&#x2019;s reactive! This means that if it changes, anything dependent on it will change, too. Next up is a helper to toggle our two icons/states in the editor header.</p>
+
+<p class="block-header">/client/controllers/authenticated/editor.js</p>
+
+<pre><code class="language-javascript">Template.editor.helpers({
+ [...]
+ saving: function() {
+ var saveState = Template.instance().saveState.get();
+ return saveState;
+ }
+});
+</code></pre>
+
+<p>Boom! Because we&#x2019;ve attached our <code>ReactiveVar</code> to our template instance, we can get access to it in our helper by calling <code>Template.instance().saveState.get()</code>. This is similar to a Session variable, but <a href="https://themeteorchef.com/snippets/reactive-dict-reactive-vars-and-session-variables/#tmc-when-to-use-reactive-varsdict-vs-session-variables">keeps everything local to the template</a> and the <em>instance</em> of that template. Win! Now&#x2026;one last step. We need to <em>set</em> our variable when something happens.</p>
+
+<p class="block-header">/client/controllers/authenticated/editor.js</p>
+
+<pre><code class="language-javascript">Template.editor.events({
+ 'keyup .CodeMirror': function( event, template ) {
+ [...]
+
+ template.saveState.set( true );
+
+ if ( text !== "" ) {
+ Meteor.promise( "convertMarkdown", text )
+ .then( function( html ) {
+ $( "#preview" ).html( html );
+ return Meteor.promise( "updateDocument", { _id: template.docId, markdown: text } );
+ })
+ .then( function() {
+ delay( function() {
+ template.saveState.set( false );
+ }, 1000 );
+ })
+ .catch( function( error ) {
+ Bert.alert( error.reason, "danger" );
+ });
+ }
+ },
+});
+</code></pre>
+
+<p>Back in our <code>keyup</code> event, we can see that we&#x2019;ve added a line just above our Promise chain <code>template.saveState.set( true );</code>. This just toggles the state of our variable so that in our template, instead of <code>Saved!</code> it reads <code>Saving...</code>. Notice, this is happening while we&#x2019;re <em>typing</em>. So if we&#x2019;re typing, we see <code>Saving...</code> and after our database write has completed we see <code>Saved!</code>. The latter part of that&#x2014;switching back to <code>Saved!</code>&#x2014;is handled through an additional step in our Promise chain. Notice we add an additional <code>then()</code> call with a function that sets our <code>saveState</code> back to false.</p>
+
+<p>That <code>delay</code> function may look a little funky. What is that? We&#x2019;ve added that here to compensate for <a href="http://ejohn.org/blog/how-javascript-timers-work/">how JavaScript&#x2019;s timing functions work</a>. We need a way to consistently set and cancel our event because we&#x2019;ll be calling this repeatedly while typing. This delay function helps us prevent our <code>setTimeout</code> loops from tripping over one another, toggling the save state in unpredictable ways. The school bell is about to ring, though, so consider reviewing that as <a href="https://github.com/themeteorchef/building-a-markdown-editor/blob/master/code/client/helpers/helpers-functions.js">extra credit</a>.</p>
+
+<h3>Wrap Up &amp; Summary</h3>
+
+<p>Ring! Ring! Ring! That&#x2019;s all folks. In this recipe we learned how to build a Markdown editor complete with live preview and saving to the database. We learned about using a Markdown parser, adding a CodeMirror editor to our app, and even learned how to use <code>ReactiveVar</code>. We also looked at using keyboard events to control when and how we perform certain functions, as well as how to use <code>Tracker.autorun</code> to get a wrangle on reactivity.</p>
+
+
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/watsi-logo.svg" alt="Watsi">
+ <header>
+ <h4>Enjoy this post?</h4>
+ <p>I'd really appreciate it if you showed your thanks by <a href="https://watsi.org/team/the-meteor-chef" target="_blank">joining Team Meteor Chef on Watsi</a> and donating healthcare to someone who needs it in exchange!</p>
+ </header>
+ </div>
+ 
+ <h3>Questions &amp; Comments</h3>
+ 
+
+
+
+ </div> 
+ </div>
+</body></html>

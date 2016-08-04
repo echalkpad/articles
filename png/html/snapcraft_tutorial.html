@@ -1,0 +1,288 @@
+<!DOCTYPE html><html><head><title>Snapcraft Tutorial</title></head><body>
+<h1>Snapcraft Tutorial</h1><p><a href="https://developer.ubuntu.com/en/snappy/snapcraft/your-first-snap/" target="_new">Original URL</a></p>
+<p><blockquote>Let's make a snap from scratch using Snapcraft! We'll pick something a little interesting: a webcam server. Preparation You'll want a webcam and a Snappy device. We'll assume you have those, but if&hellip;</blockquote></p>
+<div><div class="row no-border">
+<div class="eight-col">
+
+
+<p>Let's make a snap from scratch using Snapcraft! We'll pick something a little interesting: a webcam server.</p>
+
+<h2>Preparation</h2>
+
+<p>You'll want a webcam and a Snappy device. We'll assume you have those, but if you need help setting up a Snappy install, there is help <a href="https://developer.ubuntu.com/en/snappy/start/">online</a>.</p>
+
+<p>(Even if you don't have either of those, you can still follow along. You just won't be able to use the final snap package you create. But you'll get to see how Snapcraft works, which is still super rewarding.)</p>
+
+<p>You should also install Snapcraft:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>$ sudo add-apt-repository ppa:snappy-dev/snapcraft-daily
+$ sudo apt-get update
+$ sudo apt-get install snapcraft
+</code></pre>
+</div>
+
+<div class="eight-col">
+<h2>Approach</h2>
+
+<p>This example is easy because we won't be doing much of the heavy lifting ourselves. We're going to integrate a couple pieces of code together to make an interesting app.</p>
+
+<p>Namely, we'll combine a web server with a webcam program and combine them to serve a new frame every ten seconds.</p>
+
+<h3>The Web Server</h3>
+
+<p>Go has a simple web server in its standard libraries. So let's just use that.</p>
+
+<p>It's trivial to write a complete (but basic) web server in a few lines:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>package main
+import "net/http"
+func main() {
+ panic(http.ListenAndServe(":8080", http.FileServer(http.Dir("."))))
+}
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>This will serve the current directory on port <code>:8080</code>. If there is an <code>index.html</code> in the current directory, it will be served. Otherwise a directory listing will be shown.</p>
+
+<p>I've provided the above code in a simple GitHub <a href="https://github.com/mikix/golang-static-http">repository</a>.</p>
+
+<h3>The Webcam Program</h3>
+
+<p>There is a webcam program provided in the Ubuntu archives called <code>fswebcam</code>. It has a lot of neat features. But all we'll be needing for now is its ability to take a webcam freeze frame and drop it to a file by calling it like so:</p>
+</div>
+
+
+
+<div class="eight-col">
+<h2>Snapcraft Recipe</h2>
+
+<p>OK, let's create a Snapcraft recipe that combines the above programs into a useful snap.</p>
+
+<p>Snapcraft reads a single file, <code>snapcraft.yaml</code>, which tells it how to combine code. It contains a list of <code>parts</code>, or pieces of code, and some metadata for the final snap it will create. But let's not worry about the metadata yet.</p>
+
+<h3>Web Server Part</h3>
+
+<p>Let's start with the web server.</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>parts:
+ golang-static-http:
+ plugin: go1.4-project
+ source: git://github.com/mikix/golang-static-http
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>You've got a <code>parts</code> list with one item, named <code>golang-static-http</code>, but we could call it anything. That part has a few options. A <code>plugin</code> option that tells Snapcraft how to interpret the part. In this case, it's a Go project using Go 1.4. And finally, a <code>source</code> option telling Snapcraft where to download the code.</p>
+
+<p>Go ahead and create <code>snapcraft.yaml</code> with the above contents in an empty directory.</p>
+
+<p>Now we can build and "stage" this recipe. Staging just means putting the output of the parts in a common folder that has the same layout as the snap we'll eventually create. It lets you look at how the snap is constructed and make sure everything is in place.</p>
+</div>
+
+
+
+<div class="eight-col">
+<p>You'll see a bunch of output, including Snapcraft downloading the Go compiler. It will use this to compile the code found on GitHub. Eventually when it is done, you'll be able to inspect the <code>./stage</code> folder and see the web server executable sitting in <code>./stage/bin</code>:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>$ ls stage/bin
+golang-static-http
+</code></pre>
+</div>
+
+<div class="eight-col">
+<h3>Webcam Part</h3>
+
+<p>Now let's add the webcam program <code>fswebcam</code> to our snap. Edit <code>snapcraft.yaml</code> to look like:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>parts:
+ golang-static-http:
+ plugin: go1.4-project
+ source: git://github.com/mikix/golang-static-http
+ fswebcam:
+ plugin: ubuntu
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>We've added a new part called <code>fswebcam</code> handled by the <code>ubuntu</code> plugin. That plugin will include an Ubuntu package and its dependencies into your snap. It will use the name of the part as the package name to include.</p>
+
+<p>Now let's stage our recipe again.</p>
+</div>
+
+
+
+<div class="eight-col">
+<p>You'll note that Snapcraft skipped downloading and building <code>golang-static-htpp</code> again because it knew it had already done so.</p>
+
+<p>You'll also see Snapcraft downloading and unpacking all the Ubuntu packages into your snap. If you look at <code>./stage</code>, you'll see a lot more files now:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>$ ls stage
+bin etc lib usr var
+</code></pre>
+</div>
+
+<div class="eight-col">
+<h3>Gluing the Parts Together</h3>
+
+<p>OK, so we have the two programs in our staging area. But how do we make them work together?</p>
+
+<p>We'll write a tiny little script that runs the server and <code>fswebcam</code> together:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>#!/bin/sh
+set -e
+
+cd "$SNAPP_APP_DATA_PATH"
+
+golang-static-http &amp;
+
+while :; do
+ fswebcam shot.jpeg
+ sleep 10
+done
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>Save the above as <code>webcam-webui</code> and make it executable:</p>
+</div>
+
+
+
+<div class="eight-col">
+<p>Alright, let's put this script in our snap too:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>parts:
+ golang-static-http:
+ plugin: go1.4-project
+ source: git://github.com/mikix/golang-static-http
+ fswebcam:
+ plugin: ubuntu
+ glue:
+ plugin: copy
+ files:
+ webcam-webui: bin/webcam-webui
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>The <code>copy</code> plugin takes a list of files to just directly copy without building or downloading anything. In this case, we just want to put our glue script in the <code>bin/</code> directory.</p>
+
+<p>If we run Snapcraft again, we won't be surprised:</p>
+</div>
+
+
+
+<div class="eight-col">
+<p>We should now see both the web server and our script in stage/bin (the webcam program is in stage/usr/bin since it came from Ubuntu):</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>$ ls stage/bin
+golang-static-http webcam-webui
+</code></pre>
+</div>
+
+<div class="eight-col">
+<h3>Package Metadata</h3>
+
+<p>"But how do we actually make a snap?", you may be wondering. To do that, we need some metadata files required by Snappy that describe how our code should be installed and run.</p>
+
+<p>You can read all about the <a href="https://developer.ubuntu.com/en/snappy/guides/packaging-format-apps/">format of this metadata</a>, but we'll assume here that you're already familiar.</p>
+
+<p>Let's make a new subdirectory called <code>meta</code> and put our Snappy package files there. Here's the contents of <code>meta/package.yaml</code>:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>name: webcam-webui
+version: 1
+vendor: You &lt;you@example.com&gt;
+services:
+- name: webcam-webui
+ start: bin/webcam-webui
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>And a very simple <code>meta/readme.md</code>:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code># Webcam web UI
+
+Exposes your webcam over a web UI
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>Now that we have that sorted, we can tell Snapcraft where to find our metadata:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>parts:
+ golang-static-http:
+ plugin: go1.4-project
+ source: git://github.com/mikix/golang-static-http
+ fswebcam:
+ plugin: ubuntu
+ glue:
+ plugin: copy
+ files:
+ webcam-webui: bin/webcam-webui
+snappy-metadata: meta
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>And tell Snapcraft to actually make the snap package:</p>
+</div>
+
+
+
+<div class="eight-col">
+<p>You should now have a <code>webcam-webui_1_amd64.snap</code> file sitting in your directory (assuming you are running on amd64). Congratulations!</p>
+
+<h2>Next steps</h2>
+
+<p>Well done, your first snap using snapcraft is ready. If you want to check out a few examples for reference or to get inspired, have a look at the <code>examples</code> directory in the source directory of snapcraft:</p>
+</div>
+
+<div class="twelve-col">
+<pre><code>bzr branch lp:snapcraft
+cd snapcraft/examples
+</code></pre>
+</div>
+
+<div class="eight-col">
+<p>In <code>examples/</code> you can find a diverse set of examples which should help you get started on your own projects.</p>
+
+<p>If you should have any more questions, ask us on</p>
+
+<ul>
+	<li><code>#snappy</code> on <code>irc.freenode.net</code> or</li>
+	<li>the <a href="https://lists.ubuntu.com/mailman/listinfo/snappy-app-devel">snappy-app-devel</a> mailing list</li>
+</ul>
+</div>
+</div>
+
+
+
+
+ </div>
+</body></html>

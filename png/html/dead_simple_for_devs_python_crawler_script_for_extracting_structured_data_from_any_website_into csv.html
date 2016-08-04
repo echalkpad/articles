@@ -1,0 +1,80 @@
+<!DOCTYPE html><html><head><title>Dead simple {for devs} python crawler (script) for extracting structured data from any website into CSV</title></head><body>
+<h1>Dead simple {for devs} python crawler (script) for extracting structured data from any website into CSV</h1><p><a href="http://blog.webhose.io/2015/08/16/dead-simple-for-devs-python-crawler-script-for-extracting-structured-data-from-any-almost-website-into-csv/" target="_new">Original URL</a></p>
+<p><blockquote>On my previous post&#xA0;I wrote about a very basic web crawler I wrote, that can randomly scour the web and mirror/download websites. Today I want to share with you a very simple script that can&hellip;</blockquote></p>
+<div><div class="entry-content">
+		
+		<p>On my <a href="http://blog.webhose.io/2015/08/12/tiny-basic-multi-threaded-web-crawler-in-python/" target="_blank">previous post</a>&#xA0;I wrote about a very basic web crawler I wrote, that can randomly scour the web and mirror/download websites. Today I want to share with you a very simple script that can extract&#xA0;structured data from any &lt;almost&gt; website.</p>
+<p>Use the following script to extract specific information from any website&#xA0;(i.e prices, ids, titles, phone numbers etc..).&#xA0;Populate the &#x201C;fields&#x201D; parameter with the names and the patterns (regular expression) of the data you want to extract. In this specific example, I extract the product names, prices, ratings and images&#xA0;from Amazon.com.</p>
+<pre><code>import sys, thread, Queue, re, urllib2, urlparse, time, csv
+<span>### Set the site you want to crawl &amp; the patterns of the fields you want to extract ###</span>
+siteToCrawl = "<span>http://www.amazon.com/</span>"
+fields = {}
+fields["Title"] = '<span>&lt;title&gt;(.*?)&lt;/title&gt;</span>'
+fields["Rating"] = '<span>title="(\S+) out of 5 stars"</span>'
+fields["Price"] = '<span>data-price="(.*?)"</span>'
+fields["Image"] = '<span>src="(http://ecx.images-amazon.com/images/I/.*?)"</span>'
+<span>########################################################################</span>
+dupcheck = set()
+q = Queue.Queue(25)
+q.put(siteToCrawl)
+csvFile = open("output.csv", "w",0)
+csvTitles = dict(fields)
+csvTitles["Link"] = ""
+writer = csv.DictWriter(csvFile, fieldnames=csvTitles)
+writer.writeheader()
+def queueURLs(html, origLink):
+ for url in re.findall('''&lt;a[^&gt;]+href=["'](.[^"']+)["']''', html, re.I):
+ try:
+ if url.startswith("http") and urlparse.urlparse(url).netlock != urlparse.urlparse(siteToCrawl).netlock: # Make sure we keep crawling the same domain
+ continue
+ except Exception:
+ continue
+ link = url.split("#", 1)[0] if url.startswith("http") else '{uri.scheme}://{uri.netloc}'.format(uri=urlparse.urlparse(origLink)) + url.split("#", 1)[0]
+ if link in dupcheck:
+ continue
+ dupcheck.add(link)
+ if len(dupcheck) &gt; 99999:
+ dupcheck.clear()
+ q.put(link)
+def analyzePage(html,link):
+ print "Analyzing %s" % link
+ output = {}
+ for key, value in fields.iteritems():
+ m = re.search(fields[key],html, re.I | re.S)
+ if m:
+ output[key] = m.group(1)
+ output["Link"] = link
+ writer.writerow(output)
+def getHTML(link):
+ try:
+ request = urllib2.Request(link)
+ request.add_header('User-Agent', 'Structured Data Extractor')
+ html = urllib2.build_opener().open(request).read()
+ analyzePage(html,link)
+ queueURLs(html, link)
+ except (KeyboardInterrupt, SystemExit):
+ raise
+ except Exception, e:
+ print e
+while True:
+ thread.start_new_thread( getHTML, (q.get(),))
+ time.sleep(0.5)
+</code></pre>
+<p>Some notes:</p>
+<ul>
+<li>I have set a user agent name, as some websites block crawling if no user agent is present</li>
+<li>No external imports are required</li>
+<li>You can define&#xA0;as many fields to extract as you&#x2019;d like. The field name is the &#x201C;key&#x201D; in the &#x201C;fields&#x201D; parameter</li>
+<li>As I&#xA0;use&#xA0;regular expressions to define where the content is, no DOM parsing is performed, so malformed HTML pages are none issue.</li>
+<li>Each time you run the script it will overwrite the content in output.csv</li>
+</ul>
+<p>Enjoy,</p>
+<p>Ran</p>
+<div id="jp-post-flair" class="sharedaddy sd-like-enabled sd-sharing-enabled"><div class="sharedaddy sd-block sd-like jetpack-likes-widget-wrapper jetpack-likes-widget-unloaded" id="like-post-wrapper-79268159-97-55d1bc1f2e159"><h3 class="sd-title">Like this:</h3><p class="likes-widget-placeholder post-likes-widget-placeholder"><span class="button"><span>Like</span></span> <span class="loading">Loading...</span></p><a class="sd-link-color"></a></div>
+<p id="jp-relatedposts" class="jp-relatedposts">
+	<h3 class="jp-relatedposts-headline"><em>Related</em></h3>
+</p></div>			</div>
+
+	
+</div>
+</body></html>

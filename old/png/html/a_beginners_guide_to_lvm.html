@@ -1,0 +1,1507 @@
+<!DOCTYPE html><html><head><title>A Beginner's Guide To LVM</title></head><body>
+<h1>A Beginner's Guide To LVM</h1><p><a href="https://www.howtoforge.com/linux_lvm" target="_new">Original URL</a></p>
+<p><blockquote>Version 1.0 Author: Falko Timme Last updated: 2015-02-09 This guide shows how to work with LVM (Logical Volume Management) on Linux. It also describes how to use LVM together with RAID1 in an extra&hellip;</blockquote></p>
+<div><div id="htfContentPage">
+
+
+<p>Version 1.0 <br> Author: Falko Timme <br> Last updated: 2015-02-09</p>
+<p>This guide shows how to work with LVM (Logical Volume Management) on Linux. It also describes how to use LVM together with RAID1 in an extra chapter. As LVM is a rather abstract topic, this article comes with a Debian Etch VMware image that you can download and start, and on that Debian Etch system you can run all the commands I execute here and compare your results with mine. Through this practical approach you should get used to LVM very fast.</p>
+<p>However, I do not issue any guarantee that this tutorial will work for you!</p>
+
+<h3 id="-preliminary-note">1 Preliminary Note</h3>
+<p>This tutorial was inspired by two articles I read:</p>
+
+<p>These are great articles, but hard to understand if you've never worked with LVM before. That's why I have created <a href="https://www.howtoforge.com/downloads/files/Debian_Etch_LVM.zip" target="_blank">this Debian Etch VMware image</a> that you can download and run in VMware Server or VMware Player (see <a href="http://www.howtoforge.com/import_vmware_images" target="_blank">http://www.howtoforge.com/import_vmware_images</a> to learn how to do that).</p>
+<p>I installed all tools we need during the course of this guide on the Debian Etch system (by running</p>
+<p class="command">apt-get install lvm2 dmsetup mdadm reiserfsprogs xfsprogs</p>
+<p>) so you don't need to worry about that.</p>
+<p>The Debian Etch system's network is configured through DHCP, so you don't have to worry about conflicting IP addresses. The root password is <span class="system">howtoforge</span>. You can also connect to that system with an SSH client like <a href="http://www.chiark.greenend.org.uk/%7Esgtatham/putty/" target="_blank">PuTTY</a>. To find out the IP address of the Debian Etch system, run</p>
+<p class="command">ifconfig</p>
+<p>The system has six SCSI hard disks, <span class="system">/dev/sda</span> - <span class="system">/dev/sdf</span>. <span class="system">/dev/sda</span> is used for the Debian Etch system itself, while we will use <span class="system">/dev/sdb</span> - <span class="system">/dev/sdf</span> for LVM and RAID. <span class="system">/dev/sdb</span> - <span class="system">/dev/sdf</span> each have 80GB of disk space. In the beginning we will act as if each has only 25GB of disk space (thus using only 25GB on each of them), and in the course of the tutorial we will "replace" our 25GB hard disks with 80GB hard disks, thus demonstrating how you can replace small hard disks with bigger ones in LVM.</p>
+<p>The article <a href="http://www.linuxdevcenter.com/pub/a/linux/2006/04/27/managing-disk-space-with-lvm.html" target="_blank">http://www.linuxdevcenter.com/pub/a/linux/2006/04/27/managing-disk-space-with-lvm.html</a> uses hard disks of 250GB and 800GB, but some commands such as <span class="system">pvmove</span> take a long time with such hard disk sizes, that's why I decided to use hard disks of 25GB and 80GB (that's enough to understand how LVM works).</p>
+
+
+<p>Download <a href="http://downloads.howtoforge.com/files/Debian_Etch_LVM.zip" target="_blank">this Debian Etch VMware image</a> (~310MB) and start it <a href="http://www.howtoforge.com/import_vmware_images" target="_blank">like this</a>. Log in as root with the password <span class="system">howtoforge</span>.</p>
+
+<h3 id="-lvm-layout">2 LVM Layout</h3>
+<p>Basically LVM looks like this:</p>
+<p><a class="fancybox" id="img-lvm_scheme_full" href="https://www.howtoforge.com/images/lvm/big/lvm_scheme_full.png"><img src="https://www.howtoforge.com/images/lvm/lvm_scheme_full.png" width="550"></a></p>
+<p>You have one or more physical volumes (<span class="system">/dev/sdb1</span> - <span class="system">/dev/sde1</span> in our example), and on these physical volumes you create one or more volume groups (e.g. <span class="system">fileserver</span>), and in each volume group you can create one or more logical volumes. If you use multiple physical volumes, each logical volume can be bigger than one of the underlying physical volumes (but of course the sum of the logical volumes cannot exceed the total space offered by the physical volumes).</p>
+<p>It is a good practice to not allocate the full space to logical volumes, but leave some space unused. That way you can enlarge one or more logical volumes later on if you feel the need for it.</p>
+<p>In this example we will create a volume group called <span class="system">fileserver</span>, and we will also create the logical volumes <span class="system">/dev/fileserver/share</span>, <span class="system">/dev/fileserver/backup</span>, and <span class="system">/dev/fileserver/media</span> (which will use only half of the space offered by our physical volumes for now - that way we can switch to RAID1 later on (also described in this tutorial)).</p>
+
+<h3 id="-our-first-lvm-setup">3 Our First LVM Setup</h3>
+<p>Let's find out about our hard disks:</p>
+<p class="command">fdisk -l</p>
+<p>The output looks like this:</p>
+<p class="system">server1:~#&#xA0;fdisk&#xA0;-l<br> <br> Disk&#xA0;/dev/sda:&#xA0;21.4&#xA0;GB,&#xA0;21474836480&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;2610&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> &#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br> /dev/sda1&#xA0;&#xA0;&#xA0;*&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;18&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;144553+&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br> /dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2450&#xA0;&#xA0;&#xA0;&#xA0;19535040&#xA0;&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br> /dev/sda4&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2451&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2610&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1285200&#xA0;&#xA0;&#xA0;82&#xA0;&#xA0;Linux&#xA0;swap&#xA0;/&#xA0;Solaris<br> <br> Disk&#xA0;/dev/sdb:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> Disk&#xA0;/dev/sdb&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table<br> <br> Disk&#xA0;/dev/sdc:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> Disk&#xA0;/dev/sdc&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table<br> <br> Disk&#xA0;/dev/sdd:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> Disk&#xA0;/dev/sdd&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table<br> <br> Disk&#xA0;/dev/sde:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> Disk&#xA0;/dev/sde&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table<br> <br> Disk&#xA0;/dev/sdf:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> Disk&#xA0;/dev/sdf&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table</p>
+<p>There are no partitions yet on <span class="system">/dev/sdb</span> - <span class="system">/dev/sdf</span>. We will create the partitions <span class="system">/dev/sdb1</span>, <span class="system">/dev/sdc1</span>, <span class="system">/dev/sdd1</span>, and <span class="system">/dev/sde1</span> and leave <span class="system">/dev/sdf</span> untouched for now. We act as if our hard disks had only 25GB of space instead of 80GB for now, therefore we assign 25GB to <span class="system">/dev/sdb1</span>, <span class="system">/dev/sdc1</span>, <span class="system">/dev/sdd1</span>, and <span class="system">/dev/sde1</span>:</p>
+<p class="command">fdisk /dev/sdb</p>
+<p><span class="system">server1:~#&#xA0;fdisk&#xA0;/dev/sdb<br> <br> The&#xA0;number&#xA0;of&#xA0;cylinders&#xA0;for&#xA0;this&#xA0;disk&#xA0;is&#xA0;set&#xA0;to&#xA0;10443.<br> There&#xA0;is&#xA0;nothing&#xA0;wrong&#xA0;with&#xA0;that,&#xA0;but&#xA0;this&#xA0;is&#xA0;larger&#xA0;than&#xA0;1024,<br> and&#xA0;could&#xA0;in&#xA0;certain&#xA0;setups&#xA0;cause&#xA0;problems&#xA0;with:<br> 1)&#xA0;software&#xA0;that&#xA0;runs&#xA0;at&#xA0;boot&#xA0;time&#xA0;(e.g.,&#xA0;old&#xA0;versions&#xA0;of&#xA0;LILO)<br> 2)&#xA0;booting&#xA0;and&#xA0;partitioning&#xA0;software&#xA0;from&#xA0;other&#xA0;OSs<br> &#xA0;&#xA0;&#xA0;(e.g.,&#xA0;DOS&#xA0;FDISK,&#xA0;OS/2&#xA0;FDISK)<br> <br> Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- m</span><br> <span class="system">Command&#xA0;action<br> &#xA0;&#xA0;&#xA0;a&#xA0;&#xA0;&#xA0;toggle&#xA0;a&#xA0;bootable&#xA0;flag<br> &#xA0;&#xA0;&#xA0;b&#xA0;&#xA0;&#xA0;edit&#xA0;bsd&#xA0;disklabel<br> &#xA0;&#xA0;&#xA0;c&#xA0;&#xA0;&#xA0;toggle&#xA0;the&#xA0;dos&#xA0;compatibility&#xA0;flag<br> &#xA0;&#xA0;&#xA0;d&#xA0;&#xA0;&#xA0;delete&#xA0;a&#xA0;partition<br> &#xA0;&#xA0;&#xA0;l&#xA0;&#xA0;&#xA0;list&#xA0;known&#xA0;partition&#xA0;types<br> &#xA0;&#xA0;&#xA0;m&#xA0;&#xA0;&#xA0;print&#xA0;this&#xA0;menu<br> &#xA0;&#xA0;&#xA0;n&#xA0;&#xA0;&#xA0;add&#xA0;a&#xA0;new&#xA0;partition<br> &#xA0;&#xA0;&#xA0;o&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;DOS&#xA0;partition&#xA0;table<br> &#xA0;&#xA0;&#xA0;p&#xA0;&#xA0;&#xA0;print&#xA0;the&#xA0;partition&#xA0;table<br> &#xA0;&#xA0;&#xA0;q&#xA0;&#xA0;&#xA0;quit&#xA0;without&#xA0;saving&#xA0;changes<br> &#xA0;&#xA0;&#xA0;s&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;Sun&#xA0;disklabel<br> &#xA0;&#xA0;&#xA0;t&#xA0;&#xA0;&#xA0;change&#xA0;a&#xA0;partition's&#xA0;system&#xA0;id<br> &#xA0;&#xA0;&#xA0;u&#xA0;&#xA0;&#xA0;change&#xA0;display/entry&#xA0;units<br> &#xA0;&#xA0;&#xA0;v&#xA0;&#xA0;&#xA0;verify&#xA0;the&#xA0;partition&#xA0;table<br> &#xA0;&#xA0;&#xA0;w&#xA0;&#xA0;&#xA0;write&#xA0;table&#xA0;to&#xA0;disk&#xA0;and&#xA0;exit<br> &#xA0;&#xA0;&#xA0;x&#xA0;&#xA0;&#xA0;extra&#xA0;functionality&#xA0;(experts&#xA0;only)<br> <br> Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- n</span><br> <span class="system">Command&#xA0;action<br> &#xA0;&#xA0;&#xA0;e&#xA0;&#xA0;&#xA0;extended<br> &#xA0;&#xA0;&#xA0;p&#xA0;&#xA0;&#xA0;primary&#xA0;partition&#xA0;(1-4)</span><br> <span class="highlight">&lt;-- p</span><br> <span class="system">Partition&#xA0;number&#xA0;(1-4):</span>&#xA0;<span class="highlight">&lt;-- 1</span><br> <span class="system">First&#xA0;cylinder&#xA0;(1-10443,&#xA0;default&#xA0;1):</span> <span class="highlight">&lt;-- &lt;ENTER&gt;</span> <br> <span class="system">Using&#xA0;default&#xA0;value&#xA0;1<br> Last&#xA0;cylinder&#xA0;or&#xA0;+size&#xA0;or&#xA0;+sizeM&#xA0;or&#xA0;+sizeK&#xA0;(1-10443,&#xA0;default&#xA0;10443):</span>&#xA0;<span class="highlight">&lt;-- +25000M</span><br> <br> <span class="system">Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- t</span><br> <span class="system">Selected&#xA0;partition&#xA0;1<br> Hex&#xA0;code&#xA0;(type&#xA0;L&#xA0;to&#xA0;list&#xA0;codes):</span>&#xA0;<span class="highlight">&lt;-- L</span><br> <br> &#xA0;<span class="system">0&#xA0;&#xA0;Empty&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1e&#xA0;&#xA0;Hidden&#xA0;W95&#xA0;FAT1&#xA0;80&#xA0;&#xA0;Old&#xA0;Minix&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;be&#xA0;&#xA0;Solaris&#xA0;boot<br> &#xA0;1&#xA0;&#xA0;FAT12&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24&#xA0;&#xA0;NEC&#xA0;DOS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;81&#xA0;&#xA0;Minix&#xA0;/&#xA0;old&#xA0;Lin&#xA0;bf&#xA0;&#xA0;Solaris<br> &#xA0;2&#xA0;&#xA0;XENIX&#xA0;root&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;39&#xA0;&#xA0;Plan&#xA0;9&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;82&#xA0;&#xA0;Linux&#xA0;swap&#xA0;/&#xA0;So&#xA0;c1&#xA0;&#xA0;DRDOS/sec&#xA0;(FAT-<br> &#xA0;3&#xA0;&#xA0;XENIX&#xA0;usr&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3c&#xA0;&#xA0;PartitionMagic&#xA0;&#xA0;83&#xA0;&#xA0;Linux&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;c4&#xA0;&#xA0;DRDOS/sec&#xA0;(FAT-<br> &#xA0;4&#xA0;&#xA0;FAT16&#xA0;&lt;32M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40&#xA0;&#xA0;Venix&#xA0;80286&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;84&#xA0;&#xA0;OS/2&#xA0;hidden&#xA0;C:&#xA0;&#xA0;c6&#xA0;&#xA0;DRDOS/sec&#xA0;(FAT-<br> &#xA0;5&#xA0;&#xA0;Extended&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;41&#xA0;&#xA0;PPC&#xA0;PReP&#xA0;Boot&#xA0;&#xA0;&#xA0;85&#xA0;&#xA0;Linux&#xA0;extended&#xA0;&#xA0;c7&#xA0;&#xA0;Syrinx<br> &#xA0;6&#xA0;&#xA0;FAT16&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;42&#xA0;&#xA0;SFS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;86&#xA0;&#xA0;NTFS&#xA0;volume&#xA0;set&#xA0;da&#xA0;&#xA0;Non-FS&#xA0;data<br> &#xA0;7&#xA0;&#xA0;HPFS/NTFS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4d&#xA0;&#xA0;QNX4.x&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;87&#xA0;&#xA0;NTFS&#xA0;volume&#xA0;set&#xA0;db&#xA0;&#xA0;CP/M&#xA0;/&#xA0;CTOS&#xA0;/&#xA0;.<br> &#xA0;8&#xA0;&#xA0;AIX&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4e&#xA0;&#xA0;QNX4.x&#xA0;2nd&#xA0;part&#xA0;88&#xA0;&#xA0;Linux&#xA0;plaintext&#xA0;de&#xA0;&#xA0;Dell&#xA0;Utility<br> &#xA0;9&#xA0;&#xA0;AIX&#xA0;bootable&#xA0;&#xA0;&#xA0;&#xA0;4f&#xA0;&#xA0;QNX4.x&#xA0;3rd&#xA0;part&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;df&#xA0;&#xA0;BootIt<br> &#xA0;a&#xA0;&#xA0;OS/2&#xA0;Boot&#xA0;Manag&#xA0;50&#xA0;&#xA0;OnTrack&#xA0;DM&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;93&#xA0;&#xA0;Amoeba&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;e1&#xA0;&#xA0;DOS&#xA0;access<br> &#xA0;b&#xA0;&#xA0;W95&#xA0;FAT32&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;51&#xA0;&#xA0;OnTrack&#xA0;DM6&#xA0;Aux&#xA0;94&#xA0;&#xA0;Amoeba&#xA0;BBT&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;e3&#xA0;&#xA0;DOS&#xA0;R/O<br> &#xA0;c&#xA0;&#xA0;W95&#xA0;FAT32&#xA0;(LBA)&#xA0;52&#xA0;&#xA0;CP/M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;9f&#xA0;&#xA0;BSD/OS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;e4&#xA0;&#xA0;SpeedStor<br> &#xA0;e&#xA0;&#xA0;W95&#xA0;FAT16&#xA0;(LBA)&#xA0;53&#xA0;&#xA0;OnTrack&#xA0;DM6&#xA0;Aux&#xA0;a0&#xA0;&#xA0;IBM&#xA0;Thinkpad&#xA0;hi&#xA0;eb&#xA0;&#xA0;BeOS&#xA0;fs<br> &#xA0;f&#xA0;&#xA0;W95&#xA0;Ext'd&#xA0;(LBA)&#xA0;54&#xA0;&#xA0;OnTrackDM6&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a5&#xA0;&#xA0;FreeBSD&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ee&#xA0;&#xA0;EFI&#xA0;GPT<br> 10&#xA0;&#xA0;OPUS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;55&#xA0;&#xA0;EZ-Drive&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a6&#xA0;&#xA0;OpenBSD&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ef&#xA0;&#xA0;EFI&#xA0;(FAT-12/16/<br> 11&#xA0;&#xA0;Hidden&#xA0;FAT12&#xA0;&#xA0;&#xA0;&#xA0;56&#xA0;&#xA0;Golden&#xA0;Bow&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a7&#xA0;&#xA0;NeXTSTEP&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f0&#xA0;&#xA0;Linux/PA-RISC&#xA0;b<br> 12&#xA0;&#xA0;Compaq&#xA0;diagnost&#xA0;5c&#xA0;&#xA0;Priam&#xA0;Edisk&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a8&#xA0;&#xA0;Darwin&#xA0;UFS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f1&#xA0;&#xA0;SpeedStor<br> 14&#xA0;&#xA0;Hidden&#xA0;FAT16&#xA0;&lt;3&#xA0;61&#xA0;&#xA0;SpeedStor&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a9&#xA0;&#xA0;NetBSD&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f4&#xA0;&#xA0;SpeedStor<br> 16&#xA0;&#xA0;Hidden&#xA0;FAT16&#xA0;&#xA0;&#xA0;&#xA0;63&#xA0;&#xA0;GNU&#xA0;HURD&#xA0;or&#xA0;Sys&#xA0;ab&#xA0;&#xA0;Darwin&#xA0;boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f2&#xA0;&#xA0;DOS&#xA0;secondary<br> 17&#xA0;&#xA0;Hidden&#xA0;HPFS/NTF&#xA0;64&#xA0;&#xA0;Novell&#xA0;Netware&#xA0;&#xA0;b7&#xA0;&#xA0;BSDI&#xA0;fs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;auto<br> 18&#xA0;&#xA0;AST&#xA0;SmartSleep&#xA0;&#xA0;65&#xA0;&#xA0;Novell&#xA0;Netware&#xA0;&#xA0;b8&#xA0;&#xA0;BSDI&#xA0;swap&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fe&#xA0;&#xA0;LANstep<br> 1b&#xA0;&#xA0;Hidden&#xA0;W95&#xA0;FAT3&#xA0;70&#xA0;&#xA0;DiskSecure&#xA0;Mult&#xA0;bb&#xA0;&#xA0;Boot&#xA0;Wizard&#xA0;hid&#xA0;ff&#xA0;&#xA0;BBT<br> 1c&#xA0;&#xA0;Hidden&#xA0;W95&#xA0;FAT3&#xA0;75&#xA0;&#xA0;PC/IX<br> Hex&#xA0;code&#xA0;(type&#xA0;L&#xA0;to&#xA0;list&#xA0;codes):</span>&#xA0;<span class="highlight">&lt;-- 8e</span><br> <span class="system">Changed&#xA0;system&#xA0;type&#xA0;of&#xA0;partition&#xA0;1&#xA0;to&#xA0;8e&#xA0;(Linux&#xA0;LVM)<br> <br> Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- w</span><br> <span class="system">The&#xA0;partition&#xA0;table&#xA0;has&#xA0;been&#xA0;altered!<br> <br> Calling&#xA0;ioctl()&#xA0;to&#xA0;re-read&#xA0;partition&#xA0;table.<br> Syncing&#xA0;disks.</span></p>
+<p>Now we do the same for the hard disks <span class="system">/dev/sdc</span> - <span class="system">/dev/sde</span>:</p>
+<p class="command">fdisk /dev/sdc<br> fdisk /dev/sdd<br> fdisk /dev/sde</p>
+<p>Then run</p>
+<p class="command">fdisk -l</p>
+<p>again. The output should look like this:</p>
+<p class="system">server1:~#&#xA0;fdisk&#xA0;-l<br> <br> Disk&#xA0;/dev/sda:&#xA0;21.4&#xA0;GB,&#xA0;21474836480&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;2610&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> &#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br> /dev/sda1&#xA0;&#xA0;&#xA0;*&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;18&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;144553+&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br> /dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2450&#xA0;&#xA0;&#xA0;&#xA0;19535040&#xA0;&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br> /dev/sda4&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2451&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2610&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1285200&#xA0;&#xA0;&#xA0;82&#xA0;&#xA0;Linux&#xA0;swap&#xA0;/&#xA0;Solaris<br> <br> Disk&#xA0;/dev/sdb:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> &#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br> /dev/sdb1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br> <br> Disk&#xA0;/dev/sdc:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> &#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br> /dev/sdc1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br> <br> Disk&#xA0;/dev/sdd:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> &#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br> /dev/sdd1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br> <br> Disk&#xA0;/dev/sde:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> &#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br> /dev/sde1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br> <br> Disk&#xA0;/dev/sdf:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br> 255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br> Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br> <br> Disk&#xA0;/dev/sdf&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table</p>
+<p>Now we prepare our new partitions for LVM:</p>
+<p class="command">pvcreate /dev/sdb1 /dev/sdc1 /dev/sdd1 /dev/sde1</p>
+<p class="system">server1:~#&#xA0;pvcreate&#xA0;/dev/sdb1&#xA0;/dev/sdc1&#xA0;/dev/sdd1&#xA0;/dev/sde1<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sdb1"&#xA0;successfully&#xA0;created<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sdc1"&#xA0;successfully&#xA0;created<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sdd1"&#xA0;successfully&#xA0;created<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sde1"&#xA0;successfully&#xA0;created</p>
+<p>Let's revert this last action for training purposes:</p>
+<p class="command">pvremove /dev/sdb1 /dev/sdc1 /dev/sdd1 /dev/sde1</p>
+<p class="system">server1:~#&#xA0;pvremove&#xA0;/dev/sdb1&#xA0;/dev/sdc1&#xA0;/dev/sdd1&#xA0;/dev/sde1<br> &#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sdb1"&#xA0;successfully&#xA0;wiped<br> &#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sdc1"&#xA0;successfully&#xA0;wiped<br> &#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sdd1"&#xA0;successfully&#xA0;wiped<br> &#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sde1"&#xA0;successfully&#xA0;wiped</p>
+<p>Then run</p>
+<p class="command">pvcreate /dev/sdb1 /dev/sdc1 /dev/sdd1 /dev/sde1</p>
+<p>again:</p>
+<p class="system">server1:~#&#xA0;pvcreate&#xA0;/dev/sdb1&#xA0;/dev/sdc1&#xA0;/dev/sdd1&#xA0;/dev/sde1<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sdb1"&#xA0;successfully&#xA0;created<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sdc1"&#xA0;successfully&#xA0;created<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sdd1"&#xA0;successfully&#xA0;created<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sde1"&#xA0;successfully&#xA0;created</p>
+<p>Now run</p>
+<p class="command">pvdisplay</p>
+<p>to learn about the current state of your physical volumes:</p>
+<p class="system">server1:~#&#xA0;pvdisplay<br> &#xA0;&#xA0;---&#xA0;NEW&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdb1<br> &#xA0;&#xA0;VG&#xA0;Name<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;NO<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;G8lu2L-Hij1-NVde-sOKc-OoVI-fadg-Jd1vyU<br> <br> &#xA0;&#xA0;---&#xA0;NEW&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdc1<br> &#xA0;&#xA0;VG&#xA0;Name<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;NO<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40GJyh-IbsI-pzhn-TDRq-PQ3l-3ut0-AVSE4B<br> <br> &#xA0;&#xA0;---&#xA0;NEW&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdd1<br> &#xA0;&#xA0;VG&#xA0;Name<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;NO<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4mU63D-4s26-uL00-r0pO-Q0hP-mvQR-2YJN5B<br> <br> &#xA0;&#xA0;---&#xA0;NEW&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sde1<br> &#xA0;&#xA0;VG&#xA0;Name<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;NO<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3upcZc-4eS2-h4r4-iBKK-gZJv-AYt3-EKdRK6</p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+
+<p>Now let's create our volume group <span class="system">fileserver</span> and add <span class="system">/dev/sdb1</span> - <span class="system">/dev/sde1</span> to it:</p>
+<p class="command">vgcreate fileserver /dev/sdb1 /dev/sdc1 /dev/sdd1 /dev/sde1</p>
+<p class="system">server1:~#&#xA0;vgcreate&#xA0;fileserver&#xA0;/dev/sdb1&#xA0;/dev/sdc1&#xA0;/dev/sdd1&#xA0;/dev/sde1<br>
+&#xA0;&#xA0;Volume&#xA0;group&#xA0;"fileserver"&#xA0;successfully&#xA0;created<br></p>
+<p>Let's learn about our volume groups:</p>
+<p class="command">vgdisplay</p>
+<p class="system">server1:~#&#xA0;vgdisplay<br>
+&#xA0;&#xA0;---&#xA0;Volume&#xA0;group&#xA0;---<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;System&#xA0;ID<br>
+&#xA0;&#xA0;Format&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;lvm2<br>
+&#xA0;&#xA0;Metadata&#xA0;Areas&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;Metadata&#xA0;Sequence&#xA0;No&#xA0;&#xA0;1<br>
+&#xA0;&#xA0;VG&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;VG&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;resizable<br>
+&#xA0;&#xA0;MAX&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Cur&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Open&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Max&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Cur&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;Act&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;VG&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;93.14&#xA0;GB<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4.00&#xA0;MB<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23844<br>
+&#xA0;&#xA0;Alloc&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;/&#xA0;0<br>
+&#xA0;&#xA0;Free&#xA0;&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23844&#xA0;/&#xA0;93.14&#xA0;GB<br>
+&#xA0;&#xA0;VG&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3Y1WVF-BLET-QkKs-Qnrs-SZxI-wrNO-dTqhFP<br></p>
+<p>Another command to learn about our volume groups:</p>
+<p class="command">vgscan</p>
+<p class="system">server1:~#&#xA0;vgscan<br>
+&#xA0;&#xA0;Reading&#xA0;all&#xA0;physical&#xA0;volumes.&#xA0;&#xA0;This&#xA0;may&#xA0;take&#xA0;a&#xA0;while...<br>
+&#xA0;&#xA0;Found&#xA0;volume&#xA0;group&#xA0;"fileserver"&#xA0;using&#xA0;metadata&#xA0;type&#xA0;lvm2<br></p>
+<p>For training purposes let's rename our volumegroup <span class="system">fileserver</span> into <span class="system">data</span>:</p>
+<p class="command">vgrename fileserver data</p>
+<p class="system">server1:~#&#xA0;vgrename&#xA0;fileserver&#xA0;data<br>
+&#xA0;&#xA0;Volume&#xA0;group&#xA0;"fileserver"&#xA0;successfully&#xA0;renamed&#xA0;to&#xA0;"data"<br></p>
+<p>Let's run <span class="system">vgdisplay</span> and <span class="system">vgscan</span> again to see if the volume group has been renamed:</p>
+<p class="command">vgdisplay</p>
+<p class="system">server1:~#&#xA0;vgdisplay<br>
+&#xA0;&#xA0;---&#xA0;Volume&#xA0;group&#xA0;---<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;data<br>
+&#xA0;&#xA0;System&#xA0;ID<br>
+&#xA0;&#xA0;Format&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;lvm2<br>
+&#xA0;&#xA0;Metadata&#xA0;Areas&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;Metadata&#xA0;Sequence&#xA0;No&#xA0;&#xA0;2<br>
+&#xA0;&#xA0;VG&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;VG&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;resizable<br>
+&#xA0;&#xA0;MAX&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Cur&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Open&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Max&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Cur&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;Act&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;VG&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;93.14&#xA0;GB<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4.00&#xA0;MB<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23844<br>
+&#xA0;&#xA0;Alloc&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;/&#xA0;0<br>
+&#xA0;&#xA0;Free&#xA0;&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23844&#xA0;/&#xA0;93.14&#xA0;GB<br>
+&#xA0;&#xA0;VG&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3Y1WVF-BLET-QkKs-Qnrs-SZxI-wrNO-dTqhFP<br></p>
+<p class="command">vgscan</p>
+<p class="system">server1:~#&#xA0;vgscan<br>
+&#xA0;&#xA0;Reading&#xA0;all&#xA0;physical&#xA0;volumes.&#xA0;&#xA0;This&#xA0;may&#xA0;take&#xA0;a&#xA0;while...<br>
+&#xA0;&#xA0;Found&#xA0;volume&#xA0;group&#xA0;"data"&#xA0;using&#xA0;metadata&#xA0;type&#xA0;lvm2<br></p>
+<p>Now let's delete our volume group <span class="system">data</span>:</p>
+<p class="command">vgremove data</p>
+<p class="system">server1:~#&#xA0;vgremove&#xA0;data<br>
+&#xA0;&#xA0;Volume&#xA0;group&#xA0;"data"&#xA0;successfully&#xA0;removed<br></p>
+<p class="command">vgdisplay</p>
+<p>No output this time:</p>
+<p class="system">server1:~# vgdisplay </p>
+<p class="command">vgscan</p>
+<p class="system">server1:~#&#xA0;vgscan<br>
+&#xA0;&#xA0;Reading&#xA0;all&#xA0;physical&#xA0;volumes.&#xA0;&#xA0;This&#xA0;may&#xA0;take&#xA0;a&#xA0;while...<br></p>
+<p>Let's create our volume group <span class="system">fileserver</span> again:</p>
+<p class="command">vgcreate fileserver /dev/sdb1 /dev/sdc1 /dev/sdd1 /dev/sde1</p>
+<p class="system">server1:~#&#xA0;vgcreate&#xA0;fileserver&#xA0;/dev/sdb1&#xA0;/dev/sdc1&#xA0;/dev/sdd1&#xA0;/dev/sde1<br>
+&#xA0;&#xA0;Volume&#xA0;group&#xA0;"fileserver"&#xA0;successfully&#xA0;created<br></p>
+<p>Next we create our logical volumes <span class="system">share</span> (40GB), <span class="system">backup</span> (5GB), and <span class="system">media</span> (1GB) in the volume group <span class="system">fileserver</span>. Together they use a little less than 50% of the available space (that way we can make use of RAID1 later on):</p>
+<p class="command">lvcreate --name share --size 40G fileserver</p>
+<p class="system">server1:~#&#xA0;lvcreate&#xA0;--name&#xA0;share&#xA0;&#xA0;--size&#xA0;40G&#xA0;fileserver<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"share"&#xA0;created<br></p>
+<p class="command">lvcreate --name backup --size 5G fileserver</p>
+<p class="system">server1:~#&#xA0;lvcreate&#xA0;--name&#xA0;backup&#xA0;--size&#xA0;&#xA0;5G&#xA0;fileserver<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"backup"&#xA0;created<br></p>
+<p class="command">lvcreate --name media --size 1G fileserver</p>
+<p class="system">server1:~#&#xA0;lvcreate&#xA0;--name&#xA0;media&#xA0;&#xA0;--size&#xA0;&#xA0;1G&#xA0;fileserver<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"media"&#xA0;created<br></p>
+<p>Let's get an overview of our logical volumes:</p>
+<p class="command">lvdisplay</p>
+<p class="system">server1:~#&#xA0;lvdisplay<br>
+&#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/share<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;280Mup-H9aa-sn0S-AXH3-04cP-V6p9-lfoGgJ<br>
+&#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br>
+&#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40.00&#xA0;GB<br>
+&#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10240<br>
+&#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2<br>
+&#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br>
+&#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:0<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/backup<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;zZeuKg-Dazh-aZMC-Aa99-KUSt-J6ET-KRe0cD<br>
+&#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br>
+&#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.00&#xA0;GB<br>
+&#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1280<br>
+&#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br>
+&#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br>
+&#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:1<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/media<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;usfvrv-BC92-3pFH-2NW0-2N3e-6ERQ-4Sj7YS<br>
+&#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br>
+&#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.00&#xA0;GB<br>
+&#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;256<br>
+&#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br>
+&#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br>
+&#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:2<br></p>
+<p class="command">lvscan</p>
+<p class="system">server1:~#&#xA0;lvscan<br>
+&#xA0;&#xA0;ACTIVE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;'/dev/fileserver/share'&#xA0;[40.00&#xA0;GB]&#xA0;inherit<br>
+&#xA0;&#xA0;ACTIVE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;'/dev/fileserver/backup'&#xA0;[5.00&#xA0;GB]&#xA0;inherit<br>
+&#xA0;&#xA0;ACTIVE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;'/dev/fileserver/media'&#xA0;[1.00&#xA0;GB]&#xA0;inherit<br></p>
+<p>For training purposes we rename our logical volume <span class="system">media</span> into <span class="system">films</span>:</p>
+<p class="command">lvrename fileserver media films</p>
+<p class="system">server1:~#&#xA0;lvrename&#xA0;fileserver&#xA0;media&#xA0;films<br>
+&#xA0;&#xA0;Renamed&#xA0;"media"&#xA0;to&#xA0;"films"&#xA0;in&#xA0;volume&#xA0;group&#xA0;"fileserver"<br></p>
+<p class="command">lvdisplay</p>
+<p class="system">server1:~#&#xA0;lvdisplay<br>
+&#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/share<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;280Mup-H9aa-sn0S-AXH3-04cP-V6p9-lfoGgJ<br>
+&#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br>
+&#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40.00&#xA0;GB<br>
+&#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10240<br>
+&#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2<br>
+&#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br>
+&#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:0<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/backup<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;zZeuKg-Dazh-aZMC-Aa99-KUSt-J6ET-KRe0cD<br>
+&#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br>
+&#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.00&#xA0;GB<br>
+&#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1280<br>
+&#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br>
+&#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br>
+&#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:1<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/films<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;usfvrv-BC92-3pFH-2NW0-2N3e-6ERQ-4Sj7YS<br>
+&#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br>
+&#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.00&#xA0;GB<br>
+&#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;256<br>
+&#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br>
+&#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br>
+&#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:2<br></p>
+<p class="command">lvscan</p>
+<p class="system">server1:~#&#xA0;lvscan<br>
+&#xA0;&#xA0;ACTIVE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;'/dev/fileserver/share'&#xA0;[40.00&#xA0;GB]&#xA0;inherit<br>
+&#xA0;&#xA0;ACTIVE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;'/dev/fileserver/backup'&#xA0;[5.00&#xA0;GB]&#xA0;inherit<br>
+&#xA0;&#xA0;ACTIVE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;'/dev/fileserver/films'&#xA0;[1.00&#xA0;GB]&#xA0;inherit<br></p>
+<p>Next let's delete the logical volume <span class="system">films</span>:</p>
+<p class="command">lvremove /dev/fileserver/films</p>
+<p><span class="system">server1:~#&#xA0;lvremove&#xA0;/dev/fileserver/films<br>
+Do&#xA0;you&#xA0;really&#xA0;want&#xA0;to&#xA0;remove&#xA0;active&#xA0;logical&#xA0;volume&#xA0;"films"?&#xA0;[y/n]:</span>&#xA0;<span class="highlight">&lt;-- y</span><br>
+<span class="system">&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"films"&#xA0;successfully&#xA0;removed</span><br></p>
+<p>We create the logical volume <span class="system">media</span> again:</p>
+<p class="command">lvcreate --name media --size 1G fileserver</p>
+<p class="system">server1:~#&#xA0;lvcreate&#xA0;--name&#xA0;media&#xA0;&#xA0;--size&#xA0;&#xA0;1G&#xA0;fileserver<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"media"&#xA0;created<br></p>
+<p>Now let's enlarge <span class="system">media</span> from 1GB to 1.5GB:</p>
+<p class="command">lvextend -L1.5G /dev/fileserver/media</p>
+<p class="system">server1:~#&#xA0;lvextend&#xA0;-L1.5G&#xA0;/dev/fileserver/media<br>
+&#xA0;&#xA0;Extending&#xA0;logical&#xA0;volume&#xA0;media&#xA0;to&#xA0;1.50&#xA0;GB<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;media&#xA0;successfully&#xA0;resized<br></p>
+<p>Let's shrink it to 1GB again:</p>
+<p class="command">lvreduce -L1G /dev/fileserver/media</p>
+<p><span class="system">server1:~#&#xA0;lvreduce&#xA0;-L1G&#xA0;/dev/fileserver/media<br>
+&#xA0;&#xA0;WARNING:&#xA0;Reducing&#xA0;active&#xA0;logical&#xA0;volume&#xA0;to&#xA0;1.00&#xA0;GB<br>
+&#xA0;&#xA0;THIS&#xA0;MAY&#xA0;DESTROY&#xA0;YOUR&#xA0;DATA&#xA0;(filesystem&#xA0;etc.)<br>
+Do&#xA0;you&#xA0;really&#xA0;want&#xA0;to&#xA0;reduce&#xA0;media?&#xA0;[y/n]:</span>&#xA0;<span class="highlight">&lt;-- y</span><br>
+<span class="system">&#xA0;&#xA0;Reducing&#xA0;logical&#xA0;volume&#xA0;media&#xA0;to&#xA0;1.00&#xA0;GB<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;media&#xA0;successfully&#xA0;resized</span><br></p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+
+ 
+
+
+
+ 
+ 
+
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+
+<p>Until now we have three logical volumes, but we don't have any filesystems in them, and without a filesystem we can't save anything in them. Therefore we create an ext3 filesystem in <span class="system">share</span>, an xfs filesystem in <span class="system">backup</span>, and a reiserfs filesystem in <span class="system">media</span>:</p>
+<p class="command">mkfs.ext3 /dev/fileserver/share</p>
+<p class="system">server1:~#&#xA0;mkfs.ext3&#xA0;/dev/fileserver/share<br>
+mke2fs&#xA0;1.40-WIP&#xA0;(14-Nov-2006)<br>
+Filesystem&#xA0;label=<br>
+OS&#xA0;type:&#xA0;Linux<br>
+Block&#xA0;size=4096&#xA0;(log=2)<br>
+Fragment&#xA0;size=4096&#xA0;(log=2)<br>
+5242880&#xA0;inodes,&#xA0;10485760&#xA0;blocks<br>
+524288&#xA0;blocks&#xA0;(5.00%)&#xA0;reserved&#xA0;for&#xA0;the&#xA0;super&#xA0;user<br>
+First&#xA0;data&#xA0;block=0<br>
+Maximum&#xA0;filesystem&#xA0;blocks=0<br>
+320&#xA0;block&#xA0;groups<br>
+32768&#xA0;blocks&#xA0;per&#xA0;group,&#xA0;32768&#xA0;fragments&#xA0;per&#xA0;group<br>
+16384&#xA0;inodes&#xA0;per&#xA0;group<br>
+Superblock&#xA0;backups&#xA0;stored&#xA0;on&#xA0;blocks:<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;32768,&#xA0;98304,&#xA0;163840,&#xA0;229376,&#xA0;294912,&#xA0;819200,&#xA0;884736,&#xA0;1605632,&#xA0;2654208,<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096000,&#xA0;7962624<br>
+<br>
+Writing&#xA0;inode&#xA0;tables:&#xA0;done<br>
+Creating&#xA0;journal&#xA0;(32768&#xA0;blocks):&#xA0;done<br>
+Writing&#xA0;superblocks&#xA0;and&#xA0;filesystem&#xA0;accounting&#xA0;information:&#xA0;done<br>
+<br>
+This&#xA0;filesystem&#xA0;will&#xA0;be&#xA0;automatically&#xA0;checked&#xA0;every&#xA0;23&#xA0;mounts&#xA0;or<br>
+180&#xA0;days,&#xA0;whichever&#xA0;comes&#xA0;first.&#xA0;&#xA0;Use&#xA0;tune2fs&#xA0;-c&#xA0;or&#xA0;-i&#xA0;to&#xA0;override.<br></p>
+<p class="command">mkfs.xfs /dev/fileserver/backup</p>
+<p class="system">server1:~#&#xA0;mkfs.xfs&#xA0;/dev/fileserver/backup<br>
+meta-data=/dev/fileserver/backup&#xA0;isize=256&#xA0;&#xA0;&#xA0;&#xA0;agcount=8,&#xA0;agsize=163840&#xA0;blks<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;sectsz=512&#xA0;&#xA0;&#xA0;attr=0<br>
+data&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;bsize=4096&#xA0;&#xA0;&#xA0;blocks=1310720,&#xA0;imaxpct=25<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;sunit=0&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;swidth=0&#xA0;blks,&#xA0;unwritten=1<br>
+naming&#xA0;&#xA0;&#xA0;=version&#xA0;2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;bsize=4096<br>
+log&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=internal&#xA0;log&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;bsize=4096&#xA0;&#xA0;&#xA0;blocks=2560,&#xA0;version=1<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;sectsz=512&#xA0;&#xA0;&#xA0;sunit=0&#xA0;blks<br>
+realtime&#xA0;=none&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;extsz=65536&#xA0;&#xA0;blocks=0,&#xA0;rtextents=0<br></p>
+<p class="command">mkfs.reiserfs /dev/fileserver/media</p>
+<p class="system">server1:~#&#xA0;mkfs.reiserfs&#xA0;/dev/fileserver/media<br>
+mkfs.reiserfs&#xA0;3.6.19&#xA0;(2003&#xA0;www.namesys.com)<br>
+<br>
+A&#xA0;pair&#xA0;of&#xA0;credits:<br>
+Alexander&#xA0;&#xA0;Lyamin&#xA0;&#xA0;keeps&#xA0;our&#xA0;hardware&#xA0;&#xA0;running,&#xA0;&#xA0;and&#xA0;was&#xA0;very&#xA0;&#xA0;generous&#xA0;&#xA0;to&#xA0;our<br>
+project&#xA0;in&#xA0;many&#xA0;little&#xA0;ways.<br>
+<br>
+Chris&#xA0;Mason&#xA0;wrote&#xA0;the&#xA0;journaling&#xA0;code&#xA0;for&#xA0;V3,&#xA0;&#xA0;which&#xA0;was&#xA0;enormously&#xA0;more&#xA0;useful<br>
+to&#xA0;users&#xA0;than&#xA0;just&#xA0;waiting&#xA0;until&#xA0;&#xA0;we&#xA0;could&#xA0;create&#xA0;a&#xA0;wandering&#xA0;log&#xA0;filesystem&#xA0;as<br>
+Hans&#xA0;would&#xA0;have&#xA0;unwisely&#xA0;done&#xA0;without&#xA0;him.<br>
+Jeff&#xA0;Mahoney&#xA0;optimized&#xA0;the&#xA0;bitmap&#xA0;&#xA0;scanning&#xA0;code&#xA0;for&#xA0;V3,&#xA0;&#xA0;and&#xA0;performed&#xA0;the&#xA0;big<br>
+endian&#xA0;cleanups.<br>
+<br>
+<br>
+Guessing&#xA0;about&#xA0;desired&#xA0;format..&#xA0;Kernel&#xA0;2.6.17-2-486&#xA0;is&#xA0;running.<br>
+Format&#xA0;3.6&#xA0;with&#xA0;standard&#xA0;journal<br>
+Count&#xA0;of&#xA0;blocks&#xA0;on&#xA0;the&#xA0;device:&#xA0;262144<br>
+Number&#xA0;of&#xA0;blocks&#xA0;consumed&#xA0;by&#xA0;mkreiserfs&#xA0;formatting&#xA0;process:&#xA0;8219<br>
+Blocksize:&#xA0;4096<br>
+Hash&#xA0;function&#xA0;used&#xA0;to&#xA0;sort&#xA0;names:&#xA0;"r5"<br>
+Journal&#xA0;Size&#xA0;8193&#xA0;blocks&#xA0;(first&#xA0;block&#xA0;18)<br>
+Journal&#xA0;Max&#xA0;transaction&#xA0;length&#xA0;1024<br>
+inode&#xA0;generation&#xA0;number:&#xA0;0<br>
+UUID:&#xA0;2bebf750-6e05-47b2-99b6-916fa7ea5398<br>
+ATTENTION:&#xA0;YOU&#xA0;SHOULD&#xA0;REBOOT&#xA0;AFTER&#xA0;FDISK!<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ALL&#xA0;DATA&#xA0;WILL&#xA0;BE&#xA0;LOST&#xA0;ON&#xA0;'/dev/fileserver/media'!<br>
+Continue&#xA0;(y/n):y<br>
+Initializing&#xA0;journal&#xA0;-&#xA0;0%....20%....40%....60%....80%....100%<br>
+Syncing..ok<br>
+<br>
+Tell&#xA0;your&#xA0;friends&#xA0;to&#xA0;use&#xA0;a&#xA0;kernel&#xA0;based&#xA0;on&#xA0;2.4.18&#xA0;or&#xA0;later,&#xA0;and&#xA0;especially&#xA0;not&#xA0;a<br>
+kernel&#xA0;based&#xA0;on&#xA0;2.4.9,&#xA0;when&#xA0;you&#xA0;use&#xA0;reiserFS.&#xA0;Have&#xA0;fun.<br>
+<br>
+ReiserFS&#xA0;is&#xA0;successfully&#xA0;created&#xA0;on&#xA0;/dev/fileserver/media.<br></p>
+<p>Now we are ready to mount our logical volumes. I want to mount <span class="system">share</span> in <span class="system">/var/share</span>, <span class="system">backup</span> in <span class="system">/var/backup</span>, and <span class="system">media</span> in <span class="system">/var/media</span>, therefore we must create these directories first:</p>
+<p class="command">mkdir /var/media /var/backup /var/share</p>
+<p>Now we can mount our logical volumes:</p>
+<p class="command">mount /dev/fileserver/share /var/share<br>
+mount /dev/fileserver/backup /var/backup<br>
+mount /dev/fileserver/media /var/media</p>
+<p>Now run</p>
+<p class="command">df -h</p>
+<p>You should see your logical volumes in the output:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;665M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;88K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-share<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40G&#xA0;&#xA0;177M&#xA0;&#xA0;&#xA0;38G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.0G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;992M&#xA0;&#xA0;&#xA0;4%&#xA0;/var/media<br></p>
+<p>Congratulations, you've just set up your first LVM system! You can now write to and read from <span class="system">/var/share</span>, <span class="system">/var/backup</span>, and <span class="system">/var/media</span> as usual.</p>
+<p>We have mounted our logical volumes manually, but of course we'd like to have them mounted automatically when the system boots. Therefore we modify <span class="system">/etc/fstab</span>:</p>
+<p class="command">mv /etc/fstab /etc/fstab_orig<br>
+cat /dev/null &gt; /etc/fstab</p>
+<p class="command">vi /etc/fstab</p>
+<p>Put the following into it:</p>
+<table class="" border="1" cellpadding="2" cellspacing="0" width="90%">
+<tbody><tr>
+<td class="">
+<pre># /etc/fstab: static file system information.
+#
+# &lt;file system&gt; &lt;mount point&gt; &lt;type&gt; &lt;options&gt; &lt;dump&gt; &lt;pass&gt;
+proc /proc proc defaults 0 0
+/dev/sda2 / ext3 defaults,errors=remount-ro 0 1
+/dev/sda1 /boot ext3 defaults 0 2
+/dev/hdc /media/cdrom0 udf,iso9660 user,noauto 0 0
+/dev/fd0 /media/floppy0 auto rw,user,noauto 0 0
+/dev/fileserver/share /var/share ext3 rw,noatime 0 0
+/dev/fileserver/backup /var/backup xfs rw,noatime 0 0
+/dev/fileserver/media /var/media reiserfs rw,noatime 0 0</pre>
+</td></tr>
+</tbody></table>
+<p>If you compare it to our backup of the original file, <span class="system">/etc/fstab_orig</span>, you will notice that we added the lines:</p>
+<p class="system">/dev/fileserver/share&#xA0;&#xA0;&#xA0;/var/share&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ext3&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;rw,noatime&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;0<br>
+/dev/fileserver/backup&#xA0;&#xA0;&#xA0;&#xA0;/var/backup&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;xfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;rw,noatime&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;0<br>
+/dev/fileserver/media&#xA0;&#xA0;&#xA0;&#xA0;/var/media&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;reiserfs&#xA0;&#xA0;&#xA0;rw,noatime&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;0<br></p>
+<p>Now we reboot the system:</p>
+<p class="command">shutdown -r now</p>
+<p>After the system has come up again, run</p>
+<p class="command">df -h</p>
+<p>again. It should still show our logical volumes in the output:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;665M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;88K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-share<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40G&#xA0;&#xA0;177M&#xA0;&#xA0;&#xA0;38G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.0G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;992M&#xA0;&#xA0;&#xA0;4%&#xA0;/var/media<br></p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+<div class="contributeEdit">
+
+<div id="tocContainer">
+<h3>On this page</h3>
+<ol class="toc">
+<li><a href="https://www.howtoforge.com#-resize-logical-volumes-and-their-filesystems">4 Resize Logical Volumes And Their Filesystems</a></li>
+</ol>
+</div>
+</div>
+<h3 id="-resize-logical-volumes-and-their-filesystems">4 Resize Logical Volumes And Their Filesystems</h3>
+<p>In this chapter we will learn how to resize our logical volume <span class="system">share</span> which has an ext3 filesystem. (I will show how to resize logical volumes with xfs and reiserfs filesystems further down this tutorial.)</p>
+<p>First we must unmount it:</p>
+<p class="command">umount /var/share</p>
+<p><span class="system">share</span> should not be listed anymore in the</p>
+<p class="command">df -h</p>
+<p>output:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;665M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;88K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.0G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;992M&#xA0;&#xA0;&#xA0;4%&#xA0;/var/media<br></p>
+<p>Now let's enlarge <span class="system">share</span> from 40GB to 50GB:</p>
+<p class="command">lvextend -L50G /dev/fileserver/share</p>
+<p class="system">server1:~#&#xA0;lvextend&#xA0;-L50G&#xA0;/dev/fileserver/share<br>
+&#xA0;&#xA0;Extending&#xA0;logical&#xA0;volume&#xA0;share&#xA0;to&#xA0;50.00&#xA0;GB<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;share&#xA0;successfully&#xA0;resized<br></p>
+<p>Until now we have enlarged only <span class="system">share</span>, but not the ext3 filesystem on <span class="system">share</span>. This is what we do now:</p>
+<p class="command">e2fsck -f /dev/fileserver/share </p>
+<p class="system">server1:~#&#xA0;e2fsck&#xA0;-f&#xA0;/dev/fileserver/share<br>
+e2fsck&#xA0;1.40-WIP&#xA0;(14-Nov-2006)<br>
+Pass&#xA0;1:&#xA0;Checking&#xA0;inodes,&#xA0;blocks,&#xA0;and&#xA0;sizes<br>
+Pass&#xA0;2:&#xA0;Checking&#xA0;directory&#xA0;structure<br>
+Pass&#xA0;3:&#xA0;Checking&#xA0;directory&#xA0;connectivity<br>
+Pass&#xA0;4:&#xA0;Checking&#xA0;reference&#xA0;counts<br>
+Pass&#xA0;5:&#xA0;Checking&#xA0;group&#xA0;summary&#xA0;information<br>
+/dev/fileserver/share:&#xA0;11/5242880&#xA0;files&#xA0;(9.1%&#xA0;non-contiguous),&#xA0;209588/10485760&#xA0;blocks<br></p>
+<p>Make a note of the total amount of blocks (<span class="system">10485760</span>) because we need it when we shrink <span class="system">share</span> later on. </p>
+<p class="command">resize2fs /dev/fileserver/share</p>
+<p class="system">server1:~#&#xA0;resize2fs&#xA0;/dev/fileserver/share<br>
+resize2fs&#xA0;1.40-WIP&#xA0;(14-Nov-2006)<br>
+Resizing&#xA0;the&#xA0;filesystem&#xA0;on&#xA0;/dev/fileserver/share&#xA0;to&#xA0;13107200&#xA0;(4k)&#xA0;blocks.<br>
+The&#xA0;filesystem&#xA0;on&#xA0;/dev/fileserver/share&#xA0;is&#xA0;now&#xA0;13107200&#xA0;blocks&#xA0;long.<br></p>
+<p>Let's mount <span class="system">share</span>:</p>
+<p class="command">mount /dev/fileserver/share /var/share</p>
+<p>and in the</p>
+<p class="command">df -h</p>
+<p>output share should now have 50GB instead of 40:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;665M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;88K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.0G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;992M&#xA0;&#xA0;&#xA0;4%&#xA0;/var/media<br>
+/dev/mapper/fileserver-share<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;50G&#xA0;&#xA0;180M&#xA0;&#xA0;&#xA0;47G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br></p>
+<p>Shrinking a logical volume is the other way round: first we must shrink the filesystem before we reduce the logical volume's size. Let's shrink share to 40GB again:</p>
+<p class="command">umount /var/share</p>
+<p class="command">df -h</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;665M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;88K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.0G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;992M&#xA0;&#xA0;&#xA0;4%&#xA0;/var/media<br></p>
+<p class="command">e2fsck -f /dev/fileserver/share</p>
+<p class="system">server1:~#&#xA0;e2fsck&#xA0;-f&#xA0;/dev/fileserver/share<br>
+e2fsck&#xA0;1.40-WIP&#xA0;(14-Nov-2006)<br>
+Pass&#xA0;1:&#xA0;Checking&#xA0;inodes,&#xA0;blocks,&#xA0;and&#xA0;sizes<br>
+Pass&#xA0;2:&#xA0;Checking&#xA0;directory&#xA0;structure<br>
+Pass&#xA0;3:&#xA0;Checking&#xA0;directory&#xA0;connectivity<br>
+Pass&#xA0;4:&#xA0;Checking&#xA0;reference&#xA0;counts<br>
+Pass&#xA0;5:&#xA0;Checking&#xA0;group&#xA0;summary&#xA0;information<br>
+/dev/fileserver/share:&#xA0;11/6553600&#xA0;files&#xA0;(9.1%&#xA0;non-contiguous),&#xA0;251733/13107200&#xA0;blocks<br></p>
+<p>When resizing an ext3 filesystem to a certain size (instead of all available space), <span class="system">resize2fs</span> takes the number of blocks as argument (you can as well specify the new size in MB, etc. See</p>
+<p class="command">man resize2fs</p>
+<p>for more details). From our previous operation we know the 40GB equals <span class="system">10485760</span> blocks so we run</p>
+<p class="command">resize2fs /dev/fileserver/share 10485760</p>
+<p class="system">server1:~#&#xA0;resize2fs&#xA0;/dev/fileserver/share&#xA0;10485760<br>
+resize2fs&#xA0;1.40-WIP&#xA0;(14-Nov-2006)<br>
+Resizing&#xA0;the&#xA0;filesystem&#xA0;on&#xA0;/dev/fileserver/share&#xA0;to&#xA0;10485760&#xA0;(4k)&#xA0;blocks.<br>
+The&#xA0;filesystem&#xA0;on&#xA0;/dev/fileserver/share&#xA0;is&#xA0;now&#xA0;10485760&#xA0;blocks&#xA0;long.<br></p>
+<p>We've shrinked the filesystem, now we must shrink the logical volume, too:</p>
+<p class="command">lvreduce -L40G /dev/fileserver/share</p>
+<p><span class="system">server1:~#&#xA0;lvreduce&#xA0;-L40G&#xA0;/dev/fileserver/share<br>
+&#xA0;&#xA0;WARNING:&#xA0;Reducing&#xA0;active&#xA0;logical&#xA0;volume&#xA0;to&#xA0;40.00&#xA0;GB<br>
+&#xA0;&#xA0;THIS&#xA0;MAY&#xA0;DESTROY&#xA0;YOUR&#xA0;DATA&#xA0;(filesystem&#xA0;etc.)<br>
+Do&#xA0;you&#xA0;really&#xA0;want&#xA0;to&#xA0;reduce&#xA0;share?&#xA0;[y/n]:</span>&#xA0;<span class="highlight">&lt;-- y</span><br>
+<span class="system">&#xA0;&#xA0;Reducing&#xA0;logical&#xA0;volume&#xA0;share&#xA0;to&#xA0;40.00&#xA0;GB<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;share&#xA0;successfully&#xA0;resized</span><br></p>
+<p>We can ignore the warning that data might be destroyed because we have shrinked the filesystem before.</p>
+<p>Let's mount <span class="system">share</span> again:</p>
+<p class="command">mount /dev/fileserver/share /var/share</p>
+<p>The output of</p>
+<p class="command">df -h</p>
+<p>should now look like this:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;665M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;88K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.0G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;992M&#xA0;&#xA0;&#xA0;4%&#xA0;/var/media<br>
+/dev/mapper/fileserver-share<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40G&#xA0;&#xA0;177M&#xA0;&#xA0;&#xA0;38G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br></p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+
+ 
+
+
+
+ 
+ 
+
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+<div class="contributeEdit">
+ 
+<div id="tocContainer">
+<h3>On this page</h3>
+<ol class="toc">
+<li><a href="https://www.howtoforge.com#-adding-a-hard-drive-and-removing-another-one">5 Adding A Hard Drive And Removing Another One</a></li>
+</ol>
+</div>
+</div>
+<h3 id="-adding-a-hard-drive-and-removing-another-one">5 Adding A Hard Drive And Removing Another One</h3>
+<p>We haven't used <span class="system">/dev/sdf</span> until now. We will now create the partition <span class="system">/dev/sdf1</span> (25GB) and add that to our <span class="system">fileserver</span> volume group.</p>
+<p class="command">fdisk /dev/sdf</p>
+<p><span class="system">server1:~#&#xA0;fdisk&#xA0;/dev/sdf<br> Device&#xA0;contains&#xA0;neither&#xA0;a&#xA0;valid&#xA0;DOS&#xA0;partition&#xA0;table,&#xA0;nor&#xA0;Sun,&#xA0;SGI&#xA0;or&#xA0;OSF&#xA0;disklabel<br> Building&#xA0;a&#xA0;new&#xA0;DOS&#xA0;disklabel.&#xA0;Changes&#xA0;will&#xA0;remain&#xA0;in&#xA0;memory&#xA0;only,<br> until&#xA0;you&#xA0;decide&#xA0;to&#xA0;write&#xA0;them.&#xA0;After&#xA0;that,&#xA0;of&#xA0;course,&#xA0;the&#xA0;previous<br> content&#xA0;won't&#xA0;be&#xA0;recoverable.<br> <br> <br> The&#xA0;number&#xA0;of&#xA0;cylinders&#xA0;for&#xA0;this&#xA0;disk&#xA0;is&#xA0;set&#xA0;to&#xA0;10443.<br> There&#xA0;is&#xA0;nothing&#xA0;wrong&#xA0;with&#xA0;that,&#xA0;but&#xA0;this&#xA0;is&#xA0;larger&#xA0;than&#xA0;1024,<br> and&#xA0;could&#xA0;in&#xA0;certain&#xA0;setups&#xA0;cause&#xA0;problems&#xA0;with:<br> 1)&#xA0;software&#xA0;that&#xA0;runs&#xA0;at&#xA0;boot&#xA0;time&#xA0;(e.g.,&#xA0;old&#xA0;versions&#xA0;of&#xA0;LILO)<br> 2)&#xA0;booting&#xA0;and&#xA0;partitioning&#xA0;software&#xA0;from&#xA0;other&#xA0;OSs<br> &#xA0;&#xA0;&#xA0;(e.g.,&#xA0;DOS&#xA0;FDISK,&#xA0;OS/2&#xA0;FDISK)<br> Warning:&#xA0;invalid&#xA0;flag&#xA0;0x0000&#xA0;of&#xA0;partition&#xA0;table&#xA0;4&#xA0;will&#xA0;be&#xA0;corrected&#xA0;by&#xA0;w(rite)<br> <br> Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- m</span><br> <span class="system">Command&#xA0;action<br> &#xA0;&#xA0;&#xA0;a&#xA0;&#xA0;&#xA0;toggle&#xA0;a&#xA0;bootable&#xA0;flag<br> &#xA0;&#xA0;&#xA0;b&#xA0;&#xA0;&#xA0;edit&#xA0;bsd&#xA0;disklabel<br> &#xA0;&#xA0;&#xA0;c&#xA0;&#xA0;&#xA0;toggle&#xA0;the&#xA0;dos&#xA0;compatibility&#xA0;flag<br> &#xA0;&#xA0;&#xA0;d&#xA0;&#xA0;&#xA0;delete&#xA0;a&#xA0;partition<br> &#xA0;&#xA0;&#xA0;l&#xA0;&#xA0;&#xA0;list&#xA0;known&#xA0;partition&#xA0;types<br> &#xA0;&#xA0;&#xA0;m&#xA0;&#xA0;&#xA0;print&#xA0;this&#xA0;menu<br> &#xA0;&#xA0;&#xA0;n&#xA0;&#xA0;&#xA0;add&#xA0;a&#xA0;new&#xA0;partition<br> &#xA0;&#xA0;&#xA0;o&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;DOS&#xA0;partition&#xA0;table<br> &#xA0;&#xA0;&#xA0;p&#xA0;&#xA0;&#xA0;print&#xA0;the&#xA0;partition&#xA0;table<br> &#xA0;&#xA0;&#xA0;q&#xA0;&#xA0;&#xA0;quit&#xA0;without&#xA0;saving&#xA0;changes<br> &#xA0;&#xA0;&#xA0;s&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;Sun&#xA0;disklabel<br> &#xA0;&#xA0;&#xA0;t&#xA0;&#xA0;&#xA0;change&#xA0;a&#xA0;partition's&#xA0;system&#xA0;id<br> &#xA0;&#xA0;&#xA0;u&#xA0;&#xA0;&#xA0;change&#xA0;display/entry&#xA0;units<br> &#xA0;&#xA0;&#xA0;v&#xA0;&#xA0;&#xA0;verify&#xA0;the&#xA0;partition&#xA0;table<br> &#xA0;&#xA0;&#xA0;w&#xA0;&#xA0;&#xA0;write&#xA0;table&#xA0;to&#xA0;disk&#xA0;and&#xA0;exit<br> &#xA0;&#xA0;&#xA0;x&#xA0;&#xA0;&#xA0;extra&#xA0;functionality&#xA0;(experts&#xA0;only)<br> <br> Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- n</span><br> <span class="system">Command&#xA0;action<br> &#xA0;&#xA0;&#xA0;e&#xA0;&#xA0;&#xA0;extended<br> &#xA0;&#xA0;&#xA0;p&#xA0;&#xA0;&#xA0;primary&#xA0;partition&#xA0;(1-4)</span><br> <span class="highlight">&lt;-- p</span><br> <span class="system">Partition&#xA0;number&#xA0;(1-4):</span>&#xA0;<span class="highlight">&lt;-- 1</span><br> <span class="system">First&#xA0;cylinder&#xA0;(1-10443,&#xA0;default&#xA0;1):<br> Using&#xA0;default&#xA0;value&#xA0;1<br> Last&#xA0;cylinder&#xA0;or&#xA0;+size&#xA0;or&#xA0;+sizeM&#xA0;or&#xA0;+sizeK&#xA0;(1-10443,&#xA0;default&#xA0;10443):</span>&#xA0;<span class="highlight">&lt;-- +25000M</span><br> <br> <span class="system">Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- t</span><br> <span class="system">Selected&#xA0;partition&#xA0;1<br> Hex&#xA0;code&#xA0;(type&#xA0;L&#xA0;to&#xA0;list&#xA0;codes):</span>&#xA0;<span class="highlight">&lt;-- 8e</span><br> <span class="system">Changed&#xA0;system&#xA0;type&#xA0;of&#xA0;partition&#xA0;1&#xA0;to&#xA0;8e&#xA0;(Linux&#xA0;LVM)<br> <br> Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- w</span><br> <span class="system">The&#xA0;partition&#xA0;table&#xA0;has&#xA0;been&#xA0;altered!<br> <br> Calling&#xA0;ioctl()&#xA0;to&#xA0;re-read&#xA0;partition&#xA0;table.<br> Syncing&#xA0;disks.</span></p>
+<p>Let's prepare <span class="system">/dev/sdf1</span> for LVM:</p>
+<p class="command">pvcreate /dev/sdf1</p>
+<p class="system">server1:~#&#xA0;pvcreate&#xA0;/dev/sdf1<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/sdf1"&#xA0;successfully&#xA0;created</p>
+<p>Add <span class="system">/dev/sdf1</span> to our <span class="system">fileserver</span> volume group:</p>
+<p class="command">vgextend fileserver /dev/sdf1</p>
+<p>Run</p>
+<p class="command">vgdisplay</p>
+<p><span class="system">VG Size</span> should now be bigger than before:</p>
+<p class="system">server1:~#&#xA0;vgdisplay<br> &#xA0;&#xA0;---&#xA0;Volume&#xA0;group&#xA0;---<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;System&#xA0;ID<br> &#xA0;&#xA0;Format&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;lvm2<br> &#xA0;&#xA0;Metadata&#xA0;Areas&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5<br> &#xA0;&#xA0;Metadata&#xA0;Sequence&#xA0;No&#xA0;&#xA0;12<br> &#xA0;&#xA0;VG&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br> &#xA0;&#xA0;VG&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;resizable<br> &#xA0;&#xA0;MAX&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Cur&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br> &#xA0;&#xA0;Open&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br> &#xA0;&#xA0;Max&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Cur&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5<br> &#xA0;&#xA0;Act&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5<br> &#xA0;&#xA0;VG&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;116.43&#xA0;GB<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4.00&#xA0;MB<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;29805<br> &#xA0;&#xA0;Alloc&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;11776&#xA0;/&#xA0;46.00&#xA0;GB<br> &#xA0;&#xA0;Free&#xA0;&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;18029&#xA0;/&#xA0;70.43&#xA0;GB<br> &#xA0;&#xA0;VG&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;iWr1Vk-7h7J-hLRL-SHbx-3p87-Rq47-L1GyEO</p>
+<p>That's it. <span class="system">/dev/sdf1</span> has been added to the fileserver volume group.</p>
+<p>Now let's remove <span class="system">/dev/sdb1</span>. Before we do this, we must copy all data on it to <span class="system">/dev/sdf1</span>:</p>
+<p class="command">pvmove /dev/sdb1 /dev/sdf1</p>
+<p>This can take some minutes:</p>
+<p class="system">server1:~#&#xA0;pvmove&#xA0;/dev/sdb1&#xA0;/dev/sdf1<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;1.9%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;3.8%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;5.8%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;7.8%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;9.7%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;11.6%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;13.6%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;15.6%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;17.5%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;19.4%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;21.4%<br> &#xA0;&#xA0;[...]<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;85.7%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;87.7%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;89.7%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;91.7%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;93.6%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;95.5%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;97.5%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;99.4%<br> &#xA0;&#xA0;/dev/sdb1:&#xA0;Moved:&#xA0;100.0%</p>
+<p>Next we remove <span class="system">/dev/sdb1</span> from the <span class="system">fileserver</span> volume group:</p>
+<p class="command">vgreduce fileserver /dev/sdb1</p>
+<p class="system">server1:~#&#xA0;vgreduce&#xA0;fileserver&#xA0;/dev/sdb1<br> &#xA0;&#xA0;Removed&#xA0;"/dev/sdb1"&#xA0;from&#xA0;volume&#xA0;group&#xA0;"fileserver"</p>
+<p class="command">vgdisplay</p>
+<p class="system">server1:~#&#xA0;vgdisplay<br> &#xA0;&#xA0;---&#xA0;Volume&#xA0;group&#xA0;---<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;System&#xA0;ID<br> &#xA0;&#xA0;Format&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;lvm2<br> &#xA0;&#xA0;Metadata&#xA0;Areas&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br> &#xA0;&#xA0;Metadata&#xA0;Sequence&#xA0;No&#xA0;&#xA0;16<br> &#xA0;&#xA0;VG&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br> &#xA0;&#xA0;VG&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;resizable<br> &#xA0;&#xA0;MAX&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Cur&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br> &#xA0;&#xA0;Open&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br> &#xA0;&#xA0;Max&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Cur&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br> &#xA0;&#xA0;Act&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br> &#xA0;&#xA0;VG&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;93.14&#xA0;GB<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4.00&#xA0;MB<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23844<br> &#xA0;&#xA0;Alloc&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;11776&#xA0;/&#xA0;46.00&#xA0;GB<br> &#xA0;&#xA0;Free&#xA0;&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;12068&#xA0;/&#xA0;47.14&#xA0;GB<br> &#xA0;&#xA0;VG&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;iWr1Vk-7h7J-hLRL-SHbx-3p87-Rq47-L1GyEO</p>
+<p>Then we run</p>
+<p class="command">pvremove /dev/sdb1</p>
+<p><span class="system">/dev/sdb1</span> shouldn't be listed as a physical volume anymore:</p>
+<p class="command">pvdisplay</p>
+<p class="system">server1:~#&#xA0;pvdisplay<br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdc1<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1682<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4279<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40GJyh-IbsI-pzhn-TDRq-PQ3l-3ut0-AVSE4B<br> <br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdd1<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4681<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1280<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4mU63D-4s26-uL00-r0pO-Q0hP-mvQR-2YJN5B<br> <br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sde1<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5705<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;256<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3upcZc-4eS2-h4r4-iBKK-gZJv-AYt3-EKdRK6<br> <br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdf1<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes&#xA0;(but&#xA0;full)<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1xgo2I-SBjj-0MAz-lmDu-OLZ1-3NdO-mLkS20</p>
+<p>You could now remove <span class="system">/dev/sdb</span> from the system (if this was a real system and not a virtual machine).</p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+
+ 
+
+
+
+ 
+ 
+
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+<div class="contributeEdit">
+
+<div id="tocContainer">
+<h3>On this page</h3>
+<ol class="toc">
+<li><a href="https://www.howtoforge.com#-return-to-the-systems-original-state">6 Return To The System's Original State</a></li>
+<li><a href="https://www.howtoforge.com#-lvm-on-raid">7 LVM On RAID1</a></li>
+</ol>
+</div>
+</div>
+<h3 id="-return-to-the-systems-original-state">6 Return To The System's Original State</h3>
+<p>In this chapter we will undo all changes from the previous chapters to return to the system's original state. This is just for training purposes so that you learn how to undo an LVM setup. </p>
+<p>First we must unmount our logical volumes:</p>
+<p class="command">umount /var/share<br>
+umount /var/backup<br>
+umount /var/media</p>
+<p class="command">df -h</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;665M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;92K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+</p>
+<p>Then we delete each of them:</p>
+<p class="command">lvremove /dev/fileserver/share</p>
+<p><span class="system">server1:~#&#xA0;lvremove&#xA0;/dev/fileserver/share<br>
+Do&#xA0;you&#xA0;really&#xA0;want&#xA0;to&#xA0;remove&#xA0;active&#xA0;logical&#xA0;volume&#xA0;"share"?&#xA0;[y/n]:</span>&#xA0;<span class="highlight">&lt;-- y</span><br>
+<span class="system">&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"share"&#xA0;successfully&#xA0;removed</span><br></p>
+<p class="command">lvremove /dev/fileserver/backup</p>
+<p><span class="system">server1:~#&#xA0;lvremove&#xA0;/dev/fileserver/backup<br>
+Do&#xA0;you&#xA0;really&#xA0;want&#xA0;to&#xA0;remove&#xA0;active&#xA0;logical&#xA0;volume&#xA0;"backup"?&#xA0;[y/n]:</span>&#xA0;<span class="highlight">&lt;-- y</span><br>
+<span class="system">&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"backup"&#xA0;successfully&#xA0;removed</span><br></p>
+<p class="command">lvremove /dev/fileserver/media</p>
+<p><span class="system">server1:~#&#xA0;lvremove&#xA0;/dev/fileserver/media<br>
+Do&#xA0;you&#xA0;really&#xA0;want&#xA0;to&#xA0;remove&#xA0;active&#xA0;logical&#xA0;volume&#xA0;"media"?&#xA0;[y/n]:</span>&#xA0;<span class="highlight">&lt;-- y</span><br>
+<span class="system">&#xA0;&#xA0;Logical&#xA0;volume&#xA0;"media"&#xA0;successfully&#xA0;removed</span><br></p>
+<p>Next we remove the volume group <span class="system">fileserver</span>:</p>
+<p class="command">vgremove fileserver</p>
+<p class="system">server1:~#&#xA0;vgremove&#xA0;fileserver<br>
+&#xA0;&#xA0;Volume&#xA0;group&#xA0;"fileserver"&#xA0;successfully&#xA0;removed<br></p>
+<p>Finally we do this:</p>
+<p class="command">pvremove /dev/sdc1 /dev/sdd1 /dev/sde1 /dev/sdf1</p>
+<p class="system">server1:~#&#xA0;pvremove&#xA0;&#xA0;/dev/sdc1&#xA0;/dev/sdd1&#xA0;/dev/sde1&#xA0;/dev/sdf1<br>
+&#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sdc1"&#xA0;successfully&#xA0;wiped<br>
+&#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sdd1"&#xA0;successfully&#xA0;wiped<br>
+&#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sde1"&#xA0;successfully&#xA0;wiped<br>
+&#xA0;&#xA0;Labels&#xA0;on&#xA0;physical&#xA0;volume&#xA0;"/dev/sdf1"&#xA0;successfully&#xA0;wiped<br></p>
+<p class="command">vgdisplay</p>
+<p class="system">server1:~#&#xA0;vgdisplay<br>
+&#xA0;&#xA0;No&#xA0;volume&#xA0;groups&#xA0;found<br></p>
+<p class="command">pvdisplay</p>
+<p>should display nothing at all:</p>
+<p class="system">server1:~# pvdisplay </p>
+<p>Now we must undo our changes in <span class="system">/etc/fstab</span> to avoid that the system tries to mount non-existing devices. Fortunately we have made a backup of the original file that we can copy back now:</p>
+<p class="command">mv /etc/fstab_orig /etc/fstab</p>
+<p>Reboot the system:</p>
+<p class="command">shutdown -r now</p>
+<p>Afterwards the output of</p>
+<p class="command">df -h</p>
+<p>should look like this:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;666M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;92K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br></p>
+<p>Now the system is like it was in the beginning (except that the partitions <span class="system">/dev/sdb1</span> - <span class="system">/dev/sdf1</span> still exist - you could delete them with <span class="system">fdisk</span> but we don't do this now - as well as the directories <span class="system">/var/share</span>, <span class="system">/var/backup</span>, and <span class="system">/var/media</span> which we also don't delete). </p>
+
+<h3 id="-lvm-on-raid">7 LVM On RAID1</h3>
+<p>In this chapter we will set up LVM again and move it to a RAID1 array to guarantee for high-availability. In the end this should look like this:</p>
+<p><img src="https://www.howtoforge.com/images/lvm/lvm_scheme_full_raid1.png" width="550"> </p>
+<p>This means we will make the RAID array <span class="system">/dev/md0</span> from the partitions <span class="system">/dev/sdb1</span> + <span class="system">/dev/sdc1</span>, and the RAID array <span class="system">/dev/md1</span> from the partitions <span class="system">/dev/sdd1</span> + <span class="system">/dev/sde1</span>. <span class="system">/dev/md0</span> and <span class="system">/dev/md1</span> will then be the physical volumes for LVM. </p>
+<p>Before we come to that, we set up LVM as before:</p>
+<p class="command">pvcreate /dev/sdb1 /dev/sdc1 /dev/sdd1 /dev/sde1<br>
+vgcreate fileserver /dev/sdb1 /dev/sdc1 /dev/sdd1 /dev/sde1<br>
+lvcreate --name share --size 40G fileserver<br>
+lvcreate --name backup --size 5G fileserver<br>
+lvcreate --name media --size 1G fileserver</p>
+<p class="command">mkfs.ext3 /dev/fileserver/share<br>
+mkfs.xfs /dev/fileserver/backup<br>
+mkfs.reiserfs /dev/fileserver/media </p>
+<p>Then we mount our logical volumes:</p>
+<p class="command">mount /dev/fileserver/share /var/share<br>
+mount /dev/fileserver/backup /var/backup<br>
+mount /dev/fileserver/media /var/media</p>
+<p>The output of </p>
+<p class="command">df -h</p>
+<p>should now look like this:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;666M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;92K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-share<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40G&#xA0;&#xA0;177M&#xA0;&#xA0;&#xA0;38G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.0G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;992M&#xA0;&#xA0;&#xA0;4%&#xA0;/var/media<br></p>
+<p>Now we must move the contents of <span class="system">/dev/sdc1</span> and <span class="system">/dev/sde1</span> (<span class="system">/dev/sdc1</span> is the second partition of our future <span class="system">/dev/md0</span>, <span class="system">/dev/sde1</span> the second partition of our future <span class="system">/dev/md1</span>) to the remaining partitions, because we will afterwards remove them from LVM and format them with the type <span class="system">fd</span> (Linux RAID autodetect) and move them to <span class="system">/dev/md0</span> resp. <span class="system">/dev/md1</span>.</p>
+<p class="command">modprobe dm-mirror<br>
+pvmove /dev/sdc1</p>
+<p class="command">vgreduce fileserver /dev/sdc1<br>
+pvremove /dev/sdc1</p>
+<p class="command">pvdisplay</p>
+<p class="system">server1:~#&#xA0;pvdisplay<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdb1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes&#xA0;(but&#xA0;full)<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;USDJyG-VDM2-r406-OjQo-h3eb-c9Mp-4nvnvu<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdd1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4681<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1280<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;qdEB5d-389d-O5UA-Kbwv-mn1y-74FY-4zublN<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sde1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1426<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4535<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4vL1e0-sr2M-awGd-qDJm-ZrC9-wuxW-2lEqp2<br></p>
+<p class="command">pvmove /dev/sde1</p>
+<p class="command">vgreduce fileserver /dev/sde1<br>
+pvremove /dev/sde1</p>
+<p class="command">pvdisplay</p>
+<p class="system">server1:~#&#xA0;pvdisplay<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdb1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes&#xA0;(but&#xA0;full)<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;USDJyG-VDM2-r406-OjQo-h3eb-c9Mp-4nvnvu<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdd1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;146<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5815<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;qdEB5d-389d-O5UA-Kbwv-mn1y-74FY-4zublN<br></p>
+<p>Now we format <span class="system">/dev/sdc1</span> with the type <span class="system">fd</span> (Linux RAID autodetect):</p>
+<p class="command">fdisk /dev/sdc </p>
+<p><span class="system">server1:~#&#xA0;fdisk&#xA0;/dev/sdc<br>
+<br>
+The&#xA0;number&#xA0;of&#xA0;cylinders&#xA0;for&#xA0;this&#xA0;disk&#xA0;is&#xA0;set&#xA0;to&#xA0;10443.<br>
+There&#xA0;is&#xA0;nothing&#xA0;wrong&#xA0;with&#xA0;that,&#xA0;but&#xA0;this&#xA0;is&#xA0;larger&#xA0;than&#xA0;1024,<br>
+and&#xA0;could&#xA0;in&#xA0;certain&#xA0;setups&#xA0;cause&#xA0;problems&#xA0;with:<br>
+1)&#xA0;software&#xA0;that&#xA0;runs&#xA0;at&#xA0;boot&#xA0;time&#xA0;(e.g.,&#xA0;old&#xA0;versions&#xA0;of&#xA0;LILO)<br>
+2)&#xA0;booting&#xA0;and&#xA0;partitioning&#xA0;software&#xA0;from&#xA0;other&#xA0;OSs<br>
+&#xA0;&#xA0;&#xA0;(e.g.,&#xA0;DOS&#xA0;FDISK,&#xA0;OS/2&#xA0;FDISK)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- m</span><br>
+<span class="system">Command&#xA0;action<br>
+&#xA0;&#xA0;&#xA0;a&#xA0;&#xA0;&#xA0;toggle&#xA0;a&#xA0;bootable&#xA0;flag<br>
+&#xA0;&#xA0;&#xA0;b&#xA0;&#xA0;&#xA0;edit&#xA0;bsd&#xA0;disklabel<br>
+&#xA0;&#xA0;&#xA0;c&#xA0;&#xA0;&#xA0;toggle&#xA0;the&#xA0;dos&#xA0;compatibility&#xA0;flag<br>
+&#xA0;&#xA0;&#xA0;d&#xA0;&#xA0;&#xA0;delete&#xA0;a&#xA0;partition<br>
+&#xA0;&#xA0;&#xA0;l&#xA0;&#xA0;&#xA0;list&#xA0;known&#xA0;partition&#xA0;types<br>
+&#xA0;&#xA0;&#xA0;m&#xA0;&#xA0;&#xA0;print&#xA0;this&#xA0;menu<br>
+&#xA0;&#xA0;&#xA0;n&#xA0;&#xA0;&#xA0;add&#xA0;a&#xA0;new&#xA0;partition<br>
+&#xA0;&#xA0;&#xA0;o&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;DOS&#xA0;partition&#xA0;table<br>
+&#xA0;&#xA0;&#xA0;p&#xA0;&#xA0;&#xA0;print&#xA0;the&#xA0;partition&#xA0;table<br>
+&#xA0;&#xA0;&#xA0;q&#xA0;&#xA0;&#xA0;quit&#xA0;without&#xA0;saving&#xA0;changes<br>
+&#xA0;&#xA0;&#xA0;s&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;Sun&#xA0;disklabel<br>
+&#xA0;&#xA0;&#xA0;t&#xA0;&#xA0;&#xA0;change&#xA0;a&#xA0;partition's&#xA0;system&#xA0;id<br>
+&#xA0;&#xA0;&#xA0;u&#xA0;&#xA0;&#xA0;change&#xA0;display/entry&#xA0;units<br>
+&#xA0;&#xA0;&#xA0;v&#xA0;&#xA0;&#xA0;verify&#xA0;the&#xA0;partition&#xA0;table<br>
+&#xA0;&#xA0;&#xA0;w&#xA0;&#xA0;&#xA0;write&#xA0;table&#xA0;to&#xA0;disk&#xA0;and&#xA0;exit<br>
+&#xA0;&#xA0;&#xA0;x&#xA0;&#xA0;&#xA0;extra&#xA0;functionality&#xA0;(experts&#xA0;only)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- t</span><br>
+<span class="system">Selected&#xA0;partition&#xA0;1<br>
+Hex&#xA0;code&#xA0;(type&#xA0;L&#xA0;to&#xA0;list&#xA0;codes):</span>&#xA0;<span class="highlight">&lt;-- L</span><br>
+<br>
+&#xA0;<span class="system">0&#xA0;&#xA0;Empty&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1e&#xA0;&#xA0;Hidden&#xA0;W95&#xA0;FAT1&#xA0;80&#xA0;&#xA0;Old&#xA0;Minix&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;be&#xA0;&#xA0;Solaris&#xA0;boot<br>
+&#xA0;1&#xA0;&#xA0;FAT12&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24&#xA0;&#xA0;NEC&#xA0;DOS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;81&#xA0;&#xA0;Minix&#xA0;/&#xA0;old&#xA0;Lin&#xA0;bf&#xA0;&#xA0;Solaris<br>
+&#xA0;2&#xA0;&#xA0;XENIX&#xA0;root&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;39&#xA0;&#xA0;Plan&#xA0;9&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;82&#xA0;&#xA0;Linux&#xA0;swap&#xA0;/&#xA0;So&#xA0;c1&#xA0;&#xA0;DRDOS/sec&#xA0;(FAT-<br>
+&#xA0;3&#xA0;&#xA0;XENIX&#xA0;usr&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3c&#xA0;&#xA0;PartitionMagic&#xA0;&#xA0;83&#xA0;&#xA0;Linux&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;c4&#xA0;&#xA0;DRDOS/sec&#xA0;(FAT-<br>
+&#xA0;4&#xA0;&#xA0;FAT16&#xA0;&lt;32M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40&#xA0;&#xA0;Venix&#xA0;80286&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;84&#xA0;&#xA0;OS/2&#xA0;hidden&#xA0;C:&#xA0;&#xA0;c6&#xA0;&#xA0;DRDOS/sec&#xA0;(FAT-<br>
+&#xA0;5&#xA0;&#xA0;Extended&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;41&#xA0;&#xA0;PPC&#xA0;PReP&#xA0;Boot&#xA0;&#xA0;&#xA0;85&#xA0;&#xA0;Linux&#xA0;extended&#xA0;&#xA0;c7&#xA0;&#xA0;Syrinx<br>
+&#xA0;6&#xA0;&#xA0;FAT16&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;42&#xA0;&#xA0;SFS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;86&#xA0;&#xA0;NTFS&#xA0;volume&#xA0;set&#xA0;da&#xA0;&#xA0;Non-FS&#xA0;data<br>
+&#xA0;7&#xA0;&#xA0;HPFS/NTFS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4d&#xA0;&#xA0;QNX4.x&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;87&#xA0;&#xA0;NTFS&#xA0;volume&#xA0;set&#xA0;db&#xA0;&#xA0;CP/M&#xA0;/&#xA0;CTOS&#xA0;/&#xA0;.<br>
+&#xA0;8&#xA0;&#xA0;AIX&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4e&#xA0;&#xA0;QNX4.x&#xA0;2nd&#xA0;part&#xA0;88&#xA0;&#xA0;Linux&#xA0;plaintext&#xA0;de&#xA0;&#xA0;Dell&#xA0;Utility<br>
+&#xA0;9&#xA0;&#xA0;AIX&#xA0;bootable&#xA0;&#xA0;&#xA0;&#xA0;4f&#xA0;&#xA0;QNX4.x&#xA0;3rd&#xA0;part&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;df&#xA0;&#xA0;BootIt<br>
+&#xA0;a&#xA0;&#xA0;OS/2&#xA0;Boot&#xA0;Manag&#xA0;50&#xA0;&#xA0;OnTrack&#xA0;DM&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;93&#xA0;&#xA0;Amoeba&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;e1&#xA0;&#xA0;DOS&#xA0;access<br>
+&#xA0;b&#xA0;&#xA0;W95&#xA0;FAT32&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;51&#xA0;&#xA0;OnTrack&#xA0;DM6&#xA0;Aux&#xA0;94&#xA0;&#xA0;Amoeba&#xA0;BBT&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;e3&#xA0;&#xA0;DOS&#xA0;R/O<br>
+&#xA0;c&#xA0;&#xA0;W95&#xA0;FAT32&#xA0;(LBA)&#xA0;52&#xA0;&#xA0;CP/M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;9f&#xA0;&#xA0;BSD/OS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;e4&#xA0;&#xA0;SpeedStor<br>
+&#xA0;e&#xA0;&#xA0;W95&#xA0;FAT16&#xA0;(LBA)&#xA0;53&#xA0;&#xA0;OnTrack&#xA0;DM6&#xA0;Aux&#xA0;a0&#xA0;&#xA0;IBM&#xA0;Thinkpad&#xA0;hi&#xA0;eb&#xA0;&#xA0;BeOS&#xA0;fs<br>
+&#xA0;f&#xA0;&#xA0;W95&#xA0;Ext'd&#xA0;(LBA)&#xA0;54&#xA0;&#xA0;OnTrackDM6&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a5&#xA0;&#xA0;FreeBSD&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ee&#xA0;&#xA0;EFI&#xA0;GPT<br>
+10&#xA0;&#xA0;OPUS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;55&#xA0;&#xA0;EZ-Drive&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a6&#xA0;&#xA0;OpenBSD&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ef&#xA0;&#xA0;EFI&#xA0;(FAT-12/16/<br>
+11&#xA0;&#xA0;Hidden&#xA0;FAT12&#xA0;&#xA0;&#xA0;&#xA0;56&#xA0;&#xA0;Golden&#xA0;Bow&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a7&#xA0;&#xA0;NeXTSTEP&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f0&#xA0;&#xA0;Linux/PA-RISC&#xA0;b<br>
+12&#xA0;&#xA0;Compaq&#xA0;diagnost&#xA0;5c&#xA0;&#xA0;Priam&#xA0;Edisk&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a8&#xA0;&#xA0;Darwin&#xA0;UFS&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f1&#xA0;&#xA0;SpeedStor<br>
+14&#xA0;&#xA0;Hidden&#xA0;FAT16&#xA0;&lt;3&#xA0;61&#xA0;&#xA0;SpeedStor&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;a9&#xA0;&#xA0;NetBSD&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f4&#xA0;&#xA0;SpeedStor<br>
+16&#xA0;&#xA0;Hidden&#xA0;FAT16&#xA0;&#xA0;&#xA0;&#xA0;63&#xA0;&#xA0;GNU&#xA0;HURD&#xA0;or&#xA0;Sys&#xA0;ab&#xA0;&#xA0;Darwin&#xA0;boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;f2&#xA0;&#xA0;DOS&#xA0;secondary<br>
+17&#xA0;&#xA0;Hidden&#xA0;HPFS/NTF&#xA0;64&#xA0;&#xA0;Novell&#xA0;Netware&#xA0;&#xA0;b7&#xA0;&#xA0;BSDI&#xA0;fs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;auto<br>
+18&#xA0;&#xA0;AST&#xA0;SmartSleep&#xA0;&#xA0;65&#xA0;&#xA0;Novell&#xA0;Netware&#xA0;&#xA0;b8&#xA0;&#xA0;BSDI&#xA0;swap&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fe&#xA0;&#xA0;LANstep<br>
+1b&#xA0;&#xA0;Hidden&#xA0;W95&#xA0;FAT3&#xA0;70&#xA0;&#xA0;DiskSecure&#xA0;Mult&#xA0;bb&#xA0;&#xA0;Boot&#xA0;Wizard&#xA0;hid&#xA0;ff&#xA0;&#xA0;BBT<br>
+1c&#xA0;&#xA0;Hidden&#xA0;W95&#xA0;FAT3&#xA0;75&#xA0;&#xA0;PC/IX<br>
+Hex&#xA0;code&#xA0;(type&#xA0;L&#xA0;to&#xA0;list&#xA0;codes):</span>&#xA0;<span class="highlight">&lt;-- fd</span><br>
+<span class="system">Changed&#xA0;system&#xA0;type&#xA0;of&#xA0;partition&#xA0;1&#xA0;to&#xA0;fd&#xA0;(Linux&#xA0;raid&#xA0;autodetect)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- w</span><br>
+<span class="system">The&#xA0;partition&#xA0;table&#xA0;has&#xA0;been&#xA0;altered!<br>
+<br>
+Calling&#xA0;ioctl()&#xA0;to&#xA0;re-read&#xA0;partition&#xA0;table.<br>
+Syncing&#xA0;disks.</span><br></p>
+<p>Now do the same with <span class="system">/dev/sde1</span>:</p>
+<p class="command">fdisk /dev/sde</p>
+<p>The output of </p>
+<p class="command">fdisk -l</p>
+<p>should now look like this:</p>
+<p class="system">server1:~#&#xA0;fdisk&#xA0;-l<br>
+<br>
+Disk&#xA0;/dev/sda:&#xA0;21.4&#xA0;GB,&#xA0;21474836480&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;2610&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;*&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;18&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;144553+&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2450&#xA0;&#xA0;&#xA0;&#xA0;19535040&#xA0;&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br>
+/dev/sda4&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2451&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2610&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1285200&#xA0;&#xA0;&#xA0;82&#xA0;&#xA0;Linux&#xA0;swap&#xA0;/&#xA0;Solaris<br>
+<br>
+Disk&#xA0;/dev/sdb:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdb1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br>
+<br>
+Disk&#xA0;/dev/sdc:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdc1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+<br>
+Disk&#xA0;/dev/sdd:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdd1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br>
+<br>
+Disk&#xA0;/dev/sde:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sde1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+<br>
+Disk&#xA0;/dev/sdf:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdf1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br></p>
+<p>Next we add <span class="system">/dev/sdc1</span> to <span class="system">/dev/md0</span> and <span class="system">/dev/sde1</span> to <span class="system">/dev/md1</span>. Because the second nodes (<span class="system">/dev/sdb1</span> and <span class="system">/dev/sdd1</span>) are not ready yet, we must specify <span class="system">missing</span> in the following commands:</p>
+<p class="command">mdadm --create /dev/md0 --auto=yes -l 1 -n 2 /dev/sdc1 missing</p>
+<p class="system">server1:~# mdadm --create /dev/md0 --auto=yes -l 1 -n 2 /dev/sdc1 missing<br>
+mdadm: array /dev/md0 started. </p>
+<p class="command">mdadm --create /dev/md1 --auto=yes -l 1 -n 2 /dev/sde1 missing</p>
+<p class="system">server1:~# mdadm --create /dev/md1 --auto=yes -l 1 -n 2 /dev/sde1 missing<br>
+mdadm: array /dev/md1 started.</p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+
+<p>Afterwards we prepare <span class="system">/dev/md0</span> and <span class="system">/dev/md1</span> for LVM:</p>
+<p class="command">pvcreate /dev/md0 /dev/md1</p>
+<p class="system">server1:~#&#xA0;pvcreate&#xA0;/dev/md0&#xA0;/dev/md1<br>
+&#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/md0"&#xA0;successfully&#xA0;created<br>
+&#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/md1"&#xA0;successfully&#xA0;created<br></p>
+<p>and extend our <span class="system">fileserver</span> volume group:</p>
+<p class="command">vgextend fileserver /dev/md0 /dev/md1</p>
+<p class="system">server1:~#&#xA0;vgextend&#xA0;fileserver&#xA0;/dev/md0&#xA0;/dev/md1<br>
+&#xA0;&#xA0;Volume&#xA0;group&#xA0;"fileserver"&#xA0;successfully&#xA0;extended<br></p>
+<p>The outputs of</p>
+<p class="command">pvdisplay</p>
+<p>and</p>
+<p class="command">vgdisplay</p>
+<p>should look like this:</p>
+<p class="system">server1:~#&#xA0;pvdisplay<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdb1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes&#xA0;(but&#xA0;full)<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;USDJyG-VDM2-r406-OjQo-h3eb-c9Mp-4nvnvu<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/sdd1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;146<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5815<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;qdEB5d-389d-O5UA-Kbwv-mn1y-74FY-4zublN<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md0<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;7JHUXF-1R2p-OjbJ-X1OT-uaeg-gWRx-H6zx3P<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;pwQ5AJ-RwVK-EebA-0Z13-d27d-2IdP-HqT5RW<br></p>
+<p class="system">server1:~#&#xA0;vgdisplay<br>
+&#xA0;&#xA0;---&#xA0;Volume&#xA0;group&#xA0;---<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;System&#xA0;ID<br>
+&#xA0;&#xA0;Format&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;lvm2<br>
+&#xA0;&#xA0;Metadata&#xA0;Areas&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;Metadata&#xA0;Sequence&#xA0;No&#xA0;&#xA0;14<br>
+&#xA0;&#xA0;VG&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br>
+&#xA0;&#xA0;VG&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;resizable<br>
+&#xA0;&#xA0;MAX&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Cur&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br>
+&#xA0;&#xA0;Open&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br>
+&#xA0;&#xA0;Max&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Cur&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;Act&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br>
+&#xA0;&#xA0;VG&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;93.14&#xA0;GB<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4.00&#xA0;MB<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23844<br>
+&#xA0;&#xA0;Alloc&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;11776&#xA0;/&#xA0;46.00&#xA0;GB<br>
+&#xA0;&#xA0;Free&#xA0;&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;12068&#xA0;/&#xA0;47.14&#xA0;GB<br>
+&#xA0;&#xA0;VG&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;dQDEHT-kNHf-UjRm-rmJ3-OUYx-9G1t-aVskI1<br></p>
+<p>Now we move the contents of <span class="system">/dev/sdb1</span> to <span class="system">/dev/md0</span> and the contents of <span class="system">/dev/sdd1</span> to <span class="system">/dev/md1</span>, then we remove <span class="system">/dev/sdb1</span> and <span class="system">/dev/sdd1</span> from LVM:</p>
+<p class="command">pvmove /dev/sdb1 /dev/md0</p>
+<p class="command">pvmove /dev/sdd1 /dev/md1</p>
+<p class="command">vgreduce fileserver /dev/sdb1 /dev/sdd1<br>
+pvremove /dev/sdb1 /dev/sdd1</p>
+<p>Now only <span class="system">/dev/md0</span> and <span class="system">/dev/md1</span> should be left as physical volumes:</p>
+<p class="command">pvdisplay</p>
+<p class="system">server1:~#&#xA0;pvdisplay<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md0<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes&#xA0;(but&#xA0;full)<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;7JHUXF-1R2p-OjbJ-X1OT-uaeg-gWRx-H6zx3P<br>
+<br>
+&#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br>
+&#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md1<br>
+&#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br>
+&#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br>
+&#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br>
+&#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br>
+&#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br>
+&#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;146<br>
+&#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5815<br>
+&#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;pwQ5AJ-RwVK-EebA-0Z13-d27d-2IdP-HqT5RW<br></p>
+<p>Now we format <span class="system">/dev/sdb1</span> with <span class="system">fd</span> (Linux RAID autodetect):</p>
+<p class="command">fdisk /dev/sdb</p>
+<p><span class="system">server1:~#&#xA0;fdisk&#xA0;/dev/sdb<br>
+<br>
+The&#xA0;number&#xA0;of&#xA0;cylinders&#xA0;for&#xA0;this&#xA0;disk&#xA0;is&#xA0;set&#xA0;to&#xA0;32635.<br>
+There&#xA0;is&#xA0;nothing&#xA0;wrong&#xA0;with&#xA0;that,&#xA0;but&#xA0;this&#xA0;is&#xA0;larger&#xA0;than&#xA0;1024,<br>
+and&#xA0;could&#xA0;in&#xA0;certain&#xA0;setups&#xA0;cause&#xA0;problems&#xA0;with:<br>
+1)&#xA0;software&#xA0;that&#xA0;runs&#xA0;at&#xA0;boot&#xA0;time&#xA0;(e.g.,&#xA0;old&#xA0;versions&#xA0;of&#xA0;LILO)<br>
+2)&#xA0;booting&#xA0;and&#xA0;partitioning&#xA0;software&#xA0;from&#xA0;other&#xA0;OSs<br>
+&#xA0;&#xA0;&#xA0;(e.g.,&#xA0;DOS&#xA0;FDISK,&#xA0;OS/2&#xA0;FDISK)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- m</span><br>
+<span class="system">Command&#xA0;action<br>
+&#xA0;&#xA0;&#xA0;a&#xA0;&#xA0;&#xA0;toggle&#xA0;a&#xA0;bootable&#xA0;flag<br>
+&#xA0;&#xA0;&#xA0;b&#xA0;&#xA0;&#xA0;edit&#xA0;bsd&#xA0;disklabel<br>
+&#xA0;&#xA0;&#xA0;c&#xA0;&#xA0;&#xA0;toggle&#xA0;the&#xA0;dos&#xA0;compatibility&#xA0;flag<br>
+&#xA0;&#xA0;&#xA0;d&#xA0;&#xA0;&#xA0;delete&#xA0;a&#xA0;partition<br>
+&#xA0;&#xA0;&#xA0;l&#xA0;&#xA0;&#xA0;list&#xA0;known&#xA0;partition&#xA0;types<br>
+&#xA0;&#xA0;&#xA0;m&#xA0;&#xA0;&#xA0;print&#xA0;this&#xA0;menu<br>
+&#xA0;&#xA0;&#xA0;n&#xA0;&#xA0;&#xA0;add&#xA0;a&#xA0;new&#xA0;partition<br>
+&#xA0;&#xA0;&#xA0;o&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;DOS&#xA0;partition&#xA0;table<br>
+&#xA0;&#xA0;&#xA0;p&#xA0;&#xA0;&#xA0;print&#xA0;the&#xA0;partition&#xA0;table<br>
+&#xA0;&#xA0;&#xA0;q&#xA0;&#xA0;&#xA0;quit&#xA0;without&#xA0;saving&#xA0;changes<br>
+&#xA0;&#xA0;&#xA0;s&#xA0;&#xA0;&#xA0;create&#xA0;a&#xA0;new&#xA0;empty&#xA0;Sun&#xA0;disklabel<br>
+&#xA0;&#xA0;&#xA0;t&#xA0;&#xA0;&#xA0;change&#xA0;a&#xA0;partition's&#xA0;system&#xA0;id<br>
+&#xA0;&#xA0;&#xA0;u&#xA0;&#xA0;&#xA0;change&#xA0;display/entry&#xA0;units<br>
+&#xA0;&#xA0;&#xA0;v&#xA0;&#xA0;&#xA0;verify&#xA0;the&#xA0;partition&#xA0;table<br>
+&#xA0;&#xA0;&#xA0;w&#xA0;&#xA0;&#xA0;write&#xA0;table&#xA0;to&#xA0;disk&#xA0;and&#xA0;exit<br>
+&#xA0;&#xA0;&#xA0;x&#xA0;&#xA0;&#xA0;extra&#xA0;functionality&#xA0;(experts&#xA0;only)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- t</span><br>
+<span class="system">Selected&#xA0;partition&#xA0;1<br>
+Hex&#xA0;code&#xA0;(type&#xA0;L&#xA0;to&#xA0;list&#xA0;codes):</span>&#xA0;<span class="highlight">&lt;-- fd</span><br>
+<span class="system">Changed&#xA0;system&#xA0;type&#xA0;of&#xA0;partition&#xA0;1&#xA0;to&#xA0;fd&#xA0;(Linux&#xA0;raid&#xA0;autodetect)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- w</span><br>
+<span class="system">The&#xA0;partition&#xA0;table&#xA0;has&#xA0;been&#xA0;altered!<br>
+<br>
+Calling&#xA0;ioctl()&#xA0;to&#xA0;re-read&#xA0;partition&#xA0;table.<br>
+Syncing&#xA0;disks.</span><br></p>
+<p>Do the same with <span class="system">/dev/sdd1</span>:</p>
+<p class="command">fdisk /dev/sdd</p>
+<p>Next add <span class="system">/dev/sdb1</span> to <span class="system">/dev/md0</span> and <span class="system">/dev/sdd1</span> to <span class="system">/dev/md1</span>:</p>
+<p class="command">mdadm --manage /dev/md0 --add /dev/sdb1</p>
+<p class="system">server1:~# mdadm --manage /dev/md0 --add /dev/sdb1<br>
+mdadm: added /dev/sdb1</p>
+<p class="command">mdadm --manage /dev/md1 --add /dev/sdd1</p>
+<p class="system">server1:~# mdadm --manage /dev/md1 --add /dev/sdd1<br>
+mdadm: added /dev/sdd1 </p>
+<p>Now the two RAID arrays will be synchronized. This will take some time, you can check with</p>
+<p class="command">cat /proc/mdstat</p>
+<p>when the process is finished. The output looks like this for an unfinished process:</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdd1[2]&#xA0;sde1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;[=&gt;...................]&#xA0;&#xA0;recovery&#xA0;=&#xA0;&#xA0;6.4%&#xA0;(1586560/24418688)&#xA0;finish=1.9min&#xA0;speed=198320K/sec<br>
+<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdb1[2]&#xA0;sdc1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;[==&gt;..................]&#xA0;&#xA0;recovery&#xA0;=&#xA0;10.5%&#xA0;(2587264/24418688)&#xA0;finish=2.8min&#xA0;speed=129363K/sec<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<p>and like this when the process is finished:</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdd1[1]&#xA0;sde1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br>
+<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdb1[1]&#xA0;sdc1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<p>If you have a look at <span class="system">PV Size</span> in the output of </p>
+<p class="command">pvdisplay</p>
+<p>you will see that <span class="system">2 10_years_of_git_an_interview_with_git_creator_linus_torvalds.md accuracy_in_the_palm_of_your_hand.md a_clear_view_of_the_brain.md a_liberator_but_never_free.md a_look_at_alteras_opencl_sdk_for_fpgas.md an_important_step_in_artificial_intelligence.md an_introduction_to_matlab_metaprogramming.md announcing_the_nulecule_specification_for_composite_applications.md a_quick_introduction_to_consul__scotts_weblog__the_weblog_of_an_it_pro_specializing_in_virtualization_networking_open_source_and_cloud_computing.md a_thorough_introduction_guide_to_docker_containers.md a_tmux_crash_course.md bayesian_inference_of_a_binomial_proportion__the_analytical_approach.md browser_monitoring_for_githubcom.md can_ecstasy_replace_xanax.md circles_sines_and_signals__introduction.md creating_kvm_machines_with_boxgrinder_and_vmbuilder.md creating_shazam_in_java.md crossplatform_development_with_nwjs__tuts_code_tutorial.md data_archeology.md data.json data_ml david_deutsch_explains_why_it’s_good_to_be_wrong.md deku_how_we_built_our_functional_alternative_to_react.md designing_a_state_machine_without_conditionals.md devops discovering_and_monitoring_hardware_in_linux.md docker does_long_term_use_of_psychiatric_drugs_cause_more_harm_than_good.md drug_perks_up_old_muscles_and_aging_brains.md electronics_for_the_javascript_developer_using_wifi_and_bluetooth_le.md elements_of_scale_composing_and_scaling_data_platforms.md elements_of_scale_composing_and_scaling_data platforms.md embedded eve_online_how_a_virtual_world_went_to_the_edge_of_apocalypse_and_back__simon_parkin.md explaining_a_cornerstone_of_game_theory_john_nash’s_equilibrium.md five_funny_little_linux_network_testers_and_monitors.md fixing_engineerings_loyalty_and_longevity_problem.md gaming github go golden_gate_bridge_builders_ate_special_meals_to_prevent_dizziness.md google_systems_guru_explains_why_containers_are_the_future_of_computing.md hackers_build_a_new_tor_client_designed_to_beat_the_nsa.md highavailability_storage_with_halvm.md historyfuture_proof_fingerprint.md how_i_got_converted_to_gmo_food.md how_shazam_works.md how_to_be_polite_—_the_message.md how_to_get_your_very_own_rstudio_server_and_shiny_server_with_digitalocean.md how_to_turn_your_pc_or_other_device_into_a_retro_arcade_with_lakka.md html implementing_a_trustless_security_solution_with_hardware_wallets_and_multisignature.md inside_the_mind_that_built_google_brain_on_life_creativity_and_failure.md ira_glass_public_radio_can_capitalize_on_its_popularity_without_selling_out_its_mission.md itspritecom.md javascript join_the_engineering_leisure_class.md just_don’t_hire_0x_engineers.md linux linux_commandline_video_editing.md make.md make_your_own_injection_molding_machine__make_diy_projects_howtos_electronics_crafts_and_ideas_for_makers.md mark_twain__helen_keller’s_special_friendship_he_treated_me_not_as_a_freak_but_as_a_person_dealing_with_great_difficulties.md mbuntu_y_macbuntu_transformation_pack_available_for_ubuntu_1504_vivid_vervet.md meeting_a_silk_road_drugs_boss.md mobile no_death_no_taxes.md null.md old on_edgar_allan_poe_by_marilynne_robinson.md optimize_python_with closures.md phd_is_the_doctoral_thesis_obsolete.md pisoc_learn_to_create.md png polymatheia__persistent_vector_performance_summarised.md popular_electric_brain_stimulation_method_tdcs_is_detrimental_to_iq_scores_study.md programming robust_landmarkbased_audio_fingerprinting.md roll_your_own_customized_ubuntu_with_uck.md running_a_small_docker_swarm_cluster.md rust_discovery_or_how_i_figure_things_out.md safe_connection.md scantool__obdii_car_diagnostic_software_for_linux.md science smart_regulation_for_smart_drugs.md social software_install_guide.md stigler_diet_–_how_i_became_a_data_scientist_despite_having_been_a_math_major.md tfidf_is_about_what_matters.md the_business_economics_and_opportunity_of_opensource_data_science.md the_entrepreneur_disrupting_the_tech_world_by_spilling_her_company’s_secrets.md the_identity_underground.md the_man_who_became_big bird.md the_most_common_illegal_job_interview_questions_you_should_watch_out_for.md theory.md the_psychology_of_ux.md the_roland_tr808_the_drum_machine_that_revolutionised_music.md the_shazam_effect.md the_sound_of_ted_a_case_for_distaste.md the_unreasonable_effectiveness_of_recurrent_neural_networks.md tidy understanding_c_by_learning_assembly.md url_to_filename.csv weave_is_kinda_slow.md web_dev what_richard_branson_and_30_amazing_entrepreneurs_taught_me_in_7_days_on_necker_island.md who_funds_the_future.md why_we_age_–_part_i_the_evolution_of_aging.md wireless_raspberry_pi_speaker.md 23.29GB = 46.58GB</span> are available, however only <span class="system">40GB (share) + 5GB (backup) + 1GB (media) = 46GB</span> are used which means we could extend one of our logical devices with about 0.5GB. I've already shown how to extend an ext3 logical volume (<span class="system">share</span>), so we will resize <span class="system">media</span> now which uses reiserfs. reiserfs filesystems can be resized without unmounting: </p>
+<p class="command">lvextend -L1.5G /dev/fileserver/media</p>
+<p class="system">server1:~#&#xA0;lvextend&#xA0;-L1.5G&#xA0;/dev/fileserver/media<br>
+&#xA0;&#xA0;Extending&#xA0;logical&#xA0;volume&#xA0;media&#xA0;to&#xA0;1.50&#xA0;GB<br>
+&#xA0;&#xA0;Logical&#xA0;volume&#xA0;media&#xA0;successfully&#xA0;resized<br></p>
+<p class="command">resize_reiserfs /dev/fileserver/media</p>
+<p class="system">server1:~# resize_reiserfs /dev/fileserver/media<br>
+resize_reiserfs 3.6.19 (2003 www.namesys.com)</p>
+
+<p class="system">resize_reiserfs: On-line resizing finished successfully.</p>
+<p>The output of</p>
+<p class="command">df -h</p>
+<p>looks like this:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;666M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;92K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-share<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40G&#xA0;&#xA0;177M&#xA0;&#xA0;&#xA0;38G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.5G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;1.5G&#xA0;&#xA0;&#xA0;3%&#xA0;/var/media<br></p>
+<p>If we want our logical volumes to be mounted automatically at boot time, we must modify <span class="system">/etc/fstab</span> again (like in chapter 3):</p>
+<p class="command">mv /etc/fstab /etc/fstab_orig<br>
+cat /dev/null &gt; /etc/fstab</p>
+<p class="command">vi /etc/fstab</p>
+<p>Put the following into it:</p>
+<table class="" border="1" cellpadding="2" cellspacing="0" width="90%">
+<tbody><tr>
+<td class="">
+<pre># /etc/fstab: static file system information.
+#
+# &lt;file system&gt; &lt;mount point&gt; &lt;type&gt; &lt;options&gt; &lt;dump&gt; &lt;pass&gt;
+proc /proc proc defaults 0 0
+/dev/sda2 / ext3 defaults,errors=remount-ro 0 1
+/dev/sda1 /boot ext3 defaults 0 2
+/dev/hdc /media/cdrom0 udf,iso9660 user,noauto 0 0
+/dev/fd0 /media/floppy0 auto rw,user,noauto 0 0
+/dev/fileserver/share /var/share ext3 rw,noatime 0 0
+/dev/fileserver/backup /var/backup xfs rw,noatime 0 0
+/dev/fileserver/media /var/media reiserfs rw,noatime 0 0</pre>
+</td>
+</tr>
+</tbody></table>
+<p>If you compare it to our backup of the original file, <span class="system">/etc/fstab_orig</span>, you will notice that we added the lines:</p>
+<p class="system">/dev/fileserver/share&#xA0;&#xA0;&#xA0;/var/share&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ext3&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;rw,noatime&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;0<br>
+/dev/fileserver/backup&#xA0;&#xA0;&#xA0;&#xA0;/var/backup&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;xfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;rw,noatime&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;0<br>
+/dev/fileserver/media&#xA0;&#xA0;&#xA0;&#xA0;/var/media&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;reiserfs&#xA0;&#xA0;&#xA0;rw,noatime&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;0<br>
+</p>
+<p>Now we reboot the system:</p>
+<p class="command">shutdown -r now</p>
+<p>After the system has come up again, run</p>
+<p class="command">df -h</p>
+<p>again. It should still show our logical volumes in the output:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br>
+Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;666M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br>
+udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;100K&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;&#xA0;1%&#xA0;/dev<br>
+tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br>
+/dev/mapper/fileserver-share<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40G&#xA0;&#xA0;177M&#xA0;&#xA0;&#xA0;38G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br>
+/dev/mapper/fileserver-backup<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.0G&#xA0;&#xA0;144K&#xA0;&#xA0;5.0G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br>
+/dev/mapper/fileserver-media<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.5G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;1.5G&#xA0;&#xA0;&#xA0;3%&#xA0;/var/media<br></p>
+<p>Now we are finished with our LVM on RAID1 setup.</p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+<div class="contributeEdit">
+
+<div id="tocContainer">
+
+<ol class="toc">
+<li><a href="https://www.howtoforge.com#-replacing-the-hard-disks-with-bigger-ones">8 Replacing The Hard Disks With Bigger Ones</a></li>
+</ol>
+</div>
+</div>
+
+<p>We are currently using four hard disks with a size of 25GB each (at least we are acting like that). Now let's assume this isn't enough anymore, and we need more space in our RAID setup. Therefore we will replace our 25GB hard disks with 80GB hard disks (in fact we will still use the current hard disks, but use their full capacity now - in the real life you would replace your old, small hard disks with new, bigger ones).</p>
+<p>The procedure is as follows: first we remove <span class="system">/dev/sdb</span> and <span class="system">/dev/sdd</span> from the RAID arrays, replace them with bigger hard disks, put them back into the RAID arrays, and then we do the same again with <span class="system">/dev/sdc</span> and <span class="system">/dev/sde</span>. </p>
+<p>First we mark <span class="system">/dev/sdb1</span> as failed:</p>
+<p class="command">mdadm --manage /dev/md0 --fail /dev/sdb1 </p>
+<p class="system">server1:~# mdadm --manage /dev/md0 --fail /dev/sdb1<br>
+mdadm: set /dev/sdb1 faulty in /dev/md0</p>
+<p>The output of </p>
+<p class="command">cat /proc/mdstat</p>
+<p>looks now like this:</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdc1[0]&#xA0;sdb1[2](F)<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sde1[0]&#xA0;sdd1[1]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<p>Then we remove <span class="system">/dev/sdb1</span> from the RAID array <span class="system">/dev/md0</span>:</p>
+<p class="command">mdadm --manage /dev/md0 --remove /dev/sdb1</p>
+<p class="system">server1:~# mdadm --manage /dev/md0 --remove /dev/sdb1<br>
+mdadm: hot removed /dev/sdb1</p>
+<p class="command">cat /proc/mdstat</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdc1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sde1[0]&#xA0;sdd1[1]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<p>Now we do the same with <span class="system">/dev/sdd1</span>:</p>
+<p class="command">mdadm --manage /dev/md1 --fail /dev/sdd1 </p>
+<p class="system">server1:~# mdadm --manage /dev/md1 --fail /dev/sdd1<br>
+mdadm: set /dev/sdd1 faulty in /dev/md1</p>
+<p class="command">cat /proc/mdstat</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdc1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sde1[0]&#xA0;sdd1[2](F)<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<p class="command">mdadm --manage /dev/md1 --remove /dev/sdd1</p>
+<p class="system">server1:~# mdadm --manage /dev/md1 --remove /dev/sdd1<br>
+mdadm: hot removed /dev/sdd1</p>
+<p class="command">cat /proc/mdstat</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdc1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sde1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<p>On a real system you would now shut it down, pull out the 25GB <span class="system">/dev/sdb</span> and <span class="system">/dev/sdd </span> and replace them with 80GB ones. As I said before, we don't have to do this because all hard disks already have a capacity of 80GB.</p>
+<p>Next we must format <span class="system">/dev/sdb</span> and <span class="system">/dev/sdd</span>. We must create a <span class="system">/dev/sdb1</span> resp. <span class="system">/dev/sdd1</span> partition, type <span class="system">fd</span> (Linux RAID autodetect), size 25GB (the same settings as on the old hard disks), and a <span class="system">/dev/sdb2</span> resp. <span class="system">/dev/sdd2</span> partition, type <span class="system">fd</span>, that cover the rest of the hard disks. As <span class="system">/dev/sdb1</span> and <span class="system">/dev/sdd1</span> are still present on our hard disks, we only have to create <span class="system">/dev/sdb2</span> and <span class="system">/dev/sdd2</span> in this special example.</p>
+<p class="command">fdisk /dev/sdb</p>
+<p><span class="system">server1:~#&#xA0;fdisk&#xA0;/dev/sdb<br>
+<br>
+The&#xA0;number&#xA0;of&#xA0;cylinders&#xA0;for&#xA0;this&#xA0;disk&#xA0;is&#xA0;set&#xA0;to&#xA0;10443.<br>
+There&#xA0;is&#xA0;nothing&#xA0;wrong&#xA0;with&#xA0;that,&#xA0;but&#xA0;this&#xA0;is&#xA0;larger&#xA0;than&#xA0;1024,<br>
+and&#xA0;could&#xA0;in&#xA0;certain&#xA0;setups&#xA0;cause&#xA0;problems&#xA0;with:<br>
+1)&#xA0;software&#xA0;that&#xA0;runs&#xA0;at&#xA0;boot&#xA0;time&#xA0;(e.g.,&#xA0;old&#xA0;versions&#xA0;of&#xA0;LILO)<br>
+2)&#xA0;booting&#xA0;and&#xA0;partitioning&#xA0;software&#xA0;from&#xA0;other&#xA0;OSs<br>
+&#xA0;&#xA0;&#xA0;(e.g.,&#xA0;DOS&#xA0;FDISK,&#xA0;OS/2&#xA0;FDISK)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- p</span><br>
+<br>
+<span class="system">Disk&#xA0;/dev/sdb:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdb1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- n</span><br>
+<span class="system">Command&#xA0;action<br>
+&#xA0;&#xA0;&#xA0;e&#xA0;&#xA0;&#xA0;extended<br>
+&#xA0;&#xA0;&#xA0;p&#xA0;&#xA0;&#xA0;primary&#xA0;partition&#xA0;(1-4)</span><br>
+<span class="highlight">&lt;-- p</span><br>
+<span class="system">Partition&#xA0;number&#xA0;(1-4):</span>&#xA0;<span class="highlight">&lt;-- 2</span><br>
+<span class="system">First&#xA0;cylinder&#xA0;(3041-10443,&#xA0;default&#xA0;3041):</span> <span class="highlight">&lt;-- &lt;ENTER&gt;</span> <br>
+<span class="system">Using&#xA0;default&#xA0;value&#xA0;3041<br>
+Last&#xA0;cylinder&#xA0;or&#xA0;+size&#xA0;or&#xA0;+sizeM&#xA0;or&#xA0;+sizeK&#xA0;(3041-10443,&#xA0;default&#xA0;10443):</span> <span class="highlight">&lt;-- &lt;ENTER&gt;</span> <br>
+<span class="system">Using&#xA0;default&#xA0;value&#xA0;10443<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- t</span><br>
+<span class="system">Partition&#xA0;number&#xA0;(1-4):</span>&#xA0;<span class="highlight">&lt;-- 2</span><br>
+<span class="system">Hex&#xA0;code&#xA0;(type&#xA0;L&#xA0;to&#xA0;list&#xA0;codes):</span>&#xA0;<span class="system">&lt;-- fd</span><br>
+<span class="system">Changed&#xA0;system&#xA0;type&#xA0;of&#xA0;partition&#xA0;2&#xA0;to&#xA0;fd&#xA0;(Linux&#xA0;raid&#xA0;autodetect)<br>
+<br>
+Command&#xA0;(m&#xA0;for&#xA0;help):</span>&#xA0;<span class="highlight">&lt;-- w</span><br>
+<span class="system">The&#xA0;partition&#xA0;table&#xA0;has&#xA0;been&#xA0;altered!<br>
+<br>
+Calling&#xA0;ioctl()&#xA0;to&#xA0;re-read&#xA0;partition&#xA0;table.<br>
+Syncing&#xA0;disks.</span><br></p>
+<p>Do the same for <span class="system">/dev/sdd</span>:</p>
+<p class="command">fdisk /dev/sdd </p>
+<p>The output of</p>
+<p class="command">fdisk -l</p>
+<p>looks now like this:</p>
+<p class="system">server1:~#&#xA0;fdisk&#xA0;-l<br>
+<br>
+Disk&#xA0;/dev/sda:&#xA0;21.4&#xA0;GB,&#xA0;21474836480&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;2610&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sda1&#xA0;&#xA0;&#xA0;*&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;18&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;144553+&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br>
+/dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2450&#xA0;&#xA0;&#xA0;&#xA0;19535040&#xA0;&#xA0;&#xA0;83&#xA0;&#xA0;Linux<br>
+/dev/sda4&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2451&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2610&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1285200&#xA0;&#xA0;&#xA0;82&#xA0;&#xA0;Linux&#xA0;swap&#xA0;/&#xA0;Solaris<br>
+<br>
+Disk&#xA0;/dev/sdb:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdb1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+/dev/sdb2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3041&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10443&#xA0;&#xA0;&#xA0;&#xA0;59464597+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+<br>
+Disk&#xA0;/dev/sdc:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdc1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+<br>
+Disk&#xA0;/dev/sdd:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdd1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+/dev/sdd2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3041&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10443&#xA0;&#xA0;&#xA0;&#xA0;59464597+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+<br>
+Disk&#xA0;/dev/sde:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sde1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;fd&#xA0;&#xA0;Linux&#xA0;raid&#xA0;autodetect<br>
+<br>
+Disk&#xA0;/dev/sdf:&#xA0;85.8&#xA0;GB,&#xA0;85899345920&#xA0;bytes<br>
+255&#xA0;heads,&#xA0;63&#xA0;sectors/track,&#xA0;10443&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;16065&#xA0;*&#xA0;512&#xA0;=&#xA0;8225280&#xA0;bytes<br>
+<br>
+&#xA0;&#xA0;&#xA0;Device&#xA0;Boot&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Start&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;End&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Blocks&#xA0;&#xA0;&#xA0;Id&#xA0;&#xA0;System<br>
+/dev/sdf1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3040&#xA0;&#xA0;&#xA0;&#xA0;24418768+&#xA0;&#xA0;8e&#xA0;&#xA0;Linux&#xA0;LVM<br>
+<br>
+Disk&#xA0;/dev/md1:&#xA0;25.0&#xA0;GB,&#xA0;25004736512&#xA0;bytes<br>
+2&#xA0;heads,&#xA0;4&#xA0;sectors/track,&#xA0;6104672&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;8&#xA0;*&#xA0;512&#xA0;=&#xA0;4096&#xA0;bytes<br>
+<br>
+Disk&#xA0;/dev/md1&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table<br>
+<br>
+Disk&#xA0;/dev/md0:&#xA0;25.0&#xA0;GB,&#xA0;25004736512&#xA0;bytes<br>
+2&#xA0;heads,&#xA0;4&#xA0;sectors/track,&#xA0;6104672&#xA0;cylinders<br>
+Units&#xA0;=&#xA0;cylinders&#xA0;of&#xA0;8&#xA0;*&#xA0;512&#xA0;=&#xA0;4096&#xA0;bytes<br>
+<br>
+Disk&#xA0;/dev/md0&#xA0;doesn't&#xA0;contain&#xA0;a&#xA0;valid&#xA0;partition&#xA0;table<br></p>
+<p>Now we add <span class="system">/dev/sdb1</span> to <span class="system">/dev/md0</span> again and <span class="system">/dev/sdd1</span> to <span class="system">/dev/md1</span>:</p>
+<p class="command">mdadm --manage /dev/md0 --add /dev/sdb1</p>
+<p class="system">server1:~# mdadm --manage /dev/md0 --add /dev/sdb1<br>
+mdadm: re-added /dev/sdb1</p>
+<p class="command">mdadm --manage /dev/md1 --add /dev/sdd1</p>
+<p class="system">server1:~# mdadm --manage /dev/md1 --add /dev/sdd1<br>
+mdadm: re-added /dev/sdd1</p>
+<p>Now the contents of both RAID arrays will be synchronized. We must wait until this is finished before we can go on. We can check the status of the synchronization with</p>
+<p class="command">cat /proc/mdstat</p>
+<p>The output looks like this during synchronization:</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdb1[1]&#xA0;sdc1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;[=&gt;...................]&#xA0;&#xA0;recovery&#xA0;=&#xA0;&#xA0;9.9%&#xA0;(2423168/24418688)&#xA0;finish=2.8min&#xA0;speed=127535K/sec<br>
+<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdd1[1]&#xA0;sde1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/1]&#xA0;[U_]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;[=&gt;...................]&#xA0;&#xA0;recovery&#xA0;=&#xA0;&#xA0;6.4%&#xA0;(1572096/24418688)&#xA0;finish=1.9min&#xA0;speed=196512K/sec<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<p>and like this when it's finished:</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br>
+Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br>
+md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdb1[1]&#xA0;sdc1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br>
+<br>
+md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdd1[1]&#xA0;sde1[0]<br>
+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br>
+<br>
+unused&#xA0;devices:&#xA0;&lt;none&gt;<br></p>
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+</div><hr class="rdb-page-break" /><div><div id="htfContentPage">
+
+
+<p>Now we do the same process again, this time replacing <span class="system">/dev/sdc</span> and <span class="system">/dev/sde</span>:</p>
+<p class="command">mdadm --manage /dev/md0 --fail /dev/sdc1<br> mdadm --manage /dev/md0 --remove /dev/sdc1<br> mdadm --manage /dev/md1 --fail /dev/sde1<br> mdadm --manage /dev/md1 --remove /dev/sde1</p>
+<p class="command">fdisk /dev/sdc<br> fdisk /dev/sde</p>
+<p class="command">mdadm --manage /dev/md0 --add /dev/sdc1<br> mdadm --manage /dev/md1 --add /dev/sde1</p>
+<p class="command">cat /proc/mdstat</p>
+<p>Wait until the synchronization has finished.</p>
+<p>Next we create the RAID arrays <span class="system">/dev/md2</span> from <span class="system">/dev/sdb2</span> and <span class="system">/dev/sdc2</span> as well as <span class="system">/dev/md3</span> from <span class="system">/dev/sdd2</span> and <span class="system">/dev/sde2</span>.</p>
+<p class="command">mdadm --create /dev/md2 --auto=yes -l 1 -n 2 /dev/sdb2 /dev/sdc2</p>
+<p class="system">server1:~# mdadm --create /dev/md2 --auto=yes -l 1 -n 2 /dev/sdb2 /dev/sdc2<br> mdadm: array /dev/md2 started.</p>
+<p class="command">mdadm --create /dev/md3 --auto=yes -l 1 -n 2 /dev/sdd2 /dev/sde2</p>
+<p class="system">server1:~# mdadm --create /dev/md3 --auto=yes -l 1 -n 2 /dev/sdd2 /dev/sde2<br> mdadm: array /dev/md3 started.</p>
+<p>The new RAID arrays must be synchronized before we go on, so you should check</p>
+<p class="command">cat /proc/mdstat</p>
+<p class="system">server1:~#&#xA0;cat&#xA0;/proc/mdstat<br> Personalities&#xA0;:&#xA0;[linear]&#xA0;[multipath]&#xA0;[raid0]&#xA0;[raid1]&#xA0;[raid5]&#xA0;[raid4]&#xA0;[raid6]&#xA0;[raid10]<br> md3&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sde2[1]&#xA0;sdd2[0]<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;59464512&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;[=&gt;...................]&#xA0;&#xA0;resync&#xA0;=&#xA0;&#xA0;5.1%&#xA0;(3044224/59464512)&#xA0;finish=5.5min&#xA0;speed=169123K/sec<br> <br> md2&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdc2[1]&#xA0;sdb2[0]<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;59464512&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;[=&gt;...................]&#xA0;&#xA0;resync&#xA0;=&#xA0;&#xA0;5.5%&#xA0;(3312512/59464512)&#xA0;finish=9.3min&#xA0;speed=100379K/sec<br> <br> md0&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sdc1[0]&#xA0;sdb1[1]<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br> <br> md1&#xA0;:&#xA0;active&#xA0;raid1&#xA0;sde1[0]&#xA0;sdd1[1]<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;24418688&#xA0;blocks&#xA0;[2/2]&#xA0;[UU]<br> <br> unused&#xA0;devices:&#xA0;&lt;none&gt;</p>
+<p>After the synchronization has finished, we prepare <span class="system">/dev/md2</span> and <span class="system">/dev/md3</span> for LVM:</p>
+<p class="command">pvcreate /dev/md2 /dev/md3</p>
+<p class="system">server1:~#&#xA0;pvcreate&#xA0;/dev/md2&#xA0;/dev/md3<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/md2"&#xA0;successfully&#xA0;created<br> &#xA0;&#xA0;Physical&#xA0;volume&#xA0;"/dev/md3"&#xA0;successfully&#xA0;created</p>
+<p>and add <span class="system">/dev/md2</span> and <span class="system">/dev/md3</span> to our <span class="system">fileserver</span> volume group:</p>
+<p class="command">vgextend fileserver /dev/md2 /dev/md3</p>
+<p class="system">server1:~#&#xA0;vgextend&#xA0;fileserver&#xA0;/dev/md2&#xA0;/dev/md3<br> &#xA0;&#xA0;Volume&#xA0;group&#xA0;"fileserver"&#xA0;successfully&#xA0;extended</p>
+<p>Now let's run our <span class="system">*display</span> commands:</p>
+<p class="command">pvdisplay</p>
+<p class="system">server1:~#&#xA0;pvdisplay<br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md0<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes&#xA0;(but&#xA0;full)<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;7JHUXF-1R2p-OjbJ-X1OT-uaeg-gWRx-H6zx3P<br> <br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md1<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;23.29&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5961<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;18<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5943<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;pwQ5AJ-RwVK-EebA-0Z13-d27d-2IdP-HqT5RW<br> <br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md2<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;56.71&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;14517<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;14517<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;300kTo-evxm-rfmf-90LA-4YOJ-2LG5-t4JHnf<br> <br> &#xA0;&#xA0;---&#xA0;Physical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;PV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/md3<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;PV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;56.71&#xA0;GB&#xA0;/&#xA0;not&#xA0;usable&#xA0;0<br> &#xA0;&#xA0;Allocatable&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;yes<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;(KByte)&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4096<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;14517<br> &#xA0;&#xA0;Free&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;14517<br> &#xA0;&#xA0;Allocated&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;PV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;LXFSW6-7LQX-ZGGU-dV95-jQgg-TK44-U5JOjO</p>
+<p class="command">vgdisplay</p>
+<p class="system">server1:~#&#xA0;vgdisplay<br> &#xA0;&#xA0;---&#xA0;Volume&#xA0;group&#xA0;---<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;System&#xA0;ID<br> &#xA0;&#xA0;Format&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;lvm2<br> &#xA0;&#xA0;Metadata&#xA0;Areas&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br> &#xA0;&#xA0;Metadata&#xA0;Sequence&#xA0;No&#xA0;&#xA0;26<br> &#xA0;&#xA0;VG&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br> &#xA0;&#xA0;VG&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;resizable<br> &#xA0;&#xA0;MAX&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Cur&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br> &#xA0;&#xA0;Open&#xA0;LV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;3<br> &#xA0;&#xA0;Max&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Cur&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br> &#xA0;&#xA0;Act&#xA0;PV&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4<br> &#xA0;&#xA0;VG&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;159.98&#xA0;GB<br> &#xA0;&#xA0;PE&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;4.00&#xA0;MB<br> &#xA0;&#xA0;Total&#xA0;PE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40956<br> &#xA0;&#xA0;Alloc&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;11904&#xA0;/&#xA0;46.50&#xA0;GB<br> &#xA0;&#xA0;Free&#xA0;&#xA0;PE&#xA0;/&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;29052&#xA0;/&#xA0;113.48&#xA0;GB<br> &#xA0;&#xA0;VG&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;dQDEHT-kNHf-UjRm-rmJ3-OUYx-9G1t-aVskI1</p>
+<p class="command">lvdisplay</p>
+<p class="system">server1:~#&#xA0;lvdisplay<br> &#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/share<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;bcn3Oi-vW3p-WoyX-QlF2-xEtz-uz7Z-4DllYN<br> &#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br> &#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br> &#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br> &#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40.00&#xA0;GB<br> &#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10240<br> &#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2<br> &#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br> &#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:0<br> <br> &#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/backup<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;vfKVnU-gFXB-C6hE-1L4g-il6U-78EE-N8Sni8<br> &#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br> &#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br> &#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br> &#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;5.00&#xA0;GB<br> &#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1280<br> &#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br> &#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br> &#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:1<br> <br> &#xA0;&#xA0;---&#xA0;Logical&#xA0;volume&#xA0;---<br> &#xA0;&#xA0;LV&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/dev/fileserver/media<br> &#xA0;&#xA0;VG&#xA0;Name&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;fileserver<br> &#xA0;&#xA0;LV&#xA0;UUID&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;H1gagh-wTwH-Og0S-cJNQ-BgX1-zGlM-LwLVzE<br> &#xA0;&#xA0;LV&#xA0;Write&#xA0;Access&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;read/write<br> &#xA0;&#xA0;LV&#xA0;Status&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;available<br> &#xA0;&#xA0;#&#xA0;open&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;2<br> &#xA0;&#xA0;LV&#xA0;Size&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.50&#xA0;GB<br> &#xA0;&#xA0;Current&#xA0;LE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;384<br> &#xA0;&#xA0;Segments&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1<br> &#xA0;&#xA0;Allocation&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;inherit<br> &#xA0;&#xA0;Read&#xA0;ahead&#xA0;sectors&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0<br> &#xA0;&#xA0;Block&#xA0;device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;253:2</p>
+<p>If your outputs look similar, you have successfully replaced your small hard disks with bigger ones.</p>
+<p>Now that we have more disk space (<span class="system">2* 23.29GB + 2 10_years_of_git_an_interview_with_git_creator_linus_torvalds.md accuracy_in_the_palm_of_your_hand.md a_clear_view_of_the_brain.md a_liberator_but_never_free.md a_look_at_alteras_opencl_sdk_for_fpgas.md an_important_step_in_artificial_intelligence.md an_introduction_to_matlab_metaprogramming.md announcing_the_nulecule_specification_for_composite_applications.md a_quick_introduction_to_consul__scotts_weblog__the_weblog_of_an_it_pro_specializing_in_virtualization_networking_open_source_and_cloud_computing.md a_thorough_introduction_guide_to_docker_containers.md a_tmux_crash_course.md bayesian_inference_of_a_binomial_proportion__the_analytical_approach.md browser_monitoring_for_githubcom.md can_ecstasy_replace_xanax.md circles_sines_and_signals__introduction.md creating_kvm_machines_with_boxgrinder_and_vmbuilder.md creating_shazam_in_java.md crossplatform_development_with_nwjs__tuts_code_tutorial.md data_archeology.md data.json data_ml david_deutsch_explains_why_it’s_good_to_be_wrong.md deku_how_we_built_our_functional_alternative_to_react.md designing_a_state_machine_without_conditionals.md devops discovering_and_monitoring_hardware_in_linux.md docker does_long_term_use_of_psychiatric_drugs_cause_more_harm_than_good.md drug_perks_up_old_muscles_and_aging_brains.md electronics_for_the_javascript_developer_using_wifi_and_bluetooth_le.md elements_of_scale_composing_and_scaling_data_platforms.md elements_of_scale_composing_and_scaling_data platforms.md embedded eve_online_how_a_virtual_world_went_to_the_edge_of_apocalypse_and_back__simon_parkin.md explaining_a_cornerstone_of_game_theory_john_nash’s_equilibrium.md five_funny_little_linux_network_testers_and_monitors.md fixing_engineerings_loyalty_and_longevity_problem.md gaming github go golden_gate_bridge_builders_ate_special_meals_to_prevent_dizziness.md google_systems_guru_explains_why_containers_are_the_future_of_computing.md hackers_build_a_new_tor_client_designed_to_beat_the_nsa.md highavailability_storage_with_halvm.md historyfuture_proof_fingerprint.md how_i_got_converted_to_gmo_food.md how_shazam_works.md how_to_be_polite_—_the_message.md how_to_get_your_very_own_rstudio_server_and_shiny_server_with_digitalocean.md how_to_turn_your_pc_or_other_device_into_a_retro_arcade_with_lakka.md html implementing_a_trustless_security_solution_with_hardware_wallets_and_multisignature.md inside_the_mind_that_built_google_brain_on_life_creativity_and_failure.md ira_glass_public_radio_can_capitalize_on_its_popularity_without_selling_out_its_mission.md itspritecom.md javascript join_the_engineering_leisure_class.md just_don’t_hire_0x_engineers.md linux linux_commandline_video_editing.md make.md make_your_own_injection_molding_machine__make_diy_projects_howtos_electronics_crafts_and_ideas_for_makers.md mark_twain__helen_keller’s_special_friendship_he_treated_me_not_as_a_freak_but_as_a_person_dealing_with_great_difficulties.md mbuntu_y_macbuntu_transformation_pack_available_for_ubuntu_1504_vivid_vervet.md meeting_a_silk_road_drugs_boss.md mobile no_death_no_taxes.md null.md old on_edgar_allan_poe_by_marilynne_robinson.md optimize_python_with closures.md phd_is_the_doctoral_thesis_obsolete.md pisoc_learn_to_create.md png polymatheia__persistent_vector_performance_summarised.md popular_electric_brain_stimulation_method_tdcs_is_detrimental_to_iq_scores_study.md programming robust_landmarkbased_audio_fingerprinting.md roll_your_own_customized_ubuntu_with_uck.md running_a_small_docker_swarm_cluster.md rust_discovery_or_how_i_figure_things_out.md safe_connection.md scantool__obdii_car_diagnostic_software_for_linux.md science smart_regulation_for_smart_drugs.md social software_install_guide.md stigler_diet_–_how_i_became_a_data_scientist_despite_having_been_a_math_major.md tfidf_is_about_what_matters.md the_business_economics_and_opportunity_of_opensource_data_science.md the_entrepreneur_disrupting_the_tech_world_by_spilling_her_company’s_secrets.md the_identity_underground.md the_man_who_became_big bird.md the_most_common_illegal_job_interview_questions_you_should_watch_out_for.md theory.md the_psychology_of_ux.md the_roland_tr808_the_drum_machine_that_revolutionised_music.md the_shazam_effect.md the_sound_of_ted_a_case_for_distaste.md the_unreasonable_effectiveness_of_recurrent_neural_networks.md tidy understanding_c_by_learning_assembly.md url_to_filename.csv weave_is_kinda_slow.md web_dev what_richard_branson_and_30_amazing_entrepreneurs_taught_me_in_7_days_on_necker_island.md who_funds_the_future.md why_we_age_–_part_i_the_evolution_of_aging.md wireless_raspberry_pi_speaker.md 56.71GB = 160GB</span>) we could enlarge our logical volumes. Until now you know how to enlarge ext3 and reiserfs partitions, so let's enlarge our <span class="system">backup</span> logical volume now which uses xfs:</p>
+<p class="command">lvextend -L10G /dev/fileserver/backup</p>
+<p class="system">server1:~#&#xA0;lvextend&#xA0;-L10G&#xA0;/dev/fileserver/backup<br> &#xA0;&#xA0;Extending&#xA0;logical&#xA0;volume&#xA0;backup&#xA0;to&#xA0;10.00&#xA0;GB<br> &#xA0;&#xA0;Logical&#xA0;volume&#xA0;backup&#xA0;successfully&#xA0;resized</p>
+<p>To enlarge the xfs filesystem, we run</p>
+<p class="command">xfs_growfs /dev/fileserver/backup</p>
+<p class="system">server1:~#&#xA0;xfs_growfs&#xA0;/dev/fileserver/backup<br> meta-data=/dev/fileserver/backup&#xA0;isize=256&#xA0;&#xA0;&#xA0;&#xA0;agcount=8,&#xA0;agsize=163840&#xA0;blks<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;sectsz=512&#xA0;&#xA0;&#xA0;attr=0<br> data&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;bsize=4096&#xA0;&#xA0;&#xA0;blocks=1310720,&#xA0;imaxpct=25<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;sunit=0&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;swidth=0&#xA0;blks,&#xA0;unwritten=1<br> naming&#xA0;&#xA0;&#xA0;=version&#xA0;2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;bsize=4096<br> log&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=internal&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;bsize=4096&#xA0;&#xA0;&#xA0;blocks=2560,&#xA0;version=1<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;=&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;sectsz=512&#xA0;&#xA0;&#xA0;sunit=0&#xA0;blks<br> realtime&#xA0;=none&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;extsz=65536&#xA0;&#xA0;blocks=0,&#xA0;rtextents=0<br> data&#xA0;blocks&#xA0;changed&#xA0;from&#xA0;1310720&#xA0;to&#xA0;2621440</p>
+<p>The output of</p>
+<p class="command">df -h</p>
+<p>should now look like this:</p>
+<p class="system">server1:~#&#xA0;df&#xA0;-h<br> Filesystem&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Size&#xA0;&#xA0;Used&#xA0;Avail&#xA0;Use%&#xA0;Mounted&#xA0;on<br> /dev/sda2&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;19G&#xA0;&#xA0;666M&#xA0;&#xA0;&#xA0;17G&#xA0;&#xA0;&#xA0;4%&#xA0;/<br> tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/lib/init/rw<br> udev&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10M&#xA0;&#xA0;116K&#xA0;&#xA0;9.9M&#xA0;&#xA0;&#xA0;2%&#xA0;/dev<br> tmpfs&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;0&#xA0;&#xA0;&#xA0;78M&#xA0;&#xA0;&#xA0;0%&#xA0;/dev/shm<br> /dev/sda1&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;137M&#xA0;&#xA0;&#xA0;17M&#xA0;&#xA0;114M&#xA0;&#xA0;13%&#xA0;/boot<br> /dev/mapper/fileserver-share<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;40G&#xA0;&#xA0;177M&#xA0;&#xA0;&#xA0;38G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/share<br> /dev/mapper/fileserver-backup<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;10G&#xA0;&#xA0;272K&#xA0;&#xA0;&#xA0;10G&#xA0;&#xA0;&#xA0;1%&#xA0;/var/backup<br> /dev/mapper/fileserver-media<br> &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;1.5G&#xA0;&#xA0;&#xA0;33M&#xA0;&#xA0;1.5G&#xA0;&#xA0;&#xA0;3%&#xA0;/var/media</p>
+<p>That's it! If you've made it until here, you should now be used to LVM and LVM on RAID.</p>
+
+
+
+<nav>
+
+</nav>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+
+ 
+
+
+
+ 
+ 
+
+</div>
+</body></html>

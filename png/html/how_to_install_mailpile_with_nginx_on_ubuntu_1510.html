@@ -1,0 +1,103 @@
+<!DOCTYPE html><html><head><title>How to Install Mailpile with Nginx on Ubuntu 15.10</title></head><body>
+<h1>How to Install Mailpile with Nginx on Ubuntu 15.10</h1><p><a href="https://www.howtoforge.com/tutorial/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/" target="_new">Original URL</a></p>
+<p><blockquote>Mailpile is an open source mail client that focuses on encryption and users privacy. Mailpile makes the PGP setup easy, it allows you to create PGP keys directly in the email application and send PGP&hellip;</blockquote></p>
+<div><div id="htfContentPage">
+
+
+<p>Mailpile is an open source mail client that focuses on encryption and users privacy. Mailpile makes the PGP setup easy, it allows you to create PGP keys directly in the email application and send PGP encrypted messages. Mailpile has been created by Bjarni R. Einarsson on 2013. The software can be installed on Mac OSX, Windows, and Linux as web based client.</p>
+<p>In this tutorial, I will guide you trough the Mailpile installation on Ubuntu 15.10. We will install Mailpile as a web-based client with Nginx as a reverse proxy.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+<ul>
+<li>Ubuntu 15.10 - 64bit.</li>
+<li>Root Privileges.</li>
+</ul>
+
+<h2 id="step-install-mailpile-dependencies">Step 1 - Install Mailpile Dependencies</h2>
+<p>Mailpile is written in the python programming language and we need a bunch of python modules for the installation. I will install Mailpile in a python virtual environment with virtualenv&#xA0;and use python 2.7 for the installation. For encryption, I will install GnuPG version 1.4.x.</p>
+<p>To get started, update your repository database and install the packages from Ubuntu repository:</p>
+<p class="command">sudo apt-get update<br>sudo apt-get install gnupg openssl python-virtualenv python-pip python-lxml git</p>
+<p>Now check the python version and GnuPG version:</p>
+<p class="command">python --version<br>gpg --version</p>
+<p><a class="fancybox" id="img-Python_and_Gnupgp_Version" href="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/big/Python_and_Gnupgp_Version.png"><img src="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/Python_and_Gnupgp_Version.png" alt="Python and GnuPG version." width="550"></a></p>
+<p>Mailpile requires the PIL (Python Imaging Library), therefore, we install&#xA0;libjpeg, zlib1g, and python-dev:</p>
+<p class="command">sudo apt-get install libjpeg62 libjpeg62-dev zlib1g-dev python-dev</p>
+<p>When the installation is finished we're ready for the next step of the Mailpile installation.</p>
+
+<h2 id="step-install-and-configure-mailpile">Step 2 - Install and Configure Mailpile</h2>
+<p>In this step, I will install Mailpile into the "/opt/" directory and then create a new python virtual environment for the installation. Before we begin with the installation, clone the Mailpile source code from the github repository to the opt directory.</p>
+<p class="command">cd /opt/<br>git clone --recursive https://github.com/mailpile/Mailpile.git</p>
+<p>Now go to the Mailpile directory and create the virtual environment with python2.7 as the python version:</p>
+<p class="command">cd /opt/Mailpile/<br>virtualenv -p /usr/bin/python2.7 --system-site-packages mailpile-env</p>
+<p><em>-p</em> = Use a specific python version, we use python 2.7.<br> <em>--system-site packages</em> = Give the virtual environment access to the global site-packages.<br> <em>mailpile-env</em> = Directory for new virtual environment.</p>
+<p>Then activate the virtual environment, make sure that you &#xA0;are in the "/opt/Mailpile/" directory, and finally activate it.</p>
+<p class="command">cd /opt/Mailpile/<br>source mailpile-env/bin/activate</p>
+<p>You can check the commandline if the virtual environment is active:</p>
+<p class="command">(mailpile-env)root@madhouse:/opt/Mailpile#</p>
+<p>The virutal environment name should be in front of your username and hostname on the shell.</p>
+<p>Next, install the mailpile requirements with the pip command in the mailpile-env environment:</p>
+<p class="command">pip install -r requirements.txt</p>
+<p>Let's trest Mailpile with the command "./mp" in the virtual environemt:</p>
+<p class="command">./mp</p>
+<p><a class="fancybox" id="img-MP-Command" href="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/big/MP-Command.png"><img src="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/MP-Command.png" alt="MP command." width="550"></a></p>
+<p>In the screenshot we can see that Mailpile is running on localhost with port 33411.</p>
+<p>So let's try&#xA0;to access it with the curl command from the server shell:</p>
+<p class="command">curl -I localhost:33411</p>
+<p>It is working correctly when you get the following result:</p>
+<p class="system">HTTP/1.1 302 Found<br>Location: /setup/welcome/</p>
+<p>Actually, in this step, we could tell Mailpile to run on our public IP so everyone can access it. But in this tutorial, we will use Nginx as reverse proxy for Mailpile on port 33411.</p>
+
+<h2 id="step-install-nginx">Step 3 - Install Nginx</h2>
+<p>Install Nginx with this apt command:</p>
+<p class="command">sudo apt-get install nginx</p>
+<p>Now verify that Nginx is running on port 80:</p>
+<p class="command">netstat -plntu | grep 80</p>
+
+<h2 id="step-create-selfsigned-ssl-certificate">Step 4 - Create Self-Signed SSL Certificate</h2>
+<p>Let's go to the Nginx directory and create new SSL directory there:</p>
+<p class="command">cd /etc/nginx/<br>mkdir -p /etc/nginx/ssl/<br>cd ssl/</p>
+<p>Then generate the SSL certificate file:</p>
+<p class="command">openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/mailpile.key -out /etc/nginx/ssl/mailpile.crt</p>
+<p>And change the permission of the private key to 600:</p>
+<p class="command">chmod 600 mailpile.key</p>
+
+<h2 id="step-configure-mailpile-virtualhost">Step 5 - Configure Mailpile Virtualhost</h2>
+<p>In this step, I will create new virtual host configuration for Mailpile. This virtual host is just proxy-ing incoming requests on port 80 to Mailpile on port 33411. Nginx is a secure and powerfull reverse proxy.</p>
+<p>Go to the Nginx "sites-available" directory and create a new file called "mailpile":</p>
+<p class="command">cd /etc/nginx/site-available/<br>touch mailpile</p>
+<p>Edit the mailpile&#xA0;file with the vim editor:</p>
+<p class="command">vim mailpile</p>
+<p>Paste the virtualhost configuration below:</p>
+<p class="system">server {<br> <br>&#xA0;&#xA0;&#xA0; # Mailpile Domain<br>&#xA0;&#xA0;&#xA0; server_name mail.mailpile.me;<br>&#xA0;&#xA0;&#xA0; client_max_body_size 20m;<br> <br>&#xA0;&#xA0;&#xA0; # Nginx port 80 and 334<br>&#xA0;&#xA0;&#xA0; listen 80;<br>&#xA0;&#xA0;&#xA0; listen 443 default ssl;<br> <br>&#xA0;&#xA0;&#xA0; # SSL Certificate File<br>&#xA0;&#xA0;&#xA0; ssl_certificate&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; /etc/nginx/ssl/mailpile.crt;<br>&#xA0;&#xA0;&#xA0; ssl_certificate_key&#xA0; /etc/nginx/ssl/mailpile.key;<br> <br>&#xA0;&#xA0;&#xA0; # Redirect HTTP to HTTPS<br>&#xA0;&#xA0;&#xA0; if ($scheme = http) {<br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return 301 https://$server_name$request_uri;<br>&#xA0;&#xA0;&#xA0; }<br> <br>&#xA0;&#xA0;&#xA0; # Nginx Poroxy pass for mailpile<br>&#xA0;&#xA0;&#xA0; location / {<br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; proxy_set_header X-Real-IP $remote_addr;<br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;<br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; proxy_set_header Host $http_host;<br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; proxy_set_header X-NginX-Proxy true;<br> <br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; proxy_pass http://localhost:33411;<br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; proxy_read_timeout&#xA0; 90;<br>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; proxy_redirect http://localhost:33411 https://mail.mailpile.me;<br>&#xA0;&#xA0;&#xA0; }<br>}</p>
+<p>Now activate the mailpile virtualhost and restart Nginx:</p>
+<p class="command">ln -s /etc/nginx/site-available/mailpile /etc/nginx/site-enabled/<br>systemctl restart nginx</p>
+<p><strong>Note</strong>: Make sure you do not kill the mailpile process in your virtual environment.</p>
+<p>Next, visit the Mailpile domain (in my case&#xA0;<em>mail.mailpile.me)</em> and you will be redirected to https connection.</p>
+<p>Select the default language, in my case "<em>English</em>" and click "<em>Begin</em>".</p>
+<p><a class="fancybox" id="img-Welcome_Mailpile" href="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/big/Welcome_Mailpile.png"><img src="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/Welcome_Mailpile.png" alt="Welcome Mailpile." width="550"></a></p>
+<p>Now type in your password to login into the application, make sure you have a strong password.</p>
+<p><a class="fancybox" id="img-Mailpile_password" href="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/big/Mailpile_password.png"><img src="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/Mailpile_password.png" alt="Set a Mailpile password." width="550"></a></p>
+<p>And start using Mailpile.</p>
+<p><a class="fancybox" id="img-Start_using_mailpile" href="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/big/Start_using_mailpile.png"><img src="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/Start_using_mailpile.png" alt="Start using Mailpile." width="550"></a></p>
+<p>The Mailpile setup is finished, enter your password and press "Enter".</p>
+<p><a class="fancybox" id="img-Login_mailpile1" href="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/big/Login_mailpile1.png"><img src="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/Login_mailpile1.png" alt="Login to Mailpile." width="550"></a></p>
+<p>You can see the mail page right after login:</p>
+<p><a class="fancybox" id="img-Mailpile_Done" href="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/big/Mailpile_Done.png"><img src="https://www.howtoforge.com/images/how-to-install-mailpile-with-nginx-on-ubuntu-15-10/Mailpile_Done.png"></a></p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>Mailpile is a free OpenSource email client that focuses on encryption and user privacy. Mailpile has multi platform support, it can be installed on Mac, Windows, or Linux. Mailpile can be installed on your own server as a&#xA0;private mail client. Mailpile is based on python, it's easy to install and configure, just make sure you run python 2.7 with gnupg 1.4.x. We can use Mailpile as a standalone system, but for better performance we use Nginx as a reverse proxy.</p>
+
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+<div>
+<p><b>Share this page:</b></p>
+
+
+
+</div>
+</div>
+ 
+ 
+</div>
+</body></html>

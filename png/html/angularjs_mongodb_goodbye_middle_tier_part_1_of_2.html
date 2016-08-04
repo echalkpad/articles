@@ -1,0 +1,125 @@
+<!DOCTYPE html><html><head><title>AngularJS + MongoDB: Goodbye middle tier? (part 1 of 2)</title></head><body>
+<h1>AngularJS + MongoDB: Goodbye middle tier? (part 1 of 2)</h1><p><a href="http://www.codebulb.ch/2015/05/angularjs-mongodb-goodbye-middle-tier-part-1.html" target="_new">Original URL</a></p>
+<p><blockquote>With the advent of client side JavaScript frameworks, it seems like the middle tier has become Java&#x2019;s last resort. But as a Java developer myself, I have to admit there are compelling&hellip;</blockquote></p>
+<div><div class="post-body entry-content" id="post-body-1739471937488063059">
+<br>
+<br>
+
+<br>
+<span><i>With the advent of client side JavaScript frameworks, it seems like the middle tier has become Java&#x2019;s last resort. But as a Java developer myself, I have to admit there are compelling alternatives to a full-blown enterprise server. For this blog post, I want to push this thought to the limit and try out whether we really need the middle tier at all&#x2026;</i></span>
+<br>
+<a href="http://www.codebulb.ch/2015/05/angularjs-mongodb-goodbye-middle-tier-part-1.html#tool" name="tool"><h2>
+The tool set</h2></a>
+For the build environment:<br>
+<ul>
+<li>I use the <a href="http://yeoman.io/"><b>Yeoman</b></a> generator for project scaffolding which is built on top of <a href="https://nodejs.org/"><b>Node.js</b></a> + <b>npm</b> and which sets up the JavaScript build system based on <b>Grunt</b> and dependency management based on <b>Bower</b>.</li>
+<li>During development, the application is loaded into Grunt&#x2019;s static server which provides live reload on source change. It runs on default port 9000.</li>
+<li>I use <b>NetBeans</b> as file editor / IDE.</li>
+</ul>
+For the application stack:<br>
+<ul>
+<li>I use <a href="http://www.mongodb.org/"><b>MongoDB</b></a> 3.1.3 as the database. It runs on default port 27017.</li>
+<ul>
+<li>I use <a href="https://github.com/andzdroid/mongo-express"><b>Mongo Express</b></a> 0.21.0 as a simple web-based UI frontend for MongoDB. It runs on default port 8081.</li>
+</ul>
+<li>I use <a href="http://restheart.org/"><b>RESTHeart</b></a> 0.10.2 as the MongoDB REST frontend. It runs on default port 8080.</li>
+<ul>
+<li>RESTHeart includes the <b>HAL browser</b> as a simple web-based UI frontend for RESTHeart. It is accessible through RESTHeart&#x2019;s port.</li>
+<li>For convenience, I use the <a href="https://github.com/jakubroztocil/httpie"><b>httpie</b></a> 0.9.2 tool parallel to the HAL browser to test RESTHeart queries through RESTful HTTP requests (it&#x2019;s basically a more user-friendly version of curl).</li>
+</ul>
+<li>I use <a href="https://github.com/mgonto/restangular"><b>Restangular</b></a> 1.5.1 as an AngularJS abstraction layer to do RESTful HTTP requests which offers a far more sophisticated although more concise API than AngularJS&#x2019;s built-in <code>$http</code> and <code>$resource</code>.</li>
+<li>Finally, the GUI is developed with <a href="https://angularjs.org/"><b>AngularJS</b></a> 1.3.0.</li>
+</ul>
+<h3>
+A RESTful stack</h3>
+Thus, the tech stack looks like this: <br>
+<div class="separator">
+<a href="http://1.bp.blogspot.com/-piOLQjfTXrY/VWm1i7g_hwI/AAAAAAAAANI/cFVMkI1_HuA/s1600/angularjs-and-mongodb-components.png"><img border="0" src="http://1.bp.blogspot.com/-piOLQjfTXrY/VWm1i7g_hwI/AAAAAAAAANI/cFVMkI1_HuA/s1600/angularjs-and-mongodb-components.png"></a></div>
+You can clearly see that something is lacking here &#x2013; there&#x2019;s no such thing as a middle tier. As MongoDB has been extended with a REST interface through RESTHeart and AngularJS has been extended with a REST interface through Restangular, these two tiers can communicate directly with each other.<br>
+<br>
+The beauty of a RESTful API which is taken advantage of here is that<br>
+<ul>
+<li>REST is CRUD. As the example application will do CRUD only, this is a perfect fit. A &#x201C;middle tier&#x201D; would apparently not add any value.</li>
+<li>REST is de-facto-standardized. Even without any formal service descriptor, the API can be used really intuitively and concisely. There&#x2019;s no need for further abstraction; a &#x201C;middle tier&#x201D; would just be an empty delegate.</li>
+</ul>
+<h3>
+Technology choice</h3>
+Please skip this section unless you&#x2019;re interested in why I chose the technologies mentioned for my stack.<br>
+<ul>
+<li>I chose <b>MongoDB </b>because it&#x2019;s considered <a href="http://db-engines.com/en/ranking">by far the most widespread &#x201C;NoSQL&#x201D; databases</a> at the moment. I didn&#x2019;t go for a &#x201C;proper&#x201D; SQL database because the application&#x2019;s requirements should be covered by a simple document store. The fact that MongoDB doesn&#x2019;t provide a RESTful HTTP interface out of the box (in contrast to e.g. CouchDB) doesn&#x2019;t really matter; I wouldn&#x2019;t choose a DB based on the interfaces it provides, as long as it&#x2019;s extensible.</li>
+<li>After choosing MongoDB though I needed a RESTful interface for that. <a href="http://docs.mongodb.org/ecosystem/tools/http-interfaces/">Of all available options</a>, <b>RESTHeart </b>seemed the most mature one.</li>
+<li><b>AngularJS</b>, as well, was chosen based on its popularity as well as on its functionality.</li>
+<li>With some experience from plain AngularJS HTTP handling, I wanted to try a more high-level API, as provided by <b>Restangular</b>. I will explain throughout the text why I quickly became very happy with my choice.</li>
+</ul>
+<a href="http://www.codebulb.ch/2015/05/angularjs-mongodb-goodbye-middle-tier-part-1.html#example" name="example"><h2>
+The example application</h2></a>
+Based on above tech stack, I created a simple web application with CRUD functionality for these two business entities:<br>
+<div class="separator">
+<a href="http://1.bp.blogspot.com/-Vi_7w5jowV4/VVofHBlygwI/AAAAAAAAAMo/FgGKIj6ub-U/s1600/JSF%2BREST%2BPrd%2BModels.png"><img border="0" src="http://1.bp.blogspot.com/-Vi_7w5jowV4/VVofHBlygwI/AAAAAAAAAMo/FgGKIj6ub-U/s1600/JSF%2BREST%2BPrd%2BModels.png"></a></div>
+<br>
+Each entity is uniquely identified by its id which is auto-generated on persist.<br>
+<br>
+A customer can have one or more payments, and one payment is associated with exactly one customer. A customer of employment type <i>unemployed</i> must not have a company name.<br>
+<br>
+There will be a master view (list of all entities) and a detail view (edit page for current entity) for the customer entity. The payments master view will be integrated in the detail view of the parent customer entity which provides editing options for its payments though popup windows.<br>
+<br>
+This is actually a recreation of <a href="http://www.codebulb.ch/2015/05/restful-jsf-with-post-redirect-get-part-1.html">the very same example application I created just two weeks ago with the server-side JSF stack</a> which, for me, added to the fun of creating a middle-tier-less application. (In fact, I even reused the HTML markup generated by the JSF application for this one.)
+<br>
+<a href="http://www.codebulb.ch/2015/05/angularjs-mongodb-goodbye-middle-tier-part-1.html#setup" name="setup"><h2>
+Setup</h2></a>
+Setting up the whole stack really is just a matter of following the tutorials provided with each tool.<br>
+<br>
+However, setting up Restangular for use with RESTHeart deserves some more explanation.<br>
+<h3>
+Restangular + RESTHeart</h3>
+RESTHeart&#x2019;s HAL+JSON document format doesn&#x2019;t quite match Restangular&#x2019;s default expectations, but luckily, Restangular provides a clever API to tweak its configuration.<br>
+<br>
+Having Restangular included into the AngularJS application (script included, dependencies declared), one can configure Restangular like so:<br>
+<pre class="brush:javascript">angular.config(function (RestangularProvider) {
+ RestangularProvider.setBaseUrl('http://localhost:8080/restangularOnMongoDb/');
+
+ // we are mapping the id of each element to the _id field.
+ RestangularProvider.setRestangularFields({
+ id: "_id.$oid",
+ });
+
+ RestangularProvider.addResponseInterceptor(function (data, operation, what, url, response, deferred) {
+ var extractedData;
+ // look for getList operations
+ if (operation === "getList") {
+ // the actual entities are in the _embedded section
+ extractedData = data._embedded['rh:doc'];
+ } else {
+ extractedData = data;
+ }
+ return extractedData;
+ });
+ 
+ RestangularProvider.addFullRequestInterceptor(function (data, operation, what, url) {
+ if (operation !== "getList") {
+ if (typeof data._etag !== 'undefined') {
+ return {headers: {"If-Match": data._etag.$oid}};
+ }
+ if (typeof data._id.$oid === 'undefined') {
+ data._id = null;
+ }
+ }
+ return {};
+ });
+});
+</pre>
+<ul>
+<li><code>RestangularProvider</code> is the dependency-injected Restangular config service.</li>
+<li>First of all, we set the base URL to the server / port of RESTHeart and point to the database which contains all document collections.</li>
+<li>We have to tell Restangular that the &#x201C;id&#x201D; of a JSON document is <i>not</i> stored in the property named <code>id</code>, but in <code>_id.$oid</code>, as defined by MongoDB.</li>
+<li>We have to tell Restangular that when querying for a list of documents, the actual payload (the list) is stored in the <code>_embedded.rh:doc</code> property.</li>
+<li>Finally, we have to tell Restangular where to find the ETag property of a JSON document which must be included in a &#x201C;write&#x201D; request in the &#x201C;If-Match&#x201D; HTTP header. <a href="http://en.wikipedia.org/wiki/HTTP_ETag">ETag is an HTTP concept</a> which is used by RESTHeart to implicitly provide <i>optimistic locking</i>. Similar to the &#x201C;id&#x201D; problem described above, we must tell Restangular that this information is not stored in <code>etag</code>, but in <code>_etag.$oid</code>.</li>
+</ul>
+<br>
+<br>
+
+
+</div>
+
+</div>
+</body></html>

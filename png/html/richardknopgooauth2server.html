@@ -1,0 +1,392 @@
+<!DOCTYPE html><html><head><title>RichardKnop/go-oauth2-server</title></head><body>
+<h1>RichardKnop/go-oauth2-server</h1><p><a href="https://github.com/RichardKnop/go-oauth2-server" target="_new">Original URL</a></p>
+<p><blockquote>Go OAuth2 Server This service implements OAuth 2.0 specification. Excerpts from the specification are included in this README file to describe different grant types. Please read the full spec for&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content"><p><a href="https://travis-ci.org/RichardKnop/go-oauth2-server"><img src="https://camo.githubusercontent.com/90026677c99785e2b5c5d4962e79629d901a5601/68747470733a2f2f7472617669732d63692e6f72672f526963686172644b6e6f702f676f2d6f61757468322d7365727665722e7376673f6272616e63683d6d6173746572" alt="Build Status" title="Build Status"></a></p>
+
+<h2><a id="user-content-go-oauth2-server" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#go-oauth2-server"></a>Go OAuth2 Server</h2>
+
+<p>This service implements <a href="http://tools.ietf.org/html/rfc6749#section-4.3">OAuth 2.0 specification</a>. Excerpts from the specification are included in this README file to describe different grant types. Please read the full spec for more detailed information.</p>
+
+<h2><a id="user-content-index" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#index"></a>Index</h2>
+
+
+
+<h2><a id="user-content-api" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#api"></a>API</h2>
+
+<h2><a id="user-content-oauth-20" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#oauth-20"></a>OAuth 2.0</h2>
+
+<h3><a id="user-content-client-authentication" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#client-authentication"></a>Client Authentication</h3>
+
+<p><a href="http://tools.ietf.org/html/rfc6749#section-3.2.1">http://tools.ietf.org/html/rfc6749#section-3.2.1</a></p>
+
+<p>Clients must authenticate with client credentials (client ID and secret) when issuing requests to <code>/oauth/api/v1/tokens</code> endpoint. Basic HTTP authentication should be used.</p>
+
+<h3><a id="user-content-grant-types" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#grant-types"></a>Grant Types</h3>
+
+<h4><a id="user-content-authorization-code" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#authorization-code"></a>Authorization Code</h4>
+
+<p><a href="http://tools.ietf.org/html/rfc6749#section-4.1">http://tools.ietf.org/html/rfc6749#section-4.1</a></p>
+
+<p>The authorization code grant type is used to obtain both access tokens and refresh tokens and is optimized for confidential clients. Since this is a redirection-based flow, the client must be capable of interacting with the resource owner's user-agent (typically a web browser) and capable of receiving incoming requests (via redirection) from the authorization server.</p>
+
+<pre><code>+----------+
+| Resource |
+| Owner |
+| |
++----------+
+ ^
+ |
+ (B)
++----|-----+ Client Identifier +---------------+
+| -+----(A)-- &amp; Redirection URI ----&gt;| |
+| User- | | Authorization |
+| Agent -+----(B)-- User authenticates ---&gt;| Server |
+| | | |
+| -+----(C)-- Authorization Code ---&lt;| |
++-|----|---+ +---------------+
+ | | ^ v
+ (A) (C) | |
+ | | | |
+ ^ v | |
++---------+ | |
+| |&gt;---(D)-- Authorization Code ---------' |
+| Client | &amp; Redirection URI |
+| | |
+| |&lt;---(E)----- Access Token -------------------'
++---------+ (w/ Optional Refresh Token)
+</code></pre>
+
+<p>The client initiates the flow by directing the resource owner's user-agent to the authorization endpoint. The client includes its client identifier, requested scope, local state, and a redirection URI to which the authorization server will send the user-agent back once access is granted (or denied).</p>
+
+<pre><code>http://localhost:8080/web/authorize?client_id=test_client&amp;redirect_uri=https%3A%2F%2Fwww.example.com&amp;response_type=code&amp;state=somestate
+</code></pre>
+
+<p>The authorization server authenticates the resource owner (via the user-agent).</p>
+
+<p><a href="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/login_screenshot.png" target="_blank"><img src="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/login_screenshot.png" alt="Log In page screenshot"></a></p>
+
+<p>The authorization server then establishes whether the resource owner grants or denies the client's access request.</p>
+
+<p><a href="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/authorize_screenshot.png" target="_blank"><img src="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/authorize_screenshot.png" alt="Authorize page screenshot"></a></p>
+
+<p>If the request fails due to a missing, invalid, or mismatching redirection URI, or if the client identifier is missing or invalid, the authorization server SHOULD inform the resource owner of the error and MUST NOT automatically redirect the user-agent to the invalid redirection URI.</p>
+
+<p>If the resource owner denies the access request or if the request fails for reasons other than a missing or invalid redirection URI, the authorization server informs the client by adding the error parameter to the query component of the redirection URI.</p>
+
+<pre><code>https://www.example.com/?error=access_denied&amp;state=somestate
+</code></pre>
+
+<p>Assuming the resource owner grants access, the authorization server redirects the user-agent back to the client using the redirection URI provided earlier (in the request or during client registration). The redirection URI includes an authorization code and any local state provided by the client earlier.</p>
+
+<pre><code>https://www.example.com/?code=7afb1c55-76e4-4c76-adb7-9d657cb47a27&amp;state=somestate
+</code></pre>
+
+<p>The client requests an access token from the authorization server's token endpoint by including the authorization code received in the previous step. When making the request, the client authenticates with the authorization server. The client includes the redirection URI used to obtain the authorization code for verification.</p>
+
+<pre><code>$ curl -v localhost:8080/oauth/api/v1/tokens \
+ -u test_client:test_secret \
+ -d "grant_type=authorization_code" \
+ -d "code=7afb1c55-76e4-4c76-adb7-9d657cb47a27"
+</code></pre>
+
+<p>The authorization server authenticates the client, validates the authorization code, and ensures that the redirection URI received matches the URI used to redirect the client before. If valid, the authorization server responds back with an access token and, optionally, a refresh token.</p>
+
+<div class="highlight highlight-source-json"><pre>{
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span>: <span class="pl-c1">1</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>access_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>00ccd40e-72ca-4e79-a4b6-67c95e2e3f1c<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>expires_in<span class="pl-pds">"</span></span>: <span class="pl-c1">3600</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>token_type<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>Bearer<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>scope<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>foo bar<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>refresh_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>6fd8d272-375a-4d8a-8d0f-43367dc8b791<span class="pl-pds">"</span></span>
+}</pre></div>
+
+<h4><a id="user-content-implicit" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#implicit"></a>Implicit</h4>
+
+<p><a href="http://tools.ietf.org/html/rfc6749#section-4.2">http://tools.ietf.org/html/rfc6749#section-4.2</a></p>
+
+<p>The implicit grant type is used to obtain access tokens (it does not support the issuance of refresh tokens) and is optimized for public clients known to operate a particular redirection URI. These clients are typically implemented in a browser using a scripting language such as JavaScript.</p>
+
+<p>Since this is a redirection-based flow, the client must be capable of interacting with the resource owner's user-agent (typically a web browser) and capable of receiving incoming requests (via redirection) from the authorization server.</p>
+
+<p>Unlike the authorization code grant type, in which the client makes separate requests for authorization and for an access token, the client receives the access token as the result of the authorization request.</p>
+
+<p>The implicit grant type does not include client authentication, and relies on the presence of the resource owner and the registration of the redirection URI. Because the access token is encoded into the redirection URI, it may be exposed to the resource owner and other applications residing on the same device.</p>
+
+<pre><code>+----------+
+| Resource |
+| Owner |
+| |
++----------+
+ ^
+ |
+ (B)
++----|-----+ Client Identifier +---------------+
+| -+----(A)-- &amp; Redirection URI ---&gt;| |
+| User- | | Authorization |
+| Agent -|----(B)-- User authenticates --&gt;| Server |
+| | | |
+| |&lt;---(C)--- Redirection URI ----&lt;| |
+| | with Access Token +---------------+
+| | in Fragment
+| | +---------------+
+| |----(D)--- Redirection URI ----&gt;| Web-Hosted |
+| | without Fragment | Client |
+| | | Resource |
+| (F) |&lt;---(E)------- Script ---------&lt;| |
+| | +---------------+
++-|--------+
+ | |
+ (A) (G) Access Token
+ | |
+ ^ v
++---------+
+| |
+| Client |
+| |
++---------+
+</code></pre>
+
+<p>The client initiates the flow by directing the resource owner's user-agent to the authorization endpoint. The client includes its client identifier, requested scope, local state, and a redirection URI to which the authorization server will send the user-agent back once access is granted (or denied).</p>
+
+<pre><code>http://localhost:8080/web/authorize?client_id=test_client&amp;redirect_uri=https%3A%2F%2Fwww.example.com&amp;response_type=token&amp;state=somestate
+</code></pre>
+
+<p>The authorization server authenticates the resource owner (via the user-agent).</p>
+
+<p><a href="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/login_screenshot.png" target="_blank"><img src="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/login_screenshot.png" alt="Log In page screenshot"></a></p>
+
+<p>The authorization server then establishes whether the resource owner grants or denies the client's access request.</p>
+
+<p><a href="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/authorize_screenshot.png" target="_blank"><img src="https://raw.githubusercontent.com/RichardKnop/assets/master/go-oauth2-server/authorize_screenshot.png" alt="Authorize page screenshot"></a></p>
+
+<p>If the request fails due to a missing, invalid, or mismatching redirection URI, or if the client identifier is missing or invalid, the authorization server SHOULD inform the resource owner of the error and MUST NOT automatically redirect the user-agent to the invalid redirection URI.</p>
+
+<p>If the resource owner denies the access request or if the request fails for reasons other than a missing or invalid redirection URI, the authorization server informs the client by adding the following parameters to the fragment component of the redirection URI.</p>
+
+<pre><code>https://www.example.com/#error=access_denied&amp;state=somestate
+</code></pre>
+
+<p>Assuming the resource owner grants access, the authorization server redirects the user-agent back to the client using the redirection URI provided earlier. The redirection URI includes he access token in the URI fragment.</p>
+
+<pre><code>https://www.example.com/#access_token=087902d5-29e7-417b-a339-b57a60d6742a&amp;expires_in=3600&amp;state=somestate&amp;token_type=Bearer
+</code></pre>
+
+<p>The user-agent follows the redirection instructions by making a request to the web-hosted client resource (which does not include the fragment per [RFC2616]). The user-agent retains the fragment information locally.</p>
+
+<p>The web-hosted client resource returns a web page (typically an HTML document with an embedded script) capable of accessing the full redirection URI including the fragment retained by the user-agent, and extracting the access token (and other parameters) contained in the fragment.</p>
+
+<p>The user-agent executes the script provided by the web-hosted client resource locally, which extracts the access token.</p>
+
+<p>The user-agent passes the access token to the client.</p>
+
+<h4><a id="user-content-resource-owner-password-credentials" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#resource-owner-password-credentials"></a>Resource Owner Password Credentials</h4>
+
+<p><a href="http://tools.ietf.org/html/rfc6749#section-4.3">http://tools.ietf.org/html/rfc6749#section-4.3</a></p>
+
+<p>The resource owner password credentials grant type is suitable in cases where the resource owner has a trust relationship with the client, such as the device operating system or a highly privileged application. The authorization server should take special care when enabling this grant type and only allow it when other flows are not viable.</p>
+
+<p>This grant type is suitable for clients capable of obtaining the resource owner's credentials (username and password, typically using an interactive form). It is also used to migrate existing clients using direct authentication schemes such as HTTP Basic or Digest authentication to OAuth by converting the stored credentials to an access token.</p>
+
+<pre><code>+----------+
+| Resource |
+| Owner |
+| |
++----------+
+ v
+ | Resource Owner
+ (A) Password Credentials
+ |
+ v
++---------+ +---------------+
+| |&gt;--(B)---- Resource Owner -------&gt;| |
+| | Password Credentials | Authorization |
+| Client | | Server |
+| |&lt;--(C)---- Access Token ---------&lt;| |
+| | (w/ Optional Refresh Token) | |
++---------+ +---------------+
+
+</code></pre>
+
+<p>The resource owner provides the client with its username and password.</p>
+
+<p>The client requests an access token from the authorization server's token endpoint by including the credentials received from the resource owner. When making the request, the client authenticates with the authorization server.</p>
+
+<pre><code>$ curl -v localhost:8080/oauth/api/v1/tokens \
+ -u test_client:test_secret \
+ -d "grant_type=password" \
+ -d "username=test@username" \
+ -d "password=test_password" \
+ -d "scope=read_write"
+</code></pre>
+
+<p>The authorization server authenticates the client and validates the resource owner credentials, and if valid, issues an access token.</p>
+
+<div class="highlight highlight-source-json"><pre>{
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span>: <span class="pl-c1">1</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>access_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>00ccd40e-72ca-4e79-a4b6-67c95e2e3f1c<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>expires_in<span class="pl-pds">"</span></span>: <span class="pl-c1">3600</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>token_type<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>Bearer<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>scope<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>foo bar<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>refresh_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>6fd8d272-375a-4d8a-8d0f-43367dc8b791<span class="pl-pds">"</span></span>
+}</pre></div>
+
+<h4><a id="user-content-client-credentials" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#client-credentials"></a>Client Credentials</h4>
+
+<p><a href="http://tools.ietf.org/html/rfc6749#section-4.4">http://tools.ietf.org/html/rfc6749#section-4.4</a></p>
+
+<p>The client can request an access token using only its client credentials (or other supported means of authentication) when the client is requesting access to the protected resources under its control, or those of another resource owner that have been previously arranged with the authorization server (the method of which is beyond the scope of this specification).</p>
+
+<p>The client credentials grant type MUST only be used by confidential clients.</p>
+
+<pre><code>+---------+ +---------------+
+| | | |
+| |&gt;--(A)- Client Authentication ---&gt;| Authorization |
+| Client | | Server |
+| |&lt;--(B)---- Access Token ---------&lt;| |
+| | | |
++---------+ +---------------+
+</code></pre>
+
+<p>The client authenticates with the authorization server and requests an access token from the token endpoint.</p>
+
+<pre><code>$ curl -v localhost:8080/oauth/api/v1/tokens \
+ -u test_client:test_secret \
+ -d "grant_type=client_credentials" \
+ -d "scope=read_write"
+</code></pre>
+
+<p>The authorization server authenticates the client, and if valid, issues an access token.</p>
+
+<div class="highlight highlight-source-json"><pre>{
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span>: <span class="pl-c1">1</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>access_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>00ccd40e-72ca-4e79-a4b6-67c95e2e3f1c<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>expires_in<span class="pl-pds">"</span></span>: <span class="pl-c1">3600</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>token_type<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>Bearer<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>scope<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>foo bar<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>refresh_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>6fd8d272-375a-4d8a-8d0f-43367dc8b791<span class="pl-pds">"</span></span>
+}</pre></div>
+
+<h3><a id="user-content-refreshing-an-access-token" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#refreshing-an-access-token"></a>Refreshing An Access Token</h3>
+
+<p><a href="http://tools.ietf.org/html/rfc6749#section-6">http://tools.ietf.org/html/rfc6749#section-6</a></p>
+
+<p>If the authorization server issued a refresh token to the client, the client can make a refresh request to the token endpoint in order to refresh the access token.</p>
+
+<pre><code>$ curl -v localhost:8080/oauth/api/v1/tokens \
+ -u test_client:test_secret \
+ -d "grant_type=refresh_token" \
+ -d "refresh_token=6fd8d272-375a-4d8a-8d0f-43367dc8b791"
+</code></pre>
+
+<p>The authorization server MUST:</p>
+
+<ul>
+<li><p>require client authentication for confidential clients or for any client that was issued client credentials (or with other authentication requirements),</p></li>
+<li><p>authenticate the client if client authentication is included and ensure that the refresh token was issued to the authenticated client, and</p></li>
+<li><p>validate the refresh token.</p></li>
+</ul>
+
+<p>If valid and authorized, the authorization server issues an access token.</p>
+
+<div class="highlight highlight-source-json"><pre>{
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span>: <span class="pl-c1">1</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>access_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>1f962bd5-7890-435d-b619-584b6aa32e6c<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>expires_in<span class="pl-pds">"</span></span>: <span class="pl-c1">3600</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>token_type<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>Bearer<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>scope<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>foo bar<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>refresh_token<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>3a6b45b8-9d29-4cba-8a1b-0093e8a2b933<span class="pl-pds">"</span></span>
+}</pre></div>
+
+<p>The authorization server MAY issue a new refresh token, in which case the client MUST discard the old refresh token and replace it with the new refresh token. The authorization server MAY revoke the old refresh token after issuing a new refresh token to the client. If a new refresh token is issued, the refresh token scope MUST be identical to that of the refresh token included by the client in the request.</p>
+
+<h2><a id="user-content-development" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#development"></a>Development</h2>
+
+<h2><a id="user-content-dependencies" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#dependencies"></a>Dependencies</h2>
+
+<p>According to <a href="https://docs.google.com/document/d/1Bz5-UB7g2uPBdOx-rw5t9MxJwkfpx90cqG9AFL0JAYo">Go 1.5 Vendor experiment</a>, all dependencies are stored in a vendor directory. This approach is called "vendoring" and is the best practice for Go projects to lock versions of dependencies in order to achieve reproducible builds.</p>
+
+<p>To update dependencies during development:</p>
+
+<pre><code>$ make update-deps
+</code></pre>
+
+<p>To install dependencies:</p>
+
+<pre><code>$ make install-deps
+</code></pre>
+
+<h2><a id="user-content-setup" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#setup"></a>Setup</h2>
+
+<p>If you are developing on OSX, install <code>etcd</code>, <code>Postgres</code>:</p>
+
+<pre><code>$ brew install etcd
+$ brew install postgres
+</code></pre>
+
+<p>You might want to create a <code>Postgres</code> database:</p>
+
+<pre><code>$ createuser --createdb go_oauth2_server
+$ createdb -U go_microservice_example go_oauth2_server
+</code></pre>
+
+<p>Load a configuration into <code>etcd</code>:</p>
+
+<pre><code>$ curl -L http://127.0.0.1:4001/v2/keys/config/go_oauth2_server.json -XPUT -d value='{
+ "Database": {
+ "Type": "postgres",
+ "Host": "127.0.0.1",
+ "Port": 5432,
+ "User": "go_oauth2_server",
+ "Password": "",
+ "DatabaseName": "go_oauth2_server"
+ },
+ "Oauth": {
+ "AccessTokenLifetime": 3600,
+ "RefreshTokenLifetime": 1209600,
+ "AuthCodeLifetime": 3600 
+ },
+ "Session": {
+ "Secret": "test_secret",
+ "Path": "/",
+ "MaxAge": 604800,
+ "HTTPOnly": true
+ },
+ "TrustedClient": {
+ "ClientID": "test_client",
+ "Secret": "test_secret"
+ }
+}'
+</code></pre>
+
+<p>Run migrations:</p>
+
+<pre><code>$ go run main.go migrate
+</code></pre>
+
+<p>And finally, run the app:</p>
+
+<pre><code>$ go run main.go runserver
+</code></pre>
+
+<h2><a id="user-content-test-data" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#test-data"></a>Test Data</h2>
+
+<p>You might want to insert some test data if you are testing locally using curl:</p>
+
+<div class="highlight highlight-source-sql"><pre><span class="pl-k">insert into</span> scopes(scope, is_default) <span class="pl-k">values</span>(<span class="pl-s"><span class="pl-pds">'</span>read<span class="pl-pds">'</span></span>, true);
+<span class="pl-k">insert into</span> scopes(scope, is_default) <span class="pl-k">values</span>(<span class="pl-s"><span class="pl-pds">'</span>read_write<span class="pl-pds">'</span></span>, false);
+
+<span class="pl-k">insert into</span> clients(client_id, secret) <span class="pl-k">values</span>(<span class="pl-s"><span class="pl-pds">'</span>test_client<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>$2a$10$CUoGytf1pR7CC6Y043gt/.vFJUV4IRqvH5R6F0VfITP8s2TqrQ.4e<span class="pl-pds">'</span></span>);
+
+<span class="pl-k">insert into</span> users(username, password) <span class="pl-k">values</span>(<span class="pl-s"><span class="pl-pds">'</span>test@username<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>$2a$10$4J4t9xuWhOKhfjN0bOKNReS9sL3BVSN9zxIr2.VaWWQfRBWh1dQIS<span class="pl-pds">'</span></span>);</pre></div>
+
+<h2><a id="user-content-testing" class="anchor" href="https://github.com/RichardKnop/go-oauth2-server#testing"></a>Testing</h2>
+
+<p>Some of the tests are functional. You need to have <code>sqlite</code> and <code>etcd</code> installed and running in order to run the tests.</p>
+
+<p>To run tests:</p>
+
+<pre><code>make test
+</code></pre>
+</article>
+ </div>
+</body></html>

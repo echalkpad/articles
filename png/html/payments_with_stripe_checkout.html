@@ -1,0 +1,385 @@
+<!DOCTYPE html><html><head><title>Payments with Stripe Checkout</title></head><body>
+<h1>Payments with Stripe Checkout</h1><p><a href="https://themeteorchef.com/recipes/payments-with-stripe-checkout/" target="_new">Original URL</a></p>
+<p><blockquote>What we're going to learn In this recipe, we'll learn how to integrate payments using Stripe Checkout. We'll learn how to wire the interface up on the client, how to make it accept Bitcoin, and even&hellip;</blockquote></p>
+<div><div id="recipe" class="tab-content active">
+ <h3>What we're going to learn</h3>
+ <p>In this recipe, we'll learn how to integrate payments using <a href="https://stripe.com/checkout">Stripe Checkout</a>. We'll learn how to wire the interface up on the client, how to make it accept Bitcoin, and even how to handle payments on the server.</p>
+
+ 
+ 
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/slack-logo.svg" alt="Slack">
+ <header>
+ <h4>Join The Meteor Chef on Slack</h4>
+ <p>If you get confused or stuck while reading&#x2014;or just want to talk about Meteor&#x2014;join us on Slack! <a href="http://slack.themeteorchef.com" target="_blank">Get an invite now</a>.</p>
+ </header>
+ </div>
+ 
+
+ 
+
+<div class="note">
+ <h3>Additional Packages <i class="fa fa-warning"></i></h3>
+ <p>This recipe relies on several other packages that come as part of <a href="https://themeteorchef.com/base">Base</a>, the boilerplate kit used here on The Meteor Chef. The packages listed below are merely recipe-specific additions to the packages that are included by default in the kit. Make sure to reference the <a href="https://themeteorchef.com/base/packages-included">Packages Included list</a> for Base to ensure you have fulfilled all of the dependencies.</p>
+</div>
+
+<h3>Prep</h3>
+
+
+
+<h3>What are we building?</h3>
+
+<p>The Ghostbusters are blowing up. New York is <a href="https://youtu.be/EwKR_y93izs?t=48s">under siege from a ton of ghosts</a> and other spooks and the team has asked us if we can help out. Their biggest problem currently is that they cannot keep up with orders. The phone keeps ringing off the hook and Janine can&#x2019;t answer quickly enough. They&#x2019;ve lost a significant amount of business as a result and want to fix things fast.</p>
+
+<p>The system they need is actually pretty simple. They recently switched to a fixed set of packages that customers can purchase. Our task will be to implement a way for customers to purchase one of these packages with one click. After thinking about it for a bit, we decided to recommend Stripe Checkout to the Ghostbusters. It&#x2019;s free, quick to implement, and fits perfectly with what they need.</p>
+
+<p>In this recipe, we&#x2019;re going to learn how to wire up Stripe Checkout, all the way up through creating a charge. The Ghostbusters want to be as future proof as possible, so they&#x2019;ve asked that we add support for Bitcoin, too! Before we get to work, here&#x2019;s a quick example of what we&#x2019;re after:</p>
+
+<figure>
+ <img src="https://tmc-post-content.s3.amazonaws.com/ghostbusters-checkout-demo.gif" alt="Watch out, ghosts!">
+ <figcaption>Watch out, ghosts!</figcaption>
+</figure>
+
+<p>Ready to get to work? Let&#x2019;s do it!</p>
+
+<h3>Ingredients</h3>
+
+<p>Before we start building, make sure that you&#x2019;ve installed the following packages and libraries in your application. We&#x2019;ll use these at different points in the recipe, so it&#x2019;s best to install these now so we have access to them later.</p>
+
+<h4>Meteor packages</h4>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add mrgalaxy:stripe
+</code></pre>
+
+<p>We&#x2019;ll rely on the <code>mrgalaxy:stripe</code> package to give us access to Stripe Checkout on the client as well as <a href="https://github.com/stripe/stripe-node">Stripe&#x2019;s Node.js library</a> on the server.</p>
+
+<h3>Configuring our application settings</h3>
+
+<p>Before we start to write code, we&#x2019;ll want to set up a <a href="https://themeteorchef.com/snippets/making-use-of-settings-json/">settings file</a> in our application for storing our Stripe keys. These keys&#x2014;a public key and a secret key&#x2014;will allow us to identify our application with Stripe and process payments. To do this, hop over to your Stripe dashboard&#x2014;this assumes you&#x2019;ve created a Stripe account, if you haven&#x2019;t <a href="https://dashboard.stripe.com/register">sign up here</a>&#x2014;and open up the <a href="https://dashboard.stripe.com/account/apikeys">API Key Settings</a> section.</p>
+
+<figure>
+ <img src="https://tmc-post-content.s3.amazonaws.com/Screen-Shot-2015-12-15-16-19-03.png" alt="Finding API keys in the Stripe dashboard.">
+ <figcaption>Finding API keys in the Stripe dashboard.</figcaption>
+</figure>
+
+<p>What we need from this page is at a minimum is our &#x201C;Test Secret Key&#x201D; and our &#x201C;Test Publishable Key.&#x201D; If you intend to use the code we write in production, you will also want to make note of your &#x201C;Live Secret Key&#x201D; and &#x201C;Live Publishable Key.&#x201D; Pay close attention coming up if this is the case. We&#x2019;ll be storing our keys in a <code>settings-development.json</code> file for local development, but for production values you&#x2019;ll want to use a <code>settings-production.json</code> file (<a href="https://themeteorchef.com/snippets/making-use-of-settings-json/#tmc-settingsjson-in-development-vs-production">Why</a>?).</p>
+
+<h4>Adding our keys to settings-development.json</h4>
+
+<p>Next, we&#x2019;ll want to take our &#x201C;Test&#x201D; keys from Stripe and store them in a file called <code>settings-development.json</code> in our project&#x2019;s root. Here&#x2019;s what we&#x2019;re after:</p>
+
+<p class="block-header">settings-development.json</p>
+
+<pre><code class="language-javascript">{
+ "public": {
+ "stripe": "pk_test_&lt;Your Key Here&gt;"
+ },
+ "private": {
+ "stripe": "sk_test_&lt;Your Key Here&gt;"
+ }
+}
+</code></pre>
+
+<p>That&#x2019;s it! By adding these, we&#x2019;ll have access to our keys within our application by starting our app with <code>meteor --settings settings-development.json</code>. When we do, we&#x2019;ll have access to our keys via <code>Meteor.settings.public.stripe</code> and <code>Meteor.settings.private.stripe</code>. So it&#x2019;s clear, the reason we want to store these here as opposed to in our application source is two-fold.</p>
+
+<p>First, it ensures that if we have to change our keys out later, we won&#x2019;t have to edit multiple files. Second&#x2014;and most importantly&#x2014;it ensures that our code is more secure by keeping our keys in one place. If a key were to get leaked, we can swap it out quickly and easily without worrying about breaking our application.</p>
+
+<p>Cool! At this point we&#x2019;re one step closer to wiring up the Ghostbuster&#x2019;s new payment system. Don&#x2019;t forget: make sure to start your app with this file using <code>meteor --settings settings-development.json</code> or you&#x2019;ll run into errors later. With this all set up, we can get into the code!</p>
+
+<h3>Adding our template</h3>
+
+<p>First up, we need to create a template. Fortunately our template is pretty simple. Because the Ghostbusters have a fixed range of services, we won&#x2019;t need to worry about wiring up to a database. Let&#x2019;s take a look at our entire template now and then step through it. Don&#x2019;t worry, there&#x2019;s <em>a lot</em> here but we&#x2019;ll explain each piece and show how it&#x2019;s working next.</p>
+
+<p class="block-header">/client/templates/public/services.html</p>
+
+<pre><code class="language-javascript">&lt;template name="services"&gt;
+ &lt;div class="row"&gt;
+ &lt;div class="col-xs-12 col-md-6"&gt;
+ &lt;img width="150" src="https://tmc-post-content.s3.amazonaws.com/ghostbusters-logo.png" alt="Ghostbusters"&gt;
+ &lt;h4 class="page-header"&gt;We're ready to believe you!&lt;/h4&gt;
+ {{#unless processing}}
+ &lt;p class="alert alert-info"&gt;We offer the following paranormal elimination services:&lt;/p&gt;
+
+ &lt;ul class="list-group price-list"&gt;
+ &lt;li class="list-group-item clearfix"&gt;
+ &lt;p class="pull-left"&gt;&lt;strong&gt;$3,000&lt;/strong&gt; &amp;mdash; Full Torso Apparition Removal&lt;/p&gt;
+ &lt;a href="#" data-service="full-torso-apparition" class="btn btn-success pull-right"&gt;Buy Now&lt;/a&gt;
+ &lt;/li&gt;
+ &lt;li class="list-group-item clearfix"&gt;
+ &lt;p class="pull-left"&gt;&lt;strong&gt;$4,250&lt;/strong&gt; &amp;mdash; Free-Floating Repeater Removal&lt;/p&gt;
+ &lt;a href="#" data-service="free-floating-repeater" class="btn btn-success pull-right"&gt;Buy Now&lt;/a&gt;
+ &lt;/li&gt;
+ &lt;li class="list-group-item clearfix"&gt;
+ &lt;p class="pull-left"&gt;&lt;strong&gt;$5,000&lt;/strong&gt; &amp;mdash; Full Roaming Vapor Removal&lt;/p&gt;
+ &lt;a href="#" data-service="full-roaming-vapor" class="btn btn-success pull-right"&gt;Buy Now&lt;/a&gt;
+ &lt;/li&gt;
+ &lt;/ul&gt;
+
+ &lt;p class="alert alert-warning"&gt;To demo, use any email address along with the card number &lt;strong&gt;4242 4242 4242 4242&lt;/strong&gt;, any &lt;em&gt;future&lt;/em&gt; expiration date, and any 3 digit security code (e.g 555)&lt;/p&gt;
+ {{else}}
+ &lt;p class="alert alert-warning"&gt;&lt;i class="fa fa-refresh fa-spin"&gt;&lt;/i&gt; Processing payment...&lt;/p&gt;
+ {{/unless}}
+ &lt;/div&gt;
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+
+<p>Let&#x2019;s start at the top. First, notice that our list of services is wrapped in an <code>{{#unless}}</code> block pointing to a helper that we&#x2019;ll define later called <code>processing</code>. In a bit, we&#x2019;ll wire this up to a Reactive Var that we&#x2019;ll trigger whenever a customer clicks on the &#x201C;Buy Now&#x201D; button next to an item. When we do, we want to hide the services list and display a &#x201C;Processing Payment&#x2026;&#x201D; message to acknowledge the user&#x2019;s action.</p>
+
+<p>So it&#x2019;s clear, let&#x2019;s look at the JavaScript running our <code>{{#unless}}</code> and <code>{{#if}}</code> blocks here. From there, we&#x2019;ll start to build up our logic for the checkout.</p>
+
+<h4>Wiring up our template</h4>
+
+<p>First, let&#x2019;s focus on our Reactive Var. What we need to do is define these and then create the helpers that they&#x2019;ll be wired up to. Again, these will simply be used for toggling state in our application via the <code>{{#unless processing}}</code> block.</p>
+
+<p class="block-header">/client/templates/public/services.js</p>
+
+<pre><code class="language-javascript">Template.services.onCreated( () =&gt; {
+ let template = Template.instance();
+ 
+ template.processing = new ReactiveVar( false );
+});
+
+Template.services.helpers({
+ processing() {
+ return Template.instance().processing.get();
+ }
+});
+</code></pre>
+
+<p>This is all we need for now! We start by defining our Reactive Var&#x2019;s by using <code>new ReactiveVar()</code> in our template&#x2019;s <code>onCreated</code> method, assigning them to variables defined <em>on</em> our template instance. Why? This ensures that our variables only exist for the lifecycle of the template. If we were to move to another page&#x2014;effectively &#x201C;destroying&#x201D; the template&#x2014;these values would cease to exist. Pretty wild, eh? We could do this just the same with something like Session variables, however, those will stick around (which we don&#x2019;t want).</p>
+
+<p>Toward the bottom, we&#x2019;re setting up our helper <code>processing</code>. Here, we access the template instance and the our variable using <code>Template.instance().processing.get()</code>. This is part of the Reactive Var API. As we&#x2019;ll see in a bit, the <code>.get()</code> method here has a counterpart called <code>.set()</code>. Again, this is all very similar to Session, however, it allows us to keep everything local to the template. Just note that right now all we&#x2019;re doing is pulling our value in and returning it from our helper. Remember, this value is <em>reactive</em>, meaning, when we change it our helper will reflect the change (toggling the state in our interface).</p>
+
+<p>Now for the fun part! Next, we need to wire up Stripe Checkout. This involves two steps: configuring the checkout and a callback for handling the token Stripe will create for us and handling the opening of the checkout window.</p>
+
+<h3>Adding a call to Stripe Checkout</h3>
+
+<p>We need to do two things: configure Stripe checkout and then set up a way to call it. Let&#x2019;s get our configuration in place. We&#x2019;ll be working in our <code>services</code> template&#x2019;s JavaScript file again, focusing on the <code>onCreated</code> callback like we did up above.</p>
+
+<p class="block-header">/client/templates/public/services.js</p>
+
+<pre><code class="language-javascript">Template.services.onCreated( () =&gt; {
+ let template = Template.instance();
+
+ [...]
+
+ template.checkout = StripeCheckout.configure({
+ key: Meteor.settings.public.stripe,
+ image: 'https://tmc-post-content.s3.amazonaws.com/ghostbusters-logo.png',
+ locale: 'auto',
+ token( token ) {
+ // We'll pass our token and purchase info to the server here.
+ }
+ });
+});
+
+[...]
+</code></pre>
+
+<p>Easy peasy. Notice that here, we&#x2019;re piggy backing our <code>template</code> variable we set up earlier (the one we assigned our Reactive Var&#x2019;s to). To ensure that we have access to our instance of Stripe Checkout throughout our <code>services</code> template, we call to <code>StripeCheckout.configure()</code>, assigning it to <code>template.checkout</code> (we&#x2019;ll see why this is helpful in a bit). For our configuration, we pass four items: our <em>public</em> key (required), an image (optional, but nice to have), a locale (optional, configures the checkout&#x2019;s display language), and a callback method <code>token()</code>.</p>
+
+<p>Notice that for the <code>key</code> property here, we&#x2019;re passing <code>Meteor.settings.public.stripe</code> which is pointing to the <code>public</code> block in our <code>settings-development.json</code> file and the <code>stripe</code> property within that. For the <code>locale</code> property here, we&#x2019;ve selected <code>auto</code> so that the checkout will automatically match the customer&#x2019;s language preferences. Finally, the <code>token()</code> method is being defined here with an argument <code>token</code>. Can you guess what happens here?</p>
+
+<p>Once our customer successfully completes the payment form, Stripe will send their information securely to their servers to generate a token. A <a href="https://stripe.com/docs/api#tokens">token</a> is a representation of the card or Bitcoin address that is sent to Stripe. This allows us, in turn, to securely share that information with Stripe without bumping into any compliance issues. Neat! This <code>token()</code> method is what Stripe will call as soon as it has a token. For now, let&#x2019;s pause here. What we need to do now is wire up the actual opening of the checkout. Once we have that in place, we&#x2019;ll jump back up here and explain how to handle our token.</p>
+
+<h4>Opening the checkout</h4>
+
+<p>At this point, we&#x2019;ve initialized our checkout but we need to actually <em>open</em> it when our customer does something. Remember, the Ghostbusters have asked that we make this as simple as possible. What we&#x2019;re going to do is simply listen for a click event on any button with a <code>data-service</code> attribute. When a click event is detected, we&#x2019;ll grab the value of <code>data-service</code> from the button&#x2014;to let us know what service the customer is purchasing&#x2014;and then open up our checkout.</p>
+
+<p class="block-header">/client/templates/public/services.js</p>
+
+<pre><code class="language-javascript">Template.services.onCreated( () =&gt; {
+ let template = Template.instance();
+
+ template.selectedService = new ReactiveVar( false );
+ template.processing = new ReactiveVar( false );
+
+ template.checkout = StripeCheckout.configure(...);
+});
+
+[...]
+
+Template.services.events({
+ 'click [data-service]' ( event, template ) {
+ const pricing = {
+ 'full-torso-apparition': {
+ amount: 300000,
+ description: "Full Torso Apparition Removal"
+ },
+ 'free-floating-repeater': {
+ amount: 425000,
+ description: "Free-Floating Repeater Removal"
+ },
+ 'full-roaming-vapor': {
+ amount: 500000,
+ description: "Full Roaming Vapor Removal"
+ }
+ };
+
+ let service = pricing[ event.target.dataset.service ];
+
+ template.selectedService.set( service );
+ template.processing.set( true );
+
+ template.checkout.open({
+ name: 'Ghostbusting Service',
+ description: service.description,
+ amount: service.amount,
+ bitcoin: true
+ });
+ }
+});
+</code></pre>
+
+<p>Quite a few things being added here, so pay close attention. First, notice that up in our <code>onCreated</code> function we&#x2019;re adding a new Reactive Var and assigning it to <code>template.selectedService</code>. When we wire up our <code>token()</code> method later, we&#x2019;ll use this to let us know which service the user has clicked on. Down below in our <code>events</code> block, we&#x2019;ve got quite a bit going on. First, notice that we&#x2019;re defining our event by watching for <code>click</code> events on any element with a <code>data-service</code> attribute using <code>click [data-service]</code>.</p>
+
+<p>Inside of the event handler, we define a new object <code>pricing</code> and assign it three sub-objects, each one named after the value passed to <code>data-service</code> in our template markup. Following along? For each service, we define an <code>amount</code> property and a <code>description</code>. Notice that here, we&#x2019;re defining amount in <code>cents</code> as this is how Stripe expects to receive the value.</p>
+
+<p>A little further down, we&#x2019;re grabbing the name of the service that the user clicked from the &#x201C;Buy Now&#x201D; button using <code>event.target.dataset.service</code> and pointing to that value in the <code>pricing</code> object we just defined. See what&#x2019;s happening? If <code>event.target.dataset.service</code> returns <code>free-floating-repeater</code>, we&#x2019;ll be setting our <code>service</code> variable equal to the contents of that block, or, <code>{ amount: 425000, description: "Free-Floating Repeater Removal" }</code>. Pretty cool, eh?</p>
+
+<p class="block-header">/client/templates/public/services.html</p>
+
+<pre><code class="language-markup">&lt;a href="#" data-service="full-roaming-vapor" class="btn btn-success pull-right"&gt;Buy Now&lt;/a&gt;
+</code></pre>
+
+<p>Because this happens on the click of the button, we can be certain that it will map to the correct service (as long as our <code>data-service</code> attribute is set correctly on each button in our template). Awesome. Next, notice that we&#x2019;re <em>finally</em> starting to toggle these Reactive Var&#x2019;s we&#x2019;ve defined. Here, we&#x2019;re setting the <code>selectedService</code> so we can reference it up in our <code>token()</code> method later, as well as setting <code>processing</code> to true. Remember, when we toggle processing we&#x2019;re hiding our services list and revealing our &#x201C;Processing payment&#x2026;&#x201D; message.</p>
+
+<p>Finally, the good stuff. This is where we trigger Stripe Checkout to actually open up! Remember that up top, we assigned our instance of the checkout to <code>template.checkout</code>. Using this, we can simply call <code>template.checkout.open</code> and pass in our configuration. For the Ghostbuster&#x2019;s purposes, we just need to pass four items: the generic <code>name</code> of the service, the <code>description</code> of the service the customer clicked on (taken from our <code>service</code> variable we just set), the <code>amount</code> we&#x2019;re looking to charge the customer (also taken from our <code>service</code> variable), and finally <code>bitcoin</code> being set to true.</p>
+
+<p>That last one is Stripe doing a magic trick. This one line tells Stripe that we want to accept Bitcoin. They handle the rest behind the scenes. Sweet! At this point, we&#x2019;re all wired up to receive a token from Stripe. Before we process the charge on the server, let&#x2019;s take a look at how we pass our token along from our <code>token()</code> callback up top.</p>
+
+<h4>Getting the token from Stripe</h4>
+
+<p>Now for the good stuff. At this point, we&#x2019;ve successfully configured and implemented a way to fire our checkout. Now, we need to wire up what happens after we get a token back from Stripe. Just a little more weight:</p>
+
+<p class="block-header">/client/templates/public/services.js</p>
+
+<pre><code class="language-javascript">Template.services.onCreated( () =&gt; {
+ let template = Template.instance();
+
+ [...]
+
+ template.checkout = StripeCheckout.configure({
+ [...]
+ token( token ) {
+ let service = template.selectedService.get(),
+ charge = {
+ amount: token.amount || service.amount,
+ currency: token.currency || 'usd',
+ source: token.id,
+ description: token.description || service.description,
+ receipt_email: token.email
+ };
+
+ Meteor.call( 'processPayment', charge, ( error, response ) =&gt; {
+ if ( error ) {
+ template.processing.set( false );
+ Bert.alert( error.reason, 'danger' );
+ } else {
+ Bert.alert( 'Thanks! You\'ll be ghost free soon :)', 'success' );
+ }
+ });
+ },
+ closed() {
+ template.processing.set( false );
+ }
+ });
+});
+
+[...]
+</code></pre>
+
+<p>Inside of our <code>token()</code> method (the callback Stripe fires once it has successfully created a card token), we start by grabbing the currently selected service from our Reactive Var. Once we have it, we define a <code>charge</code> object to toss up to the server. Pay close attention here. Notice that for the <code>amount</code>, <code>currency</code> and <code>description</code> fields we&#x2019;re using an <code>||</code> or operator to switch between two different values. What gives?</p>
+
+<p>This is because depending on whether the customer chooses to pay with a card or Bitcoin, Stripe sends us back differently shaped responses for the <code>token</code> value. To make sure that we support both&#x2014;<a href="https://tmc-post-content.s3.amazonaws.com/egon-spengler.png">Egon</a> was kind of a jerk about this whole Bitcoin thing&#x2014;we need to account for the different response. To compensate for the missing values in the response from Stripe, notice that we just default back to the value stored on the object from our Reactive Var <code>selectedService</code>. Easy enough.</p>
+
+<p>Okay! Now we&#x2019;re getting to the important part: actually charging a customer. Even though Stripe is giving us back a token, we technically haven&#x2019;t charged the customer for anything yet. That will need to happen on the server. To get it working, here, we define a method call to <code>processPayment</code>, passing up our <code>charge</code> object we just defined. Notice that in our error and success callback below, we&#x2019;re triggering the appropriate Reactive Var to reset our service list&#x2019;s state.</p>
+
+<p>Last but not least, notice that we&#x2019;ve added another callback method <code>closed()</code> which Stripe fires when the payment window is closed. This ensures that if the customer decides to <em>not</em> go forward with the payment (or the payment is successful), we reset our &#x201C;processing&#x201D; state accordingly with our Reactive Var. Simple, but important so we don&#x2019;t frustrate the Ghostbuster&#x2019;s customers.</p>
+
+<p>That&#x2019;s it for the client! Let&#x2019;s hop up to the server and wrap this fella up. When we finish, we&#x2019;ll have a fully functioning check out system with both credit card <em>and</em> Bitcoin payments. Rad.</p>
+
+<h3>Handling the payment on the server</h3>
+
+<p>Last step! This part is quick and easy. Let&#x2019;s dump out all of the code for our method and walk through it.</p>
+
+<p class="block-header">/server/methods/utility/stripe.js</p>
+
+<pre><code class="language-javascript">let Stripe = StripeAPI( Meteor.settings.private.stripe );
+
+Meteor.methods({
+ processPayment( charge ) {
+ check( charge, {
+ amount: Number,
+ currency: String,
+ source: String,
+ description: String,
+ receipt_email: String
+ });
+
+ let handleCharge = Meteor.wrapAsync( Stripe.charges.create, Stripe.charges ),
+ payment = handleCharge( charge );
+
+ return payment;
+ }
+});
+</code></pre>
+
+<p>Starting at the top. We begin by assigning a new variable <code>Stripe</code> equal to an instance of <code>StripeAPI</code>. See what this is doing? This is giving us access to Stripe&#x2019;s API here on the server. To make it work, we pass in the value of <code>Meteor.settings.private.stripe</code>, which, remember, is equal to our <em>secret</em> key. Once that&#x2019;s configured, we get to work defining our method.</p>
+
+<p>First, we set it up taking in a <code>charge</code> argument (the object we defined on the client) and <a href="https://themeteorchef.com/snippets/using-the-check-package/">check the passed value</a> to ensure it contains the values and types that we expect. Once we have it, we do a little bit of synchronous muscle flexing. Here, we&#x2019;re making use of Meteor&#x2019;s <code>wrapAsync</code> method which allows us to <a href="https://themeteorchef.com/snippets/synchronous-methods/#tmc-using-wrapasync">&#x201C;convert&#x201D; an <em>asynchronous</em> function into a <em>synchronous</em> function</a>. The difference? A synchronous function must complete before our method returns. An <em>asynchronous</em> function, however, can be called but doesn&#x2019;t block the order of operations.</p>
+
+<p>Here, we want this to be synchronous so we can confirm the payment on the client without a lot of fuss. <code>wrapAsync</code> is a bit weird at first pass. What&#x2019;s happening is that we pass <code>Stripe.charges.create</code> (<a href="https://stripe.com/docs/api#create_charge">the Stripe method we want to call</a> on their API) and then we pass that method&#x2019;s <em>context</em>. Yeah, <em>okay</em>. Bear with me. What this does behind the scenes is to return a function that&#x2019;s automatically wrapped using two things: a future (a Node.js convention for creating synchronous function calls) and <code>Meteor.bindEnvironment</code> (a function that ensures the current Meteor environment is accessible within our asynchronous function&#x2019;s callback).</p>
+
+<p>The point being that we get back a synchrounous function which we&#x2019;re assigning to our <code>handleCharge</code> variable. Because we&#x2019;re getting back a <em>function</em> we can call it, which we do on the line below. Notice that when we call it <code>handleCharge()</code> we&#x2019;re passing in our <code>charge</code> object we sent over from the client. In a slightly convoluted&#x2014;but super handy&#x2014;way, we&#x2019;re saying something like this:</p>
+
+<p class="block-header">Asynchronous Version</p>
+
+<pre><code class="language-javascript">Stripe.charges.create( charge, ( error, reponse ) =&gt; {
+ if ( error ) {
+ return error;
+ } else {
+ return response;
+ }
+});
+</code></pre>
+
+<p>The big difference between this and the above code with <code>Meteor.wrapAsync</code> is that it will indefinitely pause our method from returning <code>payment</code> until <code>payment</code> receives either an error or a response. Pretty slick, right?</p>
+
+<p>With this in place, we&#x2019;re done! If we hop back to the client and attempt to process either a card-based or Bitcoin-based payment, they will succeed. To confirm, we can check our Stripe dashboard to see that the payment went through (make sure that you&#x2019;re on the &#x201C;Test&#x201D; side by flipping the switch in the top left of the dashboard interface):</p>
+
+<figure>
+ <img src="https://tmc-post-content.s3.amazonaws.com/Screen-Shot-2015-12-15-18-30-57.png" alt="A credit card charge landing in Stripe's dashboard via our checkout.">
+ <figcaption>A credit card charge landing in Stripe&#x2019;s dashboard via our checkout.</figcaption>
+</figure>
+
+<p>Somebody better let Slimer know he won&#x2019;t be hanging out in the city for long. Let&#x2019;s call the Ghostbusters and let them know their checkout is ready!</p>
+
+<p><img src="https://tmc-post-content.s3.amazonaws.com/slimer-blast.gif" alt=""></p>
+
+<h3>Wrap up &amp; summary</h3>
+
+<p>In this recipe, we learned how to wire up Stripe&#x2019;s Checkout feature. We looked at configuring our API keys to work with Stripe securely, how to configure and fire an instance of Stripe checkout, and how to toggle state in our interface using Reactive Variables. To wrap up, we learned how to actually process a payment using Stripe&#x2019;s API and information we grabbed from the checkout window.</p>
+
+
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/watsi-logo.svg" alt="Watsi">
+ <header>
+ <h4>Enjoy this post?</h4>
+ <p>I'd really appreciate it if you showed your thanks by <a href="https://watsi.org/team/the-meteor-chef" target="_blank">joining Team Meteor Chef on Watsi</a> and donating healthcare to someone who needs it in exchange!</p>
+ </header>
+ </div>
+ 
+ <h3>Questions &amp; Comments</h3>
+ 
+
+
+
+ </div> 
+ </div>
+</body></html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html><html><head><title>Running a Small Docker Swarm Cluster</title></head><body>
+<h1>Running a Small Docker Swarm Cluster</h1><p><a href="http://blog.scottlowe.org/2015/03/06/running-own-docker-swarm-cluster/" target="_new">Original URL</a></p>
+<p><blockquote>6 March 2015 In this post, I&#x2019;m going to show you how to set up and run your own Docker Swarm cluster. Docker Swarm is a relatively new orchestration tool from Docker (the company) that allows&hellip;</blockquote></p>
+<div><div class="post">
+
+<span class="post-date">6 March 2015</span>
+<p>In this post, I&#x2019;m going to show you how to set up and run your own <a href="https://docs.docker.com/swarm/">Docker Swarm</a> cluster. Docker Swarm is a relatively new orchestration tool from <a href="https://www.docker.com">Docker</a> (the company) that allows you to create a cluster of hosts running Docker (the open source project) and schedule containers across the cluster. However, just scheduling and running containers across a cluster isn&#x2019;t enough, so I&#x2019;ll show you how to add service registration and service discovery to this environment using <a href="http://www.consul.io">Consul</a>.</p>
+<p>In the event you&#x2019;re interested in following along, I&#x2019;ve created a set of files that will allow you to use <a href="http://www.vagrantup.com">Vagrant</a> to run this Docker Swarm cluster (on your laptop, if so desired). You can find all these files in the &#x201C;docker-swarm&#x201D; folder of <a href="https://github.com/lowescott/learning-tools">my GitHub learning-tools repository</a>.</p>
+<p>The Docker Swarm cluster I&#x2019;m going to show you how to build has 3 major components:</p>
+<ul>
+<li>A cluster of systems running Consul. In this case, Consul serves a dual purpose. First, it&#x2019;s used as the discovery service for the Docker Swarm cluster itself. Second, it provides service registration and service discovery functionality for the Docker containers launched on the Swarm cluster.</li>
+<li>A set of hosts running the Docker daemon (version 1.4.0 or higher, as required by Swarm). In this case, I&#x2019;m using <a href="https://coreos.com">CoreOS</a> Stable 557.2.0, which has Docker 1.4.1.</li>
+<li>A few containers running on the CoreOS hosts: a Consul client, <a href="https://github.com/gliderlabs/registrator">Registrator</a> (for dynamically registering and unregistering Docker containers), and Swarm.</li>
+</ul>
+<p>Ready? Let&#x2019;s get started!</p>
+<h2 id="setting-up-consul">Setting up Consul</h2>
+<p>If you&#x2019;re unfamiliar with Consul, I recommend having a look at <a href="http://blog.scottlowe.org/2015/02/06/quick-intro-to-consul/">my quick introduction to Consul</a>. Since that post provides an overview of getting Consul installed (which is really simple), I&#x2019;ll focus here on bootstrapping the Consul cluster. I&#x2019;m not running the Consul cluster as containers on the CoreOS systems (which works fine) in order to sidestep the issue of dealing with the CoreOS automatic updates (and subsequent reboots) and to simplify the overall environment a bit.</p>
+<p>I&#x2019;m using two pieces to handle bootstrapping the Consul cluster. First, I have a Consul configuration file that provides the necessary configuration details to Consul. Here&#x2019;s the JSON-formatting Consul configuration file:</p>
+<figure class="highlight"><pre><code class="language-json"><span class="p">{</span><span class="nt">"bootstrap_expect"</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span><span class="nt">"server"</span><span class="p">:</span><span class="kc">true</span><span class="p">,</span><span class="nt">"data_dir"</span><span class="p">:</span><span class="s2">"/var/consul"</span><span class="p">,</span><span class="nt">"log_level"</span><span class="p">:</span><span class="s2">"INFO"</span><span class="p">,</span><span class="nt">"enable_syslog"</span><span class="p">:</span><span class="kc">false</span><span class="p">,</span><span class="nt">"retry_join"</span><span class="p">:</span><span class="p">[</span><span class="s2">"192.168.1.101"</span><span class="p">,</span><span class="s2">"192.168.1.102"</span><span class="p">,</span><span class="s2">"192.168.1.103"</span><span class="p">],</span><span class="nt">"client_addr"</span><span class="p">:</span><span class="s2">"0.0.0.0"</span><span class="p">}</span></code></pre></figure>
+<p>The Consul web site provides documentation for all these parameters, but let&#x2019;s walk through this real quick:</p>
+<ul>
+<li>The <code class="highlighter-rouge">bootstrap_expect</code> line tells Consul to form a cluster when at least 3 nodes are present. This allows us to start Consul nodes independently, but none of them will start working as expected until 3 are online and communicating.</li>
+<li>The <code class="highlighter-rouge">server</code> line instructs the Consul agent (running as a daemon) to operate as a server.</li>
+<li>The <code class="highlighter-rouge">data_dir</code> directory instructs Consul to store its working files in <code class="highlighter-rouge">/var/consul</code>. Note you&#x2019;ll need to create that directory (and assign appropriate permissions).</li>
+<li>The <code class="highlighter-rouge">log_level</code> and <code class="highlighter-rouge">enable_syslog</code> lines configure logging (which, by default, will go to <code class="highlighter-rouge">/var/log/consul.log</code>).</li>
+<li>The <code class="highlighter-rouge">retry_join</code> line provides a list of addresses for other expected members of the Consul cluster. I use the <code class="highlighter-rouge">retry_join</code> line instead of <code class="highlighter-rouge">join</code> so that we can independently start the Consul nodes. You&#x2019;ll want/need to edit this line to use IP addresses that are applicable/correct for your environment.</li>
+<li>Finally, the <code class="highlighter-rouge">client_addr</code> line tells Consul to listen on all interfaces (not just loopback, which is the default).</li>
+</ul>
+<p>You can store this anywhere you&#x2019;d like, but if you want to use the scripts and such that I&#x2019;ve created, put this configuration file in <code class="highlighter-rouge">/etc/consul.d/server</code> as a file named <code class="highlighter-rouge">config.json</code>.</p>
+<p>Next, I have an Upstart script to start and run the Consul agent as a daemon using the above configuration file. Here&#x2019;s the script:</p>
+<figure class="highlight"><pre><code class="language-text">description "Consul server process"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+
+script
+ if [ -f "/etc/service/consul" ]; then
+ . /etc/service/consul
+ fi
+
+export GOMAXPROCS=`nproc`
+
+exec /usr/local/bin/consul agent \
+ -config-dir="/etc/consul.d/server" \
+ ${CONSUL_FLAGS} \
+ &gt;&gt;/var/log/consul.log 2&gt;&amp;1
+end script</code></pre></figure>
+<p>You can see that this script assumes the Consul binary is in <code class="highlighter-rouge">/usr/local/bin</code>; if you store it elsewhere, be sure to adjust this script accordingly. Store this file as <code class="highlighter-rouge">consul.conf</code> in <code class="highlighter-rouge">/etc/init</code>; then you can use these commands to start and stop Consul, respectively:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>sudo service consul start
+sudo service consul stop
+</code></pre>
+</div>
+<p>Ideally, you&#x2019;ll also want to create a dedicated user for Consul, and assign ownership/permissions on the <code class="highlighter-rouge">/etc/consul.d</code> and <code class="highlighter-rouge">/var/consul</code> directories to that user.</p>
+<p>Setting up the Consul cluster therefore looks something like this:</p>
+<ol>
+<li>Get an Ubuntu 14.04 system (or possibly earlier versions) up and running.</li>
+<li>Install the Consul binary to <code class="highlighter-rouge">/usr/local/bin</code>.</li>
+<li>Create the Consul user.</li>
+<li>Create the <code class="highlighter-rouge">/etc/consul.d/server</code> and <code class="highlighter-rouge">/var/consul</code> directories, and assign ownership/permission for those directories to the Consul user.</li>
+<li>Put the configuration file listed above onto the Ubuntu system as <code class="highlighter-rouge">config.json</code> in the <code class="highlighter-rouge">/etc/consul.d/server</code> directory.</li>
+<li>Put the Upstart script listed above onto the Ubuntu system as <code class="highlighter-rouge">consul.conf</code> in the <code class="highlighter-rouge">/etc/init</code> directory.</li>
+<li>Start the Consul daemon using <code class="highlighter-rouge">sudo service consul start</code>.</li>
+<li>Repeat steps 1-7 for two more systems to establish the minimum of three systems running Consul.</li>
+</ol>
+<p>Once your Consul cluster is up and running (you can test this by running <code class="highlighter-rouge">consul members</code>; you should see a list of three systems in the cluster), you&#x2019;re ready to move on to setting up the Swarm cluster.</p>
+<h2 id="setting-up-the-swarm-cluster">Setting up the Swarm Cluster</h2>
+<p>I won&#x2019;t go into any detail here on setting up some systems to run the Docker Engine (daemon); I&#x2019;ll leave that as an exercise for the reader. Since Consul will serve as the back-end discovery service for the Swarm cluster I&#x2019;m not immediately aware of any minimum number of Docker Engine nodes, but let&#x2019;s assume you&#x2019;ll need to start at three. If you want to use CoreOS, be sure to use a version of CoreOS that containers Docker &gt;= 1.4.0. CoreOS Stable 557.2.0 includes Docker 1.4.1, and therefore will work with Docker Swarm.</p>
+<p>You&#x2019;ll also need to ensure that Docker Engine on each node is configured to listen on a network port. I&#x2019;ll assume you&#x2019;ve configured Docker Engine to listen on TCP 2375, which is the official IANA registered port for Docker (TCP 2376 if you&#x2019;re using TLS).</p>
+<p>Setting up the Swarm cluster is pretty straightforward. On each Docker Engine node (CoreOS in my example), launch a Docker container with the following command line:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker run -d swarm join --addr=&lt;node IP address&gt;:2375 consul://&lt;IP address of Consul server in cluster&gt;:8500/swarm
+</code></pre>
+</div>
+<p>Substitute the IP address of the Docker Engine node for the <code class="highlighter-rouge">--addr</code> parameter, and substitute the IP address of a member of the Consul cluster for the <code class="highlighter-rouge">consul://</code> discovery URL. Therefore, if your Docker Engine node was at 192.168.1.104 and one of the Consul servers was at 192.168.1.101, the command would look like this:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker run -d swarm join --addr=192.168.1.104:2375 consul://192.168.1.101:8500/swarm
+</code></pre>
+</div>
+<p>Note that the &#x201C;/swarm&#x201D; on the end of the discovery URL is an arbitrary path; just be sure to use the same value everywhere in the Swarm cluster.</p>
+<p>Repeat this process on every node that should be a part of the Docker Swarm cluster.</p>
+<p>Finally, on a system running Docker Engine (it can be a separate system or a system that is part of the cluster), run a Docker container that will enable managing the Swarm cluster:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker run -d -p &lt;Swarm port&gt;:2375 swarm manage consul://&lt;&lt;IP address of Consul server in cluster&gt;:8500/swarm
+</code></pre>
+</div>
+<p>Replace <code class="highlighter-rouge">&lt;Swarm port&gt;</code> with a port number, and specify the IP address of one of the servers in the Consul cluster. If you used a path other than &#x201C;/swarm&#x201D;, be sure to use the same path here. This command sets up an endpoint against which you&#x2019;ll run Docker commands&#x2014;only in this case those Docker commands will be executed against the entire cluster.</p>
+<p>So, let&#x2019;s say you want to run an Nginx container named &#x201C;www&#x201D; somewhere on the Swarm cluster. Assuming that you used 8333 as the Swarm port when launching the Swarm manager and that the Swarm manager was running on a system with the IP address 192.168.1.104, you&#x2019;d do that with this command:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker -H tcp://192.168.1.104:8333 run -d --name www -p 80:80 nginx
+</code></pre>
+</div>
+<p>If you wanted to see a list of the containers running across all the systems in the Swarm cluster, you&#x2019;d run this command:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker -H tcp://192.168.1.104:8333 ps
+</code></pre>
+</div>
+<p>If you wanted to see information about the cluster, the nodes in the cluster, and the containers running across the cluster, you&#x2019;d run this command:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker -H tcp://192.168.1.104:8333 info
+</code></pre>
+</div>
+<p>Of course, you could also set the <code class="highlighter-rouge">DOCKER_HOST</code> environment variable, and then you could skip the <code class="highlighter-rouge">-H tcp://...</code> portion of the commands above.</p>
+<p>That&#x2019;s it! You&#x2019;ve just set up your own Docker Swarm cluster. But wait, there&#x2019;s more&#x2026;</p>
+<h2 id="setting-up-service-registration-and-discovery">Setting up Service Registration and Discovery</h2>
+<p>Docker Swarm will take care of scheduling and running containers on Docker Engine nodes within the cluster, but how in the world does one connect to services running in those containers? How does one know which IP addresses and ports are in use? That&#x2019;s where service registration and service discovery come into play. Since Consul is already running in this environment, I&#x2019;ll leverage Consul to also provide service registration and service discovery functionality.</p>
+<p>Adding this functionality to the existing Consul-backed Docker Swarm cluster is pretty straightforward. There are two pieces involved: running a Consul client container and running a Registrator container on each Docker Engine node in the Swarm cluster. The Registrator container monitors the Docker UNIX socket for events, and registers/de-registers containers and services upon start and stop. The Consul client receives the registration/de-registration events from Registrator and forwards them to the Consul cluster, where other systems can query to find and locate containers and services (even through DNS). Cool, eh?</p>
+<p>To run a Consul client as a container on a Docker Engine node in the Swarm cluster, use this command (executed against the Docker Engine directly, not through Swarm):</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker run -d -p 8300:8300 -p 8301:8301 -p 8301:8301/udp -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp --name &lt;container-name&gt; -h &lt;hostname&gt; progrium/consul -rejoin -advertise &lt;external IP address&gt; -join &lt;Consul server IP address&gt;
+</code></pre>
+</div>
+<p>OK, that&#x2019;s a hefty command, so let&#x2019;s break it down:</p>
+<ul>
+<li>All the various <code class="highlighter-rouge">-p</code> parameters are exposing the necessary Consul ports for communication.</li>
+<li>The specific container image you&#x2019;re using is <code class="highlighter-rouge">progrium/consul</code>, which is a Dockerized Consul agent.</li>
+<li>Be sure to specify a unique value both for the container name (via <code class="highlighter-rouge">--name</code>) and a unique hostname (via the <code class="highlighter-rouge">-h</code> parameter).</li>
+<li>The <code class="highlighter-rouge">-advertise</code> parameter needs to advertise the external IP address of the Docker Engine node, not the private IP address assigned to the container behind the Docker bridge.</li>
+<li>Finally, the <code class="highlighter-rouge">-join</code> parameter should specify the IP address of one of the servers in the Consul cluster.</li>
+</ul>
+<p>After launching this container, you can verify that it is working as expected via two methods:</p>
+<ol>
+<li>Use the <code class="highlighter-rouge">docker logs</code> command to see the logs from the container and see that it is communicating with the Consul cluster.</li>
+<li>Use the <code class="highlighter-rouge">consul members</code> command from one of the Consul servers to show that there is now a &#x201C;client&#x201D; node participating in Consul. (Client nodes forward requests to server nodes.)</li>
+</ol>
+<p>Almost done! Next, launch a Registrator container on each Docker Engine node (directly, not using Swarm) with this command:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker run -d --name &lt;container name&gt; -h &lt;hostname&gt; -v /var/run/docker.sock:/tmp/docker.sock progrium/registrator consul://&lt;Consul server IP address&gt;:8500
+</code></pre>
+</div>
+<p>As with the Consul client container, be sure to use a unique container name and hostname, and substitute the IP address of one of the Consul servers in the <code class="highlighter-rouge">consul://</code> URL.</p>
+<p>You can use <code class="highlighter-rouge">docker logs</code> to verify Registrator&#x2019;s operation; you should see a series of registration events in the output.</p>
+<p>You can also query Consul directly to see if Registrator registered the services in Consul by using this command:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>curl http://&lt;Consul server IP address&gt;:8500/v1/catalog/services | python -m json.tool
+</code></pre>
+</div>
+<p>You should see JSON output listing the services (unique TCP and UDP ports) from the containers across the Docker Swarm cluster. To get more information about a particular service, modify the previous command to include the service name. For example, if you&#x2019;d launched an Nginx container on the cluster the command would look like this:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>curl http://&lt;Consul server IP address&gt;:8500/v1/catalog/service/nginx-80 | python -m json.tool
+</code></pre>
+</div>
+<p>That will provide JSON-formatted output that lists all the instances of this service across the cluster, the IP addresses and nodes associated with the service, and any metadata (which probably won&#x2019;t exist).</p>
+<p>All set&#x2014;you&#x2019;ve just built a Consul cluster, used Consul as the discovery service to back-end a Docker Swarm cluster, use Docker Swarm to launch a container, and then provided service registration and service discovery functionality via Consul and Registrator. Good job!</p>
+<h2 id="additional-resources">Additional Resources</h2>
+<p>You can find copies of all the scripts, configuration files, and a <code class="highlighter-rouge">Vagrantfile</code> to follow along using Vagrant in the &#x201C;docker-swarm&#x201D; folder of <a href="https://github.com/lowescott/learning-tools">my GitHub &#x201C;learning-tools&#x201D; repository</a>.</p>
+<span class="post-date">Tags:
+<a href="http://blog.scottlowe.org/tags/#CLI">CLI</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Docker">Docker</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Fusion">Fusion</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Linux">Linux</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Macintosh">Macintosh</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Vagrant">Vagrant</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Virtualization">Virtualization</a>
+</span>
+<span class="post-date">
+<i class="fa fa-arrow-circle-left"></i> Previous Post: <a href="http://blog.scottlowe.org/2015/02/28/experimenting-docker-registrator-consul/">Experimenting with Docker, Registrator, and Consul</a></span>
+<span class="post-date">
+Next Post: <a href="http://blog.scottlowe.org/2015/03/08/choosing-coreos-over-atomic/">Choosing CoreOS over Project Atomic</a> <i class="fa fa-arrow-circle-right"></i></span>
+<div class="post-sharing"><p>Be social and share this post!<br>
+<a href="https://www.facebook.com/sharer/sharer.php?u=http://blog.scottlowe.org/2015/03/06/running-own-docker-swarm-cluster/" title="Share on Facebook"><i class="fa fa-facebook-square fa-2x"></i></a>
+<a href="https://twitter.com/intent/tweet?url=http://blog.scottlowe.org/2015/03/06/running-own-docker-swarm-cluster/&amp;text=Running%20a%20Small%20Docker%20Swarm%20Cluster" title="Share on Twitter"><i class="fa fa-twitter-square fa-2x"></i></a>
+<a href="https://plus.google.com/share?url=http://blog.scottlowe.org/2015/03/06/running-own-docker-swarm-cluster/" title="Share on Google Plus"><i class="fa fa-google-plus-square fa-2x"></i></a></p></div>
+</div>
+</div>
+</body></html>

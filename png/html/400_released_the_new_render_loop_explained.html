@@ -1,0 +1,97 @@
+<!DOCTYPE html><html><head><title>4.0.0 released: The new render loop explained</title></head><body>
+<h1>4.0.0 released: The new render loop explained</h1><p><a href="http://popmotion.io/blog/4.0.0-released-explaining-the-new-render-loop" target="_new">Original URL</a></p>
+<p><blockquote>Posted one day ago At the heart of Popmotion lies a single thread; the render loop. Its purpose is simply to run through all active Process instances, and fire their associated callbacks - once per&hellip;</blockquote></p>
+<div><article class="major centered">
+ 
+ 
+ 
+ <p class="date">Posted one day ago</p>
+ 
+ <p>At the heart of Popmotion lies a single thread; the render loop. Its purpose is simply to run through all active <a href="http://popmotion.io/api/process">Process</a> instances, and fire their associated callbacks - once per frame, 60 frames per second.</p>
+
+<p>Every Actor has its own Process instance, so when you run your own Process, you&#x2019;re running a method in tandem with all your other animations and simulations without having to manage your own render loop.</p>
+
+<p>Popmotion is already unique in exposing access to this loop, and with the release of <code>4.0.0</code>, it now provides two new methods of control and scheduling.</p>
+
+<p>The first, four new processing steps that allow more control over <strong>where</strong> in the render loop a Process will fire. The second, background processes that run <strong>only when</strong> other processes are active.</p>
+
+<h4>Discrete processing steps</h4>
+
+<p>In previous versions, a Process would represent a single callback, and every Process callback would be fired sequentially. So, Actors would update their values, render, and check if they&#x2019;re still active, all at once, one Actor after the other. This made it impossible to work with <strong>all</strong> the updated <code>Actor</code>s <strong>before</strong> they were all rendered.</p>
+
+<p>From today, there are four steps to the render loop:</p>
+
+<ul>
+<li><code>update</code></li>
+<li><code>preRender</code></li>
+<li><code>render</code></li>
+<li><code>postRender</code></li>
+</ul>
+
+<p>Now, all active <code>Process.update</code> methods will fire first, then all active <code>Process.preRender</code> methods, and so on.</p>
+
+<p>Assigning a method to run at any of these four steps is easy. Here&#x2019;s a crude framerate counter to demonstrate:</p>
+
+<pre><code>import { Process } from 'popmotion';
+
+let framerateDisplay = document.getElementById('framerate');
+let framerate = 0;
+
+let updateFramerate = new Process({
+ update: function (process, framestamp, frameDuration) {
+ framerate = 1000 / frameDuration;
+ },
+ render: function () {
+ framerateDisplay.innerHTML = framerate;
+ }
+});
+
+updateFramerate.start();
+</code></pre>
+
+<p>Soon, we&#x2019;ll be releasing a collision detection plugin that will make use of the <code>preRender</code> method to recalculate <code>Actor</code> positions before render. Canvas and WebGL applications could harness <code>postRender</code> to implement post-processing effects.</p>
+
+<h4>Background processes</h4>
+
+<p>By default, our render loop stops running if it detects no active processes, and starts again when the next process starts, which helps save battery life on mobile devices.</p>
+
+<p>Flagging a Process as a <code>background</code> process will ensure that it only runs when <strong>other, non-background</strong> processes are active.</p>
+
+<p>Our previous example of a framerate counter shows how this could be helpful. It&#x2019;d be a waste to update the framerate counter when we&#x2019;re not running any Processes. By passing <code>true</code> as the last argument to our <code>Process</code> constructor, we can flag it as a background process.</p>
+
+<pre><code>let updateFramerate = new Process(yourCallbacks, true);
+
+updateFramerate.start();</code></pre>
+
+<p>The <code>updateFramerate</code> callbacks won&#x2019;t start until another, non-background Process begins to run, or an Actor begins to animate.</p>
+
+<h4>Upgrade to 4.0.0</h4>
+
+<p>If you&#x2019;ve never used <code>Process</code> before, and as a low-level class you probably haven&#x2019;t, then you can simply upgrade.</p>
+
+<p>For those of you that have ventured this far down, as part of reevalutating the Process class we decided to add <code>once()</code> and remove <code>start(duration)</code> and <code>every()</code> to reduce our API footprint and overall internal complexity. So:</p>
+
+<pre><code>process.start(500);</code></pre>
+
+<p>becomes</p>
+
+<pre><code>process.start();
+
+setTimeout(() =&gt; process.stop(), 500);</code></pre>
+
+<p>and</p>
+
+<pre><code>process.every(200);</code></pre>
+
+<p>becomes</p>
+
+<pre><code>setInterval(() =&gt; process.once(), 200);</code></pre>
+
+<p>We&#x2019;re committed to keeping Popmotion lightweight and at 12.6kb it is easily one of the smallest motion engines for the web, while still providing an unprecedented level of functionality and compatibility. Small changes like this allow us to keep delivering big changes like the new render loop and background processes.</p>
+
+<p>As always, keep in touch with questions, suggestions or cool stuff you&#x2019;ve made via our <a href="https://twitter.com/popmotionjs">Twitter</a>.</p>
+
+ 
+ </article>
+</div>
+</body></html>

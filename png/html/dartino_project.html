@@ -1,0 +1,236 @@
+<!DOCTYPE html><html><head><title>Dartino Project</title></head><body>
+<h1>Dartino Project</h1><p><a href="https://dartino.github.io/sdk/" target="_new">Original URL</a></p>
+<p><blockquote>Dartino is an experimental project to enable highly productive development for embedded devices. It is powered by the Dart language and a fast, lean runtime. This page walks you through running your&hellip;</blockquote></p>
+<div><section>
+ 
+
+<p>Dartino is an <strong>experimental</strong> project to enable highly productive development
+for embedded devices. It is powered by the <a href="https://www.dartlang.org/docs/dart-up-and-running/ch02.html">Dart
+language</a> and a
+fast, lean runtime.</p>
+
+<p>This page walks you through running your first program on Dartino. Note that this
+early version of Dartino only supports a single embedded device &#x2013; the Raspberry
+Pi 2 &#x2013; and that the only supported client operating systems supported for
+development are MacOS and Linux (sorry, no Windows support).</p>
+
+<p>If you just want to see what Dartino programs look like, take a peek at our
+<a href="https://dartino.github.io/sdk/samples.html">samples page</a>.</p>
+
+
+
+<h2 id="what-you-will-need">What you will need</h2>
+
+<p>To develop embedded programs with Dartino, you will need the following:</p>
+
+<ul>
+ <li>
+ <p>A developer PC (running MacOS or Linux) where you write the programs</p>
+ </li>
+ <li>
+ <p>A Raspberry Pi 2 embedded device for running the programs</p>
+ </li>
+ <li>
+ <p>A MicroSD card to hold the operating system for
+ the Raspberry Pi 2, and some kind of SD card reader</p>
+ </li>
+ <li>
+ <p>A network connection between the developer PC and the Raspberry Pi 2</p>
+ </li>
+ <li>
+ <p>Optional: A breadboard and a collection of components for running some of
+ the samples (will be discussed later)</p>
+ </li>
+</ul>
+
+<p><img src="https://storage.googleapis.com/fletch-archive/images/setup.jpg" alt="What you need photo"></p>
+
+<h2 id="installing-the-sdk">Installing the SDK</h2>
+
+<p>First download the SDK. This is available as a &#x2018;.zip&#x2019; archive; pick the one that
+matches the OS of the PC you will be using for development:</p>
+
+<ul>
+ <li><a href="https://storage.googleapis.com/fletch-archive/channels/dev/release/latest/sdk/fletch-sdk-macos-x64-release.zip">Dartino SDK for MacOS (64-bit)</a></li>
+ <li><a href="https://storage.googleapis.com/fletch-archive/channels/dev/release/latest/sdk/fletch-sdk-linux-x64-release.zip">Dartino SDK for Linux (64-bit)</a></li>
+</ul>
+
+<p>Unzip the SDK, and add the &#x2018;fletch&#x2019; command to the path by typing the
+below in a terminal window:</p>
+
+<pre><code>cd $HOME
+unzip Downloads/fletch-sdk-macos-x64-release.zip
+export "PATH=$PATH:$HOME/fletch-sdk/bin"
+</code></pre>
+
+<p>Test if the &#x2018;fletch&#x2019; command works; it should print a version number to the
+console:</p>
+
+<pre><code>fletch --version
+</code></pre>
+
+<h2 id="running-your-first-program">Running your first program</h2>
+
+<p>Let&#x2019;s go ahead and run our first Dartino program. This is a simple program that
+prints Hello. In your command line type:</p>
+
+<pre><code>cd $HOME/fletch-sdk/
+fletch run samples/general/hello.dart
+</code></pre>
+
+<p>This runs the program in hello.dart on your local machine. You should see a
+message that says <code>Created settings file...</code>, and then output resembling
+this:</p>
+
+<pre><code>Hello from Darwin running on michael-pc2.
+</code></pre>
+
+<p>Try to open <code>hello.dart</code> in your favorite editor. We recommend the <a href="https://atom.io/">Atom
+editor</a> by Github with the <a href="https://github.com/dart-atom/dartlang/">Dart
+plugin</a>. Pretty easy to read, right?
+(Note: you will get some Analyzer warnings in Atom as we don&#x2019;t fully support it
+yet. You can ignore those.)</p>
+
+<h3 id="dartino-and-sessions">Dartino and sessions</h3>
+
+<p>But what actually happened when we asked the <code>fletch</code> command to run
+<code>hello.dart</code>? By default <code>fletch</code> is connected to a <em>local session</em>,
+which is connected to a local VM (Virtual Machine) running on your developer PC.
+When you ask <code>fletch</code> to run the program, it compiles the program to byte
+code, and then passes it to the local Dartino VM for execution. The VM passes
+back the result, and Dartino prints it to your command line.</p>
+
+<p><img src="https://storage.googleapis.com/fletch-archive/images/Fletch-architecture.png" alt="Dartino architecture diagram"></p>
+
+<p>Now let&#x2019;s get things running in a <em>remote session</em> that is connected to your
+Raspberry Pi 2!</p>
+
+<h2 id="preparing-your-raspberry-pi-2">Preparing your Raspberry Pi 2</h2>
+
+<p>First we need to prepare an SD card with an image that contains the standard
+Raspbian operating system, and the Dartino binaries for Raspberry Pi 2.</p>
+
+<p>This step uses a script that automates the download of Raspbian, and performs
+the needed configuration. If you prefer to configure the image manually, see the
+<a href="https://dartino.github.io/sdk/manual-install.html">manual install instructions</a>.</p>
+
+<p>Start by opening a terminal window, and enter the following command (<em>note</em>: you
+will be prompted to enter your password as the script performs system level
+operations):</p>
+
+<pre><code>platforms/raspberry-pi2/flash-sd-card
+</code></pre>
+
+<p>The script will take you through the following steps:</p>
+
+<ol>
+ <li>
+ <p><em>Specify which SD card to use</em>: You will be asked to remove all SD cards, and
+then insert <em>just</em> the one you wish to use for Dartino. <strong><em>Important</em></strong>:
+Everything on this SD card will be erased during the installation process.</p>
+ </li>
+ <li>
+ <p><em>Specify device name</em>: The name your Raspberry Pi 2 device will be given on
+the network.</p>
+ </li>
+ <li>
+ <p><em>Specify IP address</em>: If you are using automatically allocated IP addresses
+assigned by a router with DHCP just press enter. To specify a static IP, for
+example when using a direct connection (see below), enter the desired IP
+address.</p>
+ </li>
+ <li>
+ <p><em>Downloading</em>: Download of the Raspbian base image. This can take up to 10
+minutes depending on the speed of your Internet connection. A progress indicator
+will be shown.</p>
+ </li>
+ <li>
+ <p><em>Flashing</em>: Flashing of the image onto the SD card. This can take up to 10
+minutes depending on the speed of your SD card. A progress indicator
+will be shown.</p>
+ </li>
+</ol>
+
+<h2 id="connecting-your-raspberry-pi-2-to-the-network">Connecting your Raspberry Pi 2 to the network</h2>
+
+<p>Once the steps in the script are completed, and you see the <code>Finished flashing
+the SD card</code> message, remove the SD card from your PC and insert it into the
+Raspberry Pi 2.</p>
+
+<p>Next, we need to ensure your PC can communicate with the Raspberry over the
+network.</p>
+
+<h3 id="option-1-router-based-connection">Option 1: Router-based connection</h3>
+
+<p>In this option, both your PC and Raspberry are connected to the same networking
+router.</p>
+
+<ol>
+ <li>
+ <p>Connect the Raspberry to your router with an Ethernet cable.</p>
+ </li>
+ <li>
+ <p>Connect your PC to the same router.</p>
+ </li>
+</ol>
+
+<h3 id="option-2-direct-connection">Option 2: Direct connection</h3>
+
+<p>If you do not wish to use a router, or if the Raspberry is not permitted to join
+your network, you can connect it directly to your PC.</p>
+
+<ol>
+ <li>Connect the Raspberry to your PC with an Ethernet cable. If your PC does not
+have an empty Ethernet port, you can use an USB Ethernet adapter.</li>
+</ol>
+
+<h3 id="testing-the-connection">Testing the connection</h3>
+
+<p>After connecting using option 1 or 2, test the connection by running this
+command:</p>
+
+<pre><code>fletch show devices
+</code></pre>
+
+<p>If the connection is working, you should see output resembling <code>Device at
+192.168.1.2 raspberrypi.local</code>.</p>
+
+<h2 id="running-on-the-raspberry-pi-2">Running on the Raspberry Pi 2</h2>
+
+<p>Let&#x2019;s make our Hello program run again, this time on the Raspberry Pi 2. All we
+need is to specify to the <code>fletch run</code> command that we want to run in a
+remote session. Type the following on your local developer PC:</p>
+
+<pre><code>fletch run samples/general/hello.dart in session remote
+</code></pre>
+
+<p>The first time you run in the remote session you will be asked to specify the IP
+address. Select from the list of devices discovered on the network, or manually
+enter the IP address, e.g. <code>192.168.2.2</code>.</p>
+
+<p>You should see output resembling this on your screen:</p>
+
+<pre><code>Hello from Linux running on raspberrypi.
+</code></pre>
+
+<p>Did you notice the difference from when we ran in the local session? As before
+Dartino compiled the hello.dart program to byte code, but this time rather than
+passing it to the local VM via the local session it passed it to the Raspberry
+Pi via the remote session. On the Raspberry Pi, the Dartino VM Agent made sure
+that a VM (Virtual Machine) was spun up, and the program was executed on it. The
+result of the program (the printing to the console) was passed back by the VM to
+the &#x2018;fletch&#x2019; command on the developer PC, and it was printed to the local
+console.</p>
+
+<h2 id="next-steps">Next steps</h2>
+
+<p>Ready for some more fun? Take a look at our <a href="https://dartino.github.io/sdk/samples.html">samples</a>, and read
+more about the <a href="https://dartino.github.io/sdk/tool.html">fletch command</a>.</p>
+
+<p>And don&#x2019;t forget to send us some <a href="https://dartino.github.io/sdk/feedback.html">feedback</a>, and ask some
+<a href="https://dartino.github.io/sdk/faq.html">questions</a>.</p>
+
+ </section>
+
+ </div>
+</body></html>

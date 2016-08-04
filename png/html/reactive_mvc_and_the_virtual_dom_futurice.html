@@ -1,0 +1,190 @@
+<!DOCTYPE html><html><head><title>Reactive MVC and the Virtual DOM — Futurice</title></head><body>
+<h1>Reactive MVC and the Virtual DOM — Futurice</h1><p><a href="http://futurice.com/blog/reactive-mvc-and-the-virtual-dom" target="_new">Original URL</a></p>
+<p><blockquote>The web frontend scene is witness to many new frameworks and ways of working. It can be quite annoying when software becomes legacy quicker than ever. But actually, it's just good old innovation&hellip;</blockquote></p>
+<div><div class="article__body">
+ <p>The web frontend scene is witness to many new frameworks and ways of working. It can be quite annoying when software becomes legacy quicker than ever. But actually, it's just good old innovation happening as it should, because the opportunities for improvement are there. Frameworks come and go, but what remains are the good ideas that they brought to the world. We're going to talk about the good ideas and the not so good ideas.</p>
+
+<p><a href="http://facebook.github.io/react/">React</a> is one of those currently hottest frontend technologies. <strong>The new great idea in React is Virtual DOM Rendering.</strong> The gist is to frequently re-render a complete and lightweight representation of the DOM, then apply a difference filter to detect the minimum changes that need to be made to the DOM. A similar technique has existed in game development long before React: re-render the game screen in every game loop, but only update the minimum portion of the screen which changed compared to the previously rendered screen.</p>
+
+<p>It's hard to speak about React without mentioning <a href="http://facebook.github.io/flux/">Flux</a>, because only with both together can we speak of a complete frontend architecture, since React concerns only user interfaces. Flux contains many ideas, but it can be summarized as an architecture with a unidirectional and circular flow of data. The benefit is code that is easier to follow with regard to data updates.</p>
+
+<p>I started applying React to a tool I built called <a href="http://rxmarbles.com/">RxMarbles.com</a>, and spent some time investigating Flux. React turned out to disappoint me in multiple ways, mainly through a poorly designed API which induces the programmer to create <a href="http://facebook.github.io/react/docs/thinking-in-react.html">complex state machines</a> and to mix multiple concerns in one component. I decided to replace React with the great <a href="https://github.com/Matt-Esch/virtual-dom">virtual-dom</a> library, and to build a Reactive MVC alternative heavily based on <a href="https://github.com/Reactive-Extensions/RxJS">RxJS</a>. This pattern turned out to be successful and I applied it to other web apps. One of these is a customer project we are glad to say has worked out very well.</p>
+
+<p>The combo React/Flux is clearly inspired by Reactive Programming principles, but the API and architecture are an unjustified mix of Interactive and Reactive patterns. Keep reading and I'll explain what this means, and how we can do better.</p>
+
+<h2 class="article__heading--h2">Duality in inter-module communications</h2>
+
+<p>Duality is an old and powerful concept that we sometimes encounter in Mathematics, but also in programming. In a nutshell, some problem might be cumbersome to work with under one perspective, but under its dual perspective, it becomes easier.</p>
+
+<p>A playful example of duality is the dark and light Hyrule worlds in <em>The Legend of Zelda: A Link to the Past</em>. In the light world, one quest might be impossible to solve, and you need to go to the dark world to solve it, although both places are just different perspectives of the same space.</p>
+
+<figure><img alt="Light and Dark Hyrule in the Legend of Zelda: Link to the Past&#x200B;" src="https://flockler.com/thumbs/1992/zelda_s830x0_q80_noupscale.jpg">
+<figcaption><span class="image-caption-title">Light and Dark Hyrule in the Legend of Zelda: Link to the Past&#x200B;</span></figcaption>
+</figure>
+
+<p><br>
+What is duality when it comes to components of an app communicating with each other? Let's assume you have a project built with browserify modules foo, bar, baz, quux, arranged as such:</p>
+
+<figure><img alt="&#x200B;" src="https://flockler.com/thumbs/1992/modules1_s830x0_q80_noupscale.png">
+<figcaption><span class="image-caption-title">&#x200B;</span></figcaption>
+</figure>
+
+<p><br>
+An arrow from foo to bar means that foo somehow affects bar, by updating data in bar. A typical case is code inside foo which calls</p>
+
+<pre class="article__code CodeRay CodeRay--javascript">
+<code>bar.updateSomething(someValue);</code></pre>
+
+<p>Question: where does each arrow live in a program? They can't simply live in between modules, because all code is inside some module. The answer is: it depends, but typically, you expect the arrow to be defined in the arrow's tail, as such:</p>
+
+<figure><img alt="Arrows defined at their tails (Interactive)&#x200B;" src="https://flockler.com/thumbs/1992/modules2_s830x0_q80_noupscale.png">
+<figcaption><span class="image-caption-title">Arrows defined at their tails (Interactive)&#x200B;</span></figcaption>
+</figure>
+
+<p><br>
+This paradigm which you have probably been doing for most of your career is called "Interactive Programming", defined in <a href="https://hal.archives-ouvertes.fr/file/index/docid/75494/filename/RR-1065.pdf">a paper from 1989</a>. Reinterpreted to our context, we can define it as:</p>
+
+<blockquote>
+<p>In the Interactive pattern, module X defines which other modules X affects.</p>
+</blockquote>
+
+<p>The dual of Interactive is Reactive, where arrows are defined in the opposite end, in the arrow head, as such:</p>
+
+<figure><img alt="Arrows defined at their heads (Reactive)&#x200B;&#x200B;" src="https://flockler.com/thumbs/1992/modules3_s830x0_q80_noupscale.png">
+<figcaption><span class="image-caption-title">Arrows defined at their heads (Reactive)&#x200B;&#x200B;</span></figcaption>
+</figure>
+
+<p><br>
+That's it. Just flip the responsible parent for the arrows in this directed graph, and you get the Reactive pattern.</p>
+
+<blockquote>
+<p>In the Reactive pattern, module X defines which other modules affect X.</p>
+</blockquote>
+
+<p>The benefit of Reactive over Interactive is mainly separation of concerns. In Interactive, if you want to discover what affects X, you need to search for all such calls <strong>X.update()</strong> in <em>other</em> modules. However, in Reactive, all that it takes is to peek inside X, since it defines everything which affects it. For instance, this property is common in spreadsheet calculations. The definition of the contents of one cell are always defined just in that cell, regardless of changes happening on the other cells it depends on.</p>
+
+<h2 class="article__heading--h2">How to implement the Reactive pattern?</h2>
+
+<p>One common implementation of the Reactive pattern is to introduce event emitters. Hence, a module X can simply subscribe (or listen) to events from module Y in order to define that X is affected by data coming from Y. In this sense, Y is decoupled from X so that it doesn't need to consider X's existence. You do not need libraries such as RxJS or Bacon.js in order to implement this, and in fact, Flux and React use cases typically have EventEmitter from Node.js.</p>
+
+<p>When all modules start using event emitters as basic building blocks, you need an intelligent way of handling event emitters. For instance, what do you do when you need to define one event emitter as the 1-second delayed version of another event emitter? The answer probably floats around a state machine based on <strong>setTimeout() </strong>and<strong> clearTimeout()</strong>. And what if you need to merge two event emitters? There clearly is a need for higher-order functions over event emitters so one can, for instance, simply construct an event emitter <strong>y</strong> from <strong>x</strong> by writing</p>
+
+<pre class="article__code CodeRay CodeRay--javascript">
+<code><span class="keyword">var</span> y = delay(x, <span class="integer">1000</span> );</code></pre>
+
+<p>The state of the art tools for higher-order functions over events, currently available, are <a href="https://github.com/Reactive-Extensions/RxJS">RxJS</a>, <a href="http://baconjs.github.io/">Bacon.js</a>, and <a href="http://pozadi.github.io/kefir/">Kefir.js</a>. I prefer RxJS for its language ubiquity, but your mileage may vary. EventEmitter compared to RxJS is analogous to roller blades versus cars.</p>
+
+<p>How would a reactive module look like? It doesn't have imperative functions such as <strong>update()</strong>, and is based on RxJS Observables (our "event emitters"). As it turns out, the public interface of a reactive module consists only of Observables it exposes for the rest of the app to subscribe to. This reactive module might itself also need to subscribe to external Observables of other modules, so it either internally <strong>requires</strong> (node style imports) those modules, or it has a function for dependency injection.</p>
+
+<p>For instance, below is an example of a "Notifications Center" module, which observes events from other modules and exports its own events based on those.</p>
+
+<pre class="article__code CodeRay CodeRay--javascript">
+<code><span class="keyword">var</span> breakingNews = require(<span class="string"><span class="delimiter">'</span><span class="content">myapp/breakingNews</span><span class="delimiter">'</span></span>);
+<span class="keyword">var</span> sms = require(<span class="string"><span class="delimiter">'</span><span class="content">myapp/sms</span><span class="delimiter">'</span></span>);
+
+<span class="keyword">var</span> notifications = Rx.Observable
+ .merge(breakingNews.newsEvents, sms.messageEvents);
+
+module.exports = {
+ <span class="key">notifications</span>: notifications
+}</code></pre>
+
+<h2 class="article__heading--h2">Reactive MVC?</h2>
+
+<p class="article__paragraph">What would an MVC-like architecture for single-page apps look like if all components were reactive? To start with, we need to get rid of the Controller, because it is by definition an Interactive component, imperatively controlling other components. In fact, no reactive component should send commands to other components in an imperative fashion.</p>
+
+<p>The Model takes care of representing data and the current state of the app, so it should export Observables of data events. The View should subscribe to Model events and render a representation of the Model. The rendered output can also be wrapped as an Observable which the View exports. As it turns out, the View component is nothing else than a function which takes Model events as input and has renderings as outputs.</p>
+
+<p>The missing piece is the Controller replacement, as it usually happens with MV* architectures. We need a component to take the responsibility of managing user input events. A traditional Controller would take user input events, do some computation over them, and then call a function such as <strong>Model.update(value)</strong>. Because we are doing Reactive, it should go the other way around: the Model observes what the "Reactive Controller" <em>wants</em> to update, and the Model decides to update itself based on "Reactive Controller" events.</p>
+
+<p>The name I give to this Reactive Controller is "Intent".</p>
+
+<h2 class="article__heading--h2">Model-View-Intent</h2>
+
+<p>Intent is a component whose sole responsibility is to translate user input events into model-friendly events. It should interpret what the user is trying to do in terms of model updates, and export these "user intentions" as events. It translates "View idioms" to "Model idioms". Intent itself doesn't change anything else, as any other typical Reactive component doesn't, by definition.</p>
+
+<p>The Model observes Intent events, and decides to change its data if the intent doesn't break restrictions internally defined in the Model. This ties the knots of a circular unidirectional flow of data:</p>
+
+<figure><img alt="View observes Model, Intent observes View, Model observes Intent&#x200B;" src="https://flockler.com/thumbs/1992/mvi2--82jxp31iez_s830x0_q80_noupscale.png">
+<figcaption><span class="image-caption-title">View observes Model, Intent observes View, Model observes Intent&#x200B;</span></figcaption>
+</figure>
+
+<p><br>
+Each of these is "function-like", in the sense that it takes events as input and exports events as output. However, they cannot be JavaScript functions strictly speaking, because that would be a recursive cycle without a starting point. This is what each part has as inputs and outputs:</p>
+
+<h3 class="article__heading--h3">Model</h3>
+
+<p><strong>Input:</strong> user interaction events from the Intent.<br>
+<strong>Output:</strong> data events.</p>
+
+<h3 class="article__heading--h3">View</h3>
+
+<p><strong>Input:</strong> data events from the Model.<br>
+<strong>Output:</strong> a Virtual DOM rendering of the model, and raw user input events (such as clicks, keyboard typing, accelerometer events, etc).</p>
+
+<h3 class="article__heading--h3">Intent</h3>
+
+<p><strong>Input:</strong> raw user input events from the View.<br>
+<strong>Output:</strong> model-friendly user intention events.</p>
+
+<p>To avoid circular imports, we cannot use <strong>require</strong> from Node.js. Instead, each of these components has an <strong>observe()</strong> function as a dependency injection mechanism to define what is its input module. For instance, <strong>view.observe(model);</strong>. To tie all the knots, we instantiate the three, and then call the three <strong>observe()</strong> functions along the cycle. To see how this works in practice, check out <a href="http://www.staltz.com/mvi-example">this example</a>.</p>
+
+<p>To have inter-model dependencies, one Model just needs to import other Models and listen to their events. The same applies to dependencies between Intents.</p>
+
+<h2 class="article__heading--h2">Virtual DOM to DOM</h2>
+
+<p>Reactive components by definition do not change the external world, so the MVI trio won't either. For changing the external world we need side effects. It might come to you as a surprise, but in this MVI architecture, the View doesn't actually render anything to the user. View exports an Observable of VTree, which is in virtual-dom terminology just a virtual DOM "element". View's responsibility is to express what the DOM <em>should</em> look like, but it doesn't itself change the DOM.</p>
+
+<p>We delegate the responsibility of changing the DOM to a component called Renderer. It's very simple: it subscribes to VTree Observables from all the Views in your app, and converts these VTree into actual DOM elements. It does so by diff'ing with the previous VTree and applying a patch to the DOM.</p>
+
+<figure><img alt="Renderer component as a side effect&#x200B;" src="https://flockler.com/thumbs/1992/renderer_s830x0_q80_noupscale.png">
+<figcaption><span class="image-caption-title">Renderer component as a side effect&#x200B;</span></figcaption>
+</figure>
+
+<p><br>
+Renderer is a side-effect and "sink" type of component, consuming events from Views and changing the real world. The benefit of its separation from Views is that Views become more testable since they don't require a browser environment. You can use Views as function-like components: feed in any mockup data, and inspect what Virtual DOM elements (just Javascript objects) come out.<br>
+<br>
+Apparently, React has only <strong><a href="http://facebook.github.io/react/docs/top-level-api.html#react.rendertostring">renderToString()</a></strong> (meant for using from the backend), which isn't the best format for testing output views. In MVI it is easier to test purely virtual elements.</p>
+
+<h2 class="article__heading--h2">Example</h2>
+
+<p>A couple of weeks ago I saw <a href="http://binarymuse.github.io/react-primer/build/index.html">this collection of React examples</a>, and decided to build <a href="http://staltz.com/mvi-example">one of those implemented in MVI and Virtual DOM</a>. You can compare it to its React counterpart.</p>
+
+<h2 class="article__heading--h2">How is this different to React/Flux?</h2>
+
+<p>MVI is a unidirectional data flow architecture with Virtual DOM for rendering, just like React/Flux is. But the similarities end there, and MVI is different for the following reasons.</p>
+
+<p><strong>Purely Reactive.</strong> React mixes Reactive programming patterns with Interactive programming patterns, whenever it makes use of imperative APIs such as <strong>setState</strong>, <strong>forceUpdate</strong>, <strong>setProps</strong>, <strong>render</strong>. Flux attempts to be reactive by making Stores listen to Dispatcher events, and Controller-Views listen to Store events. However, the centralized Dispatcher is imperatively controlled by Actions, rather than taking the responsibility to observe Actions. Also, Actions are imperatively created at Views. MVI has a consistent reactive approach, making it easy to reason how any component is internally structured.</p>
+
+<p><strong>MVI is decentralized.</strong> Flux has a centralized Dispatcher, and the guidelines recommend that it is kept always singleton in the application. This leads to typical centralization problems such as unmaintainability of a large file as the application grows. The Dispatcher is actually an event plumber, connecting all the parties related to events, in a style not that different to a centralized Event Bus. In the MVI structure described here, inter-model dependencies can be easily described separately in each Model: whenever Model X depends on events from Model Y and Model Z happening first, then X simply internally defines that it depends on Y and Z.</p>
+
+<p><strong>Leverages the power of RxJS.</strong> While Flux suggests using the low-level EventEmitter which requires manual event handling, RxJS and similar event processing tools are powerhouses capable of replacing a lot of boilerplate that a typical Flux application contains. RxJS also allows the internal structure of a component to be reactive.</p>
+
+<p><strong>Renderer separated from View.</strong> By separating View logic from View rendering, the application has more separation of concerns, and the View becomes more testable and replaceable. Since the Renderer is modular and never referenced by any other component, one can also play with different implementations of the Renderer and easily swap between them. In a Renderer, you can even have post-processing steps over the View Observables, modifying the elements or wrapping them in a container div. This makes it easy to implement UI skins, for instance. These modular capabilities do not exist in React.</p>
+
+<p><strong>More testable.</strong> Every component in MVI, except side-effects such as the Renderer, are function-like since they are free of side-effects and receive input, generating output. This is an ideal situation for automated tests, specially when the View logic can be tested outside of a browser context, where test execution is faster.</p>
+
+<p><strong>Less coupled.</strong> Interactive patterns, often found in React/Flux, immediately imply more coupling between the parts. For instance, Actions import the Dispatcher and explicitly affect it, hence making it harder to replace the Dispatcher with another, if needed. MVI has separation of concerns in its core since it follows reactive programming principles strictly. You can even insert a mediator between the Model and the View or between any other two reactive modules, since they shouldn't need to explicitly import each other. Each component in the MVI cycle is agnostic to the input component it is given in the dependency injection system, as long as the input satisfies an expected interface.</p>
+
+<p><strong>virtual-dom is faster than React.</strong> <a href="http://elm-lang.org/blog/Blazing-Fast-Html.elm">Preliminary benchmarks</a> show that rendering run with <a href="https://github.com/Matt-Esch/virtual-dom">virtual-dom</a> is faster than in React and other frameworks. I have yet to see React (as a Virtual DOM rendering tool) perform better than&#xA0; <em>virtual-dom</em>.</p>
+
+<p><strong>Models observe other Models.</strong> Flux dictates that inter-model dependency should live in the Dispatcher, but in MVI, those dependencies are defined inside each Model.</p>
+
+<p><strong>No internal state.</strong> MVI is comparable to React implementations that only use properties (no state). Views should not contain internal state, since that would violate the View concern, which is simply to render a virtual element. In MVI, all state should live in the Model, even those that are purely UI related. This is more of a recommended practice, rather than a limitation, since one has freedom to implement state in MVI Views. This is related to the next point.</p>
+
+<p><strong>No reusable UI components.</strong> React has a strong emphasis on "reusable UI components", which is unmatched in this current MVI proposal. The focus in MVI is to enable separation of concerns with function-like modules. Currently, achieving proper reusable UI components in MVI is still an open problem. That's because a React View component can contain all three Model, View, and Intent responsibilities. I believe the ideal solution to this will be the advent of <a href="http://webcomponents.org/">Web Components</a> inside the context of a Virtual DOM. Ideally, we should virtually render a <strong>&lt;custom-element&gt;</strong>, with its own internal state and complex behavior, just like we do with any other <strong>&lt;div&gt;</strong>. For a lengthy discussion on these possibilities, <a href="http://futurice.com/blog/combining-react-flux-and-web-components">read more from our brilliant Jarno Rantanen</a>.</p>
+
+<h2 class="article__heading--h2">What's next</h2>
+
+<p>Model-View-Intent might evolve into a framework, or might not require enough boilerplate to justify a framework. Problems are yet to be discovered. Currently, the biggest challenge is encapsulating a UI component with its behavior, for reuse. We are anxious to see what Web Components will enable together with a Virtual DOM.</p>
+
+<p>I strongly recommend frontend developers to try <em>virtual-dom</em> before picking up React. Its API is minimal, and it only does one thing, so the rest of the work is good old Do-It-Yourself JavaScript with little code. In my opinion it is more faithful to the promise "Just the UI" than React is. <em>virtual-dom</em> throws instructive errors in the event of invalid input, and there are some very useful <a href="https://github.com/Matt-Esch/virtual-dom/wiki">libraries built specifically for virtual-dom.</a></p>
+
+<p>Another crucial tool is RxJS, which makes it possible to avoid writing low-level event utilities that other frameworks have to provide. It often almost removes the need to have a framework in the first place.</p>
+
+<p>Model-View-Intent is just an experiment that seems to be working. Unidirectional data flow with the Virtual DOM certainly exists outside the context of React and Flux. There are many possible variations of this architecture, and as frontend technologies normally go, this might evolve significantly in the future. These are exciting times with a lot still to happen.</p>
+
+ </div>
+
+ </div>
+</body></html>

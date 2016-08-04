@@ -1,0 +1,116 @@
+<!DOCTYPE html><html><head><title>How to create a network backup with Apple's TimeMachine</title></head><body>
+<h1>How to create a network backup with Apple's TimeMachine</h1><p><a href="https://foliovision.com/2010/05/network-backup-apple-timemachine" target="_new">Original URL</a></p>
+<p><blockquote>If you have tried to set up network backup on OS X and you ran into the message "the backup disk image could not be created", probably this article will help you. OS X's TimeMachine software had&hellip;</blockquote></p>
+<div>
+
+					
+
+					<div class="entry-content">
+						
+						
+<p>If you have tried to set up network backup on OS X and you ran into the message "the backup disk image could not be created", probably this article will help you.</p>
+<p>OS X's TimeMachine software had native support for network backup until the OS X&#xA0; Leopard 10.5.2 was released. Apple had its own <a href="http://www.kuro5hin.org/story/2008/5/11/131026/867">reasons</a> for the decision to remove network backup, but many advanced users including us at Foliovision would still like to be able to back up over the network.</p>
+<p>We have a bunch of Mac Minis in a mixed network of Linux and Windows computers. We'd like to use all our Minis for work and not for backup and use one of our older Linux towers to store the backup.</p>
+<p>How do you do it?</p>
+
+<p>Fortunately Apple left us an option to turn-on network support for TimeMachine by running the following command in terminal:</p>
+<p><code>defaults write com.apple.systempreferences TMShowUnsupportedNetworkVolumes 1</code></p>
+<p>We can finally see network hardrives in selection for backup places. The problem might seems to be solved. No dice: it is only the beginning.</p>
+<p>If you select a network drive for backup, you will see a very familiar message:</p>
+<blockquote>
+<p>the backup disk image could not be created</p>
+</blockquote>
+<p>Google automatically completes the phrase as soon as you type "the backup d".</p>
+<p>The real problem is in the file system which must be used for TimeMachine backup. TimeMachine only supports Mac OS Extended (Journaled) file system.</p>
+<p>The solution is to create a place on the network, which will trick TimeMachine, into thinking that it holds data in Mac OS Extended (Journaled) file system. This trick is accomplished via copying a sparsebundle image (with special name) to a network share. You have to do following steps for to make TimeMachine successfully run a backup.</p>
+<h3>OVERVIEW</h3>
+<ol>
+<li><strong>Enable network hardrive support in TimeMachine<br>
+ </strong></li>
+<li><strong>Mount network shared place for backup data<br>
+ </strong></li>
+<li><strong>Create a sparsebundle virtual image</strong></li>
+<li><strong>Copy the sparsebundle virtual image to the network shared place<br>
+ </strong></li>
+<li><strong>Set up TimeMachine for network backup</strong></li>
+<li><strong>Optimisation and other information</strong></li>
+</ol>
+<h3>1. Enable network hardrive support for the TimeMachine software</h3>
+<p>Network hardrive support for TimeMachine is turn off by default. For changing this fact we have to type following command to the terminal:<br>
+<code>defaults write com.apple.systempreferences TMShowUnsupportedNetworkVolumes 1 </code></p>
+<p>After that, you should see mounted network harddrive in TimeMachine's locations for backup. If it is not this case, probably a restart is needed.</p>
+<h3>2. Mount Network shared place for backup data</h3>
+<p>If you have a shared location for backup data on Linux server, you can map the directory as a drive to Mac in Finder application. You have to do following steps:</p>
+<ol>
+<li>Click GO and then &#x201C;<em>connect to server</em>&#x201D; in finder menu.<br>
+<h5><a class="colorbox" title="Finder Menu" rel="lightbox[slideshow]" href="https://foliovision.com/images/2010/04/Finder-Menu.png"><img width="400" alt="Finder Menu" src="https://cdn.foliovision.com/images/2010/04/400/Finder-Menu.png"></a></h5>
+<h5>&#xA0;</h5>
+</li>
+<li>Write following path if your sharing is based on protocol samba (SMB):<br>
+ <code>SMB://&lt;IP_ADDRESS_or_COMPUTER_NAME&gt;/&lt;NAME_of_SHARED_PLACE&gt;</code> (e.g. <code>SMB://192.168.1.25/Backup</code>)
+<h5 class="noborder"><a class="colorbox" title="Connect Server" rel="lightbox[slideshow]" href="https://foliovision.com/images/2010/04/Connect-Server.png"><img width="400" alt="Connect Server" src="https://cdn.foliovision.com/images/2010/04/400/Connect-Server.png"></a></h5>
+</li>
+</ol>
+
+<h3>3. Create a sparsebundle virtual image</h3>
+<p>This step is very important, because the TimeMachine doesn&#x2019;t allow to backup data to a network drive, which has any file system except&#xA0;&#x201C;Mac OS Extended (Journaled)&#x201D;. So we have to create a disk image in "Mac OS Extended (Journaled)&#x201D; format.<br>
+We have two ways to do it:</p>
+<ol>
+<li>Open disk utility (Disk Utility) and create new virtual disk with following atributes:
+<ul>
+<li><code><strong>Save As:</strong> &lt;computer hostname&gt;_&lt;hex mac address of en0 interface&gt;.sparsebundle</code> (e.g. <code>MacAlec_00ef9a048c4f.sparsebundle</code>, if you forget to add <code>.sparsebundle</code>, it will be added automatically)</li>
+<li><code> <strong>Volume Name:</strong> Backup of &lt;computer hostname&gt;</code> (e.g. <code>Backup of MacAlec</code>)</li>
+<li><code> <strong>Volume Size:</strong></code> the max amount of space you're going to set aside for backups. (The volume size is depends on amounts of backup data. I have chosen <code>150 GB</code>)</li>
+<li><code><strong>Volume Format:</strong> Mac OS Extended (Journaled)</code></li>
+<li><code><strong>Encryption:</strong> None</code></li>
+<li><code> <strong>Partitions:</strong> No partition map </code></li>
+<li><code> <strong>Image Format:</strong> Sparse bundle disk image</code>
+<p><a class="colorbox" title="Disk Utility" rel="lightbox[slideshow]" href="https://foliovision.com/images/2010/04/Disk-Utility.png"><img width="399" alt="Disk Utility" src="https://cdn.foliovision.com/images/2010/04/400/Disk-Utility.png"></a></p>
+</li>
+<li>Note: Disk utility automatically mounts the image to system volumes. We won&#x2019;t need the image mounted, so we can safely unmount it.</li>
+</ul>
+</li>
+<li>The previous step can be done by one command in terminal:<br>
+ <code>hdiutil create -size 150g -fs HFS+J -volname "Backup of MacAlec" MacAlec_00ef9a048c4f.sparsebundle</code></li>
+</ol>
+<h3>3. Copy the sparsebundle virtual image to the network shared place</h3>
+<p>You can copy the sparsebundle image to the network shared place using one of the following steps:</p>
+<ul>
+<li>Copy the file to shared place by drag and drop operation in Finder application.</li>
+<li>If you prefer to work with the terminal, you can type this instead:<br>
+ <code>cp -r &lt;sparsebundle_image_disc_location&gt;/&lt;computer hostname&gt;_&lt;hex mac address of en0 interface&gt;.sparsebundle /Volumes/&lt;NAME_of_SHARED_PLACE&gt;/</code>(e.g. <code>cp -r /Users/Alec/Documents/MacAlec_00ef9a048c4f.sparsebundle /Volumes/Backup/</code>)</li>
+</ul>
+<p>Now we can safely delete the sparsebundle image copy on local computer once we are sure that it has been copied to the shared location.</p>
+<h3><strong>Set up the TimeMachine for network backup</strong></h3>
+<ol>
+<li>Open TimeMachine preferences (in SystemPreferences).</li>
+<li>Click on <strong>Change Disk</strong> button for select the network drive for backup. (We have to select the "Backup"in our case.)</li>
+<li>
+<p><a class="colorbox" title="TimeMachine" rel="lightbox[slideshow]" href="https://foliovision.com/images/2010/04/TimeMachine.png"><img width="399" alt="TimeMachine" src="https://cdn.foliovision.com/images/2010/04/400/TimeMachine.png"></a></p>
+</li>
+<li>The first backup will start in two minutes. TimeMachine supports incremental backup, thus the first backup can take very long time (it is depends on network bandwidth and amount of backup data).</li>
+</ol>
+<p>If you want to eject the mapped shared volume (<code>/Volumes/Backup</code> in our case), you have to do it within the two minutes countdown before backup starts or after backup is finished. TimeMachine has its own mechanism for mapping network hardrives, so a backup process isn't interrupted by your hard drive mounting or unmounting. TimeMachine will automatically mount the virtual sparsebundle image, when the backup starts. You will see <code>Backup of &lt;computer_name&gt;</code> as connected device on your desktop, so you won't need to manually mount the network hard drive later.</p>
+<h3>4. Optimisation and other information</h3>
+<p>&#xA0;in order to avoid long delays in backup process caused by Spotlight indexing,&#xA0;You should set the Spotlight application to not index the mapped network drive. Here's how to remove spotlight indexing for a hard drive:</p>
+<ul>
+<li>Open up the Spotlight software preferences in system preferences window</li>
+<li>Move to privacy options and add the network drive by plus symbol
+<p class="noborder"><a class="colorbox" title="Spotlight" rel="lightbox[slideshow]" href="https://foliovision.com/images/2010/04/Spotlight.png"><img width="400" alt="Spotlight" src="https://cdn.foliovision.com/images/2010/04/400/Spotlight.png"></a></p>
+</li>
+</ul>
+<p>If you'd like to back up a &#xA0;little less often, you can modify the file <code>com.apple.backupd-auto.plist</code> which is located in <code>/System/Library/LaunhDaemons/</code> to change backup time interval. Open up the file in text editor and find the section:</p>
+<p><code>&lt;key&gt;StartInterval&lt;/key&gt;<br>
+&lt;integer&gt;3600&lt;/integer&gt;</code></p>
+<p>You should change the number 3600 to the number of seconds of your backup interval.</p>
+<h3>Result</h3>
+<p>I deliberately deleted some files to test backup reliability. This worked just fine. I was able to restore data from backup using TimeMachine's restore feature. TimeMachine restore is easy to use and lets you choose data from any date and hour. &#xA0;If you have followed the exact steps above, you should have a working network backup now on a non-Apple computer.</p>
+<p>I would like to thank <a href="http://www.foobar.org/blog/time-machine-on-samba-shares">Nick Hilliard</a> and <a href="http://www.readynas.com/?p=253">MacCorner</a> for useful information.</p>
+
+											</div>
+
+
+					<div class="entry-utility">
+						This entry was posted in <a href="https://foliovision.com/weblog/it">IT</a>. Bookmark the <a href="https://foliovision.com/2010/05/network-backup-apple-timemachine" title="Permalink to How to create a network backup with Apple&#x2019;s TimeMachine" rel="bookmark">permalink</a>.											</div>
+					</div>
+</body></html>

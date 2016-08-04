@@ -1,0 +1,229 @@
+<!DOCTYPE html><html><head><title>Hello, Blog! - An advanced setup of Ghost and Docker made simple</title></head><body>
+<h1>Hello, Blog! - An advanced setup of Ghost and Docker made simple</h1><p><a href="http://coderunner.io/hello-blog-an-advanced-setup-of-ghost-and-docker-made-simple/" target="_new">Original URL</a></p>
+<p><blockquote>So you want to setup a nice new blog with a streamlined development workflow? Great, so did I! After spending some time ironing out a setup that works for me, I thought I'd share it. If you want a&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p>So you want to setup a nice new blog with a streamlined development workflow? Great, so did I! After spending some time ironing out a setup that works for me, I thought I'd share it.</p>
+
+<p><img src="http://coderunner.io/content/images/2015/12/ghost-docker.png" alt="Ghost &amp; Docker logos"></p>
+
+<p>If you want a simple, back-to-basics blogging platform, then <a href="https://ghost.org/">Ghost</a> is a good choice. It is focussed on the content and making it look nice right out the box, and it is powering what you're reading now.</p>
+
+<p>I'll detail my workflow step-by-step so that it you want to do something similar you can follow along, just replace all references to <code>coderunner.io</code> with your own domain :) I'm still making refinements, so leave a comment below with any suggestions!</p>
+
+<p>I have split this up into three parts:</p>
+
+
+
+<h2 id="thegoal">The Goal </h2>
+
+<p>What we're shooting for:</p>
+
+<ul>
+<li>Ability to bring up/down the whole stack with a single command (we'll use <a href="https://docs.docker.com/compose/">Docker Compose</a> for that)</li>
+<li>Front our blog with a <a href="https://en.wikipedia.org/wiki/Reverse_proxy">reverse proxy</a>, because we will be hosting it on a VPS and may want to have other blogs/apps on the same box</li>
+<li>Simple to clone our environment for development (or to migrate to a different host in the future)</li>
+<li>Let us create content first on our local environment and then sync it with our public host</li>
+<li>Automated backup (and restore) to somewhere like <a href="https://www.dropbox.com">Dropbox</a></li>
+</ul>
+
+<p>Sounds good? Let's get started!</p>
+
+<h2 id="partisettingupadockerisedinstallationofghostwithmariadb">Part I: Setting up a Dockerised installation of Ghost with MariaDB</h2>
+
+<h4 id="guide">Guide</h4>
+
+
+
+<h4 id="overview">Overview</h4>
+
+<p>Ghost can be setup with <a href="https://www.sqlite.org/">sqlite3</a> (default) or <a href="https://www.mysql.com/">MySql</a>/<a href="https://mariadb.org/">MariaDB</a>. I decided to use MariaDB so I have a fully featured RDBMS, and as it will fit in nicely to our modular Docker setup. </p>
+
+<p>In this post we'll setup Ghost running in a Docker container, linked to a MariaDB container and fronted by <a href="https://www.nginx.com/resources/wiki/">Nginx</a>. To wire it all together, we'll use Docker Compose.</p>
+
+<blockquote>
+ <p>Before getting started, you should have <a href="https://docs.docker.com/engine/installation/">Docker installed</a> and <a href="https://docs.docker.com/compose/install/">Docker Compose setup</a>. We'll set everything up locally and then deploy to a VPS in the next post. </p>
+</blockquote>
+
+<h2 id="directorystructure">Directory Structure</h2>
+
+<p>So that it is clear up-front, this is the directory structure we'll be putting together: </p>
+
+<pre><code class="language-bash">.
+|-- data-coderunner.io
+| |-- config.js #[gist](https://gist.github.com/bennetimo/6ddb288bf645abf76b38/ed4f50cd4acda83f540e12bc6b7bb3267ea18d93)
+| |-- Dockerfile #[gist](https://gist.github.com/bennetimo/0ab18d783557438c6145)
+| `-- env_coderunner.io
+`-- docker-compose.yml #[gist](https://gist.github.com/bennetimo/91ca871c3aaa2e7a148a)
+
+1 directory, 4 files 
+</code></pre>
+
+<p>We'll build up each one as we go, but I've added the gists so you can see the final result if you want.</p>
+
+<h2 id="creatingadataonlycontainer">Creating a Data Only container</h2>
+
+<p>The power of Docker comes from composing together single purpose containers to create your application. To fully embrace this we'll create a <a href="http://container42.com/2013/12/16/persistent-volumes-with-docker-container-as-volume-pattern/">data only container</a> just to hold our data, and nothing more. Then we will be able to easily link the data volumes into any containers that need to access it, whether that's our Ghost container, backup container, or something else.</p>
+
+<p>Here is the <code>Dockerfile</code> for our data container, which lives in the sub-directory <code>data-coderunner.io</code>. </p>
+
+<pre><code class="language-docker">FROM ghost 
+MAINTAINER Tim Bennett &lt;tim@coderunner.io&gt;
+
+# Create required volumes
+VOLUME ["/var/lib/mysql", "/var/lib/ghost"]
+
+ENTRYPOINT ["/bin/bash"] 
+</code></pre>
+
+<p>It's pretty uninteresting, we just inform Docker that we want to mount the mysql and ghost directories. I'm basing off the Ghost image so it reuses the same layers as the Ghost container that we'll need later, to alleviate <a href="http://container42.com/2014/11/18/data-only-container-madness/">container madness</a>.</p>
+
+<blockquote>
+ <p>As of Docker 1.9.0 there is a new <a href="https://docs.docker.com/engine/reference/commandline/volume_create/">Volumes API</a> which it would be nice to use here, but it is <a href="https://github.com/docker/compose/issues/2110">not yet supported in Docker Compose</a>. </p>
+</blockquote>
+
+<h2 id="builditwithdockercompose">Build it with Docker Compose</h2>
+
+<p>Now we want to build our data container, but instead of doing it manually we'll do it with <a href="https://docs.docker.com/compose/">Docker Compose</a>, by creating a <code>docker-compose.yml</code> file at the top level of the directory:</p>
+
+<pre><code class="language-yaml">data-coderunner.io: 
+ build: ./data-coderunner.io
+ container_name: "data-coderunner.io"
+</code></pre>
+
+<p>In this file we'll be declaratively listing all of the components that make up our stack and how they link together. </p>
+
+<p>The <a href="https://docs.docker.com/compose/compose-file/#build">build</a> directive will create our data container, and we name it so we can refer back to it later.</p>
+
+<blockquote>
+ <p>It's also possible to setup the data-container <a href="http://stackoverflow.com/questions/32908621/how-can-i-create-a-data-container-only-using-docker-compose-yml">directly</a> in Docker-Compose, but I prefer this approach</p>
+</blockquote>
+
+<h2 id="setupourmariadbcontainer">Setup our MariaDB container</h2>
+
+<p>There's an officially supported <a href="https://hub.docker.com/_/mariadb/">image</a> for MariaDB which makes our lives easy. </p>
+
+<p>All we need to do is add it to our docker-compose.yml: </p>
+
+<pre><code class="language-yaml">mariadb: 
+ image: mariadb
+ container_name: "mariadb"
+ env_file: ./data-coderunner.io/env_coderunner.io
+ environment:
+ - TERM=xterm
+ ports:
+ - "127.0.0.1:3306:3306"
+ volumes_from:
+ - data-coderunner.io
+</code></pre>
+
+<p>There's a few things going on here. <code>volumes-from</code> references the data container we just created, so that MariaDB will be using the <code>/var/lib/mysql</code> mount point that we setup.</p>
+
+<p>The ports mapping will bind port 3306 on our host to 3306 in the container, and we bind it for the loopback interface only. Otherwise we would be able to connect directly to the database container from the outside, but we want our only outside entry point to be our proxy that we'll create shortly. </p>
+
+<p>We also specified an <code>env_file</code> with our db configuration: </p>
+
+<pre><code class="language-bash"># MariaDB configuration
+MYSQL_ROOT_PASSWORD=&lt;REDACTED&gt; 
+MYSQL_USER=tim 
+MYSQL_PASSWORD=&lt;REDACTED&gt; 
+MYSQL_DATABASE=blog 
+</code></pre>
+
+<p>Finally, I'm setting the TERM environment variable so I can use the mysql tool to connect to our database, if needed.</p>
+
+<h2 id="setupghost">Setup Ghost</h2>
+
+<p>Next up we need to actually add Ghost, and we have an <a href="https://hub.docker.com/_/ghost/">official image</a> for that too, awesome!</p>
+
+<pre><code class="language-yaml">blog-coderunner.io: 
+ image: ghost
+ container_name: "blog-coderunner.io"
+ volumes:
+ - ./data-coderunner.io/config.js:/var/lib/ghost/config.js
+ volumes_from:
+ - data-coderunner.io
+ env_file: ./data-coderunner.io/env_coderunner.io
+ links:
+ - mariadb:mysql
+</code></pre>
+
+<p>The only new things here are <code>volumes</code> and <code>links</code>, so let's just take a look at those.</p>
+
+<p>Ghost uses a config.js file for <a href="http://support.ghost.org/config/">configuration</a>, and the Docker image will create one that can then be modified as needed. But we want everything to be dynamic, and pick up the fact that we're using MariaDB instead of sqlite automagically!</p>
+
+<p>So, we'll use our own config.js that figures everything out using the environment variables from the containers. Here is the <a href="https://gist.github.com/bennetimo/6ddb288bf645abf76b38">gist</a>. Then, in the <code>volumes</code> section, we mount it straight to where Ghost is expecting it in the container.</p>
+
+<p>Now we just need to add this to our <code>env_coderunner.io</code> file: </p>
+
+<pre><code class="language-bash"># Ghost configuration
+URL=http://coderunner.io 
+</code></pre>
+
+<p>This is picked up in the config.js to configure the URL for Ghost.</p>
+
+<p>The <code>links</code> entry tells Docker to create a tunnel between our containers by adding a <code>mysql</code> entry to the <code>/etc/hosts</code> file; Now our blog container can talk to our mysql container.</p>
+
+<p>At this point we could fire up our blog, but we wouldn't be able to access it from our local machine as we're not exposing the ports. We will go one better than exposing the Ghost port directly, and setup <a href="https://www.nginx.com/resources/wiki/">nginx</a>.</p>
+
+<h2 id="putitallbehindnginx">Put it all behind nginx</h2>
+
+<p>By setting everything up behind an nginx reverse proxy, we can have multiple services (applications, other blogs etc) running on a single box and have nginx handling traffic routing between them. We could set this up manually, but there is already an awesome out-the-box Docker setup in <a href="https://hub.docker.com/r/jwilder/nginx-proxy/">jwilder/nginx-proxy</a>. </p>
+
+<p>Now we're really starting to see the magic and power of Docker. We're building our application by sticking together components like making a house out of lego bricks! </p>
+
+<div class="attributed-image"> 
+<img src="https://farm9.static.flickr.com/8507/8505316460_78d0abaf5b_b.jpg" alt="FlickrFriday: Keep it Simple. by elPadawan, on Flickr" title=""> 
+<a href="https://www.flickr.com/photos/elpadawan/8505316460/">Photo</a> 
+ by elPadawan / <a href="http://creativecommons.org/licenses/by/2.0/">CC BY</a>
+</div>
+
+<p>So we add this to our <code>docker-compose.yml</code>:</p>
+
+<pre><code class="language-yaml">nginx: 
+ image: jwilder/nginx-proxy
+ container_name: "nginx"
+ ports: 
+ - "80:80"
+ volumes:
+ - /var/run/docker.sock:/tmp/docker.sock
+</code></pre>
+
+<p>And that's all we need to create a fully-fledged reverse proxy! Now we just need to tell it the hostname that will map to our blog, by adding an environment variable to the blog container: </p>
+
+<pre><code class="language-yaml">environment: 
+ - VIRTUAL_HOST=coderunner.io
+</code></pre>
+
+<h2 id="startitup">Start it up!</h2>
+
+<p>In the main blog directory:</p>
+
+<pre><code>docker-compose up 
+</code></pre>
+
+<p>And we're running!</p>
+
+<blockquote>
+ <p>On the very first launch the Ghost container might try to connect to MariaDB before it's finished setting up the database. To avoid it you can start MariaDB separately first with <code>docker-compose up -d mariadb</code>, or by using my <a href="https://hub.docker.com/r/bennetimo/ghost-wait-mysql/">modified image</a>. See <a href="https://github.com/docker/compose/issues/374">here</a> for more info.</p>
+</blockquote>
+
+<p>At the moment everything is on our local machine, so we can add an entry to <code>/etc/hosts</code> to simulate the domain setup.</p>
+
+<pre><code class="language-bash">localhost coderunner.io 
+</code></pre>
+
+<blockquote>
+ <p>If you're using <a href="https://docs.docker.com/machine/">docker-machine</a> then you want to use the IP of the virtual machine which you can find with <code>docker-machine ip default</code></p>
+</blockquote>
+
+<p>Now we can fire up a browser and visit <a href="http://coderunner.io">http://coderunner.io</a>, and we're greeted with Ghost:</p>
+
+<p><img src="http://coderunner.io/content/images/2015/12/Screen-Shot-2015-12-20-at-13-37-25.png" alt="ghost-welcome-page"></p>
+
+<p>We now have a Ghost blog running, linked to a MariaDB container, and fronted by an Nginx reverse proxy, all running in Docker containers. Nice! </p>
+
+<p>But, at the moment we're just running locally. In the <a href="http://coderunner.io/deploying-ghost-on-digital-ocean-with-docker-compose">next post</a>, we'll move this to a VPS on DigitalOcean so we're publicly accessible.</p>
+ </section>
+
+ </div>
+</body></html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html><html><head><title>rvikmanis/fastflux</title></head><body>
+<h1>rvikmanis/fastflux</h1><p><a href="https://github.com/rvikmanis/fastflux" target="_new">Original URL</a></p>
+<p><blockquote>A lightweight message driven flux implementation written in ES6, inspired by FRP, the original Flux and Redux. Introduction Architecture Installation Getting Started</blockquote></p>
+<div><article class="markdown-body entry-content">
+
+<p><a href="http://rvikmanis.github.io/fastflux/source.html"><img src="https://camo.githubusercontent.com/81ad64f9659069241cd62ccd13a334e6a6ac16fe/687474703a2f2f7276696b6d616e69732e6769746875622e696f2f66617374666c75782f62616467652e737667" alt="Documentation Status"></a></p>
+
+<p>A lightweight message driven flux implementation written in ES6,
+inspired by <a href="https://en.wikipedia.org/wiki/Functional_reactive_programming">FRP</a>,
+the <a href="https://facebook.github.io/flux/docs/overview.html">original Flux</a>
+and <a href="https://github.com/rackt/redux">Redux</a>.</p>
+
+<ul>
+<li><a href="https://github.com/rvikmanis/fastflux#introduction">Introduction</a></li>
+<li><a href="https://github.com/rvikmanis/fastflux#architecture">Architecture</a></li>
+<li><a href="https://github.com/rvikmanis/fastflux#installation">Installation</a></li>
+<li><a href="https://github.com/rvikmanis/fastflux#getting-started">Getting Started</a></li>
+<li><a href="http://rvikmanis.github.io/fastflux/identifiers.html">API Reference</a></li>
+</ul>
+
+<h2><a id="user-content-introduction" class="anchor" href="https://github.com/rvikmanis/fastflux#introduction"></a>Introduction</h2>
+
+<p>Fastflux is a simple application state management library; meant to be the <em>Model</em>, and to some extent <em>Controller</em>, in your <strong>M-V-C</strong> stack, with <a href="https://facebook.github.io/react/">React</a> as the <em>View</em>.</p>
+
+<h5><a id="user-content-why" class="anchor" href="https://github.com/rvikmanis/fastflux#why"></a>Why?</h5>
+
+<p>Creating rich user interfaces in React is simple and fun, but React was never meant to do the job alone, it is not a full web framework.</p>
+
+<p>Say, you need to add new semi-global state to your application of 15 levels of nested components. How will you do it? Add the state to nearest common parent component and pass it down through props? Gets tedious fast, right? We call it <em>prop hell</em>.</p>
+
+<p>Fastflux keeps the <strong>state decoupled from components</strong>, allowing you to keep your app and your mind free from grandiose prop hierarchies, letting you focus on what matters most - application logic.</p>
+
+<h5><a id="user-content-how" class="anchor" href="https://github.com/rvikmanis/fastflux#how"></a>How?</h5>
+
+<p>Fastflux is a flux-like library, meaning it follows the same "data flows one way" pattern as React. Learn more about the Flux architecture from <a href="http://facebook.github.io/flux/docs/overview.html#content">the official docs</a>.</p>
+
+<p>Architecture of Fastflux and its differences and similarities to classic Flux are explained in the next section.</p>
+
+<h2><a id="user-content-architecture" class="anchor" href="https://github.com/rvikmanis/fastflux#architecture"></a>Architecture</h2>
+
+<p>How data flows in a typical Fastflux application:</p>
+
+<p><a href="https://camo.githubusercontent.com/6bb5daee67ce6ad23e32fb44d928eeee2b4cbfc2/687474703a2f2f7331342e706f7374696d672e6f72672f6f726c6a743672626c2f66617374666c75782e706e67" target="_blank"><img src="http://s14.postimg.org/orljt6rbl/fastflux.png" alt="Architecture"></a></p>
+
+<ul>
+<li><strong>Stores</strong> are state containers, coupled with one or more <em>reducers</em> -- pure functions describing the transformation of state in response to messages.</li>
+<li><strong>Messages</strong> -- plain objects identified by <code>type</code>, optionally containing data fields -- primarily used to signal stores about some event (data received from server, user pressed key etc.). Known from classic Flux as <em>actions</em>.</li>
+<li><strong>Actions</strong>, unlike in classic Flux, are self-contained asynchronous functions for a concrete task (create post, logout user etc.). Usually invoked by views, other actions or events from the environment. Subscribers (stores, other actions, even views) listen to actions for messages that can be emitted multiple times per invocation. IO and side effects are permitted.</li>
+<li><strong>Views</strong> -- React components. Can listen to stores for state changes. Additionally views may listen to actions for messages when a short feedback cycle is desired (e.g. input error handling), without polluting the stores.</li>
+</ul>
+
+<p>There is no central dispatcher as in classic Flux -- stores subscribe directly to the actions they need.</p>
+
+<h2><a id="user-content-installation" class="anchor" href="https://github.com/rvikmanis/fastflux#installation"></a>Installation</h2>
+
+<p>Install from npm:</p>
+
+<pre lang="plain"><code>npm install fastflux
+</code></pre>
+
+<h2><a id="user-content-getting-started" class="anchor" href="https://github.com/rvikmanis/fastflux#getting-started"></a>Getting Started</h2>
+
+<p>This introduction assumes familiarity with ES6 and React.</p>
+
+<h3><a id="user-content-create-your-first-store-and-action" class="anchor" href="https://github.com/rvikmanis/fastflux#create-your-first-store-and-action"></a>Create your first store and action</h3>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">import</span> {<span class="pl-smi">createStore</span>, <span class="pl-smi">createAction</span>} <span class="pl-k">from</span> <span class="pl-s"><span class="pl-pds">'</span>fastflux<span class="pl-pds">'</span></span>;
+
+<span class="pl-c">// Define store</span>
+<span class="pl-k">let</span> items <span class="pl-k">=</span> <span class="pl-en">createStore</span>({
+ <span class="pl-en">getInitialState</span>() {<span class="pl-k">return</span> []},
+
+ reducers<span class="pl-k">:</span> {
+
+ <span class="pl-en">add</span>(<span class="pl-smi">state</span>, {<span class="pl-smi">text</span>}) {
+ <span class="pl-k">return</span> <span class="pl-smi">state</span>.<span class="pl-c1">concat</span>([text])
+ }
+
+ }
+});
+
+<span class="pl-c">// Define action</span>
+<span class="pl-k">let</span> addItem <span class="pl-k">=</span> <span class="pl-en">createAction</span>(emit <span class="pl-k">=&gt;</span> text <span class="pl-k">=&gt;</span> {
+ <span class="pl-en">emit</span>({type<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>add<span class="pl-pds">"</span></span>, text})
+});
+
+<span class="pl-c">// Link action to store</span>
+<span class="pl-smi">addItem</span>.<span class="pl-en">subscribe</span>(<span class="pl-smi">items</span>.<span class="pl-smi">send</span>);
+</pre></div>
+
+<h5><a id="user-content-setup-logging" class="anchor" href="https://github.com/rvikmanis/fastflux#setup-logging"></a>Setup logging</h5>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-c">// Log state over time</span>
+<span class="pl-smi">items</span>.<span class="pl-en">subscribe</span>(s <span class="pl-k">=&gt;</span> <span class="pl-en">console</span>.<span class="pl-c1">log</span>(<span class="pl-s"><span class="pl-pds">"</span>State of `items`:<span class="pl-pds">"</span></span>, s))
+
+<span class="pl-c">// While we're at it, let's create some items</span>
+[<span class="pl-s"><span class="pl-pds">"</span>bar<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span>foobar<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span>baz<span class="pl-pds">"</span></span>].<span class="pl-en">forEach</span>(addItem);</pre></div>
+
+<p>Open the console, you will see something like this:</p>
+
+<pre lang="plain"><code>State of `items`: ["bar"]
+State of `items`: ["bar", "foobar"]
+State of `items`: ["bar", "foobar", "baz"]
+</code></pre>
+
+<h3><a id="user-content-create-components" class="anchor" href="https://github.com/rvikmanis/fastflux#create-components"></a>Create components</h3>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">import</span> {<span class="pl-smi">createSubscriber</span>} <span class="pl-k">from</span> <span class="pl-s"><span class="pl-pds">'</span>fastflux<span class="pl-pds">'</span></span>;
+<span class="pl-k">import</span> {<span class="pl-smi">Component</span>} <span class="pl-k">from</span> <span class="pl-s"><span class="pl-pds">'</span>react<span class="pl-pds">'</span></span>;
+
+<span class="pl-c">// Define input</span>
+<span class="pl-k">class</span> <span class="pl-en">ItemInput</span> <span class="pl-k">extends</span> <span class="pl-en">Component</span> {
+
+ state <span class="pl-k">=</span> {value<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>};
+
+ <span class="pl-en">onKeyDown</span> <span class="pl-k">=</span> (<span class="pl-smi">e</span>) <span class="pl-k">=&gt;</span> {
+ <span class="pl-k">if</span> (<span class="pl-smi">e</span>.<span class="pl-smi">key</span> <span class="pl-k">===</span> <span class="pl-s"><span class="pl-pds">"</span>Enter<span class="pl-pds">"</span></span>) {
+ <span class="pl-c">// Invoke action</span>
+ <span class="pl-en">addItem</span>(<span class="pl-smi">e</span>.<span class="pl-c1">target</span>.<span class="pl-c1">value</span>);
+ <span class="pl-v">this</span>.<span class="pl-en">clearValue</span>();
+ }
+ };
+
+ <span class="pl-en">onChange</span> <span class="pl-k">=</span> (<span class="pl-smi">e</span>) <span class="pl-k">=&gt;</span> {
+ <span class="pl-v">this</span>.<span class="pl-en">setValue</span>(<span class="pl-smi">e</span>.<span class="pl-c1">target</span>.<span class="pl-c1">value</span>)
+ };
+
+ <span class="pl-en">setValue</span> <span class="pl-k">=</span> (<span class="pl-smi">value</span>) <span class="pl-k">=&gt;</span> <span class="pl-v">this</span>.<span class="pl-en">setState</span>({value});
+ <span class="pl-en">clearValue</span> <span class="pl-k">=</span> () <span class="pl-k">=&gt;</span> <span class="pl-v">this</span>.<span class="pl-en">setValue</span>(<span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>);
+
+ <span class="pl-en">render</span>() {
+ <span class="pl-k">return</span> <span class="pl-k">&lt;</span>input
+ type<span class="pl-k">=</span><span class="pl-s"><span class="pl-pds">"</span>text<span class="pl-pds">"</span></span>
+ onKeyDown<span class="pl-k">=</span>{<span class="pl-v">this</span>.<span class="pl-smi">onKeyDown</span>}
+ <span class="pl-c1">onChange</span><span class="pl-k">=</span>{<span class="pl-v">this</span>.<span class="pl-smi">onChange</span>}
+ value<span class="pl-k">=</span>{<span class="pl-v">this</span>.<span class="pl-smi">state</span>.<span class="pl-c1">value</span>}
+ <span class="pl-k">/</span><span class="pl-k">&gt;</span>
+ }
+
+}
+
+<span class="pl-c">// Define root component</span>
+<span class="pl-k">function</span> <span class="pl-en">ControllerView</span>(<span class="pl-smi">props</span>) {
+ <span class="pl-c">// `props.items` contains current state of the `items` store</span>
+ <span class="pl-k">let</span> items <span class="pl-k">=</span> <span class="pl-smi">props</span>.<span class="pl-smi">items</span>.<span class="pl-en">map</span>(item <span class="pl-k">=&gt;</span> <span class="pl-k">&lt;</span>li<span class="pl-k">&gt;</span>{item}<span class="pl-k">&lt;</span><span class="pl-k">/</span>li<span class="pl-k">&gt;</span>);
+ <span class="pl-k">return</span> <span class="pl-k">&lt;</span>div<span class="pl-k">&gt;</span>
+ <span class="pl-k">&lt;</span>ul<span class="pl-k">&gt;</span>{items}<span class="pl-k">&lt;</span><span class="pl-k">/</span>ul<span class="pl-k">&gt;</span>
+ <span class="pl-k">&lt;</span>ItemInput <span class="pl-k">/</span><span class="pl-k">&gt;</span>
+ <span class="pl-k">&lt;</span><span class="pl-k">/</span>div<span class="pl-k">&gt;</span>;
+}
+
+<span class="pl-c">// Subscriber observes stores passed in props:</span>
+<span class="pl-c">// When a store emits new state, subscriber updates wrapped component's prop.</span>
+ControllerView <span class="pl-k">=</span> <span class="pl-en">createSubscriber</span>(ControllerView);
+<span class="pl-k">let</span> rootComponent <span class="pl-k">=</span> <span class="pl-k">&lt;</span>ControllerView items<span class="pl-k">=</span>{items}<span class="pl-k">&gt;</span>;</pre></div>
+
+<h5><a id="user-content-render" class="anchor" href="https://github.com/rvikmanis/fastflux#render"></a>Render</h5>
+
+<p>Assuming you have <code>&lt;div id="mount"&gt;&lt;/div&gt;</code> in your document body:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">import</span> {<span class="pl-smi">render</span>} <span class="pl-k">from</span> <span class="pl-s"><span class="pl-pds">'</span>react-dom<span class="pl-pds">'</span></span>;
+<span class="pl-en">render</span>(rootComponent, <span class="pl-smi">document</span>.<span class="pl-en">querySelector</span>(<span class="pl-s"><span class="pl-pds">"</span>#mount<span class="pl-pds">"</span></span>))</pre></div>
+</article>
+ </div>
+</body></html>

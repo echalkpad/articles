@@ -1,0 +1,117 @@
+<!DOCTYPE html><html><head><title>An Introduction to PostCSS</title></head><body>
+<h1>An Introduction to PostCSS</h1><p><a href="https://www.sitepoint.com/an-introduction-to-postcss/" target="_new">Original URL</a></p>
+<p><blockquote>Most developers who spend their time working with CSS are familiar with preprocessors such Less, Sass, and Stylus. These tools have become a vital part of the web development ecosystem. Writing&hellip;</blockquote></p>
+<div><div class="ArticleCopy language-">
+ <p>Most developers who spend their time working with CSS are familiar with preprocessors such Less, Sass, and Stylus. These tools have become a vital part of the web development ecosystem. Writing styles for a website without using features like nesting, variables, or mixins now seems cumbersome and awkward. Although each of them is a great and extremely useful product, let&#x2019;s take a step back and consider if using preprocessors in such a way is indeed the best approach.</p>
+<p>I see a couple of problems with tradition preprocessors:</p>
+<ul>
+<li><strong>They are not extendable.</strong> Whichever preprocessor you choose, you are limited to the set of features that it provides. If you need anything on top of that, you&#x2019;ll need to add it as a separate step in your build process. If you feel like writing your own extension, you&#x2019;re on your own.</li>
+<li><strong>You can&#x2019;t leave anything out.</strong> Some of the features preprocessors provide such as Sass&#x2019;s <code>@extend</code> <a href="http://www.sitepoint.com/avoid-sass-extend/">may be detrimental</a> to you, and you might want to leave them out completely. Unfortunately, while you can avoid using them, you can&#x2019;t remove that part of the tool to minimize code.</li>
+<li><strong>They push out CSS standards.</strong> You might say that each of the preprocessors has become a standard of its own. Regrettably, they don&#x2019;t aim at being compatible with the W3C standards, which means that they cannot be used as polyfills for early testing of the newer W3C standards.</li>
+</ul>
+<p>This is where PostCSS comes in.</p>
+
+<h2 id="what-is-postcss">What is PostCSS?</h2>
+<p><a href="https://github.com/postcss/postcss">PostCSS</a> is not a preprocessor per se; it doesn&#x2019;t transform CSS. As a matter of fact, it doesn&#x2019;t do much by itself at all. What it does is provide a CSS parser and a framework for creating plugins that can analyse, lint, handle assets, optimise, create fallbacks, and otherwise transform parsed CSS. PostCSS parses CSS into an abstract syntax tree (AST), passes it through a series of plugins, and then concatenates back into a string. If you&#x2019;re familiar with JavaScript tooling, then you can think of PostCSS as <a href="http://babeljs.io/">Babel</a> for CSS.</p>
+<p>There are currently more than 200 plugins for PostCSS, many of which are listed <a href="https://github.com/postcss/postcss">on the PostCSS GitHub page</a>, while others can be found on the useful PostCSS directory <a href="http://postcss.parts/">postcss.parts</a>. PostCSS can be integrated in most the build tools including Gulp, Grunt, webpack or npm.</p>
+<p>So how does PostCSS tackle the problems we listed earlier?</p>
+<ul>
+<li><strong>Each plugin is installed separately.</strong> This means you choose which ones you need and in what order they should be applied. Usually, plugins can be additionally configured using some set of options.</li>
+<li><strong>You can write your own plugins.</strong> Each PostCSS plugin receives parsed CSS as an input parameter, analyses or modifies it, and returns it in the same manner. This means that plugins don&#x2019;t need to handle parsing CSS and converting it back into a string. So the ability to build your own plugins is not as difficult as you might think.</li>
+<li><strong>PostCSS can be used to polyfill real W3C features.</strong> There are a lot of plugins that aim to implement features from new W3C specifications. This will enable you to write code that respects standards and is likely to be compatible with future versions of CSS.</li>
+</ul>
+<h2 id="using-postcss">Using PostCSS</h2>
+<p>Theory is great, but let&#x2019;s move on to some juicy practice. Let&#x2019;s install PostCSS and see what it can actually do. We won&#x2019;t go into much detail about setting up proper project builds, since that&#x2019;s a topic that deserves an article of its own. Instead we&#x2019;ll run PostCSS directly from the command line. You can find more info on using PostCSS with your favourite build tool <a href="https://github.com/postcss/postcss">on its Github page</a>.</p>
+<h2 id="installing-postcss">Installing PostCSS</h2>
+<p>PostCSS is installed via node and npm, so make sure you have those installed before you start. To install PostCSS globally on your system run:</p>
+<pre><code class="language-bash">npm install -g postcss-cli</code></pre>
+<p>You can make sure it&#x2019;s working by running:</p>
+<pre><code class="language-bash">postcss --help</code></pre>
+<p>This will give you a list of parameters that the CLI accepts. You can also find these in the <a href="https://github.com/code42day/postcss-cli">postcss-cli documenation</a>.</p>
+<h2 id="running-postcss">Running PostCSS</h2>
+<p>Now that we have PostCSS installed, let&#x2019;s give it something to work with. Create a <code>styles.css</code> file in your project folder and add some CSS. For example, define a flexbox container:</p>
+<pre><code class="language-css">.container {
+ display: flex;
+}</code></pre>
+<p>Flexbox is a great feature, but it does require vendor prefixes to run on certain browsers. I would hate to maintain these manually. Fortunately, <a href="https://github.com/postcss/autoprefixer">Autoprefixer</a>, one of the most popular PostCSS plugins does exactly that. It automatically adds vendor prefixes based on the information provided via <a href="http://caniuse.com/">Can I use</a>. I&#x2019;ll show you how to use it to keep our vendor prefixes up to date.</p>
+<p>To install Autoprefixer run:</p>
+<pre><code class="language-bash">npm install -g autoprefixer</code></pre>
+<p>Next, navigate to your project folder and create a <code>dist</code> folder that will contain the processed CSS:</p>
+<pre><code class="language-bash">mkdir dist</code></pre>
+<p>Then run PostCSS:</p>
+<pre><code class="language-bash">postcss -u autoprefixer styles.css -d dist</code></pre>
+<p>What this says is: <em>run Autoprefixer on <code>styles.css</code> and save the output to <code>dist/styles.css</code></em>. Now if you open <code>dist/styles.css</code> you will see your CSS with all of the required vendor prefixes:</p>
+<pre><code class="language-css">.container {
+ display: -webkit-box;
+ display: -webkit-flex;
+ display: -ms-flexbox;
+ display: flex;
+}</code></pre>
+<p>If you run PostCSS with a <code>-w</code> flag, this will also start a watcher process and automatically rebuild <code>styles.css</code> each time the file is modified.</p>
+<h2 id="plugin-configuration">Plugin Configuration</h2>
+<p>We can configure Autoprefixer to add prefixes according to the browsers we plan on supporting. This can be done using the <code>browsers</code> option. When running PostCSS via the CLI, plugin configuration needs to be defined in a separate .json file, for example, <code>postcss.json</code>. Let&#x2019;s create the file in the current folder and configure Autoprefixer to support the 2 most recent versions of each browser.</p>
+<pre><code class="language-javascript">{
+ "autoprefixer": {
+ "browsers": ["last 2 versions"]
+ }
+}</code></pre>
+<p>We can now re-run the PostCSS watcher with the new configuration file:</p>
+<pre><code class="language-bash">postcss styles.css -u autoprefixer -c postcss.json -d dist -w</code></pre>
+<h2 id="enabling-source-maps">Enabling Source Maps</h2>
+<p>Source maps are essential for debugging compiled CSS. PostCSS can generate inline source maps in the output file if you add the <code>--map</code> option (or the <code>-m</code> flag).</p>
+<h2 id="even-more-plugins">Even More Plugins</h2>
+<p>PostCSS has an amazing number of plugins for linting, quality checks, fallback, old browser support, inlining assets, generating sprites, optimisation, new syntax support, and future CSS features. As mentioned, you can find a structured catalogue of plugins at <a href="http://postcss.parts/">postcss.parts</a>.</p>
+<p>To give you a sample, here are a few more plugins that demonstrate the power of PostCSS.</p>
+<h3 id="the-custom-properties-plugin-for-css-variables">The Custom Properties Plugin for CSS Variables</h3>
+<p>The <a href="https://github.com/postcss/postcss-custom-properties">postcss-custom-properties</a> plugin aims to implement support for the <a href="https://www.w3.org/TR/css-variables/">W3C custom properties specification</a> (aka <a href="http://www.sitepoint.com/css-variables-can-preprocessors-cant/">native variables</a>). It allows you to define custom properties in a selector with arbitrary values and reference these in other places in the stylesheet.</p>
+<p>This serves a similar purpose to Less and Sass variables: to store common values and eliminate code duplication. The main difference is that the scoping mechanism is a bit different; similar to regular properties, CSS custom properties propagate along the element cascade, instead of being block scoped.</p>
+<p>Here&#x2019;s an example of how this plugin works. The following code:</p>
+<pre><code class="language-css">:root {
+ --container-width: 800px;
+}
+
+.container {
+ width: var(--container-width);
+}</code></pre>
+<p>Will compile to:</p>
+<pre><code class="language-css">.container {
+ width: 800px;
+}</code></pre>
+<h3 id="the-custom-selectors-plugin">The Custom Selectors Plugin</h3>
+<p>The <a href="https://github.com/postcss/postcss-custom-selectors">postcss-custom-selectors</a> plugin implements the <a href="https://drafts.csswg.org/css-extensions/#custom-selectors">Custom Selector specification</a>. This allows you to pre-define selectors and reference them later in the code. For example, we can save all headers in one selector and re-use this as a variable:</p>
+<pre><code class="language-css">@custom-selector :--headings h1, h2, h3, h4, h5, h6;
+
+:--headings {
+ color: mediumblue;
+}</code></pre>
+<p>Which will compile as follows:</p>
+<pre><code class="language-css">h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+ color: mediumblue;
+}</code></pre>
+<h3 id="the-russian-stylesheets-plugin">The Russian Stylesheets Plugin</h3>
+<p>Ever wanted to learn Russian but were too busy writing CSS? No worries, you can now do both by writing CSS in Russian! Just use the <a href="https://github.com/Semigradsky/postcss-russian-stylesheets">Russian Stylesheets</a> plugin. Check this out:</p>
+<pre><code class="language-css">h1 {
+ &#x440;&#x430;&#x437;&#x43C;&#x435;&#x440;-&#x448;&#x440;&#x438;&#x444;&#x442;&#x430;: 20&#x43F;&#x438;&#x43A;&#x441;&#x435;&#x43B;&#x435;&#x439;;
+ &#x446;&#x432;&#x435;&#x442;: &#x43A;&#x440;&#x430;&#x441;&#x43D;&#x44B;&#x439;;
+ &#x446;&#x432;&#x435;&#x442;-&#x444;&#x43E;&#x43D;&#x430;: &#x431;&#x435;&#x43B;&#x44B;&#x439;;
+ &#x432;&#x435;&#x441;-&#x448;&#x440;&#x438;&#x444;&#x442;&#x430;: &#x436;&#x438;&#x440;&#x43D;&#x44B;&#x439;;
+}</code></pre>
+<p>Which is translated into:</p>
+<pre><code class="language-css">h1 {
+ font-size: 20px;
+ color: red;
+ background-color: white;
+ font-weight: bold;
+}</code></pre>
+<p>Well&#x2026; I never said all the plugins were equally useful!</p>
+<h2 id="wrapping-things-up">Wrapping Things Up</h2>
+<p>Preprocessors like Less and Sass are great. They have contributed much to our development process and are definitely not something we can easily leave behind. But, I feel that that the time has come to stop and reconsider whether those tools are the right way to do things in the long run.</p>
+<p>We don&#x2019;t just need new features writing stylesheets, we also need modularity, additional exposure of the new standards, as well as flexible build processes. PostCSS provides just that and might be a game changer in the CSS world.</p>
+ </div>
+ </div>
+</body></html>

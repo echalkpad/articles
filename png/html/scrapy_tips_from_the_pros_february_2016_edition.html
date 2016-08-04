@@ -1,0 +1,134 @@
+<!DOCTYPE html><html><head><title>Scrapy Tips from the Pros: February 2016 Edition</title></head><body>
+<h1>Scrapy Tips from the Pros: February 2016 Edition</h1><p><a href="https://blog.scrapinghub.com/2016/02/24/scrapy-tips-from-the-pros-february-2016-edition/" target="_new">Original URL</a></p>
+<p><blockquote>Welcome to the February Edition of Scrapy Tips from the Pros. Each month we&#x2019;ll release a few tips and hacks that we&#x2019;ve developed to help make your Scrapy workflow go more smoothly. This&hellip;</blockquote></p>
+<div><div class="entry clear">
+								<p>Welcome to the February Edition of <a href="https://blog.scrapinghub.com/category/scrapy-tips-from-the-pros/" target="_blank">Scrapy Tips from the Pros</a>. Each month we&#x2019;ll release a few tips and hacks that we&#x2019;ve developed to help make your Scrapy workflow go more smoothly.</p>
+<p>This month we&#x2019;ll show you how to crawl websites more effectively following sitemaps and we&#x2019;ll also demonstrate how to add custom settings to individual spiders in a project.</p>
+<h2>Crawling a Website with Scrapy SitemapSpider</h2>
+<p>Web crawlers feed on URLs. The more they have, the longer they live. Finding a good source of URLs for any given website is very important as it gives the crawler a strong starting point.</p>
+<p><a href="https://en.wikipedia.org/wiki/Sitemaps" target="_blank">Sitemaps</a> are an excellent source of seed URLs. Website developers use them to indicate which URLs are available for crawling in a machine-readable format. Sitemaps are also a good way to discover web pages that would be otherwise unreachable, since some pages may not be linked to from any other page outside of the sitemap.</p>
+<p>Sitemaps are often available at <code>/sitemap.xml</code> or in a different location specified in the robots.txt file.</p>
+<p>With <a href="http://scrapy.org/" target="_blank">Scrapy</a> you don&#x2019;t need to worry about parsing XML and making requests. It includes a <a href="http://doc.scrapy.org/en/latest/topics/spiders.html#sitemapspider" target="_blank">SitemapSpider</a> class you can inherit to handle all of this for you.</p>
+<h3>SitemapSpider in Action</h3>
+<p>Let&#x2019;s say you want to crawl Apple&#x2019;s website to price check different products. You would want to visit as many pages as possible so that you can scrape as much data as you can. Fortunately, Apple&#x2019;s website provides a sitemap at <a href="http://apple.com/sitemap.xml" target="_blank">apple.com/sitemap.xml</a>, which looks like this:</p>
+<div>
+<pre><span>&lt;</span><span>urlset</span> <span>xmlns</span><span>=</span><span>"</span><span>http</span><span>:</span><span>//</span><span>www.sitemaps.org</span><span>/schemas/sitemap/0.9</span><span>"</span><span>&gt;</span>
+ <span>&lt;</span><span>url</span><span>&gt;</span><span>&lt;</span><span>loc</span><span>&gt;</span>http://www.apple.com/<span>&lt;/</span><span>loc</span><span>&gt;</span><span>&lt;/</span><span>url</span><span>&gt;</span>
+ <span>&lt;</span><span>url</span><span>&gt;</span><span>&lt;</span><span>loc</span><span>&gt;</span>http://www.apple.com/about/<span>&lt;/</span><span>loc</span><span>&gt;</span><span>&lt;/</span><span>url</span><span>&gt;</span>
+ ...
+ <span>&lt;</span><span>url</span><span>&gt;</span><span>&lt;</span><span>loc</span><span>&gt;</span>http://www.apple.com/about/workingwithapple.html<span>&lt;/</span><span>loc</span><span>&gt;</span><span>&lt;/</span><span>url</span><span>&gt;</span>
+ <span>&lt;</span><span>url</span><span>&gt;</span><span>&lt;</span><span>loc</span><span>&gt;</span>http://www.apple.com/accessibility/<span>&lt;/</span><span>loc</span><span>&gt;</span><span>&lt;/</span><span>url</span><span>&gt;</span>
+ ...
+<span>&lt;/</span><span>urlset</span><span>&gt;</span>
+</pre>
+</div>
+<p>Scrapy&#x2019;s generic <a href="http://doc.scrapy.org/en/latest/topics/spiders.html#sitemapspider" target="_blank">SitemapSpider</a> class implements all the logic for parsing and dispatching requests necessary to handle sitemaps. It reads and extracts URLs from the sitemap and it will dispatch a single request for each URL it finds. Here is a spider that will scrape Apple&#x2019;s website using the sitemap as its seed:</p>
+<pre><span>from</span> scrapy<span>.</span>spiders <span>import</span> SitemapSpider
+
+<span>class</span> AppleSpider<span>(</span>SitemapSpider<span>)</span><span>:</span>
+ name <span>=</span> <span>'apple-spider'</span>
+ sitemap_urls <span>=</span> <span>[</span><span>'http://www.apple.com/sitemap.xml'</span><span>]</span>
+
+ <span>def</span> parse<span>(</span>self<span>,</span> response<span>)</span><span>:</span>
+ <span>yield</span> <span>{</span>
+ <span>'title'</span><span>:</span> response<span>.</span>css<span>(</span><span>"title ::text"</span><span>)</span><span>.</span>extract_first<span>(</span><span>)</span><span>,</span>
+ <span>'url'</span><span>:</span> response<span>.</span>url
+ <span>}</span>
+ <span># ...</span>
+</pre>
+<p>As you can see, you only need to subclass SitemapSpider and add the sitemap&#x2019;s URL to the <code>sitemap_urls</code> attribute.</p>
+<p>Now, run the spider and check the results:</p>
+<pre>
+$ scrapy runspider apple_spider.py -o items.jl --nolog
+
+$ head -n 5 items.jl 
+{"url": "http://www.apple.com/", "title": "Apple"}
+{"url": "http://www.apple.com/ae/support/products/iphone.html", "title": "Support - AppleCare+ - iPhone - Apple (AE)"}
+{"url": "http://www.apple.com/ae/support/products/ipad.html", "title": "Support - AppleCare+ - iPad - Apple (AE)"}
+{"url": "http://www.apple.com/ae/support/products/", "title": "Support - AppleCare - Apple (AE)"}
+{"url": "http://www.apple.com/ae/support/ipod/", "title": "iPod - Apple Support"}
+</pre>
+<p>Scrapy dispatches a request for each URL found by SitemapSpider in the sitemap and then it calls the <code>parse</code> method to handle each response it gets. However, some pages in a website may vary in structure and so you might want to use multiple callbacks for different types of pages.</p>
+<p>For instance, you can define a specific callback to handle the Mac pages, another one for the iTunes pages and the default <code>parse</code> method for all the other pages:</p>
+<pre><span>from</span> scrapy<span>.</span>spiders <span>import</span> SitemapSpider
+
+<span>class</span> AppleSpider<span>(</span>SitemapSpider<span>)</span><span>:</span>
+ name <span>=</span> <span>'apple-spider'</span>
+ sitemap_urls <span>=</span> <span>[</span><span>'http://www.apple.com/sitemap.xml'</span><span>]</span>
+ sitemap_rules <span>=</span> <span>[</span>
+ <span>(</span><span>'/mac/'</span><span>,</span> <span>'parse_mac'</span><span>)</span><span>,</span>
+ <span>(</span><span>'/itunes/'</span><span>,</span> <span>'parse_itunes'</span><span>)</span><span>,</span>
+ <span>(</span><span>''</span><span>,</span> <span>'parse'</span><span>)</span>
+ <span>]</span>
+
+ <span>def</span> parse<span>(</span>self<span>,</span> response<span>)</span><span>:</span>
+ self<span>.</span>log<span>(</span><span>"default parsing method for {}"</span><span>.</span>format<span>(</span>response<span>.</span>url<span>)</span><span>)</span>
+
+ <span>def</span> parse_mac<span>(</span>self<span>,</span> response<span>)</span><span>:</span>
+ self<span>.</span>log<span>(</span><span>"parse_mac method for {}"</span><span>.</span>format<span>(</span>response<span>.</span>url<span>)</span><span>)</span>
+
+ <span>def</span> parse_itunes<span>(</span>self<span>,</span> response<span>)</span><span>:</span>
+ self<span>.</span>log<span>(</span><span>"parse_itunes method for {}"</span><span>.</span>format<span>(</span>response<span>.</span>url<span>)</span><span>)</span>
+</pre>
+<p>To do it, you have to add a <code>sitemap_rules</code> attribute to your class, mapping URL patterns to callbacks. For instance, the URLs matching the &#x2018;/mac/&#x2019; pattern will have its response handled by the <code>parse_mac</code> method.</p>
+<p>So, the next time you write a crawler, make sure to use SitemapSpider if you want to have comprehensive crawls of the website.</p>
+<p>For more features, check <a href="http://doc.scrapy.org/en/latest/topics/spiders.html#sitemapspider" target="_blank">SitemapSpider&#x2019;s documentation</a>.</p>
+<h2>Customize Settings for Individual Spiders using custom_settings</h2>
+<p>The settings for Scrapy projects are typically stored in the project&#x2019;s settings.py file. However, these are global settings that apply to each of the spiders in your project. If you want to set individual settings for each spider, all you need to do is add an attribute called <code>custom_settings</code> to your spider class.</p>
+<p>This is especially useful when you need to enable or disable pipelines or middlewares for certain spiders or to specify different settings for each one. For example, some spiders in your project might require <a href="http://scrapinghub.com/crawlera/" target="_blank">Crawlera</a> (a smart proxy service) enabled while others don&#x2019;t. You can achieve this by adding <code>CRAWLERA_ENABLED = True</code> in <code>custom_settings</code> in the specific spiders.</p>
+<h3>custom_settings in Action</h3>
+<p>Take a look at a simplified version of the spiders from a book catalog project. They need <code>custom_settings</code> to define where the book covers are going to be stored in the filesystem:</p>
+<pre><span>class</span> AlibrisSpider<span>(</span>scrapy<span>.</span>Spider<span>)</span><span>:</span>
+ name <span>=</span> <span>"alibris-covers"</span>
+ allowed_domains <span>=</span> <span>[</span><span>"alibris.com"</span><span>]</span>
+ start_urls <span>=</span> <span>(</span>
+ <span>'http://www.alibris.com/search/books/subject/Fiction-Science-Fiction'</span><span>,</span>
+ <span>)</span>
+ custom_settings <span>=</span> <span>{</span><span>'IMAGES_STORE'</span><span>:</span> <span>'imgs/alibris/sci-fi'</span><span>}</span>
+
+ <span>def</span> parse<span>(</span>self<span>,</span> response<span>)</span><span>:</span>
+ <span>for</span> book <span>in</span> response<span>.</span>css<span>(</span><span>"div#selected-works ul.primaryList li"</span><span>)</span><span>:</span>
+ <span>yield</span> <span>{</span>
+ <span>'image_urls'</span><span>:</span> <span>[</span>book<span>.</span>css<span>(</span><span>"img ::attr(src)"</span><span>)</span><span>.</span>extract_first<span>(</span><span>)</span><span>]</span><span>,</span>
+ <span>'title'</span><span>:</span> book<span>.</span>css<span>(</span><span>"p.bookTitle &gt; a ::text"</span><span>)</span><span>.</span>re_first<span>(</span><span>"</span><span>\s</span><span>*((</span><span>\w</span><span>+</span><span>\s</span><span>?)+)</span><span>\s</span><span>*"</span><span>)</span>
+ <span>}</span>
+</pre>
+<pre><span>class</span> GoodreadsSpider<span>(</span>scrapy<span>.</span>Spider<span>)</span><span>:</span>
+ name <span>=</span> <span>"goodreads-covers"</span>
+ allowed_domains <span>=</span> <span>[</span><span>"goodreads.com"</span><span>]</span>
+ start_urls <span>=</span> <span>(</span>
+ <span>'http://www.goodreads.com/genres/science-fiction'</span><span>,</span>
+ <span>)</span>
+ custom_settings <span>=</span> <span>{</span><span>'IMAGES_STORE'</span><span>:</span> <span>'imgs/goodreads/sci-fi'</span><span>}</span>
+
+ <span>def</span> parse<span>(</span>self<span>,</span> response<span>)</span><span>:</span>
+ <span>for</span> book <span>in</span> response<span>.</span>css<span>(</span><span>"img.bookImage"</span><span>)</span><span>:</span>
+ <span>yield</span> <span>{</span>
+ <span>'title'</span><span>:</span> book<span>.</span>css<span>(</span><span>"::attr(alt)"</span><span>)</span><span>.</span>extract_first<span>(</span><span>)</span><span>,</span>
+ <span>'image_urls'</span><span>:</span> <span>[</span>book<span>.</span>css<span>(</span><span>"::attr(src)"</span><span>)</span><span>.</span>extract_first<span>(</span><span>)</span><span>]</span>
+ <span>}</span>
+</pre>
+<p>These spiders scrape metadata from books on a range of websites. Book covers are retrieved using <a href="http://doc.scrapy.org/en/latest/topics/media-pipeline.html#using-the-images-pipeline" target="_blank"><code>ImagesPipeline</code></a>, which can be enabled and configured in the project global settings.py file:</p>
+<pre>ITEM_PIPELINES <span>=</span> <span>{</span>
+ <span>'scrapy.pipelines.images.ImagesPipeline'</span><span>:</span> <span>1</span>
+<span>}</span>
+IMAGES_STORE <span>=</span> <span>'/some/path/to/images'</span>
+</pre>
+<p>The <a href="http://doc.scrapy.org/en/latest/topics/media-pipeline.html#std:setting-IMAGES_STORE" target="_blank"><code>IMAGES_STORE</code></a> setting lets you define where the downloaded images will be stored in your filesystem. So if you want to separate the images downloaded by each spider into different folders, you just need to override the global <code>IMAGES_STORE</code> setting via <code>custom_settings</code> in each spider:</p>
+<pre>custom_settings <span>=</span> <span>{</span><span>'IMAGES_STORE'</span><span>:</span> <span>'/a/different/path'</span><span>}</span>
+</pre>
+<p>Alternatively, you can pass the settings as arguments for the spider using the scrapy -s command line option, but that adds the hassle of having to pass all custom settings from the command line:</p>
+<pre>
+$ scrapy crawl alibris -s IMAGES_STORE=imgs/alibris/
+</pre>
+<p>So, if you ever need different settings for some spider in your project, include them in the <code>custom_settings</code> attribute in the spider. Heads up, this feature is available for Scrapy &gt;= 1.0.0.</p>
+<p>If you are interested in learning how to download images using your spiders, <a href="http://doc.scrapy.org/en/latest/topics/media-pipeline.html" target="_blank">check the docs</a> for more information.</p>
+<h2>Wrap Up</h2>
+<p>And that&#x2019;s about it for our February tips. Check back in with us in March, follow us on <a href="https://twitter.com/ScrapingHub" target="_blank">Twitter</a>, <a href="https://www.facebook.com/ScrapingHub/" target="_blank">Facebook</a>, and <a href="https://www.instagram.com/scrapinghub/" target="_blank">Instagram</a>, and subscribe to our <a href="https://blog.scrapinghub.com/feed/" target="_blank">RSS feed</a> to catch our next <a href="https://blog.scrapinghub.com/category/scrapy-tips-from-the-pros/" target="_blank">Scrapy Tips from the Pros</a>.</p>
+<div id="jp-post-flair" class="sharedaddy sd-like-enabled sd-sharing-enabled"><div class="sharedaddy sd-block sd-like jetpack-likes-widget-wrapper jetpack-likes-widget-unloaded" id="like-post-wrapper-28801091-2306-574fa642a914c"><h3 class="sd-title">Like this:</h3><p class="likes-widget-placeholder post-likes-widget-placeholder"><span class="button"><span>Like</span></span> <span class="loading">Loading...</span></p><a class="sd-link-color"></a></div>
+<p id="jp-relatedposts" class="jp-relatedposts">
+	<h3 class="jp-relatedposts-headline"><em>Related</em></h3>
+</p></div>											</div>
+			
+		</div>
+</body></html>

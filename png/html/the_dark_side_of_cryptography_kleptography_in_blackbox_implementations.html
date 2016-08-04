@@ -1,0 +1,105 @@
+<!DOCTYPE html><html><head><title>The Dark Side of Cryptography: Kleptography in Black-Box Implementations</title></head><body>
+<h1>The Dark Side of Cryptography: Kleptography in Black-Box Implementations</h1><p><a href="http://www.infosecurity-magazine.com/magazine-features/the-dark-side-of-cryptography-kleptography-in/" target="_new">Original URL</a></p>
+<p><blockquote>Bernhard Esslinger explores the dark side of cryptography Figure 1: Kleptographic attacks are possible in each of the components of a cryptosystem shown here. The encapsulation of a black-box&hellip;</blockquote></p>
+<div><div class="min-height"><figure class="media media-left"><img src="http://assets.infosecurity-magazine.com/content/float/5fe3ee9d-8e3f-4e58-b60b-4b5cb2db15dd.jpg" alt="Bernhard Esslinger explores the dark side of cryptography "><figcaption class="media-caption">Bernhard Esslinger explores the dark side of cryptography </figcaption></figure><figure class="media media-left"><img src="http://assets.infosecurity-magazine.com/content/float/5dd182f2-0e86-4517-beb4-ebbcee1ac853.jpg" alt="Figure 1: Kleptographic attacks are possible in each of the components of a cryptosystem shown here. The encapsulation of a black-box implementation protects undesirable activity just as well as the desired operations of the system against external access."><figcaption class="media-caption">Figure 1: Kleptographic attacks are possible in each of the components of a cryptosystem shown here. The encapsulation of a black-box implementation protects undesirable activity just as well as the desired operations of the system against external access.</figcaption></figure><figure class="media media-left"><img src="http://assets.infosecurity-magazine.com/content/float/09c99240-ca6e-4fc2-8db2-eabf6e360fb0.jpg" alt="Figure 2: The e-learning tool JCrypTool includes a plug-in that demonstrates the possibilities of kleptography."><figcaption class="media-caption">Figure 2: The e-learning tool JCrypTool includes a plug-in that demonstrates the possibilities of kleptography.</figcaption></figure><table border="1" cellpadding="1" cellspacing="1">
+ <tbody>
+ <tr>
+ <td>This article was translated and revised by Patrick Vacek.</td>
+ </tr>
+ </tbody>
+</table>
+
+<p>The threat of kleptography has been discussed since the mid-1990s [1], but it was not until recently that it&#x2019;s received significant attention. This may be in part due to increasingly common discussions about the potential threats from this kind of highly sophisticated attack, but it is more likely due to several recent documented implementations of kleptographic attacks.</p>
+<p>These examples show that one of the fundamental aspects of black-box cryptography is also a prime target for intrusion. Hardware security modules (HSMs), smart cards, and Trusted Platform Modules (TPMs) claim to secure cryptographic keys from all external access. However, these devices leave the user with an element of uncertainty: How can the user be sure that the black box is doing exactly what it claims to &#x2013; and nothing more?</p>
+<p>If it&#x2019;s impossible to externally determine whether a cryptosystem has been manipulated, and the generated output does not appear suspect, one must ultimately place his or her trust in the manufacturer of a cryptosystem to know that no such manipulation has occurred. How can one be sure that the schematics and designs that a manufacturer may provide truly correspond to the finished product? Furthermore, it does not require a conspiracy theorist to imagine the influence that government organizations could have on certain manufacturers. How can we really make sure that we know what is happening inside the black boxes we use?</p>
+<h3>Kleptography</h3>
+<p>Kleptography is the "study of stealing information securely and subliminally" [2]. A kleptographic attack is an attack in which a malicious developer uses asymmetric encryption to implement a cryptographic back door. In this way, cryptography is employed against cryptography: the back door in question is not an additional channel of communication to the world outside the cryptosystem, nor does it require the transmission of additional data. The back door is instead embedded directly within the intended communication. Thus, kleptography is a subfield of cryptovirology, the application of cryptography in malware [3,6,11]. However, the target of a kleptographic attack is not just any general form of software, but rather the specific environment of a cryptosystem.</p>
+<p>The following example describes a possible kleptographic attack. A black box generates asymmetric key pairs, of which one is a private key and the other public. The private key, which is used in decryption and digital signature generation, should remain exclusively inside the black box to prevent improper usage and duplication. The public key, however, can be freely distributed. As is generally accepted, no one can derive the private key from the public key &#x2013; or can they?</p>
+<p>In fact, such a derivation is indeed possible if the key generation process has been manipulated in a particular fashion. A cryptographic back door could be embedded in the process of manufacturing the cryptosystem, which would then provide an attacker access to the private key without drawing the attention of a third party. This is possible because the generated public keys will not appear conspicuous, nor will any unexpected communication or errors arise while using the cryptographic functionality. The impact is extreme. With a copy of the private key, the attacker can counterfeit signatures and decrypt secret data, even though the cryptographic keys were generated in a sealed black box and no unauthorized access to the contents was permitted.</p>
+<p>A simplified version of this attack could manipulate the random number generator within the cryptosystem (see Figure 1) such that the key generation process would use a pseudo-random number generator and incorporate a seed known to the attacker, instead of using a truly random function. By knowing the prime numbers generated in the cryptosystem, the attacker could produce a copy of the secret key outside the black box.</p>
+<p>A manipulation of this sort could be revealed through reverse engineering, as long as this would not be prevented by a security mechanism, such as those found in dedicated cryptographic hardware. Because the seed of the pseudo-random number generator is fixed within the source code, a reverse engineer could then also calculate the private key outside of the black box. From the attacker's perspective, it is desirable to have exclusive access to the attack mechanism, which would thus no longer be the case. More sophisticated kleptographic attacks can indeed prevent reverse engineers from making this kind of discovery.</p>
+<h3>SETUP Attack</h3>
+<p>Kleptography was first discussed in 1996 at the CRYPTO conference by Adam Young and Moti Yung, in which they called attention to numerous opportunities for attacks against the cryptography of black-box systems [1]. They introduced the concept of a "Secretly Embedded Trapdoor with Universal Protection" (SETUP), an attack which they described with respect to <a href="http://www.infosecurity-magazine.com/view/20076/rsa-life-after-breach-">RSA</a> key generation.</p>
+<p>The distinguishing feature of this attack is that it can only be detected through reverse engineering (if at all), and that if found, it still cannot be used by the discoverer. The reverse engineer can only find the public key of the attacker, but not the private key. Because this attack is itself based on asymmetric cryptography, it can be considered &#x2018;secure&#x2019; &#x2013; from the attacker's perspective. This and other kleptographic attacks have been implemented in the <a href="http://www.cryptool.org/en/jcryptool">e-learning tool JCrypTool</a> (see Figure 2).</p>
+<p>Over the years, the SETUP attack has been developed further. The first attacks targeted algorithms based on the difficulty of factoring primes (e.g., RSA), but algorithm attacks relying on the discreet-logarithm problem soon followed. In 2002, a powerful attack against the Diffie-Hellman key exchange algorithm was published [2]. At the 26th Chaos Communication Congress (26C3) in December 2009, Moti Yung alluded to these techniques in his presentation "Yes We Can't!" [5], in which he stressed that kleptography restricts trust in the manufacturer.</p>
+<h3>Countermeasures</h3>
+<p>So why has kleptography been slow to garner significant attention, despite hardware cryptosystems being employed precisely where the greatest demands for security exist? After all, HSMs are used specifically to protect particularly sensitive infrastructural keys for businesses in which the potential financial and reputational damage of a successful attack would be extremely high.</p>
+<p>Perhaps the fundamental problem is not well-enough recognized, or perhaps users assume that it is in the manufacturer's best interest not to sell manipulated hardware. If the whistle were to be blown on such an incident, the damage could be enough to ruin a company.</p>
+<p>There are certainly techniques to counteract kleptography. The European Union requires that security-related industrial hardware must be independently evaluated in two different EU states to achieve maximal transparency over the entire production process.</p>
+<p>An even more basic approach is to simply combine hardware from multiple manufacturers into one system. For example, a company could use two smart cards from different and independent manufacturers and then encrypt all data twice, a form of cascading or multiple encryption [6]. In such a case, even if a manufacturer had manipulated the key generation process, it would be unable to decrypt the data, because it would not have the private key of the other smart card. But even with both of these approaches, one can merely reduce the risk. These techniques do not guarantee that manipulation has not occurred, and their increased complexity makes them rather impractical.</p>
+<p>Because kleptography requires the use of a subliminal channel to extricate information without detection from a black box, another logical idea is to eliminate all such possible subliminal channels. This line of thought was first pursued in 1984 by Gus Simmons [7] and continued in further publications [8,9], in which random numbers were built into a sort of authentication protocol.</p>
+<p>Another technique was introduced in 2002 in which a third party can verify the RSA key generation process [10]. This process is a type of distributed key generation, in which the private key is only known to the black box, thus safeguarding that the key generation was not manipulated and the key cannot be revealed through a kleptographic attack. Other concrete attempts to combat the threat of kleptography have followed, and researchers continue to search for further possibilities.</p>
+<h3>Looking Forward</h3>
+<p>Kleptography is richly interesting in terms of cryptography, but in practice it is just one of many threats in a complete system. Rather than manipulate the cryptographic implementation itself, at present it is usually easier for an attacker to assault other components of the system, such as its endpoints. For example, an attacker could use a trojan to capture confidential data from a PC before it was even encrypted by a smart card.</p>
+<p>A system is always just as secure as the weakest link in the chain. Kleptography and its defenses will likely become much more significant in the future as security breaches in other components become better recognized and restricted.</p>
+<p>It should be considered, however, that in situations that demand the highest security, the expense of implementing countermeasures against kleptography are probably already worth the cost. Even in strongly regulated environments, and even with cross-checking and rigorous testing, the final product can still contain a back door or may be vulnerable to some form of intrusion. After all, it is not necessarily the manufacturer that may construct a back door to a cryptosystem.</p>
+
+<table border="1" cellpadding="1" cellspacing="1">
+ <caption>Simple SETUP attack on RSA key generation</caption>
+ <tbody>
+ <tr>
+ <td>
+ <p>For the sake of comparison and clarification, the following demonstrates the process of <strong>normal RSA key generation</strong> with 2048-bit keys:</p>
+ <ul>
+ <li>Randomly choose two prime numbers <em>p &#x2260; q</em> (in this case each 1024 bits long). In practice, one first generates random numbers and subsequently runs tests to check for primality.</li>
+ <li>Determine <em>n (= p &#x2022; q)</em> and <em>e</em> (usually chosen as 2<sup>16</sup>+1).</li>
+ <li>Determine <em>d</em> in the congruence relation<em> e &#x2022; d</em> &#x2261; 1 mod &#x3C6;(<em>n</em>). The extended Euclidean algorithm is used to simplify this process: since <em>p</em> and <em>q</em> are prime, &#x3C6;(<em>n</em>) = (<em>p</em> &#x2013;&#xA0;1) &#x2022;&#xA0;(<em>q</em> &#x2013;&#xA0;1).</li>
+ </ul>
+ <p>This process produces the public key (<em>n</em>, <em>e</em>) and the private key (<em>d</em>). The <strong>encryption and decryption of a message <em>m</em> with RSA</strong> is carried out via exponentiation:</p>
+ <ul>
+ <li>Encryption: <em>c = m<sup>e</sup> mod n</em></li>
+ <li>Decryption: <em>m = c<sup>d </sup>mod n</em></li>
+ </ul>
+ <p>The <strong>kleptographic RSA key generation process</strong> (presented here in a simplified version from [4]) is modified and uses the public key of the attacker's own RSA key pair (<em>N</em>, <em>E</em>). Note that the attacker's key is half as long (in this case, 1024 bits) as the keys under attack.</p>
+ <ul>
+ <li>Choose a prime number <em>s</em> (1024 bits long) and calculate <em>p = H(s)</em>, where <em>H</em> is a cryptographic one-way function. This is repeated until <em>p</em> is a prime number.</li>
+ <li>Encrypt <em>s</em> with the public key (<em>N</em>, <em>E</em>) of the attacker: <em>c = s<sup>E</sup> mod N</em>.</li>
+ <li>Choose a random number<em> z</em>.</li>
+ <li>Determine <em>q</em> such that the equation <em>c</em>||<em>z</em> =<em> p</em> &#x2022;&#xA0;<em>q</em> + <em>r</em> with an arbitrary <em>r </em>is fulfilled. If <em>q</em> is not prime, then start over with a new random number <em>s</em>.</li>
+ <li>Determine <em>n</em> (= <em>p</em> &#x2022; <em>q</em>), <em>e</em> (usually chosen as 2<sup>16&#xA0;</sup>+ 1), and <em>d</em> (see above).</li>
+ </ul>
+ <p>The result is again a public key (<em>n</em>, <em>e</em>) and a private key (<em>d</em>).</p>
+ <p>The discovery of the private key is only possible with possession of the public key (<em>n</em>,<em> e</em>) created by the kleptographic RSA key generation as well as the private key of the attacker (<em>D</em>):</p>
+ <ul>
+ <li>Take the uppermost <em>n</em>/2 bits of <em>n</em> as <em>u</em> (in this case, the first 1024 bits).</li>
+ <li>Set <em>c<sub>1</sub></em> = <em>u</em> and <em>c<sub>2</sub></em> = <em>u</em> + 1. (<em>c<sub>2</sub></em> is necessary because in the calculation of <em>c</em>||<em>z</em> = <em>p &#x2022;&#xA0;q</em> + <em>r</em> a bit can "go missing".)</li>
+ <li>Decrypt <em>c</em><sub><em>1</em></sub> and <em>c<sub>2</sub> </em>with the private key (<em>D</em>) of the attacker to calculate <em>s</em><sub><em>1</em></sub> and <em>s</em><sub><em>2</em></sub>: <em>s</em><sub><em>1</em> </sub>= <em>c<sub>1</sub><sup>D</sup> mod N</em> and <em>s</em><sub><em>2</em></sub> = <em>c<sub>2</sub><sup>D</sup> mod N</em>.</li>
+ <li>Calculate <em>p<sub>1</sub> = H(s<sub>1</sub>) </em>and<em> p<sub>2</sub> = H(s<sub>2</sub>)</em>.</li>
+ <li>Calculate <em>q<sub>1</sub> = n/p</em><sub><em>1</em></sub> and <em>q<sub>2</sub> = n/p</em><sub><em>2</em></sub>. The quotient that divides <em>n</em> without a remainder yields <em>q</em> and the appropriate<em> p<sub>i</sub></em> yields <em>p</em>.</li>
+ <li>Determine <em>d</em> (see above).</li>
+ </ul>
+ <p>As a result, the attacker acquires the private key (<em>d</em>) of the victim.</p>
+ </td>
+ </tr>
+ </tbody>
+</table>
+
+
+<p><em>Professor Bernhard Esslinger teaches IT security and cryptography at the University of Siegen and leads the open-source </em><a href="http://www.cryptool.org/en/"><em>CrypTool project</em></a><em>.</em></p>
+<p><em>Patrick Vacek is a software developer for Exegy, Inc. in St. Louis and is also a contributor to the CrypTool project.</em></p>
+<table border="1" cellpadding="1" cellspacing="1">
+ <tbody>
+ <tr>
+ <td>This article was <a href="http://www.kes.info/archiv/online/10-4-006.htm">originally published</a> by <em>&lt;kes&gt; &#x2013; The Information Security Journal</em> and has been translated from the original German</td>
+ </tr>
+ </tbody>
+</table>
+
+<h3>References</h3>
+<p>[1] A. Young, M. Yung, The Dark Side of Black-Box Cryptography, or: Should we trust Capstone?, in: N. Koblitz (Ed.), <em>Advances in Cryptology &#x2013; Crypto &#x2019;96</em>, LNCS 1109, Springer, 1996, ISBN 978-3-540-<br>
+61512-5</p>
+<p>[2] A. Young, M. Yung, Kleptography: Using Cryptography Against Cryptography, in: W. Fumy (Ed.), <em>Advances in Cryptology &#x2013; Eurocrypt &#x2019;97</em>, LNCS 1233, Springer, 1997, ISBN 978-3-540-62975-7</p>
+<p>[3] A. Young, M. Yung, Cryptovirology FAQ, Version 1.31, <a href="http://www.cryptovirology.com/cryptovfiles/cryptovirologyfaqver1.html">http://www.cryptovirology.com/cryptovfiles/cryptovirologyfaqver1.html</a></p>
+<p>[4] M. Yung, Kleptography: The Outsider Inside Your Crypto Devices, and its Trust Implications, DIMACS Workshop on Theft in E-Commerce: Content, Identity, and Service, 2005, Powerpoint Presentation: <a href="http://dimacs.rutgers.edu/Workshops/Intellectual/slides/yung.ppt">http://dimacs.rutgers.edu/Workshops/Intellectual/slides/yung.ppt</a></p>
+<p>[5] M. Yung, Yes We Can&#x2019;t, 26th Chaos Communication Congress, 2009, MPEG-4 video recording: <a href="http://events.ccc.de/congress/2009/Fahrplan/events/3702.en.html">http://events.ccc.de/congress/2009/Fahrplan/events/3702.en.html</a></p>
+<p>[6] A. Young, M. Yung, <em>Malicious Cryptography: Exposing Cryptovirology</em>, John Wiley &amp; Sons, 2004,<br>
+ISBN 978-0-7645-4975-5</p>
+<p>[7] G. J. Simmons, The Prisoners' Problem and the Subliminal Channel, in: D. Chaum (Ed.), <em>Proceedings of Crypto &#x2019;83</em>, Plenum Press, 1984, ISBN 978-0-306-41637-8</p>
+<p>[8] G. J. Simmons, The Subliminal Channel and Digital Signatures, in: T. Beth, N. Cot, I. Ingemarsson<br>
+(Eds.), <em>Proceedings of Eurocrypt &#x2019;84</em>, LNCS 209, Springer-Verlag, 1985, ISBN 978-3-540-16076-2</p>
+<p>[9] Y. Desmedt, C. Goutier, S. Bengio, Special Uses and Abuses of the Fiat-Shamir Passport Protocol, in: C. Pomerance (Ed.), <em>Proceedings of Crypto &#x2019;87</em>, LNCS 293, Springer-Verlag, 1988, ISBN 978-3-540-18796-7</p>
+<p>[10] A. Juels, J. Guajardo, RSA Key Generation with Verifiable Randomness, in: D. Naccache, P. Pallier (Eds.), <em>Public Key Cryptography: 4th International Workshop on Practice and Theory in Public Key Cryptosystems</em>, Springer-Verlag, 2002, ISBN 978-3-540-43168-8</p>
+<p>[11] A. Yung, M. Young, <em>Towards a Book on Advances in Cryptovirology</em>, Selected Chapters as PDF, <a href="http://www.cryptovirology.com/cryptovfiles/newbook.html">www.cryptovirology.com/cryptovfiles/newbook.html</a></p></div>
+ 
+ </div>
+</body></html>

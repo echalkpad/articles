@@ -1,0 +1,82 @@
+<!DOCTYPE html><html><head><title>Reverse engineering Google Nest Devices</title></head><body>
+<h1>Reverse engineering Google Nest Devices</h1><p><a href="http://experimental-platform.tumblr.com/post/137835649425/reverse-engineering-google-nest-devices" target="_new">Original URL</a></p>
+<p><blockquote>Research effort for our Experimental Platform projectIn the buzzword-powered world of IoT there doesn&#x2019;t really seem to be as much innovation as some would have you think. The hundredth&hellip;</blockquote></p>
+<div><div class="copy">
+ 
+ <figure class="tmblr-full"><a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fexperimental-platform.github.io%2F&amp;t=MmQyMmUzMjY2ZWQ1MDVjOTBlNzBkOTFiZjgxMzc2NjI4YzUyOWZhMyxRRzRSUGZtMQ%3D%3D"><img alt="image" src="http://41.media.tumblr.com/2fe2bc2f546697dd4e21e3423f1f600c/tumblr_inline_o1dnmu7Dpx1tzfota_540.png"></a></figure><h2>Research effort for our <a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fexperimental-platform.github.io%2F&amp;t=MmQyMmUzMjY2ZWQ1MDVjOTBlNzBkOTFiZjgxMzc2NjI4YzUyOWZhMyxRRzRSUGZtMQ%3D%3D">Experimental Platform project</a></h2><p>In the buzzword-powered world of IoT there doesn&#x2019;t really seem to be as much innovation as some would have you think. The hundredth &#x201C;smart&#x201D; camera, door lock or lamp don&#x2019;t really disrupt much, yet some players in this space seem to be getting far ahead of the others. A notable player in this space is Nest Labs who after their acquisition by Google rose to be one of the most prominent brand names in this space, now a subsidy of Alphabet. Here at <a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fprotonet.info&amp;t=ZDI1YTg2ZDNmNzg0YjY2YjJmOTM4NjBiZGY4ZTY2MWQxM2VlZjQ0OSxRRzRSUGZtMQ%3D%3D">Protonet</a> we consider owning and having access to your own data 
+as one of our core values - thus as much as we admire Alphabet&#x2019;s tech, 
+we&#x2019;re sceptical about it&#x2019;s cloud only approach to smart home products. It&#x2019;s not much of a surprise then that we picked Nest products for our research efforts when looking into integration of different kinds of smart devices.</p><figure><img alt="image" src="http://40.media.tumblr.com/c5002db3cee1306b19592486574691e2/tumblr_inline_o1dbkaIyTi1tzfota_250.jpg" width="176"></figure><p><i>Google Nest Cam</i></p><h2>Access only via the cloud</h2><p>A notable property of Nests offering is that they are exclusively web-operated products. The only way to access their cameras or thermostats data over network is to go through Nests cloud. Neither the Nest Cam nor the Nest Thermostat which I received to play with seem to have any services running on any network ports. This has two consequences:</p><ul><li>you <a href="http://t.umblr.com/redirect?z=http%3A%2F%2Fmotherboard.vice.com%2Fread%2Fthe-internet-of-things-isnt-ready-for-babies&amp;t=MDcxNjI3YzYwMzJmZjM2NDEyMDdhODJhNmJmMmExY2Y4ZmNmNjdiZSxRRzRSUGZtMQ%3D%3D">cannot operate</a> the camera or switch your thermostat&#x2019;s settings without Internet connection</li>
+<li>all data from the devices is transmitted to Alphabet, constantly, unless the devices are disconnected</li>
+</ul><p>The device controls are accessed either by a web browser app or by a mobile app. I chose to look into the latter&#x2019;s transmissions in order to figure out how we can access our own private data. I used <a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dapp.greyshirts.sslcapture&amp;t=YzNiNTAyMDA4ZGFlZTkxMWNmMTc1NDJiOWJiN2QzZWE5OTY0MjM1NCxRRzRSUGZtMQ%3D%3D">Packet Capture</a> which in addition to doing the obvious, sets up a VPN and a phony SSL certificate to eavesdrop on all HTTPS traffic.</p><figure class="tmblr-full"><img alt="image" src="http://41.media.tumblr.com/380e4e7021cf0dd3d9bf9f99bf683fc1/tumblr_inline_o1dib6zDbf1tzfota_400.jpg" width="350"></figure><p><i>Google Nest Thermostat</i></p><h2>Reverse engineering procedure</h2><p>Logging in seems pretty straightforward - the app sends a JSON object with email and plaintext password to its server and receives a session cookie.</p><pre><i>POST /session HTTP/1.1
+Content-Type: application/json;charset=UTF-8
+User-Agent: Nest/[redacted] (Android; Obsidian) [redacted]
+Host: home.nest.com
+/.../
+{"password":"foo", "email":"bar"}</i>
+</pre><p>Then the application uses the cookie to create a session with dropcam servers since apparently Dropcam&#x2019;s separate infrastructure has been preserved. The API then provides several endpoints, e.g. for fetching the list of cameras with their numerous data fields like this:</p><pre><i>{
+ "talkback_stream_host": "stream-delta.dropcam.com:443",
+ "is_streaming_enabled": true,
+ "last_connected_time": redacted,
+ "direct_nexustalk_host": "redacted",
+ "timezone": "redacted",
+ "id": redacted,
+ "live_stream_host": "redacted",
+ "description": "",...</i></pre><p><i>see all the code when klicking on the link below</i></p><pre><i><a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fgist.github.com%2Fmarkbeee%2F41eb9954a0b3f6c7edcc&amp;t=NTg5MWExMjc5MjEwNWI2ZDc1NWNmMDZjM2Y4NDg1MWM4NzU0MjNiNyxRRzRSUGZtMQ%3D%3D">Nest Cam</a></i><br></pre><p>By another endpoint we can also retrieve a list of &#x201C;cues&#x201D; within a certain time period, i.e. points of time where motion detection has been triggered, and yet another allows to capture a current picture as jpeg. Example code in Go to do these things follows at the end of this post.</p><h2>Nest thermostat sends a vast array of data back &#x201C;home&#x201D;</h2><p>By far the greatest hope of integration with other IoT devices and home-made automation logic we&#x2019;ve put into the thermostat. Indeed, after descending through a hierarchy of objects including user, building and device, one receives a whole array of different data about the thermostat&#x2026;but the current temperature is not among them.</p><pre><i>{
+ "alt_heat_delivery": "forced-air",
+ "alt_heat_source": "gas",
+ "alt_heat_x2_delivery": "forced-air",
+ "alt_heat_x2_source": "gas",
+ "auto_away_enable": true,
+ "auto_away_reset": false,
+ "auto_dehum_enabled": false,
+ "auto_dehum_state": false,
+ "aux_heat_delivery": "forced-air",
+ "aux_heat_source": "electric",...
+ </i></pre><p><i>see all the code when klicking on the link below</i></p><pre><i><a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fgist.github.com%2Fmarkbeee%2F66136b8211cdf764d34b&amp;t=NjA4YmUzM2Q4N2IzNWNmMWUzOGJhYTQ5NDU0ZjAzNzUzMmMwMzY0MyxRRzRSUGZtMQ%3D%3D">Nest Thermostat Object</a></i><br></pre><p>So the question remains, is the temperature value not sent to Nest at all or is it sent but unreachable by the API?</p><h2>Go Code for accessing Nest Thermostat</h2><p>Here&#x2019;s a complete code sample for logging in, downloading cues, making a screenshot and dumping thermostat info:</p><pre>package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	flags "github.com/jessevdk/go-flags"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"os"...</pre><p><i>see all the code when klicking on the link below</i></p><pre><i><a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fgist.github.com%2Fmarkbeee%2F62c0a038292927e96989&amp;t=NjU2ZDQ5ZGI2YzRiOWVlMmMzNTgxYmZmODlkNjNkZjhkYzQxYWE2ZCxRRzRSUGZtMQ%3D%3D">Nest Go Code</a></i><br></pre><p>Nest devices are excellent pieces of hardware engineering, yet creating a walled garden around the user&#x2019;s own data is a shady move. All of my private data should be easibly accessible to me though open API without any gimmicks. In its <a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fnest.com%2Fpress%2Fnest-introduces-nest-weave-creating-most-comprehensive-developer-platform-for-the-home%2F&amp;t=MjhkYzY5YWJkYTllYjBhMWJiODk2YjgyYzgyMmU2OTA5NzBhMDBjNCxRRzRSUGZtMQ%3D%3D">press release</a> Nest promised introducing a public API and its <a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fdeveloper.nest.com%2Fdocumentation%2Fcloud%2Fapis&amp;t=YmY3Yzk2NDVmODNlNmRhOWVjZTc1OTI2NzMwZmFmOTUxZmUwYTZiMCxRRzRSUGZtMQ%3D%3D">reference docs</a> are already available. This API however seems limited in many ways compared to the internal API used by Nest mobile app - and to add insult to injury - many of its features require an active Nest subscription. Time will show if Nest shall repent and make its products more open - in the meantime at Protonet&#x2019;s Hamburg office we continue to explore what&#x2019;s possible on the intersection of open, malleable Internet technology and hardware devices.</p><p>Looking to root your Nest devices? Here are two useful links:</p><p><a href="http://t.umblr.com/redirect?z=http%3A%2F%2Fblog.includesecurity.com%2F2014%2F04%2Freverse-engineering-dropcam-rooting-the-device.html&amp;t=OWRkMmJmMjdjZGQ0YjI0NDk3OTAyYzVlMmI4MTQ0NWFkYmVhODkxNyxRRzRSUGZtMQ%3D%3D">Reversing the Dropcam Part 2: Rooting your Dropcam
+</a><br><a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fblog.exploitee.rs%2F2014%2Fgoogle-nest-exploiting-dfu-for-root%2F&amp;t=ZGE0MzZiNTNkM2FiNzU5Nzc4MDYwNDgxMDA1YmY1YjYxNGRjNWE4NyxRRzRSUGZtMQ%3D%3D"></a><a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fblog.exploitee.rs%2F2014%2Fgoogle-nest-exploiting-dfu-for-root%2F&amp;t=ZGE0MzZiNTNkM2FiNzU5Nzc4MDYwNDgxMDA1YmY1YjYxNGRjNWE4NyxRRzRSUGZtMQ%3D%3D">Google Nest: Exploiting DFU For Root</a><br></p><p>Written by <a href="http://t.umblr.com/redirect?z=https%3A%2F%2Fgithub.com%2Fkdomanski&amp;t=MmEwMTkxMWQxMGRlNjNmNGU2MDdiZDk2ZGFhODJlMDg1N2JhYjE4MSxRRzRSUGZtMQ%3D%3D">Kamil Doma&#x144;ski</a><br></p>
+ </div>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ </div>
+</body></html>

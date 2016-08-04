@@ -1,0 +1,139 @@
+<!DOCTYPE html><html><head><title>DisplayLink #3 – Ubuntu 9.10 (32 bit)</title></head><body>
+<h1>DisplayLink #3 – Ubuntu 9.10 (32 bit)</h1><p><a href="http://mulchman.org/blog/?p=90" target="_new">Original URL</a></p>
+<p><blockquote>Well, it&#x2019;s time to see if I can get my DisplayLink device working on an old dying laptop using Ubuntu 9.10 (32 bit) &#x2013; so here goes. Install Ubuntu 9.10 (32 bit). &#xA0;Once finally&hellip;</blockquote></p>
+<div><div class="post-entry">
+				<p>Well, it&#x2019;s time to see if I can get my <strong>DisplayLink</strong> device working on an old dying laptop using <strong>Ubuntu 9.10 (32 bit)</strong> &#x2013; so here goes.</p>
+<p>Install Ubuntu 9.10 (32 bit). &#xA0;Once finally installed and booted lets drop to a console (via <strong>Applications</strong> &gt; <strong>Accessories</strong> &gt; <strong>Terminal</strong>) and do some stuff.</p>
+<p>Start by updating the package list:</p>
+<blockquote>
+<pre>sudo apt-get update</pre>
+</blockquote>
+<p>Then download and install any package &amp; system updates:</p>
+<blockquote>
+<pre>sudo apt-get upgrade
+sudo apt-get dist-upgrade</pre>
+</blockquote>
+<p>Then download some packages we&#x2019;ll need later:</p>
+<blockquote>
+<pre>sudo apt-get install build-essential xorg-dev libusb-dev git-core</pre>
+</blockquote>
+<p>Reboot (via console or other means):</p>
+<blockquote>
+<pre>sudo shutdown -r now</pre>
+</blockquote>
+<p>Once the system is back up drop to a console and get the following package (I&#x2019;m saving it to the Desktop):</p>
+<blockquote>
+<pre>cd Desktop
+wget http://projects.unbit.it/downloads/udlfb-0.2.3_and_xf86-video-displaylink-0.3.tar.gz</pre>
+</blockquote>
+<p>NOTE: this package takes FOREVER to download.</p>
+<p>Extract the package and delete the udlfb directory it contains (we&#x2019;ll get a newer udlfb library in a bit):</p>
+<blockquote>
+<pre>tar xzvf udlfb-0.2.3_and_xf86-video-displaylink-0.3.tar.gz
+rm -rf udlfb</pre>
+</blockquote>
+<p>Get the latest udlfb and build it:</p>
+<blockquote>
+<pre>git clone http://git.plugable.com/webdav/udlfb
+cd udlfb
+make
+sudo make install</pre>
+</blockquote>
+<p>Compile the DisplayLink X driver:</p>
+<blockquote>
+<pre>cd ../xf86-video-displaylink
+./configure &amp;&amp; make
+sudo make install
+sudo shutdown -r now</pre>
+</blockquote>
+<p>You should now be able to plug in your DisplayLink device and see the green screen.</p>
+<p>Now, here&#x2019;s where things may get a bit difficult &#x2013; setting up an <strong>xorg.conf</strong> file. &#xA0;Modern distros don&#x2019;t ship with xorg.conf&#x2019;s anymore so it&#x2019;s up to the end user to create one when one is needed. &#xA0;Also, since this laptop doesn&#x2019;t have an ATI or NVIDIA card there&#x2019;s no&#xA0;proprietary&#xA0;driver to install (that would then automatically set up an xorg.conf file for me). &#xA0;I&#x2019;m creating a xorg.conf file based on <a href="http://mulchman.org/blog/?p=21">this previous DisplayLink blog entry</a>.</p>
+<p>Some things to note:</p>
+<ul>
+<li>Which <strong>/dev/fb*</strong> entry maps to the DisplayLink device. &#xA0;You can see this by unplugging the device, doing an &#x2018;<strong>ls</strong>&#x2018; in the <strong>/dev</strong> directory, then plugging back in the device and doing another &#x2018;<strong>ls</strong>&#x2018; and seeing which entry was just added.</li>
+<li>The &#x2018;<strong>BusId</strong>&#x2018; of the non-DisplayLink video card. &#xA0;This can be obtained through <strong>lspci</strong> and is needed in the xorg.conf file.</li>
+<li>Be sure to modify <strong>/etc/gdm/Init/Default</strong> to contain the following blurb right after the definition of the <strong>gdmwhich()</strong> function (<a href="http://blogg.noonday.se/2010/01/28/linux-usb-video-adapter/">this is taken from Patrick Gilmore&#x2019;s blog</a>):</li>
+<blockquote>
+<pre>XRANDR=`gdmwhich xrandr`
+if [ "x$XRANDR" != "x" ] ; then
+ $XRANDR -o 0
+fi</pre>
+</blockquote>
+</ul>
+<p>Once you do/know these things you can start tailoring your xorg.conf. &#xA0;Creating the xorg.conf file is above the scope of this blog and highly dependent on your own computers&#x2019; specific hardware. &#xA0;However, here is how mine turned out:</p>
+<blockquote>
+<pre># xorg.conf (X.Org X Window System server configuration file)
+
+############ Original Video Settings ###########
+
+Section "Device"
+ Identifier "Configured Video Device"
+	Driver		"intel"
+ BusID "PCI:0:2:0"
+EndSection
+
+Section "Monitor"
+ Identifier "Configured Monitor"
+EndSection
+
+Section "Screen"
+ Identifier "Default Screen"
+ Monitor "Configured Monitor"
+ Device "Configured Video Device"
+ SubSection "Display"
+ Depth 24
+ Modes "1280x800"
+ EndSubSection
+EndSection
+
+#################################################
+
+Section "ServerLayout"
+ Identifier "Server Layout"
+ Screen 0 "DisplayLinkScreen" 0 0
+ Screen 1 "Default Screen" LeftOf "DisplayLinkScreen"
+ Option "Xinerama" "off"
+EndSection
+
+#################################################
+
+Section "Files"
+ ModulePath "/usr/lib/xorg/modules"
+ ModulePath "/usr/local/lib/xorg/modules"
+	ModulePath	"/usr/local/lib/xorg/modules/drivers"
+EndSection
+
+############### DisplayLink Stuff ###############
+
+Section "Device"
+ Identifier "DisplayLinkDevice"
+ driver "displaylink"
+ Option "fbdev" "/dev/fb1"
+EndSection
+
+Section "Monitor"
+ Identifier "DisplayLinkMonitor"
+EndSection
+
+Section "Screen"
+ Identifier "DisplayLinkScreen"
+	Device "DisplayLinkDevice"
+ Monitor "DisplayLinkMonitor"
+ SubSection "Display"
+ Depth 16
+		Modes "1280x1024"
+ EndSubSection
+EndSection</pre>
+</blockquote>
+<p>Some pictures:</p>
+<ol>
+<li>Green screen<br>
+<a href="http://mulchman.trepid.net/DisplayLink/DSC04892.JPG"><img src="http://mulchman.trepid.net/DisplayLink/DSC04892_small.JPG" alt=""></a></li>
+<li>Both monitors working<br>
+<a href="http://mulchman.trepid.net/DisplayLink/DSC04894.JPG"><img src="http://mulchman.trepid.net/DisplayLink/DSC04894_small.JPG" alt=""></a></li>
+</ol>
+							</div>
+	
+			
+		</div>
+</body></html>

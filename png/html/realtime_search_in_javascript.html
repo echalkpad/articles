@@ -1,0 +1,136 @@
+<!DOCTYPE html><html><head><title>Real-Time Search in JavaScript</title></head><body>
+<h1>Real-Time Search in JavaScript</h1><p><a href="http://osvaldas.info/real-time-search-in-javascript" target="_new">Original URL</a></p>
+<p><blockquote>11 Aug What I meant was scanning the DOM of a page for text equivalents and showing the actual parts of the page, as well as hiding the irrelevant ones. I came up with the technique when I was&hellip;</blockquote></p>
+<div><header class="page-head">
+			
+			<time datetime="2015-08-11" title="2015-08-11" class="text-spec">11 Aug</time>
+			
+		</header>
+
+		
+		<article class="blog__content styled">
+
+			
+<p>What I meant was scanning the DOM of a page for text equivalents and showing the actual parts of the page, as well as hiding the irrelevant ones. I came up with the technique when I was designing <a href="http://readerrr.com" target="_blank">Readerrr</a>&#x2019;s FAQ page. Take a look at the example:</p>
+
+
+
+<p>I have also implemented the solution here on my <a href="http://osvaldas.info/blog">blog</a>.</p>
+
+<h2>How it works</h2>
+
+<p>All simple. Let&#x2019;s take the FAQ page as an example. Here&#x2019;s a typical markup:</p>
+
+<pre class="brush:xml;">&lt;h1&gt;FAQ&lt;/h1&gt;
+&lt;div class="faq"&gt;
+	&lt;input type="search" value="" placeholder="Type some keywords (e.g. giza, babylon, colossus)" /&gt;
+	&lt;ul&gt;
+		&lt;li id="faq-1"&gt;
+			&lt;h2&gt;&lt;a href="#faq-1"&gt;Great Pyramid of Giza&lt;/a&gt;&lt;/h2&gt;
+			&lt;div&gt;
+				&lt;p&gt;The Great Pyramid of Giza &lt;!-- ... --&gt;&lt;/p&gt;
+				&lt;!-- ... --&gt;
+			&lt;/div&gt;
+		&lt;/li&gt;
+		&lt;li id="faq-2"&gt;
+			&lt;h2&gt;&lt;a href="#faq-2"&gt;Hanging Gardens of Babylon&lt;/a&gt;&lt;/h2&gt;
+			&lt;div&gt;
+				&lt;p&gt;The Hanging Gardens of Babylon &lt;!-- ... --&gt;&lt;/p&gt;
+				&lt;!-- ... --&gt;
+			&lt;/div&gt;
+		&lt;/li&gt;
+		&lt;!-- ... --&gt;
+	&lt;/ul&gt;
+	&lt;div class="faq__notfound"&gt;&lt;p&gt;No matches were found.&lt;/p&gt;&lt;/div&gt;
+&lt;/div&gt;</pre>
+
+<p>I wrote a tiny piece of JavaScript code to handle the interaction and this is how it works:</p>
+
+<ol><li>When the page loads, the script indexes the content of all <code>li</code>&#x2019;s into browser&#x2019;s memory.</li>
+	<li>When a user types text into the search field, the script searches for equivalents among the indexed data and hides the corresponding <code>li</code>&#x2019;s where no equivalents were found. If nothing found, a message is shown.</li>
+	<li>The script highlights the text equivalents by replacing phases, for example, <code>babylon</code> becomes <code>&lt;span class="highlight"&gt;babylon&lt;/span&gt;</code>.</li>
+</ol><p>Now, try it yourself:</p>
+
+<p><a class="button" href="http://osvaldas.info/examples/real-time-search-in-javascript" target="_blank">Demo</a></p>
+
+<h2>Taking it further</h2>
+
+<p>Since I chose FAQ page as an example, there are some issues to deal with.</p>
+
+<h3>Toggling the answers</h3>
+
+<p>It is a good practice to hide the answers by default and show them only when user needs them, that is to say when they <em>press</em> the question:</p>
+
+<pre class="brush:css;">.faq &gt; ul &gt; li:not( .is-active ) &gt; div
+{
+	display: none;
+}</pre>
+
+<pre class="brush:jscript;">$( document ).on( 'click', '.faq h2 a', function( e )
+{
+	e.preventDefault();
+	$( this ).parents( 'li' ).toggleClass( 'is-active' );
+});</pre>
+
+<p>In the CSS part I use <em>child combinator selector</em> <code>&gt;</code> because I don&#x2019;t want to select and, therefore, to hide the elements of an answer, which may contain lists and <em>div&#x2019;s</em>.</p>
+
+<h3>What if JavaScript is disabled</h3>
+
+<p>The user won&#x2019;t be able to see the answers. Unless you show them by default or develop a JavaScript-less solution. To do this, take a closer look at these fragments of the markup:</p>
+
+<ul><li><code>&lt;li id="faq-1"&gt;</code></li>
+	<li><code>&lt;a href="#faq-1"&gt;</code></li>
+</ul><p>The usage of <em>fragment identifiers</em> enables us to take the advantage of CSS&#x2019;s pseudo selector <code>:target</code>:</p>
+
+<pre class="brush:css;">.faq &gt; ul &gt; li:not( :target ) &gt; div
+{
+	display: none;
+}</pre>
+
+<p>Furthermore, the real-time search is not possible as well. But you can either provide a sever-side search possibility or hide the search field and so as not to confuse the user:</p>
+
+<pre class="brush:xml;">&lt;html class="no-js"&gt;
+	&lt;head&gt;
+		&lt;!-- remove this if you use Modernizr --&gt;
+		&lt;script&gt;(function(e,t,n){var r=e.querySelectorAll("html")[0];r.className=r.className.replace(/(^|\s)no-js(\s|$)/,"$1$2")})(document,window,0);&lt;/script&gt;
+	&lt;/head&gt;
+&lt;/html&gt;</pre>
+
+<p>I added a class name <code>no-js</code> to <code>&lt;html&gt;</code> element. The <code>&lt;script&gt;</code> part removes that class name. If JavaScript support is disabled in a browser, the class name won&#x2019;t be removed; therefore:</p>
+
+<pre class="brush:css;">.no-js .faq input
+{
+	display: none;
+}
+</pre>
+
+<p>The <em>no-js</em> is a very handy technique, you can use it site-wide.</p>
+
+<h3>Improving UX</h3>
+
+<p>If there is only one list item that matches user&#x2019;s query, it is a good practice to automatically show the content of that item, without requiring to press the title. To see what I mean, head over the <a href="http://osvaldas.info/real-time-search-in-javascript#image-1">GIF</a> at the beginning of the post.</p>
+
+<h3>Hidden keywords</h3>
+
+<p>Here on my blog I have a <em>filterable</em> list of blog post titles only. Each post has some related keywords assigned. So, during the search, how do I make an item discoverable even if the title does not consist of a particular keyword? For example, how can I make the entry <em>&#x201C;Real-Time Search in JavaScript&#x201D;</em> visible if a user entered <em>&#x201C;jquery&#x201D;</em>? Yes, exactly, that is adding keywords and hiding them with CSS:</p>
+
+<pre class="brush:xml;">&lt;li&gt;
+	&lt;h2&gt;&lt;a href="/real-time-search-in-javascript"&gt;Real-Time Search in JavaScript&lt;/a&gt;&lt;/h2&gt;
+	&lt;p class="hidden-keywords" aria-hidden="true"&gt;jquery filter input html css&lt;/p&gt;
+&lt;/li&gt;</pre>
+
+<pre class="brush:css;">.hidden-keywords
+{
+	display: none;
+}</pre>
+
+<p>A simple trick but not always that obvious.</p>
+
+<p>You will find two versions of the code in the source of the demo: without dependencies and jQuery-dependent. These versions are also divided into three groups of code so you can adapt only what your project needs.</p>
+
+<p><a class="button" href="http://osvaldas.info/examples/real-time-search-in-javascript" target="_blank">Demo</a></p>
+
+		</article>
+
+		</div>
+</body></html>

@@ -1,0 +1,778 @@
+<!DOCTYPE html><html><head><title>A Beginner’s Guide To Grunt: Build Tool for JavaScript</title></head><body>
+<h1>A Beginner’s Guide To Grunt: Build Tool for JavaScript</h1><p><a href="http://designmodo.com/grunt/" target="_new">Original URL</a></p>
+<p><blockquote>Modern Web development is rapidly moving toward more complicated client-side applications. The ability to build more advanced applications requires more sophisticated tools that allow developers to&hellip;</blockquote></p>
+<div><div>
+ 
+ <p>Modern Web development is rapidly moving toward more complicated client-side applications. The ability to build more advanced applications requires more sophisticated tools that allow developers to manage complexity and prevent the program they write from collapsing under the weight of a technical dept. A developer needs to carry out a set of steps in order to prepare a web app for use.</p>
+<p>In this article, we&#x2019;ll take a brief look at <a href="http://gruntjs.com/" rel="nofollow" title="" target="_blank">Grunt</a>. To illustrate how a task runner can simplify the development process, we&#x2019;ll build a small TypeScript application that uses RequireJS and Knockout and we&#x2019;ll use Grunt to prepare, debug and release versions of that app.</p>
+<h2>Demo Application</h2>
+<h3>Overview</h3>
+<p>Let&#x2019;s first take a look at the demo application we&#x2019;re going to use for illustrative purposes. This is a simple app that has a single input field for an email address. The app validates user input and outputs either a &#x201C;SUCCESS&#x201D; label or a list of validation errors below the input box.</p>
+<div class="figure"><img class="alignnone size-full wp-image-289173" src="http://designmodo.com/wp-content/uploads/2016/02/image1-427x160.png%20427w,%20http://designmodo.com/wp-content/uploads/2016/02/image1.png%20600w,%20http://designmodo.com/wp-content/uploads/2016/02/image1-301x113.png%20301w" alt="Grunt Demo Application" width="600"></div>
+<p>The app uses a somewhat contrived set of validation rules stating that the email address entered must be: not empty, no longer than 15 characters and in a valid format.</p>
+<p>As stated above, the application is written in <a href="http://typescriptlang.org" rel="nofollow" title="" target="_blank">TypeScript</a>. It uses the <a href="http://requirejs.org/" rel="nofollow" title="" target="_blank">RequireJS</a> loader to enable modular development and easier development tracking. It also uses <a href="http://knockoutjs.com/" rel="nofollow" title="" target="_blank">Knockout</a> as a data-binding library, although with a UI that is that simple, it doesn&#x2019;t really matter all that much.</p>
+<h3>Tools and Libraries</h3>
+<p>A majority of the tools used in front-end development run in <a href="http://nodejs.org/" rel="nofollow" title="" target="_blank">Node.js</a>. Be sure to install it if you want to follow along. You&#x2019;ll also need <a href="https://www.npmjs.com/" rel="nofollow" title="" target="_blank">NPM</a> &#x2014; a node packet manager, which makes it easy to install those tools and their dependencies.</p>
+<p>We&#x2019;ll start by creating a folder for the app, let&#x2019;s call it &#x201C;grunt_demo&#x201D;. We need to initialize it for using with npm. To do so, open a command line, set the project folder as a working directory and run the initialization command:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; cd grunt_demo
+&gt; npm init
+</pre>
+<p>It will ask you a couple of simple questions and create a package.json file, which will store a list of packages you&#x2019;ve installed for this project.</p>
+<p>By now your folder should look something like this:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
++ grunt-demo
+|-- package.json
+</pre>
+<p>Now, to get RequireJS and Knockout, we&#x2019;ll install another package manager called <a href="http://bower.io" rel="nofollow" title="" target="_blank">Bower</a>. Compared to NPM, which is used for Node.js development and development tools, Bower is a&#xA0; front-end package manager. We&#x2019;ll use it to get libraries that are supposed to run in a browser.</p>
+<p>To install Bower from NPM, you&#x2019;ll need to run following command:&#xA0; &gt; npm install bower -g</p>
+<p>Option &#x201C;-g&#x201D; instructs the packet manager to install Bower globally in the system. Normally, packages are installed locally inside the project folder so each project can use specific versions of packages without affecting other projects. But since Bower is not a direct dependency of an application or it&#x2019;s supporting tools, there is no need to install it locally.</p>
+<p>To use Bower, we also need to initialize the folder: &gt; bower init</p>
+<p>You&#x2019;ll go through the same process of answering questions as you did when we initialized NPM. In fact, as you&#x2019;ll soon see, both packet managers use a pretty similar set of commands.</p>
+<p>After initialization, Bower will create it&#x2019;s own analogue of package.json, called bower.json:</p>
+<p>Now we are all set to install RequireJS and Knockout:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; bower install requirejs --save
+&gt; bower install knockout --save
+</pre>
+<p>Those commands will download and install both libraries to your project folder, inside the &#x201C;bower_components&#x201D; subfolder.</p>
+<p>&#x201C;&#x2013;save&#x201D; key instructs Bower keep a record of installed packages in bower.json. That way, as long as you commit bower.json to your repository, you don&#x2019;t have to include the &#x201C;bower_components&#x201D; folder, but you&#x2019;ll still be able to re-install the exact versions of the libraries your app depends on.</p>
+<p>Next, we&#x2019;ll install the TypeScript compiler. Since TypeScript is being actively worked on, with the new versions being released often, we&#x2019;ll install it locally in our project folder:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install typescript --save-dev
+</pre>
+<p>&#x201C;&#x2013;save-dev&#x201D; key works the same way as &#x201C;&#x2013;save&#x201D; (both Bower and NPM support these keys), but registers the installed package as a development dependency, i.e. the dependency that is needed during development time, but not required to actually run the app. NPM packages are installed in the &#x201C;node_modules&#x201D; subfolder.</p>
+<p>It you read our article about TypeScript, you know that in order to get autocomplete suggestions and type checking for external libraries, the TypeScript compiler needs to type definition modules. A collection of high quality type definitions for a variety of popular JavaScript libraries is maintained in a repository called <a href="http://definitelytyped.org/" rel="nofollow" title="" target="_blank">DefinetelyTyped</a>.</p>
+<p>Instead of downloading the entire repository, with type definitions for hundreds of libraries that we don&#x2019;t need, we&#x2019;ll install yet another package manager, but now one specifically designed for TypeScript definition. It is called TypeScript Definition manager (TSD for short) and uses DefinitelyTyped as a source for type definitions.</p>
+<p>We&#x2019;ll follow the same procedure as we did for Bower, by installing it globally from NPM and initializing the project folder:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install tsd@next -g
+&gt; tsd init
+</pre>
+<p>Initialization will create a tsd.json for tracking installed definition modules.</p>
+<p>Issuing the following commands will download definitions for Knockout and RequireJS and put it inside the typings subfolder at your project location:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; tsd install require --save
+&gt; tsd install knockout --save
+</pre>
+<p>TSD will also create and maintain a &#x201C;tsd.d.ts&#x201D; file, which will reference all installed type definition modules using the TypeScript /// &lt;reference /&gt; comment structure. It&#x2019;s handy because now you can only reference a single &#x201C;tsd.d.ts&#x201D; file in our *.ts files to get type definitions for all installed libraries (instead of referencing them one by one).</p>
+<h3>Implementation</h3>
+<p>Now we are ready to write the demo application. Let&#x2019;s create a source folder called &#x201C;src&#x201D;. We&#x2019;ll need an &#x201C;index.html&#x201D; file to represent a single screen of our application. We&#x2019;ll also need configuration and bootstrap scripts for RequireJS. The main application logic will go into the &#x201C;app&#x201D; subfolder and will consist of the main application view model and an email validator. To make the app a bit more interesting, the email validator will use a generic validation library that will reside in the &#x201C;validation&#x201D; subfolder:</p>
+<p>&#x2026;<br>
+|&#x2013; + src<br>
+ |&#x2013; + app<br>
+ |&#x2013; emailValidator.ts<br>
+ |&#x2013; mainViewModel.ts<br>
+ |&#x2013; + validation<br>
+ |&#x2013; validator.ts<br>
+ |&#x2013; &#x2026; other validation files &#x2026;<br>
+ |&#x2013; index.html<br>
+ |&#x2013; require.config.ts<br>
+ |&#x2013; require.startup.ts<br>
+&#x2026;</p>
+<p>The HTML markup for the app is fairly simple:</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;!DOCTYPE HTML&gt;
+&lt;html&gt;
+&lt;head&gt;
+ &lt;meta http-equiv="Content-Type" content="text/html; charset=UTF-8"&gt;
+ &lt;title&gt;Grunt Demo&lt;/title&gt;
+ &lt;script src="require.config.js"&gt;&lt;/script&gt;
+ &lt;script src="../bower_components/requirejs/require.js"
+ data-main="require.startup"&gt;&lt;/script&gt;
+&lt;/head&gt;
+&lt;body&gt;
+ &lt;form action="#"&gt;
+ &lt;label for="email-input"&gt;Email:&lt;/label&gt;
+ &lt;input id="email-input" type="text" data-bind="value: email" /&gt;
+ &lt;/form&gt;
+
+ &lt;!-- ko if: errors().length --&gt; 
+ &lt;ul data-bind="foreach: errors"&gt;
+ &lt;li data-bind="text: $data"&gt;&lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;!-- /ko --&gt;
+
+ &lt;!-- ko if: !errors().length --&gt;
+ &lt;span&gt;SUCCESS!&lt;/span&gt;
+ &lt;!-- /ko --&gt;
+&lt;/body&gt;
+</pre>
+<p>A couple of things to note here. We first load a require configuration file, which we refer to with the extension &#x201C;.js&#x201D;, although at the moment we only have a &#x201C;.ts&#x201D; version of it. We&#x2019;ll deal with the compilation later. Next, RequireJS is loaded and configured to execute the &#x201C;require.startup&#x201D; module (using data-main=&#x201D;&#x2026;&#x201D; attribute) after initialization is complete. This will be the entry point of our application. Finally, there is a simple HTML markup that is used to display an email entry form and validation results. data-bind=&#x201D;&#x2026;&#x201D; attributes and &lt;!&#x2013; /ko &#x2013;&gt; comments represent a <a href="http://knockoutjs.com/documentation/introduction.html" rel="nofollow" title="" target="_blank">Knockout-specific</a> way to define data bind the UI to the model.</p>
+<p>In require.config.ts we simply configure base URL and some paths for RequireJS:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+var require: Require = &lt;any&gt;{
+ baseUrl: '.',
+ paths: {
+ 'knockout': '../bower_components/knockout/dist/knockout'
+ }
+};
+</pre>
+<p>An entry point is also fairly simple:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+require(['knockout', 'app/mainViewModel'], (ko, MainViewModel) =&gt; {
+ ko.applyBindings(new MainViewModel());
+});
+</pre>
+<p>All it does is create an application view model and pass it to Knockout to bind to our UI represented as an HTML markup.</p>
+<p>The main view model uses an email validator to validate an email stored in an &#x201C;email&#x201C; property. Validation errors are assigned to the &#x201C;errors&#x201D; property. The validation process is run each time the email is changed, which is done using Knockout <a href="http://knockoutjs.com/documentation/computedObservables.html" rel="nofollow" title="" target="_blank">computed properties</a>.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+/// &lt;reference path="../../typings/tsd.d.ts" /&gt;
+
+import ko = require('knockout');
+import EmailValidator = require('app/emailValidator');
+import validationUtil = require('validation/validationUtil');
+
+class MainViewModel {
+ public email: KnockoutObservable&lt;string&gt;;
+ public errors: KnockoutComputed&lt;Array&lt;string&gt;&gt;;
+
+ private validator: EmailValidator;
+
+ constructor() {
+ this.validator = new EmailValidator(15 /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old maxLength */);
+
+ this.email = ko.observable('')
+ this.errors = ko.computed(() =&gt; this.getValidationErrors());
+ }
+
+ private getValidationErrors(): Array&lt;string&gt; {
+ var failure = this.validator.validate(this.email());
+ return validationUtil.getFailureMessages(failure);
+ }
+}
+
+export = MainViewModel;
+</pre>
+<p>Notice how it references the &#x201C;tsd.d.ts&#x201D; file to get type definitions for Knockout.</p>
+<p>EmailValidator.ts and the rest of the validation-related code can be found in the <a href="http://designmodo.com/wp-content/uploads/2016/02/grunt-demo.zip">source code download</a> attached to this article.</p>
+<p>Now, when the application is ready, it&#x2019;s time to build and run it.</p>
+<h2>Grunt Task Runner</h2>
+<h3>Installation</h3>
+<p>We&#x2019;ll handle all build-related tasks using <a href="http://gruntjs.com/" rel="nofollow" title="" target="_blank">Grunt</a>, which is a task runner designed to automate routine tasks.</p>
+<p>We&#x2019;ll start by installing the Grunt command line interface (CLI).</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install grunt-cli -g
+</pre>
+<p>It does not install the task runner itself. This is only a simple portion that provides command line access to the Grunt task runner, which will be installed locally alongside your project. That way, multiple projects can use their own version of Grunt.</p>
+<p>To install the Grunt task runner, let&#x2019;s run the following command:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install grunt --save-dev	
+</pre>
+<p>The last bit of installation is to create &#x201C;gruntfile.js&#x201D; in the project root folder. This is the node.js script that will contain definitions and configuration of all tasks that we want to run for this project.</p>
+<h2>Grunt Basics</h2>
+<h3>Command Line</h3>
+<p>Tasks are what Grunt executes and runs. A task can represent a particular thing to do, like a step of your build process or a sequence of steps. Whenever you run Grunt, you specify one or more tasks to run.</p>
+<p>To run a particular task, you can use following command: &gt; grunt [task_name],</p>
+<p>where [task_name] is the name of a task to run. Grunt will attempt to run a task named &#x201C;default&#x201D; if the task name is not specified.</p>
+<p>So, <strong>&gt; grunt default</strong>&#xA0; and <strong>&gt; grunt</strong>&#xA0;&#xA0;&#xA0; will do the same thing.</p>
+<h3>Gruntfile</h3>
+<p>Tasks are specified and configured in the gruntfile. It has a simple structure:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ // task configuration goes here
+ });
+ // load tasks from plugins
+ grunt.loadNpmTasks('grunt-contrib-uglify&#x2019;);
+ // register tasks
+ grunt.registerTask('default', ['uglify']);
+};
+</pre>
+<h3>Tasks</h3>
+<p>There are three types of tasks in Grunt: Alias tasks, multi tasks and basic tasks.</p>
+<h4>Alias Tasks</h4>
+<p>Alias tasks are registered using the grunt.registerTask() method. You pass a task name, an optional description and an array of other task names:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.registerTask('conquer_the_world', ['veni', 'vidi', 'vici']);
+</pre>
+<p>The statement above creates a new alias task called &#x201C;conquer_the_world&#x201D;. Calling</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; grunt conquer_the_world
+</pre>
+<p>will run tasks &#x201C;veni&#x201D;, &#x201C;vidi&#x201D; and &#x201C;vici&#x201D; in the order they are specified in the array.</p>
+<p>Alias tasks are handy for defining sequences of steps.</p>
+<h4>Multi tasks</h4>
+<p>Multi tasks are the ones that require configuration. Task configuration is specified as part of the object that is passed to the grunt.initConfig() method at the beginning of the grunt file. A particular set of configuration parameters for a task is called&#xA0; a target. A multi task can have multiple targets (that&#x2019;s where the &#x201C;multi&#x201D;- part of the &#x201C;multi task&#x201D; moniker comes in.)</p>
+<p>The example below shows how to pass some configuration parameters to a task called &#x201C;copy&#x201D; with two targets called &#x201C;html&#x201D; and &#x201C;css&#x201D;:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.initConfig({
+ copy: { 
+ html: /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old configuration parameters here */,
+ css: /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old configuration parameters here */
+ }
+});
+</pre>
+<p>Target configuration can be any valid JSON-object, for example:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.initConfig({
+ copy: { 
+ html: { ext: '.html' },
+ css: { ext: '.css' }
+ }
+});
+</pre>
+<p>To run a task with a particular target, you reference it using the following schema:</p>
+<p>[task_name]:[target_name]</p>
+<p>Multi tasks are registered using the grunt.registerMultiTask() method. You pass a task name, an optional description and a function that will be executed when Grunt runs a task. Inside that function, this.target will have a target name and this.data will contain target configuration.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.registerMultiTask('copy', function() {
+ grunt.log.writeln(this.target + ': *' + this.data.ext);
+});
+</pre>
+<p>Running &#x201C;grunt copy&#x201D; (with the configuration provided in the example above) will output:</p>
+<div class="figure"><img class="alignnone size-full wp-image-289174" src="http://designmodo.com/wp-content/uploads/2016/02/image2-552x160.png%20552w,%20http://designmodo.com/wp-content/uploads/2016/02/image2-390x113.png%20390w,%20http://designmodo.com/wp-content/uploads/2016/02/image2.png%20597w" alt="Grunt Copy" width="597"></div>
+<h4>Basic tasks</h4>
+<p>Basic tasks simply allow you to execute the specified function. Grunt does not look for a configuration like it does for multi task. You register basic tasks using the same grunt.registerTask() method, but instead of passing an array of other tasks, you pass a function:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.registerTask('foo', function() {
+ grunt.log.writeln('Hello, world!');
+});
+</pre>
+<p>You can pass arguments to basic tasks by appending them to a task name using the following pattern:</p>
+<p>[task_name][:arg_1][:arg_2]&#x2026;[:arg_N]</p>
+<h3>Plugins</h3>
+<p>The list of plugins is available at <a href="http://gruntjs.com/plugins" rel="nofollow" title="" target="_blank">gruntjs.com</a>. Plugins are installed using NPM. Once a plugin is installed, you can call&#xA0; grunt.loadNpmTasks() method, passing a plugin name as a first parameter, to load tasks from the plugin:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.loadNpmTasks('grunt-contrib-watch');
+</pre>
+<h2>Build Tasks</h2>
+<p>Now it&#x2019;s time to use Grunt to build our small demo application.</p>
+<p>First, we need to think what we want to achieve. At the very least we need TypeScript files compiled to JavaScript, otherwise we wouldn&#x2019;t be able to run the app at all.</p>
+<p>To encourage ourselves to write better code, we also would like to run some sort of linter on our TypeScript code to ensure that we follow best practices and avoid common TypeScript / JavaScript pitfalls.</p>
+<p>During our build process we will compile code located in the &#x201C;src&#x201D; folder and produce, debug and release versions of the app, which we&#x2019;ll put in a folder named &#x201C;build&#x201D;.</p>
+<p>&#x2026;<br>
+|&#x2013; + build<br>
+ |&#x2013; debug<br>
+ |&#x2013; release<br>
+&#x2026;</p>
+<h3>TypeScript Compilation</h3>
+<p>Let&#x2019;s start with the TypeScript compilation. A <a href="http://gruntjs.com/plugins" rel="nofollow" title="" target="_blank">quick search</a> shows that someone has already written a Grunt task to do exactly that. Let&#x2019;s install the grunt-ts plugin and start writing a grunt file using the framework shown in the corresponding section above.</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install grunt-ts --save-dev
+</pre>
+<p>Configure the plugin, and point it to where the TypeScript files are located. We also need to register plugin tasks. Finally, we&#x2019;ll define an alias task called &#x201C;default,&#x201D; which will perform a build process.</p>
+<p>We can lookup configuration details for a plugin on its <a href="https://www.npmjs.com/package/grunt-ts" rel="nofollow" title="" target="_blank">NPM page</a>.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ ts: {
+ default: {
+ src: './src/**/*.ts'
+ outDir: './build/debug/'
+ }
+ },
+ });
+ grunt.loadNpmTasks('grunt-ts');
+ grunt.registerTask('default', ['ts']);
+};
+</pre>
+<p>In the code snippet above we configure a single target called &#x201C;default,&#x201D; and specify the location of TypeScript files and an output folder where to place all the compiled JavaScript files.</p>
+<p>The ./src/**/*.ts pattern means that we need to compile all files that have the extension .ts and are located inside the &#x201C;src&#x201D; folder or any of its subfolders. Note also that a directory pattern ends with &#x201C;/&#x201C;. A dot at the beginning of the path means project root, which is the location of the grunt file.</p>
+<p>Since manipulations with files are quite often required during build tasks, Grunt supports a lot of ways of specifying which files to access. You can find them described <a href="http://gruntjs.com/configuring-tasks#files" rel="nofollow" title="" target="_blank">here</a>.</p>
+<p>While reading through grunt-ts documentation, you may notice that it is installed with it&#x2019;s own version of the TypeScript compiler, which unfortunately is a bit out date. Hopefully we can specify a path to our own version (which, if you remember, we&#x2019;ve installed to &#x201C;node_modules/typescript&#x201D;).</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ ts: {
+options: {
+	 compiler: './node_modules/typescript/bin/tsc'
+},
+ default: {
+ src: './src/**/*.ts'
+ outDir: './build/debug/'
+ }
+ },
+ });
+...
+};
+</pre>
+<p>Although it looks like we&#x2019;ve defined another target, it&#x2019;s not exactly true. The &#x201C;options&#x201D; key is a special key that defines some settings shared by all targets. Each target can in turn contain the &#x201C;options&#x201D; property to override some of the global options.</p>
+<p>Now, if we run a default task in Grunt, it should compile our TypeScript code and place the compiled versions into the &#x201C;build/debug&#x201D; folder.</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; grunt
+</pre>
+<p><em>(Remember, you don&#x2019;t need to specify a task name if you want to run a task called &#x201C;default.&#x201D;)</em></p>
+<div class="figure"><img class="alignnone size-full wp-image-289175" src="http://designmodo.com/wp-content/uploads/2016/02/image3-268x160.png%20268w,%20http://designmodo.com/wp-content/uploads/2016/02/image3.png%20600w,%20http://designmodo.com/wp-content/uploads/2016/02/image3-189x113.png%20189w" alt="TypeScript Compilation" width="600"></div>
+<p>Indeed, the debug folder contents now mirror our src folder structure, but contains twice as many files. That is because the TypeScript compiler by default creates a .map file for each of the compiled JavaScript files. These files contain a source map files that allows you to see TypeScript code in the browser debugger instead of JavaScript, which actually is running. You can read more about source maps <a href="http://www.html5rocks.com/en/tutorials/developertools/sourcemaps/" rel="nofollow" title="" target="_blank">here</a>.</p>
+<p>There are some unexpected additions. These include the &#x201C;.tscache&#x201D; folder in the project root folder and &#x201C;.baseDir.ts&#x201D; in the &#x201C;src&#x201D; folder (along with the compiled versions of that file in &#x201C;build/debug&#x201D;).</p>
+<p>These are files that grunt-ts creates to be able to incrementally compile only changed TypeScript files instead of recompiling an entire project even when a single file was changed. It stores a hash of each TypeScript file it compiled in the &#x201C;.tscache&#x201D; folder and uses the &#x201C;.baseDir.ts&#x201D; file as a marker of the code root folder (this is necessary to be able to maintain the same folder structure in the destination folder as in the source folder).</p>
+<p>With that mystery out of our way, the only issue that keeps us from running a debug version of our application is the missing index.html file, which we haven&#x2019;t yet copied to the &#x201C;build/debug&#x201D; folder.</p>
+<h3>File Copy</h3>
+<p>A quick search through the Grunt plugin page reveals a plugin called &#x201C;grunt-contrib-copy&#x201D; that is designed specifically for copying files between folders.</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install grunt-contrib-copy --save-dev
+</pre>
+<p>Now, we can update the grunt file to include another build step:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ copy: {
+ html: {
+ flatten: true,
+ expand: true,
+ src: './src/index.html',
+ dest: './build/debug/'
+ }
+ },
+
+ ts: {
+options: {
+	 compiler: './node_modules/typescript/bin/tsc'
+},
+ default: {
+ src: './src/**/*.ts'
+ outDir: './build/debug/'
+ }
+ },
+ });
+
+ grunt.loadNpmTasks('grunt-ts');
+ grunt.loadNpmTasks('grunt-contrib-copy');
+
+ grunt.registerTask('default', ['copy:html', 'ts']);
+};
+</pre>
+<p>Note the &#x201C;expand&#x201D; and &#x201C;flatten&#x201D; configuration options under the &#x201C;copy:html&#x201D; target. Normally the copy task preserves the folder structure, and if these two options weren&#x2019;t set, &#x201C;index.html&#x201D; would&#x2019;ve been copied to &#x201C;./build/debug/src/index.html&#x201D; instead of &#x201C;./build/debug/index.html&#x201D;, which we want. &#xA0;The &#x201C;Expand&#x201D; option is required in order to be able to specify the &#x201C;flatten&#x201D; option, which helps us achieve what we want. &#x201C;Flatten&#x201D; removes all path parts from the generated &#x201C;dist&#x201D; paths, meaning that in our case &#x201C;./src/index.html&#x201D; will first be reduced to &#x201C;index.html&#x201D; before appending it to &#x201C;./build/debug/&#x201D; destination.</p>
+<h3>Templates</h3>
+<p>Before we attempt to build and run out the demo application, we have to address one important thing. Notice how adding a configuration for another topic forced us to repeat ourselves:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.initConfig({
+ copy: {
+ html: {
+ flatten: true,
+ expand: true,
+ src: './src/index.html',
+ dest: './build/debug/'
+ }
+ },
+ ts: {
+ options: {
+ compiler: './node_modules/typescript/bin/tsc'
+ },
+ default: {
+ src: './src/**/*.ts',
+ outDir: './build/debug/'
+ }
+ },
+});
+</pre>
+<p>Imagine if we wanted to change our project folder structure or simply rename one of the folders. That would force us to go through all the configurations in the grunt file and update multiple places to reflect the changes in folder names or structure. Although it might seem easy to do with our simple configuration, it&#x2019;s fairly easy to imagine a more complicated grunt file where that would be a real issue.</p>
+<p>Hopefully there is a trick up in the Grunt&#x2019;s sleeve to help us keep the grunt file DRY. In the configuration object you can define properties to store arbitrary data. The only limitation is to keep those property names different from task names.</p>
+<p>You can then reference these properties in task configuration objects using &lt;%= %&gt; syntax.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.initConfig({
+ vars: {
+ sourcePath: './src/',
+ buildPath: './build/',
+ debugPath: '&lt;%= vars.buildPath %&gt;debug/',
+ typescriptFiles: '&lt;%= vars.sourcePath %&gt;**/*.ts',
+ indexHtmlFile: 'index.html'
+ },
+ copy: {
+ html: {
+ flatten: true,
+ expand: true,
+ src: '&lt;%= vars.sourcePath %&gt;&lt;%= vars.indexHtmlFile %&gt;',
+ dest: '&lt;%= vars.debugPath %&gt;'
+ }
+ },
+
+ ts: {
+ options: {
+ compiler: './node_modules/typescript/bin/tsc'
+ },
+ default: {
+ src: '&lt;%= vars.typescriptFiles %&gt;',
+ outDir: '&lt;%= vars.debugPath %&gt;'
+ }
+ },
+});
+</pre>
+<p>&#x201C;Vars&#x201D; here does not correspond to any task name used and does not define any task configuration. It&#x2019;s used to store some constant values that we want to share between task configurations. That way, if the folder structure changes, we can update the grunt file in a single place.</p>
+<h3>Text Replacement</h3>
+<p>Now grunt seemingly does what we want. It puts the compiled *.js files and index.html into the build/debug folder. However, an attempt to run an app won&#x2019;t be successful. The reason for that is the paths to libraries used.</p>
+<p>Remember the folder structure we&#x2019;ve established.</p>
+<p>+ grunt-demo<br>
+|&#x2013; + bower_components<br>
+ |&#x2013; + knockout<br>
+ |&#x2013; &#x2026; knockout.js files &#x2026;<br>
+ |&#x2013; + requirejs<br>
+ |&#x2013; &#x2026; require.js files &#x2026;<br>
+|&#x2013; + node_modules<br>
+|&#x2013; + typings<br>
+|&#x2013; + src<br>
+ |&#x2013; + app<br>
+ |&#x2013; + validation<br>
+ |&#x2013; index.html<br>
+ |&#x2013; require.config.ts<br>
+ |&#x2013; require.startup.ts<br>
+|&#x2013; package.json<br>
+|&#x2013; bower.json<br>
+|&#x2013; tsd.json</p>
+<p>Both RequireJS and Knockout reside outside of the source folder. When they are referenced in index.html and require.config.ts, we used paths relative to these files to refer to those libraries:</p>
+<p><strong>index.html</strong></p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;script src="require.config.js"&gt;&lt;/script&gt;
+&lt;script src="../bower_components/requirejs/require.js"
+ data-main="require.startup"&gt;&lt;/script&gt;
+</pre>
+<p><strong>require.config.ts</strong></p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+var require: Require = &lt;any&gt;{
+ baseUrl: '.',
+ paths: {
+ 'knockout': '../bower_components/knockout/dist/knockout'
+ }
+};
+</pre>
+<p>However, the debug version of the application is located in a folder that is nester 1 level deeper relative to &#x201C;bower_components&#x201D;, compared to the &#x201C;src&#x201D; folder.</p>
+<p>+ grunt-demo<br>
+|&#x2013; + bower_components<br>
+ |&#x2013; + knockout<br>
+ |&#x2013; &#x2026; knockout.js files &#x2026;<br>
+ |&#x2013; + requirejs<br>
+ |&#x2013; &#x2026; require.js files &#x2026;<br>
+|&#x2013; + build<br>
+ |&#x2013; + debug<br>
+ |&#x2013; + app<br>
+ |&#x2013; + validation<br>
+ |&#x2013; index.html<br>
+ |&#x2013; require.config.js<br>
+ |&#x2013; require.startup.js<br>
+|&#x2013; &#x2026;</p>
+<p>That means that index.html and require.config.js in the build/debug folder have to reference libraries using the &#x201C;../../bower_components/&#x201D; path instead of &#x201C;../bower_components/&#x201D;.</p>
+<p>We could, of course, add an extra &#x201C;../&#x201D; prefix to files located in the &#x201C;src&#x201D; folder. However, imagine if we wanted to change the location where the application is built to. We&#x2019;d have to change the gruntfile first, since it&#x2019;s currently defines the target location. We&#x2019;d also need to remember to update &#x201C;src/index.html&#x201D; and &#x201C;src/require.config.ts&#x201D; to reflect the new build target folder. And having to remember things is a sure way to make mistakes, because human memory is not perfect.</p>
+<p>Aside from violating the DRY principle, this approach also ignores the Single Responsibility Principle (SRP) as well. Ideally, the grunt file alone should be responsible for project builds, keeping the source code unaware of details of where it&#x2019;s going to be deployed.</p>
+<p>One solution for that problem is to let grunt file set the relative path to the &#x201C;bower_components&#x201D; folder. Let&#x2019;s update both &#x201C;src/index.html&#x201D; and &#x201C;src/require.config.ts&#x201D; and replace &#x201C;../bower_components&#x201D; with some token value:</p>
+<p><strong>index.html</strong></p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;script src="require.config.js"&gt;&lt;/script&gt;
+&lt;script src="{{bower}}/requirejs/require.js"
+ data-main="require.startup"&gt;&lt;/script&gt;
+</pre>
+<p><strong>require.config.ts</strong></p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+var require: Require = &lt;any&gt;{
+ baseUrl: '.',
+ paths: {
+ 'knockout': '{{bower}}/knockout/dist/knockout'
+ }
+};
+</pre>
+<p>Now, all we need to do is to replace this {{bower}} string with an actual relative path during the build procedure. Luckily, there is a plugin that does exactly that.</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+
+&gt; npm install grunt-text-replace --save-dev
+
+</pre>
+<p>In the grunt file we make the necessary adjustments:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ vars: {
+ sourcePath: './src/',
+ buildPath: './build/',
+ debugPath: '&lt;%= vars.buildPath %&gt;debug/',
+ typescriptFiles: '&lt;%= vars.sourcePath %&gt;**/*.ts',
+ indexHtmlFile: 'index.html',
+ requireConfigFile: 'require.config.js',
+ bowerPathRelativeToBuildTarget: '../../bower_components'
+ },
+ copy: { ... shortened for brevity ... },
+ ts: { ... shortened for brevity ... },
+ replace: {
+ bower: {
+ src: [ 
+ '&lt;%= vars.debugPath %&gt;&lt;%= vars.indexHtmlFile %&gt;',
+ '&lt;%= vars.debugPath %&gt;&lt;%= vars.requireConfigFile %&gt;'
+ ],
+ overwrite: true,
+ replacements: [{ 
+ from: '{{bower}}', 
+ to: '&lt;%= vars.bowerPathRelativeToBuildTarget %&gt;' 
+ }]
+ }
+ }
+ });
+ grunt.loadNpmTasks('grunt-ts');
+ grunt.loadNpmTasks('grunt-contrib-copy');
+ grunt.loadNpmTasks('grunt-text-replace');
+ grunt.registerTask('default', ['copy:html', 'ts', 'replace:bower']);
+};
+</pre>
+<p>Finally, we can run the app and make sure that the build is successful.</p>
+<h3>Linting</h3>
+<p>One final bit of building a debug version of the app is to run all TypeScript code through linter to enforce a consistent coding style that encourages following best practices and avoiding common pitfalls.</p>
+<p>&gt; npm install grunt-tslint &#x2013;save-dev</p>
+<p>This grunt plugin uses <a href="https://github.com/palantir/tslint" rel="nofollow" title="" target="_blank">TSLint</a> to check the specified TypeScript files. It comes with a robust set of built-in rules it can verify (for example, enforcing that class names are PascalCased, or that curly braces are not omitted in if/for/do/while statements). It also supports custom rules, but we are not going to use those.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ vars: { ... shortened for brevity ... },
+ copy: { ... shortened for brevity ... },
+ ts: { ... shortened for brevity ... },
+ replace: { ... shortened for brevity ... },
+ tslint: {
+ default: {
+ files: {
+ src: '&lt;%= vars.typescriptFiles %&gt;'
+ }
+ }
+ }
+ });
+ grunt.loadNpmTasks('grunt-ts');
+ grunt.loadNpmTasks('grunt-contrib-copy');
+ grunt.loadNpmTasks('grunt-text-replace');
+ grunt.loadNpmTasks('grunt-tslint'); 
+
+ grunt.registerTask('default', [
+ 'copy:html', // - copy index.html to build/debug folder
+ 'tslint', // - lint *.ts files
+ 'ts', // - compile *.ts files to build/debug folder
+ 'replace:bower' // - replace placeholders with an actual
+ // bower_components path
+ ]);
+};
+</pre>
+<p>The exact set of rules that TSLint verifies is configured in the tslint.json file. Let&#x2019;s copy it from &#x201C;./node_modules/grunt-tslint/&#x201D; to the root of the project and make some adjustments. (To indicate that we are going to use this copy of the configuration file, we need to specify that in the task configuration:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+tslint: {
+ options: {
+ configuration: grunt.file.readJSON('tslint.json')
+ },
+ default: {
+ files: {
+ src: '&lt;%= vars.typescriptFiles %&gt;'
+ }
+ }
+}
+</pre>
+<p>Now you can, for example, disable a rule that requires all *.ts files to have an empty line at the end. You&#x2019;ll need to open tslint.json in an editor and change &#x201C;eofline&#x201D;: true to &#x201C;eofline&#x201D;: false.</p>
+<p>We&#x2019;ve also adjusted a rule that enforces consistent string quotation marks. By default, it requires that all strings are enclosed in double quotes, but, as you can see from the code snippets in this document, we prefer using single quotes. So we&#x2019;ve changed the rule configuration like this:</p>
+<p>&#x201C;quotemark&#x201D;: [true, &#x201C;single&#x201D;]</p>
+<p>The list of built-in rules and their settings is available <a href="https://github.com/palantir/tslint#supported-rules" rel="nofollow" title="" target="_blank">here</a>.</p>
+<p>Now, let&#x2019;s see if our code is in a good shape. By the way, you can run a linting task alone (instead of triggering an entire build process) using the following command:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; grunt tslint
+</pre>
+<div class="figure"><img class="alignnone size-full wp-image-289176" src="http://designmodo.com/wp-content/uploads/2016/02/image4-571x160.png%20571w,%20http://designmodo.com/wp-content/uploads/2016/02/image4.png%20600w,%20http://designmodo.com/wp-content/uploads/2016/02/image4-404x113.png%20404w" alt="Grunt tslint" width="600"></div>
+<p>And it appears that we&#x2019;ve missed a semicolon in one place (mainViewModel.ts):</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+constructor() {
+this.validator = new EmailValidator(15 /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old maxLength */);
+this.email = ko.observable('') // &lt;- missing semicolon
+this.errors = ko.computed(() =&gt; this.getValidationErrors());
+}
+</pre>
+<p>Indeed, there is one needed at the end of line 16. In JavaScript there is an <a href="http://bonsaiden.github.io/JavaScript-Garden/#core.semicolon" rel="nofollow" title="" target="_blank">automatic semicolon insertion</a> (ASI) feature that makes it possible to omit semicolons. There will be no error or warning issued. But JavaScript is not a semicolon-less feature and reliance on ASI might lead to some subtle and hard to find issues. This is so much the case that the TypeScript compiler actually detects missing semicolons and silently inserts them into the code generated. Strictly speaking, this is no better than what ASI does, so we&#x2019;d better pay attention to the linter warning and fix the issue:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+this.email = ko.observable(''); // &lt;- that's better
+</pre>
+<div class="figure"><img class="alignnone size-full wp-image-289177" src="http://designmodo.com/wp-content/uploads/2016/02/image5.png%20600w,%20http://designmodo.com/wp-content/uploads/2016/02/image5-424x98.png%20424w" alt="ASI" width="600"></div>
+<h3>Bundling and Optimization</h3>
+<p>With the build process is in place for a debug version of the application, we are now ready to takethe next logical step and update the build process to be able to produce a release version.</p>
+<p>It doesn&#x2019;t make much sense to prepare a release version every time we need to build and run our app. Thus, we&#x2019;ll separate the build steps that are required for a release version into a separate task.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ ...
+ grunt.loadNpmTasks('grunt-tslint'); 
+ grunt.registerTask('debug', [
+ 'copy:html', // - copy index.html to build/debug folder
+ 'tslint', // - lint *.ts files
+ 'ts', // - compile *.ts files to build/debug folder
+ 'replace:bower' // - replace placeholders with an actual
+ // bower_components path
+ ]);
+ grunt.registerTask('release', [ 'debug', ... other release steps ... ]);
+ grunt.registerTask('default', [ 'debug' ]);
+};
+</pre>
+<p>As you can see from the code snippet above, we&#x2019;ve renamed the &#x201C;default&#x201D; task to &#x201C;debug&#x201D;, and registered another alias task called &#x201C;release&#x201D;. That way, we&#x2019;ll be able to call:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; grunt debug
+</pre>
+<p>to build a debug version of the app, and</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; grunt release
+</pre>
+<p>to prepare a release build.</p>
+<p>We&#x2019;ve also created a new &#x201C;default&#x201D; task that simply delegates all the work to the &#x201C;debug&#x201D; task. That way we can create a debug version with a simple command:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; grunt
+</pre>
+<p>just like we did in the previous section of this document. This provides a nice shortcut and saves us a few keystrokes.</p>
+<p>To build a release version, we still need to perform all the steps we did for the debug version. That is why the first thing the &#x201C;release&#x201D; task does is execute the &#x201C;debug&#x201D; task.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+grunt.registerTask('release', [ 'debug', ... other release steps ... ]);
+</pre>
+<p>Currently in the debug version, we have a lot of individual script files that are loaded asynchronously using RequireJS when our application needs it. In the production version though, we might not want to take a performance overhead of making dozens of requests to load each individual script. We also want to minimize the amount of data that is downloaded when a page is opened in order to make it load faster and save some bandwidth.</p>
+<p>To achieve both goals we&#x2019;ll use <a href="http://requirejs.org/docs/optimization.html" rel="nofollow" title="" target="_blank">r.js</a> &#x2014; a RequireJS optimization tool that bundles all scripts into a single file and minimizes the file using <a href="https://github.com/mishoo/UglifyJS2" rel="nofollow" title="" target="_blank">UglifyJS</a>.</p>
+<p>And yet again, someone has done all the heavy lifting of integrating these tools with grunt for us.</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install grunt-contrib-requirejs --save-dev
+</pre>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ vars: { 
+ ... shortened for brevity ... 
+ releasePath: '&lt;%= vars.buildPath %&gt;release/',
+ requireEntryPointName: 'require.startup',
+ releaseScriptsBundleFile: 'scripts.js'
+ },
+ copy: { ... shortened for brevity ... },
+ ts: { ... shortened for brevity ... },
+ replace: { ... shortened for brevity ... },
+ tslint: { ... shortened for brevity ... },
+ requirejs: {
+ compile: {
+ options: {
+ baseUrl: '&lt;%= vars.debugPath %&gt;',
+ mainConfigFile: '&lt;%= vars.debugPath %&gt;' 
+ + '&lt;%= vars.requireConfigFile %&gt;',
+ name: '&lt;%= vars.requireEntryPointName %&gt;',
+ out: '&lt;%= vars.releasePath %&gt;' 
+ + '&lt;%= vars.releaseScriptsBundleFile %&gt;',
+ include: [
+ '&lt;%= vars.bowerPathRelativeToBuildTarget %&gt;/requirejs/require'
+ ]
+ }
+ }
+ }
+ });
+ ...
+
+ grunt.loadNpmTasks('grunt-contrib-requirejs'); 
+ ...
+ grunt.registerTask('release', [ 'debug', 'requirejs' ]);
+ grunt.registerTask('default', [ 'debug' ]);
+};
+</pre>
+<p>We&#x2019;ve configured the &#x201C;requirejs&#x201D; task to look through all the JavaScript files in the &#x201C;build/debug&#x201D; folder and bundle them together along with their dependencies (Knockout and RequireJS). The configuration also specifies that the bundle should be called &#x201C;scripts.js&#x201D; and be placed in the &#x201C;build/release&#x201D; folder.</p>
+<h3>Script References Replacement</h3>
+<p>Now our release build process bundles scripts and puts them into the &#x201C;build/release&#x201D; folder. But that&#x2019;s not enough. We are, yet again, missing the index.html file.</p>
+<p>+ grunt-demo<br>
+|&#x2013; + bower_components<br>
+|&#x2013; + build<br>
+ |&#x2013; + release<br>
+ |&#x2013; styles.js<br>
+ |&#x2013; &#x2026;</p>
+<p>And we can not simply copy it from the debug to the release folder. This is because index.html in the debug folder does not know anything about the styles.js bundle we&#x2019;ve built and still references individual scripts (using RequireJS):</p>
+<p><strong>build/debug/index.html</strong></p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;head&gt;
+ &lt;meta http-equiv="Content-Type" content="text/html; charset=UTF-8"&gt;
+ &lt;title&gt;Grunt Demo&lt;/title&gt;
+
+ &lt;script src="require.config.js"&gt;&lt;/script&gt;
+ &lt;script src="../../bower_components/requirejs/require.js"
+ data-main="require.startup"&gt;&lt;/script&gt;
+&lt;/head&gt;
+</pre>
+<p>What we want is a copy of that file with &lt;script&gt; tags replaced by:</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;script src="styles.js"&gt;&lt;/script&gt;
+</pre>
+<p>We can achieve that using plugins we&#x2019;ve already installed &#x2014; copy and replace &#x2014; but it feels like a lot of work. Maybe someone has figured out a more convenient way to do this?</p>
+<p>And indeed someone has. Let&#x2019;s install the &#x201C;htmlrefs&#x201D; plugin and see what it can do for us.</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+&gt; npm install grunt-htmlrefs --save-dev
+</pre>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ vars: { ... shortened for brevity ... },
+ copy: { ... shortened for brevity ... },
+ ts: { ... shortened for brevity ... },
+ replace: { ... shortened for brevity ... },
+ tslint: { ... shortened for brevity ... },
+ requirejs: { ... shortened for brevity ... },
+ htmlrefs: {
+ default: {
+ src: '&lt;%= vars.debugPath %&gt;&lt;%= vars.indexHtmlFile %&gt;',
+ dest: '&lt;%= vars.releasePath %&gt;&lt;%= vars.indexHtmlFile %&gt;'
+ }
+ }
+ });
+ ...
+ grunt.loadNpmTasks('grunt-htmlrefs'); 
+ grunt.registerTask('debug', 
+ [ 'copy:html', 'tslint', 'ts', 'replace:bower' ]);
+ grunt.registerTask('release', [ 'debug', 'requirejs', 'htmlrefs' ]);
+ grunt.registerTask('default', [ 'debug' ]);
+};
+</pre>
+<p>Reading through the documentation for that plugin, we can see that it will replace blocks of text surrounded by specifically formatted comments in the specified files. For script references we have to wrap our &lt;script&gt; tags in index.html into HTML comments like that:</p>
+<p><strong>src/index.html</strong></p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;!-- ref:js styles.js --&gt;
+&lt;script src="require.config.js"&gt;&lt;/script&gt;
+&lt;script src="{{bower}}/requirejs/require.js"
+ data-main="require.startup"&gt;&lt;/script&gt;
+&lt;!-- endref --&gt;
+</pre>
+<p>The task will replace everything in between these comments with a single &lt;script&gt; tag which references a script file, specified in the opening comment after &#x201C;ref:js&#x201D;.</p>
+<p>Instead of replacing blocks of text in place, this task first copies the source file and does an update there. We use that to place the modified index.html in the &#x201C;build/release&#x201D; folder.</p>
+<p>+ grunt-demo<br>
+|&#x2013; + bower_components<br>
+|&#x2013; + build<br>
+ |&#x2013; + release<br>
+ |&#x2013; styles.js<br>
+ |&#x2013; index.html<br>
+ |&#x2013; &#x2026;<br>
+|&#x2013; &#x2026;</p>
+<p>The release version is ready and we can run it and verify that everything still works.</p>
+<h3>Final touches</h3>
+<p>We can do one last touch, and remove the &#x201C;styles.js&#x201D; reference from the index.html. We might want to do that for the same reasons we&#x2019;ve replaced the relative path in the bower_components folder with a {{bower}} placeholder in one of the previous sections.</p>
+<p>We can achieve that using the same &#x201C;replace&#x201D; task we&#x2019;ve used before. We&#x2019;ll need to configure a different target though.</p>
+<p>First, let&#x2019;s update index.html:</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;!-- ref:js {{script_bundle}} --&gt;
+&lt;script src="require.config.js"&gt;&lt;/script&gt;
+&lt;script src="{{bower}}/requirejs/require.js"
+ data-main="require.startup"&gt;&lt;/script&gt;
+&lt;!-- endref --&gt;
+</pre>
+<p>Next, we&#x2019;ll configure a new target for the &#x201C;replace&#x201D; task and include it as a step in our release build sequence:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function(grunt) {
+ grunt.initConfig({
+ vars: { ... shortened for brevity ... },
+ copy: { ... shortened for brevity ... },
+ ts: { ... shortened for brevity ... },
+ replace: {
+ bower: { ... shortened for brevity ... },
+ script: {
+ src: [ '&lt;%= vars.debugPath %&gt;&lt;%= vars.indexHtmlFile %&gt;' ],
+ overwrite: true,
+ replacements: [{ 
+ from: '{{script_bundle}}', 
+ to: '&lt;%= vars.releaseScriptsBundleFile %&gt;' 
+ }]
+ }
+ },
+ tslint: { ... shortened for brevity ... },
+ requirejs: { ... shortened for brevity ... },
+ htmlrefs: { ... shortened for brevity ... }
+ });
+...
+ grunt.registerTask('release', [
+ 'debug', // - build a debug version first
+ 'requirejs', // - optimize and bundle *.js files in build/debug
+ // and put styles.js into build/release
+ 'replace:script', // - replace placeholder with actual script 
+ // bundle name
+ 'htmlrefs' // - copy index.html from build/debug to
+ // build/release and replace references to scripts
+ ]);
+...
+</pre>
+<h2>Maintainable Grunt file</h2>
+<p>As you can see, even with our fairly simple build process, the <a href="http://designmodo.com/wp-content/uploads/2016/02/gruntfile-single.js.zip">grunt file</a> got somewhat long. Keeping all task configurations in a single file can quickly became hard to maintain. Luckily the grunt community is aware of this situation and has proposed some solutions. Please follow the lead of Thomas Boyt, who published one solution on his blog (please refer to &#x201C;<a href="http://www.thomasboyt.com/2013/09/01/maintainable-grunt.html" rel="nofollow" title="" target="_blank">More maintainable Gruntfiles</a>&#x201D; blog post for more details).</p>
+<h3>Conclusion</h3>
+<p>So there you have it. Over the course of this article we&#x2019;ve taken a look at grunt basics and walked through the process of creating a build script for a small web application, trying out a handful of useful plugins along the way.</p>
+ 
+ 
+ </div></div>
+</body></html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html><html><head><title>Getting Started with Slack Bots</title></head><body>
+<h1>Getting Started with Slack Bots</h1><p><a href="http://www.sitepoint.com/getting-started-slack-bots/" target="_new">Original URL</a></p>
+<p><blockquote>Slack is a popular tool for encouraging better communication among team members. It comes with a slew of helpful features and services including third-party integrations and webhook support. Slack&hellip;</blockquote></p>
+<div><section class="article_body">
+
+ <p><a href="https://slack.com/">Slack</a> is a popular tool for encouraging better communication among team members. It comes with a slew of helpful features and services including third-party integrations and webhook support. Slack webhooks can be fun and useful, and they&#x2019;re easy to set up. In this tutorial we&#x2019;ll set up a simple server using <a href="http://nodejs.org/">Node.js</a> and <a href="https://www.heroku.com/">Heroku</a> that will respond to your team&#x2019;s messages from Slack as a &#x201C;bot.&#x201D; Familiarity with JavaScript and Git will be helpful. If you haven&#x2019;t used Git before, take a look at <a href="http://www.sitepoint.com/git-for-beginners/">Git for Beginners</a> to get started. Access to a Slack account is also assumed, but don&#x2019;t worry &#x2013; they&#x2019;re free!</p>
+<h2 id="creating-a-new-slack-integration">Creating a New Slack Integration</h2>
+<p>From the Slack web interface, open the menu in the top left corner next to your team&#x2019;s name and select <a href="http://slack.com/services/new">Configure Integrations</a>. Here, you can see a dashboard with all the integrations available to you. Scroll to the very bottom under <strong>DIY Integrations &amp; Customizations</strong>, and add an <strong>Outgoing WebHook</strong>. Read the short description and then click <strong>Add Outgoing WebHooks Integration</strong>. </p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2014/12/1418788421slack_intro-diy_integrations.png" alt="DIY Integrations &amp; Customizations" width="844" class="alignnone size-large wp-image-96734"></p>
+<p>You will see the Outgoing WebHook configuration and an example of what the request and response payloads should look like. Our first bot will simply greet the user when called. To do this, we will allow the hook to listen for the Trigger Word &#x201C;hello&#x201D; on any channel. We don&#x2019;t know the URL it will be posting to yet, so we will come back to this page later.</p>
+<h2 id="creating-a-web-server">Creating a Web Server</h2>
+<p>We&#x2019;ll be using <a href="http://expressjs.com/">Express 4</a> on Node.js to build a simple web server.</p>
+<p>Create a new directory for your app, and run <code>npm init</code> to generate your <code>package.json</code> file. In your <code>package.json</code> dependencies, include <code>"express": "^4.x.x"</code> and <code>"body-parser": "^1.x.x"</code>. The <code>body-parser</code> package will be used to parse the payload sent from Slack. Create the server file named <code>app.js</code>. Here, we will <code>require</code> the necessary modules, add the body parser middleware, error handler, and a test route. Then, we tell the server to start listening.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+var express = require('express');
+var bodyParser = require('body-parser');
+
+var app = express();
+var port = process.env.PORT || 3000;
+
+// body parser middleware
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// test route
+app.get('/', function (req, res) { res.status(200).send('Hello world!') });
+
+// error handler
+app.use(function (err, req, res, next) {
+ console.error(err.stack);
+ res.status(400).send(err.message);
+});
+
+app.listen(port, function () {
+ console.log('Slack bot listening on port ' + port);
+});
+</pre>
+<p>Run the server with <code>node app</code> and verify that visiting <code>http://localhost:3000</code> responds with &#x201C;Hello world!&#x201D;.</p>
+<h2 id="writing-the-bot-logic">Writing the Bot Logic</h2>
+<p>Create a file named <code>hellobot.js</code></p>
+<p>This module will be where our bot logic lives. It will include one exported function that returns a message to Slack with status code <code>200</code>. We&#x2019;ll start by parsing the data that Slack sends to our server, and then we&#x2019;ll respond with a properly formatted payload of our own. To do this, let&#x2019;s revisit our Outgoing WebHook under <a href="https://slack.com/services">Configured Integrations</a>. The <strong>Outgoing Data</strong> example shows us all the info Slack sends when an Outoing WebHook is triggered.</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2014/12/1418788418slack_intro-outgoing_data.png" alt="Outgoing WebHook Data Example" width="836" class="alignnone size-large wp-image-96732"></p>
+<p>You can see that some of the data can be useful for authentication or routing, but for now we&#x2019;re just going to focus on the <code>user_name</code> property. Using this value, we can send a personalized greeting back to the user.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function (req, res, next) {
+ var userName = req.body.user_name;
+ var botPayload = {
+ text : 'Hello, ' + userName + '!'
+ };
+
+ // avoid infinite loop
+ if (userName !== 'slackbot') {
+ return res.status(200).json(botPayload);
+ } else {
+ return res.status(200).end();
+ }
+}
+</pre>
+<p>Here we create our <code>botPayload</code> object. The only necessary property is <code>botPayload.text</code>, which defines what our bot will display when we respond. Add the <code>text</code> property with a greeting to the user, and respond with JSON and a status code of <code>200</code>. Notice that our bot&#x2019;s response is our Outgoing WebHook&#x2019;s trigger word! To avoid an infinite loop, we can check the <code>user_name</code> of the body. All hooks post as &#x201C;slackbot&#x201D;, even if the name appears differently in chat. We can use this fact to keep our hook from responding to itself.</p>
+<p>Back in <code>app.js</code>, require the bot module at the top.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+var hellobot = require('./hellobot');
+</pre>
+<p>Then, add a route that listens for a <code>POST</code> to <code>/hello</code>.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+app.post('/hello', hellobot);
+</pre>
+<p>Let&#x2019;s do a quick test. Run the app again using <code>node app</code>, and in another terminal window use <code>curl</code> to make sure the app responds as we expect it to. (Note: since our bot only looks for one value here, there&#x2019;s no need to include the entire Slack payload in our test).</p>
+<pre class="brush: plain; title: ; notranslate" title="">
+curl -X POST --data "user_name=foobar" http://localhost:3000/hello
+</pre>
+<p>If our app works, we should see a response that looks like this:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+{"text":"Hello, foobar!"}
+</pre>
+<p>Now, it&#x2019;s time to put our bot online.</p>
+<h2 id="deploying-the-app-on-heroku">Deploying the App on Heroku</h2>
+<p><a href="https://www.heroku.com/">Heroku</a> is a convenient service that helps you get a web server online for free in very little time. Deployments are made by pushing your code to their git server where it is automatically deployed and run. Create an account on Heroku or log in if you already have an account.</p>
+<p>Once you&#x2019;ve logged in, you&#x2019;ll see your Heroku dashboard. Click the <code>+</code> in the top right to create a new app. Follow the instructions provided to log in to Heroku on your computer. Deployment is easy, but there is a lot to know the first time you deploy an app. Make sure you follow <a href="https://devcenter.heroku.com/articles/getting-started-with-nodejs#introduction">this guide</a> when you&#x2019;re getting your app set up. We&#x2019;ll do some double checks along the way, but there&#x2019;s a lot of good info in there that&#x2019;s outside the scope of this article.</p>
+<p>Before we can deploy our bot, we&#x2019;ll need to tell Heroku how to run the app. This is done by creating a <a href="https://devcenter.heroku.com/articles/getting-started-with-nodejs#define-a-procfile">Procfile</a>. Your Procfile only needs a single line: </p>
+<pre class="brush: plain; title: ; notranslate" title="">
+web: node app
+</pre>
+<p>Once you you&#x2019;ve done this, you can commit your changes and push to <code>heroku</code>. Heroku automatically installs the node modules, and you&#x2019;ll see the results of your deployment. If everything went smoothly, you&#x2019;ll see a link to your app at the bottom. Copy that URL, and then visit your Outgoing WebHook&#x2019;s configuration page once again. Add the URL you copied to the <strong>URL(s)</strong> input field with the <code>/hello</code> route appended and modify the name and icon of the hook if you&#x2019;d like.</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2014/12/1418788416slack_intro-outgoing_urls.png" alt="Outgoing WebHook URL(s)" width="816" class="alignnone size-large wp-image-96731"></p>
+<p>There&#x2019;s one more step to get the bot online: we need to give it a <a href="https://devcenter.heroku.com/articles/getting-started-with-nodejs#scale-the-app">Dyno</a>. In the terminal, enter:</p>
+<pre class="brush: plain; title: ; notranslate" title="">
+heroku ps:scale web=1
+</pre>
+<p>This tells Heroku to give your app one web worker. Careful; your app only gets one free dyno per month!</p>
+<p>Your bot should be online now, so go back into Slack and test it out!</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2014/12/1418788420slack_intro-hellobot.png" alt="Hellobot Response" width="214" class="alignnone size-large wp-image-96733"></p>
+<p>If you didn&#x2019;t get a response, go back and check your code. You can use the terminal command <code>heroku logs</code> to see details about the requests as well as any <code>console.log()</code> statements you&#x2019;ve added.</p>
+<p>Not too difficult, was it? We successfully set up a webhook in Slack, deployed our app to Heroku, and got the two to talk to each other! A bit more work than a simple &#x201C;hello world&#x201D; program, but much more rewarding. Now that we have our server running, we can easily add more hooks and responses. Hellobot is pretty friendly, but it&#x2019;s not that useful. In the next section we&#x2019;ll use Slack&#x2019;s other webhook types to create a dice roll chat command.</p>
+<h2 id="dicebot-using-slack-commands-and-incoming-webhooks">DiceBot &#x2013; Using Slack Commands and Incoming WebHooks</h2>
+<p>In the last section, we used an Outgoing WebHook that listened to chat for a trigger word, sent a message to our server, and displayed the response. In this section, we&#x2019;ll use two other tools for creating custom integrations: <strong>Slash Commands</strong> and <strong>Incoming WebHooks</strong>. Visit the <a href="http://slack.com/services/new">Configure Integrations</a> page and take a look at the other options under <strong>DIY Integrations &amp; Customizations</strong>. Let&#x2019;s start by adding the <strong>Slash Commands</strong> integration. Read the short description, set the command to &#x201C;/roll&#x201D;, and add the integration. The next page shows the configuration. You can see that the Outgoing Data looks similar to the Outgoing WebHook we configured earlier. We&#x2019;ll use the app we created in the last section for this section, so we can use the same URL, but this time we&#x2019;ll <code>POST</code> to the route <code>/roll</code>.</p>
+<p>Notice that the Slash Command integration can respond to the user, but only in private. What use is a dice roll if only you can see the dice? Slack suggests using an Incoming WebHook in tandem with Slash Commands to send messages to chat. Go back to the <a href="http://slack.com/services/new">Configure Integrations</a> page and add an <strong>Incoming WebHook</strong>. Read the description, select a channel, and add the hook. Don&#x2019;t worry about what channel you picked; we can specify the channel in our bot&#x2019;s response. Because we can choose the channel in our app, it means that we can also use this integration for any other bots we create. The Incoming WebHook doesn&#x2019;t have much in the way of configuration, but it does have a lot of important information for constructing our bot&#x2019;s response payloads. The most important part is the <strong>Webhook URL</strong>. We&#x2019;ll be <code>POST</code>ing to this from our app in order to send messages to Slack.</p>
+
+<p>Since we&#x2019;ve pointed our Slash Command at the route <code>/roll</code>, we can add that route to our server alongside of hellobot. We&#x2019;ll be using a secret URL for our incoming hook, so it&#x2019;s a good idea to keep it hidden in case you want to make your code public. A good way to do this is to use Heroku&#x2019;s <a href="https://devcenter.heroku.com/articles/getting-started-with-nodejs#define-config-vars">config vars</a>.</p>
+<p>Let&#x2019;s also add <code>request</code> to our package to use with the incoming hook:</p>
+<pre class="brush: plain; title: ; notranslate" title="">
+npm install --save request
+</pre>
+<p>Now we&#x2019;ll add <code>dicebot.js</code>. Dicebot will export one function, but we&#x2019;ll need two additional functions: one to <code>POST</code> to the Incoming WebHook, and one to roll the dice.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+var request = require('request');
+
+module.exports = function (req, res, next) {
+};
+
+function roll () {
+}
+
+function send () {
+}
+</pre>
+<p>As many tabletop gamers know, there are many more types of dice than just six-sided dice. Other dice have four sides, eight sides, ten sides, twenty sides, and more! A special notation is used when rolling these dice: <code>&lt;number of dice&gt;d&lt;sides of dice&gt;</code>. So, rolling two six-sided dice is notated as &#x201C;2d6&#x2033;. We can let users roll multiple dice using this notation, but we&#x2019;ll have to check for correct input from the user.</p>
+<p>Let&#x2019;s start by initializing some variables and parsing the input. We&#x2019;ll set some default values in case the user wants to omit input.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+module.exports = function (req, res, next) {
+ // default roll is 2d6
+ var matches;
+ var times = 2;
+ var die = 6;
+ var rolls = [];
+ var total = 0;
+ var botPayload = {};
+ 
+ if (req.body.text) {
+ // parse roll type if specified
+ matches = req.body.text.match(/^(\d{1,2})d(\d{1,2})$/);
+
+ if (matches &amp;&amp; matches[1] &amp;&amp; matches[2]) {
+ times = matches[1];
+ die = matches[2];
+ } else {
+ // send error message back to user if input is bad
+ return res.status(200).send('&lt;number&gt;d&lt;sides&gt;');
+ }
+ } 
+}
+</pre>
+<p>The regular expression above is pretty reliable for parsing dice rolls and limits the values to two-digit numbers only so the user can&#x2019;t go crazy. If the user messed up their syntax, we send back a hint.</p>
+<p>Rolling the dice with the user input is easy enough. See <a href="http://stackoverflow.com/a/1527820">this thread</a> for an explanation of how a random roll works. For truly random rolls you could contact the <a href="https://api.random.org/json-rpc/1/">random.org API</a>. Let&#x2019;s write the roll function.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+function roll (min, max) {
+ return Math.floor(Math.random() articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (max - min + 1) + min);
+}
+</pre>
+<p>Then, in our main function we&#x2019;ll make some rolls and build a message to respond with. Let&#x2019;s include the name of the roller so other users can see who used the <code>/roll</code> command.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+// roll dice and sum
+for (var i = 0; i &lt; times; i++) {
+ var currentRoll = roll(1, die);
+ rolls.push(currentRoll);
+ total += currentRoll;
+}
+
+// write response message and add to payload
+botPayload.text = req.body.user_name + ' rolled ' + times + 'd' + die + ':\n' +
+ rolls.join(' + ') + ' = *' + total + '*';
+</pre>
+<p>We added the message to the <code>botPayload.text</code> property with some Slack formatting around <code>total</code> to make it bold. We can also configure the name, icon, and channel using the response payload. We&#x2019;ll set the channel based on the channel the user issues the roll command from. Slack suggests using the name of the channel in the payload, but that means we&#x2019;d have to prepend it with &#x201C;#&#x201D;. Instead, we can use the channel ID, which will allow us to post in public channels as well as private groups. For the icon, a convenient die emoji exists, though you could provide a better image using <code>icon_url</code>.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+botPayload.username = 'dicebot';
+botPayload.channel = req.body.channel_id;
+botPayload.icon_emoji = ':game_die:';
+</pre>
+<p>The payload looks good. Let&#x2019;s write the <code>send</code> function. I&#x2019;ve chosen to store only the path tokens in Heroku&#x2019;s config vars. Make sure to send the body as a string of JSON.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+function send (payload, callback) {
+ var path = process.env.INCOMING_WEBHOOK_PATH;
+ var uri = 'https://hooks.slack.com/services' + path;
+
+ request({
+ uri: uri,
+ method: 'POST',
+ body: JSON.stringify(payload)
+ }, function (error, response, body) {
+ if (error) {
+ return callback(error);
+ }
+
+ callback(null, response.statusCode, body);
+ });
+}
+</pre>
+<p>In our main function, we&#x2019;ll initiate the send request. If it works, we can respond to the Slash Command with an empty <code>200</code>. If not, we can use the values from our <code>send()</code> callback to build an error. This will trigger the error handler in <code>app.js</code> and send back <code>400</code>, which will notify the user of the error.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+// send dice roll
+send(botPayload, function (error, status, body) {
+ if (error) {
+ return next(error);
+ } else if (status !== 200) {
+ // inform user that our Incoming WebHook failed
+ return next(new Error('Incoming WebHook: ' + status + ' ' + body));
+ } else {
+ return res.status(200).end();
+ }
+});
+</pre>
+<p>Let&#x2019;s run our server and <code>curl</code> it again. This time, we&#x2019;ll need to include the <code>channel_id</code>. You can use the <a href="https://api.slack.com/methods/channels.list/test">Slack API tester</a> to find the correct <code>channel_id</code>. Since the Incoming WebHook has already been set up, it should hear our server call it. We&#x2019;ll also need to include the Incoming WebHook path in our environment since the app isn&#x2019;t on Heroku yet.</p>
+<pre class="brush: plain; title: ; notranslate" title="">
+INCOMING_WEBHOOK_PATH=/your/path/tokens node app
+</pre>
+<pre class="brush: plain; title: ; notranslate" title="">
+curl -X POST --data "user_name=foobar&amp;channel_id=C0123ABCD&amp;text=4d6" http://localhost:3000/roll`
+</pre>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2014/12/1418788423slack_intro-dicebot.png" alt="Dicebot Response" width="211" class="alignnone size-large wp-image-96735"></p>
+<p>Looks good! Let&#x2019;s deploy it.</p>
+<h3 id="redeploying-to-heroku">Redeploying to Heroku</h3>
+<p>Since we used Heroku&#x2019;s config vars to store our webhook&#x2019;s token, don&#x2019;t forget to set it in the app&#x2019;s <strong>Settings</strong> menu. </p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2014/12/1418788414slack_intro-heroku_configvars.png" alt="Heroku Config Vars" width="514" class="alignnone size-full wp-image-96730"></p>
+<p>Then use git to add the new files, commit your changes, and push to your <code>heroku</code> remote. Heroku will install node modules and start the server. Before we test it, let&#x2019;s start watching the logs in real time:<br>
+<code>heroku logs -t</code></p>
+<p>With our hooks all set up, our roll command should be ready to go. Try out a few rolls! If something didn&#x2019;t work, you can use the Heroku logs to debug. To see the completed app in its entirety, check out this <a href="https://github.com/jsprodotcom/getting-started-with-slack-bots">GitHub repo</a>.</p>
+<h3 id="continuing-development">Continuing Development</h3>
+<p>These two bots demonstrate all the tools you need to start writing your own chat bots and integrations. You can integrate many services into bots, or you can try to make a convincing conversation partner. APIs and node modules exist for you to achieve both of these goals.</p>
+<p>Some other ideas for bots:</p>
+<ul>
+<li>a bot that uses the GitHub API to show you open pull requests</li>
+<li>a bot that uses the Yelp API to help your team decide on lunch</li>
+<li>a bot that does Google searches for you</li>
+<li>a bot that talks to you only with buzzwords and jargon</li>
+</ul>
+<p>If you come up with good ideas, share your code! Bots are fun to make, and they&#x2019;ve never been easier to create.</p>
+
+ </section>
+
+ </div>
+</body></html>

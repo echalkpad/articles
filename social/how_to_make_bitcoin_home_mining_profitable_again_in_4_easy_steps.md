@@ -1,0 +1,27 @@
+# How to make Bitcoin home mining profitable again in 4 easy steps.
+
+[Original URL](http://blog.bitheat.io/bitheater/)
+
+> 27 November 2015 Shrink BTC miner to fit into a pipe Fit pipeMiner as a replacement heating element for electric water heaters bin CAs Profit The first challenge is the size of this miner. In order to...
+
+27 November 2015
+
+1. Shrink BTC miner to fit into a pipe
+2. Fit pipeMiner as a replacement heating element for electric water heaters
+3. ???
+4. Profit
+
+The first challenge is the [size of this miner](http://imgur.com/a/Z23Ou/layout/horizontal#17). In order to reduce the cost, we are making it fit through a standard (US) screw in electric heating element opening. This makes the design requirements pretty extreme compared to a conventional open air miner. To aid in moving the heat from the boards and into the water, we will be employing the use of 3M's immersion cooling fluid ([same stuff Bitfury is using in their newest data center](http://datacenterfrontier.com/immersion-cooling-bitcoin/)). This fluid is the reason why we are even attempting to build this device. It has a few design requirements when building a sealed unit, but it removes all heat engineering from the design of the board and enclosure, allowing ultra high densities, and thus the small form factor we need to fit into existing infrastructure.
+
+The second largest challenge is making sure you can still have enough hot water. Because we are trying to get 100% hardware utilization, the wattage going into the water is much lower than your traditional heating element. Therefore hot water recovery is much longer. This can be remedied by more storage (storage is cheap compared to silicon). Unfortunately we can't make your current water heater larger in terms of gallon capacity, so we aim to increase the _heat_ capacity. Most water heaters operate around 40-50C. In order to get enough storage, we are planning to get the storage temp up to around 70C (mixer valve required to avoid potential scalding). This ~50% increase in heat capacity should be enough for ~24hrs of regular hot water use. The idea, is that you get one tank worth of hot water a day. So if you use 40 gallons of hot water, and have a 40 gallon tank you would probably be just short of your needs (depending if you used it all at once). However, our miner only uses the bottom heating element position, so you can still set the top thermostat to a lower setting to help in recovery for those higher use days. If this product would gain traction, we could build a phone app that could estimate the "state of charge" of the thermal battery (water heater). This could help the user load balance the use of hot water to ensure 100% utilization.
+
+The third challenge is keeping a high enough ROI potential to allow enough incentive for the added effort of installation of our miner. This is not something we can avoid. It is the only way we can make home mining profitable again. Perhaps your water heater is already 8-10 years old. You could replace it before it fails, and install our miner while your doing something you would have to do in the next couple years anyway. Unfortunately there is no magic wand for physical infrastructure.
+
+## ROI Potential
+
+Until we have the cost of the ASIC chips locked down it is very difficult to know the price, being they are going to be a very significant proportion of the overall cost. Of course, the price of the miner can be much higher if the chips are really efficient, as you will have additional revenue to pay for the higher end chip. We are trying to get a break even point no later than 18-28 months out. That way the perceived risk can be lowered. However, as shown in our [ROI graph](http://i.imgur.com/ydUQw4Q.png), the miner does not have the same cost structure as a traditional miner. Because of nearly no electricity cost, it is profitable for a very long time. We estimate the cost of our miner could be between $1200-$2200\. For chips with efficiencies around .16 J/GH a $1200 price point would ROI in about 20 months, and have a 50% ROI in 40 months. But with BitFury's 16nm chip (.06 J/GH) it would ROI in about 6 months at a $1200 price point, and about 18 months at a **$3000** price point, and a 50% ROI in 35 months. This really puts into perspective how this device has a pretty wide window of being profitable, given efficient chips.
+
+It is difficult to say how much ROI is needed to make this product viable. Obviously as much as possible would be great, but the cost of chips is out of our control. With economies of scale we can lower our price and maintain performance, but we need some initial traction to allow us to expand (or to even get started for that matter). Please contact us and let us know what you think. [@BitHeatOfficial](https://twitter.com/BitHeatOfficial) If you have a minute to spare take our [short survey](https://www.surveymonkey.com/r/Market-S), or our slightly [longer survey](https://www.surveymonkey.com/r/Market-L) that takes about 3 minutes. (Please take one, not both).
+
+If you haven't already, please read our 4 part blog series about why we are going through all this effort to build this.<br>
+[One](http://blog.bitheat.io/information-machine), [Two](http://blog.bitheat.io/vote-with-energy), [Three](http://blog.bitheat.io/bitcoin-plus-water-heater), [Four](http://blog.bitheat.io/distributed-computing-a-future-vision).

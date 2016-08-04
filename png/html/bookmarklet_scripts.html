@@ -1,0 +1,68 @@
+<!DOCTYPE html><html><head><title>Bookmarklet Scripts</title></head><body>
+<h1>Bookmarklet Scripts</h1><p><a href="http://botleg.com/stories/bookmarklet-scripts/" target="_new">Original URL</a></p>
+<p><blockquote>Bookmarklet allows you to run some script by clicking them after adding those to your browser as bookmarks. When your users click the bookmark, the script runs on the current page that the user is on&hellip;</blockquote></p>
+<div><article class="post-content"> <p>Bookmarklet allows you to run some script by clicking them after adding those to your browser as bookmarks. When your users click the bookmark, the script runs on the current page that the user is on and that information can be used. In this article, we will see how to create a bookmarklet script to send your current page with some tags via <code class="highlighter-rouge">AJAX</code> requests. We will also look into how to identify and authenticate users who are clicking this bookmarklet. You can see the code for the script <a href="https://gist.github.com/hanzeljesheen/b056fe4319955ce14b53">here</a>.</p> <h2 id="the-basic-idea">The Basic Idea</h2> <p>The bookmarklet script is a piece of javascript code that you can save as the bookmark. When the bookmarklet is clicked, the javascript code will be executed. The javascript code will be enclosed in an anonymous function which is called as soon as it&#x2019;s defined. We enclose the function with parenthesis and prepend it with <code class="highlighter-rouge">javascript:</code> to tell the browser that the code is infact javascript.</p> <figure class="highlight"><pre><code class="language-javascript"><span class="nx">javascript</span><span class="err">:</span> <span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="c1">// your script here.</span>
+<span class="p">}());</span></code></pre></figure> <p>This is the basic structure of a bookmarklet script and we can minify this to a single line.</p> <h2 id="ajax-request">AJAX Request</h2> <p>One of the basic thing that we need with a bookmarklet script is to send something to a server. This can be done in javascript with AJAX requests. You can read more about AJAX requests <a href="http://www.w3schools.com/ajax/ajax_xmlhttprequest_send.asp">here</a>.</p> <figure class="highlight"><pre><code class="language-javascript"><span class="nx">javascript</span><span class="err">:</span> <span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="nx">xhr</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">XMLHttpRequest</span><span class="p">();</span>
+
+ <span class="nx">xhr</span><span class="p">.</span><span class="nx">open</span><span class="p">(</span><span class="s2">"POST"</span><span class="p">,</span> <span class="nb">encodeURI</span><span class="p">(</span><span class="s2">"http://localhost:8080"</span><span class="p">));</span>
+
+ <span class="nx">xhr</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">({</span>
+ 	<span class="na">url</span><span class="p">:</span> <span class="nb">document</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">href</span>
+ <span class="p">}));</span>
+<span class="p">}());</span></code></pre></figure> <p>Here, we are sending a <code class="highlighter-rouge">POST</code> request to <code class="highlighter-rouge">http://localhost:8080</code>. We can get the current page address with <code class="highlighter-rouge">document.location.href</code> and we are sending this as the body of the POST request.</p> <p>One thing to note here is <code class="highlighter-rouge">CORS</code>. The origin of the AJAX request will be from the user&#x2019;s current page URL, which won&#x2019;t have the same domain as the the destination of the request. This make the request <code class="highlighter-rouge">cross-domain</code>. For example, if you are clicking the bookmarklet when you are in <code class="highlighter-rouge">google.com</code>, your origin is <code class="highlighter-rouge">google.com</code> and destination is <code class="highlighter-rouge">localhost</code>. To allow such <code class="highlighter-rouge">cross-domain</code> request, the server must set the following headers.</p> <figure class="highlight"><pre><code class="language-yml"><span class="s">Access-Control-Allow-Origin</span><span class="pi">:</span> <span class="s1">'</span><span class="s">*'</span>
+<span class="s">Access-Control-Request-Method</span><span class="pi">:</span> <span class="s1">'</span><span class="s">*'</span>
+<span class="s">Access-Control-Allow-Methods</span><span class="pi">:</span> <span class="s1">'</span><span class="s">POST'</span>
+<span class="s">Access-Control-Allow-Headers</span><span class="pi">:</span> <span class="s1">'</span><span class="s">Content-Type'</span></code></pre></figure> <h2 id="ui-elements">UI Elements</h2> <p>Now that we have sent location of the page, let&#x2019;s also send some tags that the user can input. For this we need a form with text field and a button, the UI elements. To achieve this with out script, we save the required HTML as a string and add that to out page.</p> <figure class="highlight"><pre><code class="language-javascript"><span class="nx">javascript</span><span class="err">:</span> <span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="kd">var</span> <span class="nx">el</span> <span class="o">=</span> <span class="s1">'
+ &lt;div id="bookmarklet" style="
+ position:fixed;
+ background: #FFF;
+ border: 1px #000 solid;
+ right:50px;
+ top:50px;
+ z-index:1000;
+ width:250px;
+ "&gt;
+ Tag: &lt;input type="text" id="tag-input"&gt;
+ &lt;button id="add-tag"&gt;Submit&lt;/button&gt;&lt;/div&gt;'</span><span class="p">;</span>
+ <span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">innerHTML</span> <span class="o">+=</span> <span class="nx">el</span><span class="p">;</span>
+<span class="p">}());</span></code></pre></figure> <p>Here, we have a <code class="highlighter-rouge">div</code> with a textfield and a button saved as string in <code class="highlighter-rouge">el</code> variable. This variable is then added to our page and this gives us the HTML elements in the current page. We use the <code class="highlighter-rouge">position:fixed</code> and <code class="highlighter-rouge">z-index:1000</code> property on the enclosing <code class="highlighter-rouge">div</code> to make the box floating on top of the current page.</p> <p>Make sure that you style all the elements in your UI with custom CSS. Otherwise, these elements will inherit the current page&#x2019;s CSS properties. That could make your UI look different when opened in different pages.</p> <p>Once new elements are added to the current page, we can make the AJAX request with the <code class="highlighter-rouge">click</code> event on the button. To make this happen, add the following to the end of your script, before the anonymous function ends.</p> <figure class="highlight"><pre><code class="language-javascript"><span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'add-tag'</span><span class="p">).</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"click"</span><span class="p">,</span> <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="nx">xhr</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">XMLHttpRequest</span><span class="p">();</span>
+
+ <span class="nx">xhr</span><span class="p">.</span><span class="nx">open</span><span class="p">(</span><span class="s2">"POST"</span><span class="p">,</span> <span class="nb">encodeURI</span><span class="p">(</span><span class="s2">"http://localhost:8080"</span><span class="p">));</span>
+
+ <span class="nx">xhr</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">({</span>
+ <span class="na">url</span><span class="p">:</span> <span class="nb">document</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">href</span><span class="p">,</span>
+ <span class="na">tags</span><span class="p">:</span> <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'tag-input'</span><span class="p">).</span><span class="nx">value</span>
+ <span class="p">}));</span>
+ <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'bookmarklet'</span><span class="p">).</span><span class="nx">remove</span><span class="p">();</span>
+<span class="p">});</span></code></pre></figure> <h2 id="authentication">Authentication</h2> <p>If you have a cookie based authenication system and the user has logged in to your site, every request to your site will have the cookie details in its header. We can use that for authentication. There is however a caveat, the browsers don&#x2019;t send the cookie details for cross-domain AJAX requests by default. So, we need to add the following line before send the <code class="highlighter-rouge">POST</code> request.</p> <figure class="highlight"><pre><code class="language-javascript"><span class="nx">xhr</span><span class="p">.</span><span class="nx">withCredentials</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span></code></pre></figure> <p>So the entire code for the bookmarklet script will look like this.</p> <figure class="highlight"><pre><code class="language-javascript"><span class="nx">javascript</span><span class="err">:</span> <span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="kd">var</span> <span class="nx">el</span> <span class="o">=</span> <span class="s1">'
+ &lt;div id="bookmarklet" style="
+ position:fixed;
+ background: #FFF;
+ border: 1px #000 solid;
+ right:50px;
+ top:50px;
+ z-index:1000;
+ width:250px;
+ "&gt;
+ Tag: &lt;input type="text" id="tag-input"&gt;
+ &lt;button id="add-tag"&gt;Submit&lt;/button&gt;&lt;/div&gt;'</span><span class="p">;</span>
+ <span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">innerHTML</span> <span class="o">+=</span> <span class="nx">el</span><span class="p">;</span>
+ <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'add-tag'</span><span class="p">).</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"click"</span><span class="p">,</span> <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="nx">xhr</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">XMLHttpRequest</span><span class="p">();</span>
+
+ <span class="nx">xhr</span><span class="p">.</span><span class="nx">open</span><span class="p">(</span><span class="s2">"POST"</span><span class="p">,</span> <span class="nb">encodeURI</span><span class="p">(</span><span class="s2">"http://localhost:8080"</span><span class="p">));</span>
+ <span class="nx">xhr</span><span class="p">.</span><span class="nx">withCredentials</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+
+ <span class="nx">xhr</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">({</span>
+ <span class="na">url</span><span class="p">:</span> <span class="nb">document</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">href</span><span class="p">,</span>
+ <span class="na">tags</span><span class="p">:</span> <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'tag-input'</span><span class="p">).</span><span class="nx">value</span>
+ <span class="p">}));</span>
+ <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'bookmarklet'</span><span class="p">).</span><span class="nx">remove</span><span class="p">();</span>
+ <span class="p">});</span>
+<span class="p">}());</span></code></pre></figure> <h2 id="conclusion">Conclusion</h2> <p>In this article, we have seen how to create bookmarklet scripts that can send AJAX requests, create UI elements and even do authentication.</p> </article> </div>
+</body></html>

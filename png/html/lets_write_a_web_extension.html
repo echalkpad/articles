@@ -1,0 +1,149 @@
+<!DOCTYPE html><html><head><title>Let’s Write a Web Extension</title></head><body>
+<h1>Let’s Write a Web Extension</h1><p><a href="https://hacks.mozilla.org/2015/09/lets_write_a_webextension/" target="_new">Original URL</a></p>
+<p><blockquote>You might have heard about Mozilla&#x2019;s WebExtensions, our implementation of a new browser extension API for writing multiprocess-compatible add-ons. Maybe you&#x2019;ve been wondering what it&hellip;</blockquote></p>
+<div><article class="post">
+ <p>You might have heard about Mozilla&#x2019;s <a href="https://wiki.mozilla.org/WebExtensions" title="Mozilla&#x2019;s WebExtensions Wiki Page">WebExtensions</a>, our implementation of a new browser extension API for writing multiprocess-compatible add-ons. Maybe you&#x2019;ve been wondering what it was about, and how you could use it. Well, I&#x2019;m here to help! I think the <a href="https://developer.mozilla.org/en-US/Add-ons/WebExtensions" title="MDN&#x2019;s WebExtensions Documentation">MDN&#x2019;s WebExtensions docs</a> are a pretty great place to start:</p>
+<blockquote><p>WebExtensions are a new way to write Firefox extensions.</p>
+<p>The technology is developed for cross-browser compatibility: to a large extent the API is compatible with the <a href="https://developer.chrome.com/extensions" title="Chrome&#x2019;s Extension API">extension API</a> supported by Google Chrome and Opera. Extensions written for these browsers will in most cases run in Firefox with just a few changes. The API is also fully compatible with <a href="https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Multiprocess_Firefox" title="a.k.a. Electrolysis">multiprocess Firefox</a>.</p>
+</blockquote>
+<p>The only thing I would add is that while Mozilla is implementing most of the API that Chrome and Opera support, we&#x2019;re not restricting ourselves to only that API. Where it makes sense, we will be adding new functionality and talking with other browser makers about implementing it as well. Finally, since the WebExtension API is still under development, it&#x2019;s probably best if you use <a href="https://nightly.mozilla.org/" title="Download Nightly Here">Firefox Nightly</a> for this tutorial, so that you get the most up-to-date, standards-compliant behaviour. But keep in mind, this is still experimental technology &#x2014; things might break!</p>
+<h3 id="starting-off">Starting off</h3>
+<p>Okay, let&#x2019;s start with a reasonably simple add-on. We&#x2019;ll add a button, and when you click it, it will open up <a href="http://chilloutandwatchsomecatgifs.com/" title="Cat Gifs!">one of my favourite sites</a> in a new tab.</p>
+
+<p>The first file we&#x2019;ll need is a <a href="https://developer.chrome.com/extensions/manifest" title="Chrome&#x2019;s Manifest Documentation"><code>manifest.json</code></a>, to tell Firefox about our add-on.</p>
+<pre><code class="js">{
+ "manifest_version": 2,
+ "name": "Cat Gifs!",
+ "version": "1.0",
+ "applications": {
+ "gecko": {
+ "id": "catgifs@mozilla.org"
+ }
+ },
+
+ "browser_action": {
+ "default_title": "Cat Gifs!"
+ }
+}</code></pre>
+<p>Great! We&#x2019;re done! Hopefully your code looks a little <a href="https://github.com/bwinton/catgif-extension/releases/tag/step-1" title="Step One">like this</a>. Of course, we have no idea if it works yet, so let&#x2019;s install it in Firefox (we&#x2019;re using Firefox Nightly for the latest implementation). You could try to drag the <code>manifest.json</code>, or the whole directory, onto Firefox, but that really won&#x2019;t give you what you want.</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/1-DirectoryListing.png"><img src="https://hacks.mozilla.org/files/2015/09/1-DirectoryListing-500x315.png%20500w,%20https://hacks.mozilla.org/files/2015/09/1-DirectoryListing-250x157.png%20250w,%20https://hacks.mozilla.org/files/2015/09/1-DirectoryListing.png%201166w" alt="The directory listing" width="500" class="alignnone size-large wp-image-29289"></a></p>
+<h3 id="installing">Installing</h3>
+<p>To make Firefox recognize your extension as an add-on, you need to give it a zip file which ends in <code>.xpi</code>, so let&#x2019;s make one of those by first installing <a href="http://www.7-zip.org/" title="7-Zip&#x2019;s website">7-Zip</a>, and then typing <code>7z a catgifs.xpi manifest.json</code>. (If you&#x2019;re on Mac or Linux, the <code>zip</code> command should be built-in, so just type <code>zip catgifs.xpi manifest.json</code>.) Then you can drag the <code>catgifs.xpi</code> onto Firefox, and it will show you an error because our extension is unsigned.</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/2-FirstError.png"><img src="https://hacks.mozilla.org/files/2015/09/2-FirstError-500x317.png%20500w,%20https://hacks.mozilla.org/files/2015/09/2-FirstError-250x159.png%20250w,%20https://hacks.mozilla.org/files/2015/09/2-FirstError.png%201167w" alt="The first error" width="500" class="alignnone size-large wp-image-29290"></a></p>
+<p>We can work around this by going to <code>about:config</code>, typing <code>xpinstall.signatures.required</code> in the search box, double-clicking the entry to set it to false, and then closing that tab. After that, when we drop <code>catgifs.xpi</code> onto Firefox, we get the option to install our new add-on!</p>
+<blockquote><p>It&#x2019;s important to note that beginning with Firefox 44 (later this year), add-ons will <a href="https://wiki.mozilla.org/Addons/Extension_Signing" title="Extension Signing Documentation">require a signature</a> to be installed on Firefox Beta or Release versions of the browser, so even if you set the preference shown below, you will soon still need to run Firefox Nightly or Developer Edition to follow this tutorial.</p>
+</blockquote>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/3-SuccessDialog.png"><img src="https://hacks.mozilla.org/files/2015/09/3-SuccessDialog-500x318.png%20500w,%20https://hacks.mozilla.org/files/2015/09/3-SuccessDialog-250x159.png%20250w,%20https://hacks.mozilla.org/files/2015/09/3-SuccessDialog.png%201169w" alt="Success!!!" width="500" class="alignnone size-large wp-image-29291"></a></p>
+<p>Of course, our add-on doesn&#x2019;t do a whole lot yet.</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/4-ButtonClick.png"><img src="https://hacks.mozilla.org/files/2015/09/4-ButtonClick-500x317.png%20500w,%20https://hacks.mozilla.org/files/2015/09/4-ButtonClick-250x159.png%20250w,%20https://hacks.mozilla.org/files/2015/09/4-ButtonClick.png%201169w" alt="I click and click, but nothing happens." width="500" class="alignnone size-large wp-image-29292"></a></p>
+<p>So let&#x2019;s fix that!</p>
+<h3 id="adding-features">Adding features</h3>
+<p>First, we&#x2019;ll add the following lines to <code>manifest.json</code>, above the line containing <a href="https://developer.chrome.com/extensions/browserAction" title="Chrome&#x2019;s Browser Action Documentation"><code>browser_action</code></a>:</p>
+<pre><code class="js"> "background": {
+ "scripts": ["background.js"],
+ "persistent": false
+ },</code></pre>
+<p>now, of course, that&#x2019;s pointing at a <code>background.js</code> file that doesn&#x2019;t exist yet, so we should create that, too. Let&#x2019;s paste the following javascript in it:</p>
+<pre><code class="js">'use strict';
+
+/*global chrome:false */
+
+chrome.browserAction.setBadgeText({text: '(&#x30C4;)'});
+chrome.browserAction.setBadgeBackgroundColor({color: '#eae'});
+
+chrome.browserAction.onClicked.addListener(function(aTab) {
+ chrome.tabs.create({'url': 'http://chilloutandwatchsomecatgifs.com/', 'active': true});
+});</code></pre>
+<p>And you should get something that looks <a href="https://github.com/bwinton/catgif-extension/releases/tag/step-2" title="Step Two">like this</a>. Re-create the add-on by typing <code>7z a catgifs.xpi manifest.json background.js</code> (or <code>zip catgifs.xpi manifest.json background.js</code>), and drop <code>catgifs.xpi</code> onto Firefox again, and now, when we click the button, we should get a new tab! &#x1F604;</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/5-CatGifs.gif"><img src="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/5-CatGifs.gif" alt="Cat Gifs!" width="500" class="alignnone size-large wp-image-29293"></a></p>
+<h3 id="automating-the-build">Automating the build</h3>
+<p>I don&#x2019;t know about you, but I ended up typing <code>7z a catgifs.xpi manifest.json</code> a disappointing number of times, and wondering why my <code>background.js</code> file wasn&#x2019;t running. Since I know where this blog post is ending up, I know we&#x2019;re going to be adding a bunch more files, so I think it&#x2019;s time to add a build script. I hear that the go-to build tool these days is <a href="http://gulpjs.com/" title="Gulp&#x2019;s Homepage"><code>gulp</code></a>, so I&#x2019;ll wait here while you <a href="https://github.com/gulpjs/gulp/blob/master/docs/getting-started.md#getting-started" title="Gulp&#x2019;s Installation Instructions">go install that</a>, and c&#x2019;mon back when you&#x2019;re done. (I needed to install <a href="https://nodejs.org/" title="Node&#x2019;s Homepage">Node</a>, and then gulp twice. I&#x2019;m not sure why.)</p>
+<p>So now that we have gulp installed, we should make a file named <code>gulpfile.js</code> to tell it how to build our add-on.</p>
+<pre><code class="js">'use strict';
+
+var gulp = require('gulp');
+
+var files = ['manifest.json', 'background.js'];
+var xpiName = 'catgifs.xpi';
+
+gulp.task('default', function () {
+ console.log(files, xpiName)
+});</code></pre>
+<p>Once you have that file looking something <a href="https://github.com/bwinton/catgif-extension/releases/tag/step-3" title="Step Three">like this</a>, you can type <code>gulp</code>, and see output that looks something like this:</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/6-GulpOutput.png"><img src="https://hacks.mozilla.org/files/2015/09/6-GulpOutput-500x184.png%20500w,%20https://hacks.mozilla.org/files/2015/09/6-GulpOutput-250x92.png%20250w,%20https://hacks.mozilla.org/files/2015/09/6-GulpOutput.png%20802w" alt="Just some command line stuff, nbd." width="500" class="alignnone size-large wp-image-29294"></a></p>
+<p>Now, you may notice that we didn&#x2019;t actually build the add-on. To do that, we will need to install another package to zip things up. So, type <code>npm install gulp-zip</code>, and then change the <code>gulpfile.js</code> to contain the following:</p>
+<pre><code class="js">'use strict';
+
+var gulp = require('gulp');
+var zip = require('gulp-zip');
+
+var files = ['manifest.json', 'background.js'];
+var xpiName = 'catgifs.xpi';
+
+gulp.task('default', function () {
+ gulp.src(files)
+ .pipe(zip(xpiName))
+ .pipe(gulp.dest('.'));
+});</code></pre>
+<p>Once your <code>gulpfile.js</code> looks <a href="https://github.com/bwinton/catgif-extension/releases/tag/step-4" title="Step Four">like this</a>, when we run it, it will create the <code>catgifs.xpi</code> (as we can tell by looking at the timestamp, or by deleting it and seeing it get re-created).</p>
+<h3 id="fixing-a-bug">Fixing a bug</h3>
+<p>Now, if you&#x2019;re like me, you clicked the button a whole bunch of times, to test it out and make sure it&#x2019;s working, and you might have ended up with a lot of tabs. While this will ensure you remain extra-chill, it would probably be nicer to only have one tab, either creating it, or switching to it if it exists, when we click the button. So let&#x2019;s go ahead and add that.</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/7-ManyTabbys.gif"><img src="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/7-ManyTabbys.gif" alt="Lots and lots of cats." width="500" class="alignnone size-large wp-image-29295"></a></p>
+<p>The first thing we want to do is see if the tab exists, so let&#x2019;s edit the <code>browserAction.onClicked</code> listener in <code>background.js</code> to contain the following:</p>
+<pre><code class="js">chrome.browserAction.onClicked.addListener(function(aTab) {
+ chrome.tabs.query({'url': 'http://chilloutandwatchsomecatgifs.com/'}, (tabs) =&gt; {
+ if (tabs.length === 0) {
+ // There is no catgif tab!
+ chrome.tabs.create({'url': 'http://chilloutandwatchsomecatgifs.com/', 'active': true});
+ } else {
+ // Do something here&#x2026;
+ }
+ });
+});</code></pre>
+<p>Huh, that&#x2019;s weird, it&#x2019;s always creating a new tab, no matter how many catgifs tabs there are already&#x2026; It turns out that our add-on doesn&#x2019;t have permission to see the urls for existing tabs yet which is why it can&#x2019;t find them, so let&#x2019;s go ahead and add that by inserting the following code above the <code>browser_action</code>:</p>
+<pre><code class="js"> "permissions": [
+ "tabs"
+ ],</code></pre>
+<p>Once your code looks <a href="https://github.com/bwinton/catgif-extension/releases/tag/step-5" title="Step Five">similar to this</a>, re-run <code>gulp</code> to rebuild the add-on, and drag-and-drop to install it, and then when we test it out, ta-da! Only one catgif tab! Of course, if we&#x2019;re on another tab it doesn&#x2019;t do anything, so let&#x2019;s fix that. We can change the <code>else</code> block to contain the following:</p>
+<pre><code class="js"> // Do something here&#x2026;
+ chrome.tabs.query({'url': 'http://chilloutandwatchsomecatgifs.com/', 'active': true}, (active) =&gt; {
+ if (active.length === 0) {
+ chrome.tabs.update(tabs[0].id, {'active': true});
+ }
+ });</code></pre>
+<p>Make sure it looks <a href="https://github.com/bwinton/catgif-extension/releases/tag/step-6" title="Step Six">like this</a>, rebuild, re-install, and shazam, it works!</p>
+<h3 id="making-it-look-nice">Making it look nice</h3>
+<p>Well, it works, but it&#x2019;s not really pretty. Let&#x2019;s do a couple of things to fix that a bit.</p>
+<p>First of all, we can add a custom icon so that our add-on doesn&#x2019;t look like all the other add-ons that haven&#x2019;t bothered to set their icons&#x2026; To do that, we add the following to <code>manifest.json</code> after the <code>manifest_version</code> line:</p>
+<pre><code class="js"> "icons": {
+ "48": "icon.png",
+ "128": "icon128.png"
+ },</code></pre>
+<p>And, of course, we&#x2019;ll need to download a pretty picture for our icon, so let&#x2019;s save a copy of <a href="https://raw.githubusercontent.com/bwinton/catgif-extension/master/icon.png" title="icon.png">this picture</a> as <code>icon.png</code>, and <a href="https://raw.githubusercontent.com/bwinton/catgif-extension/master/icon128.png" title="icon128.png">this one</a> as <code>icon128.png</code>.</p>
+<p>We should also have a prettier icon for the button, so going back to the <code>manifest.json</code>, let&#x2019;s add the following lines in the <code>browser_action</code> block before the <code>default_title</code>:</p>
+<pre><code class="js"> "default_icon": {
+ "19": "button.png",
+ "38": "button38.png"
+ },</code></pre>
+<p>and save <a href="https://raw.githubusercontent.com/bwinton/catgif-extension/master/button.png" title="button.png">this image</a> as <code>button.png</code>, and <a href="https://raw.githubusercontent.com/bwinton/catgif-extension/master/button38.png" title="button38.png">this image</a> as <code>button38.png</code>.</p>
+<p>Finally, we need to tell our build script about the new files, so change the <code>files</code> line of our <code>gulpfile.js</code> to:</p>
+<pre><code class="js">var files = ['manifest.json', 'background.js', '*.png'];</code></pre>
+<p>Re-run the build, and re-install the add-on, and <a href="https://github.com/bwinton/catgif-extension/releases/tag/step-7" title="Step Seven">we&#x2019;re done</a>! &#x1F600;</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/8-PrettyIcon.png"><img src="https://hacks.mozilla.org/files/2015/09/8-PrettyIcon-500x316.png%20500w,%20https://hacks.mozilla.org/files/2015/09/8-PrettyIcon-250x158.png%20250w" alt="New, prettier, icons." width="500" class="alignnone size-large wp-image-29296"></a></p>
+<h3 id="one-more-thing---">One more thing&#x2026;</h3>
+<p>Well, there is another thing we could try to do. I mean, we have an add-on that works beautifully in Firefox, but one of the advantages of the new WebExtension API is that you can run the same add-on (or an add-on with minimal changes) on both Firefox and Chrome. So let&#x2019;s see what it will take to get this running in both browsers!</p>
+<p>We&#x2019;ll start by launching Chrome, and trying to load the add-on, and see what errors it gives us. To load our extension, we&#x2019;ll need to go to <code>chrome://extensions/</code>, and check the <code>Developer mode</code> checkbox, as shown below:</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/9-ChromeDeveloper.png"><img src="https://hacks.mozilla.org/files/2015/09/9-ChromeDeveloper-500x315.png%20500w,%20https://hacks.mozilla.org/files/2015/09/9-ChromeDeveloper-250x158.png%20250w" alt="Now we&#x2019;re hackers!" width="500" class="alignnone size-large wp-image-29297"></a></p>
+<p>Then we can click the &#x201C;Load unpacked extension&#x2026;&#x201D; button, and choose our directory to load our add-on! Uh-oh, it looks like we&#x2019;ve got an error.</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/10-ChromeAlmost.png"><img src="https://hacks.mozilla.org/files/2015/09/10-ChromeAlmost-500x315.png%20500w,%20https://hacks.mozilla.org/files/2015/09/10-ChromeAlmost-250x158.png%20250w" alt="Close, but not quite." width="500" class="alignnone size-large wp-image-29298"></a></p>
+<p>Since the <code>applications</code> key is required for Firefox, I think we can safely ignore this error. And anyways, the button shows up! And when we click it&#x2026;</p>
+<p><a href="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/11-ChromeCats.gif"><img src="https://2r4s9p1yi1fa2jd7j43zph8r-wpengine.netdna-ssl.com/files/2015/09/11-ChromeCats.gif" alt="Cats!" width="500" class="alignnone size-large wp-image-29299"></a></p>
+<p>So, I guess we&#x2019;re done! (I used to have a section in here about how to load <a href="https://babeljs.io/" title="Babel!">babel.js</a>, because the version of Chrome I was using didn&#x2019;t support ES6&#x2019;s <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/Arrow_functions" title="a.k.a. Fat-Arrows.">arrow functions</a>, but apparently they&#x2019;ve upgraded their JavaScript engine, and now everything is good. &#x1F609;)</p>
+<p>Finally, if you have any questions, or run into any problems following this tutorial, please feel free to leave a comment here, or get in touch with me through <a href="mailto:bwinton@mozilla.com" title="My email address">email</a>, or on <a href="https://twitter.com/bwinton/" title="@bwinton">twitter</a>! If you have issues or constructive feedback developing WebExtensions, the team will be listening on the <a href="https://discourse.mozilla-community.org/c/add-ons/development" target="_blank">Discourse forum</a>. </p> <section class="about">
+ <p><a class="url" href="https://hacks.mozilla.org/author/bwintonmozilla-com/">More articles by Blake Winton&#x2026;</a></p>
+ </section>
+ </article>
+ 
+
+</div>
+</body></html>

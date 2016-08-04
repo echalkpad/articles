@@ -1,0 +1,667 @@
+<!DOCTYPE html><html><head><title>How to Create a News Reader With React Native: Setup and News Item Component - Envato Tuts+ Code Tutorial</title></head><body>
+<h1>How to Create a News Reader With React Native: Setup and News Item Component - Envato Tuts+ Code Tutorial</h1><p><a href="http://code.tutsplus.com/tutorials/how-to-create-a-news-reader-with-react-native-setup-and-news-item-component--cms-25935" target="_new">Original URL</a></p>
+<p><blockquote>In this tutorial, we'll be creating a news reader app with React Native. In this two-part series, I'm going to&#xA0;assume that this isn't your first React Native app and&#xA0;I won't go too much&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>In this tutorial, we'll be creating a news reader app with React Native. In this two-part series, I'm going to&#xA0;assume that this isn't your first React Native app and&#xA0;I won't go too much into detail regarding setting up your machine and running the app on a device. That said,&#xA0;I explain the actual development process in detail.</p><p>Even though&#xA0;we'll be deploying to Android, the code used in this tutorial should work on iOS as well. Here's what the final result looks like.<br></p><figure class="post_image"><img alt="This is what youll be creating" src="https://cms-assets.tutsplus.com/uploads/users/41/posts/25935/image/figure-hn-reader.jpg"></figure><p>You can find the source code used in this tutorial on <a href="http://github.com/anchetaWern/react-native-hnreader" target="_self">GitHub</a>.</p><h2>Prerequisites<br>
+</h2><p>If you're new to React Native and haven't set up your machine yet, be sure to check out the <a href="https://facebook.github.io/react-native/docs/getting-started.html#content" target="_self">getting started guide</a> of the React Native documentation or read <a href="http://code.tutsplus.com/tutorials/creating-a-dictionary-app-using-react-native-for-android--cms-24969" target="_self">Ashraff's&#xA0;introductory tutorial</a> on Envato Tuts+. Don't forget to&#xA0;<a href="https://facebook.github.io/react-native/docs/android-setup.html" target="_self">install the Android SDK</a>&#xA0;if you want to deploy to Android or install <a href="https://developer.apple.com/xcode/downloads/" target="_self">Xcode and the SDK</a>&#xA0;for iOS.</p><p>Once you're done, <a href="https://nodejs.org/en/download/" target="_self">install NodeJS</a>&#xA0;and the React Native command line tool using <a href="https://www.npmjs.com/" target="_self">npm</a>.</p><pre class="brush: bash noskimlinks noskimwords">npm install -g react-native-cli</pre><h2>1. Project Setup<br>
+</h2><p>We're now&#xA0;ready to build the project. Before we start, I'd like to provide a brief overview on how the project is put together. We create two custom components:</p><ul>
+<li>
+<code class="inline">NewsItems</code> which renders the news items</li>
+<li>
+<code class="inline">WebPage</code>&#xA0;which renders the web page when the user taps a news item</li>
+</ul><p>These are then imported to the main entry point file for Android (<strong>index.android.js</strong>) and for iOS (<strong>index.ios.js</strong>). That's all you need to know for now.<br></p><h3>Step 1:&#xA0;Creating a New App<br>
+</h3><p>Start by navigating to your working directory. Open a new terminal window inside that directory and execute the following command:</p><pre class="brush: bash noskimlinks noskimwords">react-native init HnReader</pre><p>This creates a new folder named <strong>HnReader</strong>&#xA0;and it contains the files needed to build the app.</p><p>React Native already comes with a few&#xA0;default components, but there are also custom ones built by other developers. You can find those on the <a href="https://react.parts/native" target="_self">react.parts website</a>. Not all components work on both Android and iOS, though. Even some of the default components aren't cross-platform. That's why you have to be careful when picking components since they might differ on each platform or might not work properly on every platform.</p><p>It's a good idea to go into the issues page of the GitHub repository of the component that you plan to use and search for either <strong>android support</strong>&#xA0;or <strong>ios support</strong>&#xA0;to quickly check whether the component works on both platforms.</p><h3>Step 2:&#xA0;Installing Dependencies<br>
+</h3><p>The app that we're going to build depends on&#xA0;a few third party libraries and React components. You can install them by opening <strong>package.json</strong>&#xA0;in the root of your working directory. Add the following to&#xA0;<strong>package.json</strong>:</p><pre class="brush: javascript noskimlinks noskimwords">{
+ "name": "HnReader",
+ "version": "0.0.1",
+ "private": true,
+ "scripts": {
+ "start": "react-native start"
+ },
+ "dependencies": {
+ "lodash": "^4.0.1",
+ "moment": "^2.11.1",
+ "react-native": "^0.18.1",
+ "react-native-button": "^1.3.1",
+ "react-native-gifted-spinner": "0.0.3"
+ }
+}</pre><p>Next, open a terminal window in the&#xA0;working directory and execute <code class="inline">npm install</code>&#xA0;to install the&#xA0;dependencies specified in&#xA0;<strong>package.json</strong>. Here's a brief description of what each library does in the project:</p><ul>
+<li>
+<strong>lodash</strong>&#xA0;is used for truncating strings. It may be&#xA0;a bit overkill, but one less line of code that you have to write means one less liability.</li>
+<li>
+<strong>moment</strong>&#xA0;is used for determining if the news items in the local storage are already there for one day.</li>
+<li>
+<strong>react-native</strong>&#xA0;is the React Native framework. This is installed by default when you executed <code class="inline">react-native init</code> earlier.</li>
+<li>
+<strong>react-native-button</strong>&#xA0;is&#xA0;a react native component used for creating buttons.</li>
+<li>
+<strong>react-native-gifted-spinner</strong>&#xA0;is used as an activity indicator when making network requests.</li>
+</ul><h2>
+<span class="sectionnum">2.</span> Main Component</h2><p>As I mentioned earlier, the entry point for all React Native projects is <strong>index.android.js</strong> and <strong>index.ios.js</strong>. That is the focus&#xA0;of this section. Replace the contents of these files with the following:</p><pre class="brush: javascript noskimlinks noskimwords">'use strict';
+var React = require('react-native');
+
+var {
+ AppRegistry,
+ StyleSheet,
+ Navigator
+} = React;
+
+
+var NewsItems = require('./components/news-items');
+var WebPage = require('./components/webpage');
+
+var ROUTES = {
+ news_items: NewsItems,
+ web_page: WebPage
+};
+
+var HnReader = React.createClass({ 
+
+ renderScene: function(route, navigator) {
+
+ var Component = ROUTES[route.name];
+ return (
+ &lt;Component route={route} navigator={navigator} url={route.url} /&gt;
+ );
+ },
+
+ render: function() {
+ return (
+ &lt;Navigator 
+ style={styles.container} 
+ initialRoute={{name: 'news_items', url: ''}}
+ renderScene={this.renderScene}
+ configureScene={() =&gt; { return Navigator.SceneConfigs.FloatFromRight; }} /&gt;
+ );
+
+ },
+
+
+});
+
+
+var styles = StyleSheet.create({
+ container: {
+ flex: 1
+ }
+});
+
+AppRegistry.registerComponent('HnReader', () =&gt; HnReader);</pre><p>Let me break it down. First, we enable strict mode by using the <code class="inline">use script</code>&#xA0;directive. This makes&#xA0;the parser do more checking on your code. For example, it will complain if you initialize a variable without adding the <code class="inline">var</code>&#xA0;keyword.<br></p><pre class="brush: javascript noskimlinks noskimwords">'use strict';</pre><p>Next, we import the React Native framework. This allows us to create custom components and add styling to the app.<br></p><pre class="brush: javascript noskimlinks noskimwords">var React = require('react-native');</pre><p>We then extract all the functionality that we need out of the <code class="inline">React</code>&#xA0;object.<br></p><pre class="brush: javascript noskimlinks noskimwords">var {
+ AppRegistry,
+ StyleSheet,
+ Navigator
+} = React;</pre><p>If you're new to ES6 (ECMAScript 6), the above snippet is identical to:<br></p><pre class="brush: javascript noskimlinks noskimwords">var AppRegistry = React.AppRegistry;
+var StyleSheet = React.StyleSheet;
+var Navigator = React.Navigator;</pre><p>It is syntactic sugar introduced in ES6 to make assigning object properties to variables easier. This is called <a href="https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment" target="_self">destructuring assignment</a>.</p><p>Here's a brief description of what each of the properties that we've extracted does:<br></p><ul>
+<li>
+<code class="inline">AppRegistry</code>&#xA0;is used for registering the main component of the app.</li>
+<li>
+<code class="inline">StyleSheet</code>&#xA0;is used for declaring styles to be used by the components.</li>
+<li>
+<code class="inline">Navigator</code>&#xA0;is used for switching between different pages of the app.</li>
+</ul><p>Next, we import the custom components used by the app. We will be creating these later.<br></p><pre class="brush: javascript noskimlinks noskimwords">var NewsItems = require('./components/news-items');
+var WebPage = require('./components/webpage');</pre><p>Create a&#xA0;<code class="inline">ROUTES</code>&#xA0;variable and assign an object using the above&#xA0;two components as the value for its properties. This allows us to display the component by referring to each of the keys we've defined.<br></p><pre class="brush: javascript noskimlinks noskimwords">var ROUTES = {
+ news_items: NewsItems,
+ web_page: WebPage
+};</pre><p>Create the main component of the app by calling the&#xA0;<code class="inline">createClass</code>&#xA0;method from the <code class="inline">React</code>&#xA0;object. The <code class="inline">createClass</code> method&#xA0;accepts an object as its argument.<br></p><pre class="brush: javascript noskimlinks noskimwords">var HnReader = React.createClass({ 
+ ...
+});</pre><p>Inside the object is the <code class="inline">renderScene</code>&#xA0;method, which gets&#xA0;called whenever the route changes. The <code class="inline">route</code> and&#xA0;<code class="inline">navigator</code>&#xA0;are passed in as argument to this method. The&#xA0;<code class="inline">route</code>&#xA0;contains information about the current route (for example, the name of the route).</p><p>The&#xA0;<code class="inline">navigator</code>&#xA0;contains methods that can be used to navigate between different routes. Inside the&#xA0;<code class="inline">renderScene</code>&#xA0;method, we get the component that we want to render by passing in the name of the current route to the&#xA0;<code class="inline">ROUTES</code>&#xA0;object. Next, we render the component and pass along the&#xA0;<code class="inline">route</code>,&#xA0;<code class="inline">navigator</code>, and the&#xA0;<code class="inline">url</code>&#xA0;as attributes. Later on, you'll see how these are being used inside each of the components. For now, just remember that when you want to pass data from the main component to a child component, all you have to do is add a new attribute and use the data that you want to pass as the value.<br></p><pre class="brush: javascript noskimlinks noskimwords">renderScene: function(route, navigator) {
+
+ var Component = ROUTES[route.name]; //get the component for this specific route
+
+ //render the component and pass along the route, navigator and the url
+ return (
+ &lt;Component route={route} navigator={navigator} url={route.url} /&gt;
+ );
+},</pre><p>The&#xA0;<code class="inline">render</code>&#xA0;method is a required method when creating components because it is responsible for rendering the user interface&#xA0;of the component. In this method,&#xA0;we render the&#xA0;<code class="inline">Navigator</code>&#xA0;component and pass along a few attributes.<br></p><pre class="brush: javascript noskimlinks noskimwords">render: function() {
+ return (
+ &lt;Navigator 
+ style={styles.container} 
+ initialRoute={{name: 'news_items', url: ''}}
+ renderScene={this.renderScene}
+ configureScene={() =&gt; { return Navigator.SceneConfigs.FloatFromRight; }} /&gt;
+ );
+
+},</pre><p>Let me explain what&#xA0;each attribute does:<br></p><ul>
+<li>
+<code class="inline">style</code>&#xA0;is used for adding styles to the component.</li>
+<li>
+<code class="inline">initialRoute</code>&#xA0;is used for specifying the initial route to be used by the navigator. As you can see, we've passed along an object containing a&#xA0;<code class="inline">name</code>&#xA0;property with its value set to&#xA0;<code class="inline">news_items</code>. This object is what's being passed to the <code class="inline">route</code>&#xA0;argument of the&#xA0;<code class="inline">renderScene</code>&#xA0;method, which we defined earlier. This means that this particular code would render the <code class="inline">NewsItems</code>&#xA0;component by default.</li>
+</ul><pre class="brush: javascript noskimlinks noskimwords">var Component = ROUTES[route.name]; </pre><p>The <code class="inline">url</code>&#xA0;is set to an empty string because we don't have a webpage to render by default.</p><ul>
+<li>
+<code class="inline">renderScene</code>&#xA0;is responsible for rendering the component for a specific route.</li>
+<li>
+<code class="inline">configureScene</code>&#xA0;is responsible for specifying the animations and gestures to be used when navigating between routes. In this case, we're passing in a function that returns the <code class="inline">FloatFromRight</code>&#xA0;animation. This means that, when navigating to a route with a higher index, the new page floats from right to left. And when going back, it floats left to right. This also adds a gesture of swiping to the left as a means of going back to the previous route.</li>
+</ul><pre class="brush: javascript noskimlinks noskimwords">() =&gt; { return Navigator.SceneConfigs.FloatFromRight; }</pre><p>The styles are defined after the definition of the main component. We call the&#xA0;<code class="inline">create</code>&#xA0;method from the <code class="inline">StyleSheet</code>&#xA0;object and pass in an object containing the styles. In this case, we only have one, defining that it's going to occupy the entire screen.</p><pre class="brush: javascript noskimlinks noskimwords">var styles = StyleSheet.create({
+ container: {
+ flex: 1
+ }
+});</pre><p>Lastly, we&#xA0;register the component.<br></p><pre class="brush: javascript noskimlinks noskimwords">AppRegistry.registerComponent('HnReader', () =&gt; HnReader);</pre><h2>3. <code class="inline">NewsItem</code> Component<br>
+</h2><p>The <code class="inline">NewsItem</code> component is used for rendering the news items. The custom components are stored in the <strong>components</strong> directory.&#xA0;Inside this directory, create <strong>news-items.js</strong>&#xA0;and add the&#xA0;following code to it:</p><pre class="brush: javascript noskimlinks noskimwords">'use strict';
+var React = require('react-native');
+
+var {
+ AppRegistry,
+ StyleSheet,
+ Text,
+ ListView,
+ View,
+ ScrollView,
+ TouchableHighlight,
+ AsyncStorage
+} = React;
+
+var Button = require('react-native-button');
+var GiftedSpinner = require('react-native-gifted-spinner');
+
+var api = require('../src/api.js');
+
+var moment = require('moment');
+
+var TOTAL_NEWS_ITEMS = 10;
+
+var NewsItems = React.createClass({
+
+ getInitialState: function() {
+ return {
+ title: 'HN Reader',
+ dataSource: new ListView.DataSource({
+ rowHasChanged: (row1, row2) =&gt; row1 !== row2,
+ }),
+ news: {},
+ loaded: false
+ } 
+ },
+
+ render: function() {
+ 
+ return (
+ &lt;View style={styles.container}&gt;
+ &lt;View style={styles.header}&gt;
+ &lt;View style={styles.header_item}&gt;
+ &lt;Text style={styles.header_text}&gt;{this.state.title}&lt;/Text&gt;
+ &lt;/View&gt;
+ &lt;View style={styles.header_item}&gt;
+ { !this.state.loaded &amp;&amp; 
+ &lt;GiftedSpinner /&gt;
+ }
+ &lt;/View&gt;
+ &lt;/View&gt;
+ &lt;View style={styles.body}&gt;
+ &lt;ScrollView ref="scrollView"&gt;
+ {
+ this.state.loaded &amp;&amp; 
+ 
+ &lt;ListView initialListSize={1} dataSource={this.state.news} style={styles.news} renderRow={this.renderNews}&gt;&lt;/ListView&gt;
+ 
+ }
+ &lt;/ScrollView&gt;
+ &lt;/View&gt;
+ &lt;/View&gt;
+ ); 
+ 
+ },
+
+ componentDidMount: function() {
+ 
+ AsyncStorage.getItem('news_items').then((news_items_str) =&gt; {
+
+ var news_items = JSON.parse(news_items_str);
+
+ if(news_items != null){
+ 
+ AsyncStorage.getItem('time').then((time_str) =&gt; {
+ var time = JSON.parse(time_str);
+ var last_cache = time.last_cache;
+ var current_datetime = moment();
+
+ var diff_days = current_datetime.diff(last_cache, 'days');
+ 
+ if(diff_days &gt; 0){
+ this.getNews();
+ }else{
+ this.updateNewsItemsUI(news_items);
+ }
+
+ });
+ 
+
+ }else{
+ this.getNews();
+ }
+
+ }).done();
+
+ },
+
+ renderNews: function(news) {
+ return (
+ &lt;TouchableHighlight onPress={this.viewPage.bind(this, news.url)} underlayColor={"#E8E8E8"} style={styles.button}&gt;
+ &lt;View style={styles.news_item}&gt;
+ &lt;Text style={styles.news_item_text}&gt;{news.title}&lt;/Text&gt;
+ &lt;/View&gt;
+ &lt;/TouchableHighlight&gt;
+ );
+ },
+
+ viewPage: function(url){
+ this.props.navigator.push({name: 'web_page', url: url});
+ },
+
+ updateNewsItemsUI: function(news_items){
+ 
+ if(news_items.length == TOTAL_NEWS_ITEMS){
+
+ var ds = this.state.dataSource.cloneWithRows(news_items);
+ this.setState({
+ 'news': ds,
+ 'loaded': true
+ });
+
+ }
+ 
+ },
+
+ updateNewsItemDB: function(news_items){
+
+ if(news_items.length == TOTAL_NEWS_ITEMS){
+ AsyncStorage.setItem('news_items', JSON.stringify(news_items));
+ }
+
+ },
+
+ getNews: function() { 
+ 
+ var TOP_STORIES_URL = 'https://hacker-news.firebaseio.com/v0/topstories.json';
+ var news_items = [];
+
+ AsyncStorage.setItem('time', JSON.stringify({'last_cache': moment()}));
+
+ api(TOP_STORIES_URL).then(
+ (top_stories) =&gt; {
+ 
+ for(var x = 0; x &lt;= 10; x++){
+
+ var story_url = "https://hacker-news.firebaseio.com/v0/item/" + top_stories[x] + ".json";
+
+ api(story_url).then(
+ (story) =&gt; {
+
+ news_items.push(story);
+ this.updateNewsItemsUI(news_items);
+ this.updateNewsItemDB(news_items);
+
+ }
+ );
+
+ }
+ 
+
+ }
+
+
+
+ );
+ 
+ 
+ }
+
+});
+
+
+
+var styles = StyleSheet.create({
+ container: {
+ flex: 1
+ },
+ header: {
+ backgroundColor: '#FF6600',
+ padding: 10,
+ flex: 1,
+ justifyContent: 'space-between',
+ flexDirection: 'row'
+ },
+ body: {
+ flex: 9,
+ backgroundColor: '#F6F6EF'
+ },
+ header_item: {
+ paddingLeft: 10,
+ paddingRight: 10,
+ justifyContent: 'center'
+ },
+ header_text: {
+ color: '#FFF',
+ fontWeight: 'bold',
+ fontSize: 15
+ },
+ button: {
+ borderBottomWidth: 1,
+ borderBottomColor: '#F0F0F0'
+ },
+ news_item: {
+ paddingLeft: 10,
+ paddingRight: 10,
+ paddingTop: 15,
+ paddingBottom: 15,
+ marginBottom: 5
+ },
+ news_item_text: {
+ color: '#575757',
+ fontSize: 18
+ }
+});
+
+module.exports = NewsItems;</pre><h3>Step 1: Importing Components &amp; Libraries</h3><p>First, we import the components and libraries that we need for the&#xA0;<code class="inline">NewsItem</code> component. We also create a global variable that stores the total number of news items to be cached.<br></p><pre class="brush: javascript noskimlinks noskimwords">'use strict';
+var React = require('react-native');
+
+var {
+ AppRegistry,
+ StyleSheet,
+ Text,
+ ListView,
+ View,
+ ScrollView,
+ TouchableHighlight,
+ AsyncStorage
+} = React;
+
+var Button = require('react-native-button');
+var GiftedSpinner = require('react-native-gifted-spinner');
+
+var api = require('../src/api.js');
+
+var moment = require('moment');
+
+var TOTAL_NEWS_ITEMS = 10;</pre><p>We use&#xA0;a few components that we haven't used earlier.<br></p><ul>
+<li>
+<code class="inline">Text</code>&#xA0;is used for displaying text in React Native.</li>
+<li>
+<code class="inline">View</code>&#xA0;is the basic building block for creating components. Think of it as a&#xA0;<code class="inline">div</code>&#xA0;in web pages.</li>
+<li>
+<code class="inline">ListView</code>&#xA0;is used for rendering an array of objects.</li>
+<li>
+<code class="inline">ScrollView</code>&#xA0;is used for adding scroll bars. React Native isn't like web pages. Scroll bars aren't automatically added when the content is larger than the view or screen. That is&#xA0;why we need to use this&#xA0;component.</li>
+<li>
+<code class="inline">TouchableHighlight</code>&#xA0;is used for making a component respond to touch events.</li>
+<li>
+<code class="inline">AsyncStorage</code>&#xA0;isn't really a component. It's&#xA0;an API used for storing local data in React Native.</li>
+<li>
+<code class="inline">Button</code>&#xA0;is a third party component for creating buttons.</li>
+<li>
+<code class="inline">GiftedSpinner</code>&#xA0;is used for creating spinners when loading data from the network.</li>
+<li>
+<code class="inline">api</code>&#xA0;is a custom module&#xA0;that wraps <code class="inline">fetch</code>, React Native's way for making network requests. There's a lot of boilerplate code needed to get hold of the data returned by a network request and that is why&#xA0;we are wrapping it inside a module. This lest us write less&#xA0;code when making network requests.</li>
+<li>
+<code class="inline">moment</code>&#xA0;is a library used for anything related to time.</li>
+</ul><h3>Step 2: Creating <code class="inline">NewsItems</code> Component</h3><p>Next, we create the <code class="inline">NewsItems</code>&#xA0;component:<br></p><pre class="brush: javascript noskimlinks noskimwords">var NewsItems = React.createClass({
+ ...
+});</pre><p>In this component is the <code class="inline">getInitialState</code>&#xA0;function, which is used for specifying the default state for this component. In React Native, the state is used for storing data that is available throughout the whole component. Here, we are storing the title of the app, the&#xA0;<code class="inline">dataSource</code>&#xA0;for the <code class="inline">ListView</code>&#xA0;component, the current <code class="inline">news</code>&#xA0;items and a boolean value,&#xA0;<code class="inline">loaded</code>, which tells whether the news items are currently being loaded from the network or not. The <code class="inline">loaded</code> variable&#xA0;is used to determine whether or not&#xA0;to display the spinner. We&#xA0;set it to <code class="inline">false</code>&#xA0;so the spinner is visible by default.</p><p>Once the news items are loaded, either from the local storage or from the network, it is set to <code class="inline">true</code>&#xA0;to hide the spinner. The <code class="inline">dataSource</code>&#xA0;is used to define the blueprint of the data source to be used for the <code class="inline">ListView</code>&#xA0;component. Think of it as a parent class in which every data source that you will be defining will inherit from.&#xA0;This requires an object containing the&#xA0;<code class="inline">rowHasChanged</code>&#xA0;function, which tells the <code class="inline">ListView</code>&#xA0;to re-render when a row has changed.</p><p>Lastly, the <code class="inline">news</code>&#xA0;object contains the initial value for the data source of the&#xA0;<code class="inline">ListView</code>.</p><pre class="brush: javascript noskimlinks noskimwords">getInitialState: function() {
+ return {
+ title: 'HN Reader',
+ dataSource: new ListView.DataSource({
+ rowHasChanged: (row1, row2) =&gt; row1 !== row2,
+ }),
+ news: {},
+ loaded: false
+ } 
+},</pre><h3>Step 3: Implementing the <code class="inline">render</code> Function</h3><p>The <code class="inline">render</code> function renders the user interface&#xA0;for this component. First, we wrap everything in a <code class="inline">View</code>. Then, inside we have the header and the body. The header contains the title and the spinner. The body contains the <code class="inline">ListView</code>. Everything inside the body is wrapped inside a&#xA0;<code class="inline">ScrollView</code>&#xA0;so that a scroll bar is automatically added if the content exceeds the available space.<br></p><pre class="brush: javascript noskimlinks noskimwords">render: function() {
+ 
+ return (
+ &lt;View style={styles.container}&gt;
+ &lt;View style={styles.header}&gt;
+ &lt;View style={styles.header_item}&gt;
+ &lt;Text style={styles.header_text}&gt;{this.state.title}&lt;/Text&gt;
+ &lt;/View&gt;
+ &lt;View style={styles.header_item}&gt;
+ { !this.state.loaded &amp;&amp; 
+ &lt;GiftedSpinner /&gt;
+ }
+ &lt;/View&gt;
+ &lt;/View&gt;
+ &lt;View style={styles.body}&gt;
+ &lt;ScrollView ref="scrollView"&gt;
+ {
+ this.state.loaded &amp;&amp; 
+ 
+ &lt;ListView initialListSize={1} dataSource={this.state.news} style={styles.news} renderRow={this.renderNews}&gt;&lt;/ListView&gt;
+ 
+ }
+ &lt;/ScrollView&gt;
+ &lt;/View&gt;
+ &lt;/View&gt;
+ ); 
+ 
+},</pre><p>Inside the header are two views:</p><ul>
+<li>one containing the title</li>
+<li>one containing the spinner</li>
+</ul><p>We're doing it this way instead of outputting the text and the spinner directly so that we can control the styling by using <strong>flexbox</strong>. You can see how this is done in the styling section, later on.<br></p><p>We can refer to the title stored in the state by using <code class="inline">this.state</code>, followed by the&#xA0;property name. As you may have noticed, every time we need to refer to an object, we wrap it in curly braces. On the other view, we're checking if the&#xA0;<code class="inline">loaded</code>&#xA0;property in the state is set to <code class="inline">false</code>&#xA0;and,&#xA0;if it is, we output the spinner.</p><pre class="brush: html noskimlinks noskimwords">&lt;View style={styles.header_item}&gt;
+ &lt;Text style={styles.header_text}&gt;{this.state.title}&lt;/Text&gt;
+&lt;/View&gt;
+&lt;View style={styles.header_item}&gt;
+{ !this.state.loaded &amp;&amp; 
+ &lt;GiftedSpinner /&gt;
+}
+&lt;/View&gt;</pre><p>Next is the body.<br></p><pre class="brush: html noskimlinks noskimwords">&lt;ScrollView ref="scrollView"&gt;
+{
+ this.state.loaded &amp;&amp; 
+ 
+ &lt;ListView initialListSize={1} dataSource={this.state.news} style={styles.news} renderRow={this.renderNews}&gt;&lt;/ListView&gt;
+ 
+}
+&lt;/ScrollView&gt;</pre><p>Notice that we have&#xA0;passed a <code class="inline">ref</code>&#xA0;attribute to the <code class="inline">ScrollView</code>. <code class="inline">ref</code>&#xA0;is a predefined attribute in React Native that allows us to assign an identifier&#xA0;to a component. We can use this identifier&#xA0;to refer to the component and call its methods. Here's an example of how this works:<br></p><pre class="brush: javascript noskimlinks noskimwords">scrollToTop: function(){
+ this.refs.scrollView.scrollTo(0);
+}</pre><p>You can then have a button and have it call the function on press. This will automatically scroll the <code class="inline">ScrollView</code>&#xA0;to the very&#xA0;top of the component.<br></p><pre class="brush: html noskimlinks noskimwords">&lt;Button onPress={this.scrollToTop}&gt;scroll to top&lt;/Button&gt;</pre><p>We won't be&#xA0;using this in the app, but it's good to know that it exists.<br></p><p>Inside the <code class="inline">ScrollView</code>, we check if the <code class="inline">loaded</code>&#xA0;property in the state is already set to <code class="inline">true</code>. If it's <code class="inline">true</code>, it means that the data source is already available for use by the <code class="inline">ListView</code>&#xA0;and we can&#xA0;render it.</p><pre class="brush: html noskimlinks noskimwords">{
+ this.state.loaded &amp;&amp; 
+ 
+ &lt;ListView initialListSize={1} dataSource={this.state.news} renderRow={this.renderNews}&gt;&lt;/ListView&gt;
+ 
+}</pre><p>We have&#xA0;passed the following attributes in the <code class="inline">ListView</code>:<br></p><ul>
+<li>
+<code class="inline">initialListSize</code>&#xA0;is used to specify how many rows to render when the component is initially mounted. We've set it to <code class="inline">1</code>, which means it will take one frame to render each row. I've set it to <code class="inline">1</code>&#xA0;as a form of performance optimization so that the user sees something as soon as possible.</li>
+<li>
+<code class="inline">dataSource</code>&#xA0;is the data source to be used.</li>
+<li>
+<code class="inline">renderRow</code>&#xA0;is the function used for rendering each row in the list.</li>
+</ul><h3>Step 4: Implementing the&#xA0;<code class="inline">componentDidMount</code> Function</h3><p>Next, we have the <code class="inline">componentDidMount</code>&#xA0;function, which gets called when this component is mounted:<br></p><pre class="brush: javascript noskimlinks noskimwords">componentDidMount: function() {
+ 
+ AsyncStorage.getItem('news_items').then((news_items_str) =&gt; {
+
+ var news_items = JSON.parse(news_items_str);
+
+ if(news_items != null){
+ 
+ AsyncStorage.getItem('time').then((time_str) =&gt; {
+ var time = JSON.parse(time_str);
+ var last_cache = time.last_cache;
+ var current_datetime = moment();
+
+ var diff_days = current_datetime.diff(last_cache, 'days');
+ 
+ if(diff_days &gt; 0){
+ this.getNews();
+ }else{
+ this.updateNewsItemsUI(news_items);
+ }
+
+ });
+ 
+
+ }else{
+ this.getNews();
+ }
+
+ }).done();
+
+},</pre><p>Inside the function, we try to fetch the news items that are currently stored in local storage. We use the&#xA0;<code class="inline">getItem</code>&#xA0;method from the <code class="inline">AsyncStorage</code>&#xA0;API. It returns a promise so we can get access to the returned data by calling the <code class="inline">then</code>&#xA0;method and passing in a function:</p><pre class="brush: javascript noskimlinks noskimwords">AsyncStorage.getItem('news_items').then((news_items_str) =&gt; {
+ ...
+}).done();</pre><p><code class="inline">AsyncStorage</code>&#xA0;can only store string data so we use <code class="inline">JSON.parse</code>&#xA0;to convert the JSON string back to a JavaScript object. If it is <code class="inline">null</code>, we call the <code class="inline">getNews</code>&#xA0;method, which fetches the data from the network.</p><pre class="brush: javascript noskimlinks noskimwords">var news_items = JSON.parse(news_items_str);
+
+if(news_items != null){
+ ...
+}else{
+ this.getNews();
+}</pre><p>If it isn't empty, we use <code class="inline">AsyncStorage</code>&#xA0;to fetch the last time the news items were stored in the local storage. We then compare it with the current time. If the difference is at least a day (24 hours), we fetch the news items from the network. If it is not, we use the ones in the local storage.<br></p><pre class="brush: javascript noskimlinks noskimwords">AsyncStorage.getItem('time').then((time_str) =&gt; {
+ var time = JSON.parse(time_str);
+ var last_cache = time.last_cache; //extract the last cache time
+ var current_datetime = moment(); //get the current time
+ 
+ //get the difference in days
+ var diff_days = current_datetime.diff(last_cache, 'days');
+ 
+ if(diff_days &gt; 0){
+ this.getNews(); //fetch from the network
+ }else{
+ this.updateNewsItemsUI(news_items); //use the one in the cache
+ }
+
+});</pre><h3>Step 5: Implementing the <code class="inline">renderNews</code>&#xA0;Function<br>
+</h3><p>Next is the function for rendering each row in the list. Earlier in the <code class="inline">ListView</code>, we have defined a <code class="inline">renderRow</code>&#xA0;attribute, which has a value of <code class="inline">this.renderNews</code>. This is that function.</p><p>The current item in the iteration is passed along as an argument to this function. This allows us to access the <code class="inline">title</code>&#xA0;and the <code class="inline">url</code>&#xA0;of each news item. Everything is wrapped inside the <code class="inline">TouchableHighlight</code> component and inside we output the title of each news item.</p><p>The <code class="inline">TouchableHighlight</code>&#xA0;component accepts the <code class="inline">onPress</code>&#xA0;attribute, which specifies which function to execute when the user taps the item. Here we call the <code class="inline">viewPage</code>&#xA0;function and bind the URL to it. The <code class="inline">underlayColor</code>&#xA0;specifies the background color of the component when it is tapped.<br></p><pre class="brush: javascript noskimlinks noskimwords">renderNews: function(news) {
+ return (
+ &lt;TouchableHighlight onPress={this.viewPage.bind(this, news.url)} underlayColor={"#E8E8E8"} style={styles.button}&gt;
+ &lt;View style={styles.news_item}&gt;
+ &lt;Text style={styles.news_item_text}&gt;{news.title}&lt;/Text&gt;
+ &lt;/View&gt;
+ &lt;/TouchableHighlight&gt;
+ );
+},</pre><p>In the <code class="inline">viewPage</code>&#xA0;function, we get a hold of the <code class="inline">navigator</code>&#xA0;attribute that we've passed earlier from <strong>index.android.js</strong>&#xA0;via the props. In React Native, props are used to access the attributes that are passed from the parent component. We refer to it as <code class="inline">this.props</code>, followed by the&#xA0;attribute name.</p><p>Here, we are using <code class="inline">this.props.navigator</code>&#xA0;to refer to the <code class="inline">navigator</code>&#xA0;object. We then call the <code class="inline">push</code> method to push the <code class="inline">web_page</code>&#xA0;route to the navigator along with the URL of the web page to be opened by the&#xA0;<code class="inline">WebPage</code> component. This makes the app transition to the <code class="inline">WebPage</code>&#xA0;component.<br></p><pre class="brush: javascript noskimlinks noskimwords">viewPage: function(url){
+ this.props.navigator.push({name: 'web_page', url: url});
+},</pre><h3>Step 6: Implementing the&#xA0;<code class="inline">updateNewsItemsUI</code>&#xA0;Function</h3><p>The <code class="inline">updateNewsItemsUI</code>&#xA0;function updates the data source and the state based on the array of news items that was passed as an argument. We only do so if the total <code class="inline">news_items</code>&#xA0;is equal to the value that we set earlier for the <code class="inline">TOTAL_NEWS_ITEMS</code>. In React Native, updating the state triggers the user interface&#xA0;to re-render. This means that&#xA0;calling <code class="inline">setState</code> with the a new data source refreshes the user interface&#xA0;with the new items.<br></p><pre class="brush: javascript noskimlinks noskimwords">updateNewsItemsUI: function(news_items){
+ 
+ if(news_items.length == TOTAL_NEWS_ITEMS){
+
+ var ds = this.state.dataSource.cloneWithRows(news_items); //update the data source
+
+ //update the state
+ this.setState({
+ 'news': ds,
+ 'loaded': true
+ });
+
+ }
+ 
+},</pre><h3>Step 7: Updating Local Storage</h3><p>The <code class="inline">updateNewsItemDB</code>&#xA0;function updates the news items that are stored in the local storage. We use the <code class="inline">JSON.stringify</code>&#xA0;function to convert the array into a JSON string so that we can store it using <code class="inline">AsyncStorage</code>.<br></p><pre class="brush: javascript noskimlinks noskimwords">updateNewsItemDB: function(news_items){
+
+ if(news_items.length == TOTAL_NEWS_ITEMS){
+ AsyncStorage.setItem('news_items', JSON.stringify(news_items));
+ }
+
+},</pre><h3>Step 8: Fetching News Items</h3><p>The <code class="inline">getNews</code> function updates the local storage item that stores the last time the data was cached, fetches the news items from the <a href="https://github.com/HackerNews/API" target="_self">Hacker News API</a>, updates the user interface&#xA0;and the local storage based on the new items that were fetched.<br></p><pre class="brush: javascript noskimlinks noskimwords">getNews: function() { 
+ 
+ var TOP_STORIES_URL = 'https://hacker-news.firebaseio.com/v0/topstories.json';
+ var news_items = [];
+
+ AsyncStorage.setItem('time', JSON.stringify({'last_cache': moment()}));
+
+ api(TOP_STORIES_URL).then(
+ (top_stories) =&gt; {
+ 
+ for(var x = 0; x &lt;= 10; x++){
+
+ var story_url = "https://hacker-news.firebaseio.com/v0/item/" + top_stories[x] + ".json";
+
+ api(story_url).then(
+ (story) =&gt; {
+
+ news_items.push(story);
+ this.updateNewsItemsUI(news_items);
+ this.updateNewsItemDB(news_items);
+
+ }
+ );
+
+ }
+ }
+ );
+ 
+}</pre><p>The <a href="https://hacker-news.firebaseio.com/v0/topstories.json" target="_self">top stories resource</a>&#xA0;in the Hacker News API returns an array that looks like this:<br></p><pre class="brush: javascript noskimlinks noskimwords">[ 10977819, 10977786, 10977295, 10978322, 10976737, 10978069, 10974929, 10975813, 10974552, 10978077, 10978306, 10973956, 10975838, 10974870...</pre><p>These are the identifiers of the top items posted on Hacker News.&#xA0;That's why we need to loop through this array and make a network request for each item in order to get the actual details, such as&#xA0;title and URL.</p><p>We then&#xA0;push it to the <code class="inline">news_items</code>&#xA0;array and call the <code class="inline">updateNewsItemsUI</code> and <code class="inline">updateNewsItemDB</code>&#xA0;functions to update the user interface&#xA0;and the local storage.</p><pre class="brush: javascript noskimlinks noskimwords">for(var x = 0; x &lt;= 10; x++){
+
+ var story_url = "https://hacker-news.firebaseio.com/v0/item/" + top_stories[x] + ".json";
+
+ api(story_url).then(
+ (story) =&gt; {
+
+ news_items.push(story);
+ this.updateNewsItemsUI(news_items);
+ this.updateNewsItemDB(news_items);
+
+ }
+ );
+
+}</pre><h3>Step 9: Styling</h3><p>Add the following styles:<br></p><pre class="brush: css noskimlinks noskimwords">var styles = StyleSheet.create({
+ container: {
+ flex: 1
+ },
+ header: {
+ backgroundColor: '#FF6600',
+ padding: 10,
+ flex: 1,
+ justifyContent: 'space-between',
+ flexDirection: 'row'
+ },
+ body: {
+ flex: 9,
+ backgroundColor: '#F6F6EF'
+ },
+ header_item: {
+ paddingLeft: 10,
+ paddingRight: 10,
+ justifyContent: 'center'
+ },
+ header_text: {
+ color: '#FFF',
+ fontWeight: 'bold',
+ fontSize: 15
+ },
+ button: {
+ borderBottomWidth: 1,
+ borderBottomColor: '#F0F0F0'
+ },
+ news_item: {
+ paddingLeft: 10,
+ paddingRight: 10,
+ paddingTop: 15,
+ paddingBottom: 15,
+ marginBottom: 5
+ },
+ news_item_text: {
+ color: '#575757',
+ fontSize: 18
+ }
+});</pre><p>Most of it is standard CSS, but note that&#xA0;we have replaced the dashes with camel case syntax. This isn't because we get a syntax error if we use something like <code class="inline">padding-left</code>. It's because it's required by React Native. Also note that&#xA0;<a href="https://facebook.github.io/react-native/docs/stylesheet.html#content" target="_self">not all css properties can be used</a>.<br></p><p>That said, here are some declarations that might not be that intuitive, especially if you haven't used <strong>flexbox</strong> before:</p><pre class="brush: css noskimlinks noskimwords">container: {
+ flex: 1
+},
+header: {
+ backgroundColor: '#FF6600',
+ padding: 10,
+ flex: 1,
+ justifyContent: 'space-between',
+ flexDirection: 'row'
+},
+body: {
+ flex: 9,
+ backgroundColor: '#F6F6EF'
+},</pre><p>Here is a simplified version of the markup for the <code class="inline">NewsItems</code> component to help you visualize it:<br></p><pre class="brush: html noskimlinks noskimwords">&lt;View style={styles.container}&gt;
+ &lt;View style={styles.header}&gt;
+ ...
+ &lt;/View&gt;
+ &lt;View style={styles.body}&gt;
+ ...
+ &lt;/View&gt;
+&lt;/View&gt;</pre><p>We have set <code class="inline">container</code>&#xA0;to <code class="inline">flex: 1</code>, which means it occupies the entire screen. Inside the <code class="inline">container</code>&#xA0;we have the <code class="inline">header</code>&#xA0;and the <code class="inline">body</code>, which we have&#xA0;set to <code class="inline">flex: 1</code>&#xA0;and <code class="inline">flex: 9</code>, respectively. In this case,&#xA0;<code class="inline">flex: 1</code>&#xA0;won't occupy the entire screen since the <code class="inline">header</code>&#xA0;has a sibling. These two will share the entire screen. This means that the entire screen will be divided into ten sections since we have <code class="inline">flex: 1</code>&#xA0;and <code class="inline">flex: 9</code>. The values for <code class="inline">flex</code>&#xA0;for each of the siblings are added up.</p><p>The&#xA0;<code class="inline">header</code>&#xA0;occupies 10%&#xA0;of the screen and the <code class="inline">body</code>&#xA0;occupies 90%&#xA0;of it. The basic idea is picking a number that will represent the height or width of the whole screen and then each sibling takes a piece from this number. Don't go overboard with this, though. You don't want to use 1000 unless you want to deploy your app in a movie theatre. I find ten to be the magic number when working with height.<br></p><p>For the <code class="inline">header</code>&#xA0;we have&#xA0;set the following styles:</p><pre class="brush: css noskimlinks noskimwords">header: {
+ backgroundColor: '#FF6600',
+ padding: 10,
+ flex: 1,
+ justifyContent: 'space-between',
+ flexDirection: 'row'
+},</pre><p>And to refresh your memory, here is the simplified markup of what is inside the header:<br></p><pre class="brush: html noskimlinks noskimwords">&lt;View style={styles.header_item}&gt;
+ ...
+&lt;/View&gt;
+&lt;View style={styles.header_item}&gt;
+ ...
+&lt;/View&gt;</pre><p>And the style added to those:<br></p><pre class="brush: css noskimlinks noskimwords">header_item: {
+ paddingLeft: 10,
+ paddingRight: 10,
+ justifyContent: 'center'
+},</pre><p>We have set <code class="inline">flexDirection</code>&#xA0;to <code class="inline">row</code>&#xA0;and <code class="inline">justifyContent</code>&#xA0;to <code class="inline">space-between</code>&#xA0;in their parent, which is <code class="inline">header</code>. This means that its children will be evenly distributed, with the&#xA0;first child at the start of the line and the last child at the end of the line.</p><p>By default <code class="inline">flexDirection</code>&#xA0;is set to <code class="inline">column</code>, which means that each child occupies the entire line since the movement is horizontal. Using <code class="inline">row</code>&#xA0;would make the flow vertical so that each child would be side by side. If you're still confused about Flexbox or you want to learn more about it, then check out&#xA0;<a href="http://webdesign.tutsplus.com/courses/css-flexbox-essentials" target="_self">CSS: Flexbox Essentials</a>.</p><p>Lastly, expose the component to the outside world:<br></p><pre class="brush: javascript noskimlinks noskimwords">module.exports = NewsItems;</pre><h2>Conclusion<br>
+</h2><p>At this point, you should have a good idea on how to do things the React Native way. Specifically, you have&#xA0;learned how to create a new React Native project, install third party libraries through <strong>npm</strong>, use various components, and add styling to the app.</p><p>In the next article, we'll continue by adding the <code class="inline">WebPage</code> component to the News Reader app. Feel free to leave any questions or comments in the comments section below.</p></div></div>
+</body></html>

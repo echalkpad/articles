@@ -1,0 +1,570 @@
+<!DOCTYPE html><html><head><title>Building a React Universal Blog App: Implementing Flux</title></head><body>
+<h1>Building a React Universal Blog App: Implementing Flux</h1><p><a href="http://www.sitepoint.com/building-a-react-universal-blog-app-implementing-flux/" target="_new">Original URL</a></p>
+<p><blockquote>In the first part of this mini-series we&#x2019;ve started digging into the world of React and see how we can use it, together with Node.js, to build a React Universal Blog App. In this second and&hellip;</blockquote></p>
+<div><div class="ArticleCopy language-">
+ <p>In <a href="http://sitepoint.com/building-a-react-universal-blog-app-a-step-by-step-guide">the first part of this mini-series</a> we&#x2019;ve started digging into the world of React and see how we can use it, together with Node.js, to build a React Universal Blog App.</p>
+<p>In this second and last part, we&#x2019;ll take our blog to the next level by learning how to add and edit content. We&#x2019;ll also get into the real meat of how to easily scale our React Universal Blog App using React organizational concepts and the <strong>Flux pattern</strong>.</p>
+<h2 id="break-it-down-for-me">Break It Down for Me</h2>
+<p>As we add more pages and content to our blog, our <code>routes.js</code> file will quickly become big. Since it&#x2019;s one of React&#x2019;s guiding principles to break things up into smaller, manageable pieces, let&#x2019;s separate our routes into different files.</p>
+<p>Open your <code>routes.js</code> file and edit it so that it&#x2019;ll have the following code:</p>
+<pre><code class="language-javascript">// routes.js
+import React from 'react'
+import { Route, IndexRoute } from 'react-router'
+
+// Store
+import AppStore from './stores/AppStore'
+
+// Main component
+import App from './components/App'
+
+// Pages
+import Blog from './components/Pages/Blog'
+import Default from './components/Pages/Default'
+import Work from './components/Pages/Work'
+import NoMatch from './components/Pages/NoMatch'
+
+export default (
+ &lt;Route path="/" data={AppStore.data} component={App}&gt;
+ &lt;IndexRoute component={Blog}/&gt;
+ &lt;Route path="about" component={Default}/&gt;
+ &lt;Route path="contact" component={Default}/&gt;
+ &lt;Route path="work" component={Work}/&gt;
+ &lt;Route path="/work/:slug" component={Work}/&gt;
+ &lt;Route path="/blog/:slug" component={Blog}/&gt;
+ &lt;Route path="*" component={NoMatch}/&gt;
+ &lt;/Route&gt;
+)</code></pre>
+<p>We&#x2019;ve added few different pages to our blog and significantly reduced the size of our <code>routes.js</code> file by breaking the pages up into separate components. Moreover, note that we&#x2019;ve added a Store by including <code>AppStore</code> which is very important for the next steps in scaling out our React application.</p>
+<h2 id="the-store-the-single-source-of-truth">The Store: The Single Source of Truth</h2>
+<p>In the Flux pattern, the Store is a very important piece because it acts as the <em>single source of truth</em> for data management. This is a crucial concept in understanding how React development works and one of the most touted benefits of React. The beauty of this discipline is that at any given state of our app we can access the <code>AppStore</code>&#x2018;s data and know exactly what&#x2019;s going on within it. There are a few key things to keep in mind if you want to build a data-driven React application:</p>
+<ol>
+<li>We never maniplulate the DOM directly.</li>
+<li>Our UI answers to data and data live in the store.</li>
+<li>If we need to change out our UI, we can go to the store and the store will create the new data state of our app.</li>
+<li>New data is fed to higher level components, then passed down to the lower-level components through <code>props</code> composing the new UI based on the new data received.</li>
+</ol>
+<p>With those four points, we basically have the foundation for a &#x201C;one-way data flow&#x201D; application. This means also that at any state in our application we can <code>console.log(AppStore.data)</code> and if we build our app correctly, we&#x2019;ll know exactly what we can expect to see. You&#x2019;ll experience how powerful this is for debugging as well.</p>
+<p>Now let&#x2019;s create a store folder called <code>stores</code>. Inside it, create a file called <code>AppStore.js</code> with the following content:</p>
+<pre><code class="language-javascript">// AppStore.js
+import { EventEmitter } from 'events'
+import _ from 'lodash'
+
+export default _.extend({}, EventEmitter.prototype, {
+
+ // Initial data
+ data: {
+ ready: false,
+ globals: {},
+ pages: [],
+ item_num: 5
+ },
+
+ // Emit change event
+ emitChange: function(){
+ this.emit('change')
+ },
+
+ // Add change listener
+ addChangeListener: function(callback){
+ this.on('change', callback)
+ },
+
+ // Remove change listener
+ removeChangeListener: function(callback) {
+ this.removeListener('change', callback)
+ }
+ 
+})</code></pre>
+<p>You can see that we&#x2019;ve attached an event emitter. This allows us to edit data in our store, then re-render our application using <code>AppStore.emitChange()</code>. This is a powerful tool that should only be used in certain places in our application. Otherwise, it can be hard to understand where <code>AppStore</code> data is being altered, which brings us to the next point&#x2026;</p>
+
+<h2 id="react-components-higher-and-lower-level">React Components &#x2013; Higher and Lower Level</h2>
+<p>Dan Abramov wrote a <a href="https://medium.com/@dan_abramov/smart-and-dumb-components-7ca2f9a7c7d0#.8endbt9xu">great post on the concept of smart and dumb components</a>. The idea is to keep data-altering actions just in the higher-level (smart) components while the lower-level (dumb) components take the data they&#x2019;re given through props and render UI based on that data. Any time there&#x2019;s an action performed on a lower-level component, that event is passed up through props to the higher level components in order to be processed into an action. Then it redistributes the data (one-way data flow) back through the application. </p>
+<p>Said that, let&#x2019;s start building some components. To do that, create a folder called <code>components</code>. Inside it, create a file called <code>App.js</code> with this content:</p>
+<pre><code class="language-javascript">// App.js
+import React, { Component } from 'react'
+
+// Dispatcher
+import AppDispatcher from '../dispatcher/AppDispatcher'
+
+// Store
+import AppStore from '../stores/AppStore'
+
+// Components
+import Nav from './Partials/Nav'
+import Footer from './Partials/Footer'
+import Loading from './Partials/Loading'
+
+export default class App extends Component {
+ 
+ // Add change listeners to stores
+ componentDidMount(){
+ AppStore.addChangeListener(this._onChange.bind(this))
+ }
+
+ // Remove change listeners from stores
+ componentWillUnmount(){
+ AppStore.removeChangeListener(this._onChange.bind(this))
+ }
+
+ _onChange(){
+ this.setState(AppStore)
+ }
+
+ getStore(){
+ AppDispatcher.dispatch({
+ action: 'get-app-store'
+ })
+ }
+
+ render(){
+ 
+ const data = AppStore.data
+
+ // Show loading for browser
+ if(!data.ready){
+
+ document.body.className = ''
+ this.getStore()
+
+ let style = {
+ marginTop: 120
+ }
+ return (
+ &lt;div className="container text-center" style={ style }&gt;
+ &lt;Loading /&gt;
+ &lt;/div&gt;
+ )
+ }
+
+ // Server first
+ const Routes = React.cloneElement(this.props.children, { data: data })
+
+ return (
+ &lt;div&gt;
+ &lt;Nav data={ data } /&gt;
+ { Routes }
+ &lt;Footer data={ data } /&gt;
+ &lt;/div&gt;
+ )
+ }
+}</code></pre>
+<p>In our <code>App.js</code> component we&#x2019;ve attached an event listener to our <code>AppStore</code> that will re-render the state when <code>AppStore</code> emits an <code>onChange</code> event. This re-rendered data will then be passed down as props to the child components. Also note that we&#x2019;ve added a <code>getStore()</code> method that will dispatch the <code>get-app-store</code> action to render our data on the client side. Once the data has been fetched from the Cosmic JS API, it will trigger an <code>AppStore</code> change that will include <code>AppStore.data.ready</code> set to <code>true</code>, remove the loading sign and render our content.</p>
+<h2 id="page-components">Page Components</h2>
+<p>To build the first page of our blog, create a <code>Pages</code> folder. Inside it, we&#x2019;ll create a file called <code>Blog.js</code> with the following code:</p>
+<pre><code class="language-javascript">// Blog.js
+import React, { Component } from 'react'
+import _ from 'lodash'
+import config from '../../config'
+
+// Components
+import Header from '../Partials/Header'
+import BlogList from '../Partials/BlogList'
+import BlogSingle from '../Partials/BlogSingle'
+
+// Dispatcher
+import AppDispatcher from '../../dispatcher/AppDispatcher'
+
+export default class Blog extends Component {
+
+ componentWillMount(){
+ this.getPageData()
+ }
+
+ componentDidMount(){
+ const data = this.props.data
+ document.title = config.site.title + ' | ' + data.page.title
+ }
+
+ getPageData(){
+ AppDispatcher.dispatch({
+ action: 'get-page-data',
+ page_slug: 'blog',
+ post_slug: this.props.params.slug
+ })
+ }
+
+ getMoreArticles(){
+ AppDispatcher.dispatch({
+ action: 'get-more-items'
+ })
+ }
+
+ render(){
+
+ const data = this.props.data
+ const globals = data.globals
+ const pages = data.pages
+ let main_content
+
+ if(!this.props.params.slug){
+
+ main_content = 
+
+ } else {
+
+ const articles = data.articles
+ 
+ // Get current page slug
+ const slug = this.props.params.slug
+ const articles_object = _.indexBy(articles, 'slug')
+ const article = articles_object[slug]
+ main_content = 
+
+ }
+ 
+ return (
+ &lt;div&gt;
+ &lt;Header data={ data }/&gt;
+ &lt;div id="main-content" className="container"&gt;
+ &lt;div className="row"&gt;
+ &lt;div className="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1"&gt;
+ { main_content }
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ )
+ }
+}</code></pre>
+<p>This page is going to serve as a template for our blog list page (home) and our single blog pages. Here we&#x2019;ve added a method to our component that will get the page data prior to the component mounting using the React lifecyle <code>componentWillMount()</code> method. Then, once the component has mounted at <code>componentDidMount()</code>, we&#x2019;ll add the page title to the <code>&lt;title&gt;</code> tag of the document.</p>
+<p>Along with some of the rendering logic in this higher-level component, we&#x2019;ve included the <code>getMoreArticles()</code>method. This is a good example of call-to-action that is stored in a higher level component and made available to lower-level components through props. <br>
+Let&#x2019;s now get into our <code>BlogList</code> component to see how this works.</p>
+<p>Create a new folder called <code>Partials</code>. Then, inside it, create a file called <code>BlogList.js</code> with the following content:</p>
+<pre><code class="language-javascript">// BlogList.js
+import React, { Component } from 'react'
+import _ from 'lodash'
+import { Link } from 'react-router'
+
+export default class BlogList extends Component {
+
+ scrollTop(){
+ $('html, body').animate({
+ scrollTop: $("#main-content").offset().top
+ }, 500)
+ }
+
+ render(){
+ 
+ let data = this.props.data
+ let item_num = data.item_num
+ let articles = data.articles
+
+ let load_more
+ let show_more_text = 'Show More Articles'
+
+ if(data.loading){
+ show_more_text = 'Loading...'
+ }
+
+ if(articles &amp;&amp; item_num &lt;= articles.length){
+ load_more = (
+ &lt;div&gt;
+ &lt;button className="btn btn-default center-block" onClick={ this.props.getMoreArticles.bind(this) }&gt;
+ { show_more_text }
+ &lt;/button&gt;
+ &lt;/div&gt;
+ )
+ }
+
+ articles = _.take(articles, item_num)
+ 
+ let articles_html = articles.map(( article ) =&gt; {
+ let date_obj = new Date(article.created)
+ let created = (date_obj.getMonth()+1) + '/' + date_obj.getDate() + '/' + date_obj.getFullYear()
+ return (
+ &lt;div key={ 'key-' + article.slug }&gt;
+ &lt;div className="post-preview"&gt;
+ &lt;h2 className="post-title pointer"&gt;
+ &lt;Link to={ '/blog/' + article.slug } onClick={ this.scrollTop }&gt;{ article.title }&lt;/Link&gt;
+ &lt;/h2&gt;
+ &lt;p className="post-meta"&gt;Posted by &lt;a href="https://cosmicjs.com" target="_blank"&gt;Cosmic JS&lt;/a&gt; on { created }&lt;/p&gt;
+ &lt;/div&gt;
+ &lt;hr/&gt;
+ &lt;/div&gt;
+ )
+ })
+
+ return (
+ &lt;div&gt;
+ &lt;div&gt;{ articles_html }&lt;/div&gt;
+ { load_more }
+ &lt;/div&gt;
+ )
+ }
+}</code></pre>
+<p>In our <code>BlogList</code> component we&#x2019;ve added an <code>onClick</code> event to our <code>Show More Articles</code> button. The latter executes the <code>getMoreArticles()</code> method that was passed down as props from the higher-level page component. When that button is clicked, the event bubbles up to the <code>Blog</code> component and then triggers an action on the <code>AppDispatcher</code>. <code>AppDispatcher</code> acts as the middle man between our higher-level components and our <code>AppStore</code>.</p>
+<p>For the sake of brevity, we&#x2019;re not going to build out all of the <code>Page</code> and <code>Partial</code> components in this tutorial, so please <a href="https://github.com/sitepoint-editors/react-universal-blog/archive/master.zip">download the GitHub repo</a> and add them from the <code>components</code> folder.</p>
+<h2 id="appdispatcher"><code>AppDispatcher</code></h2>
+<p>The <code>AppDispatcher</code> is the operator in our application that accepts information from the higher-level components and distributes actions to the store, which then re-renders our application data.</p>
+<p>To continue this tutorial, create a folder named <code>dispatcher</code>. Inside it, create a file called <code>AppDispatcher.js</code> having the following code:</p>
+<pre><code class="language-javascript">// AppDispatcher.js
+import { Dispatcher } from 'flux'
+import { getStore, getPageData, getMoreItems } from '../actions/actions'
+
+const AppDispatcher = new Dispatcher()
+
+// Register callback with AppDispatcher
+AppDispatcher.register((payload) =&gt; {
+
+ let action = payload.action
+
+ switch(action) {
+
+ case 'get-app-store':
+ getStore()
+ break
+
+ case 'get-page-data':
+ getPageData(payload.page_slug, payload.post_slug)
+ break
+
+ case 'get-more-items':
+ getMoreItems()
+ break
+
+ default:
+ return true
+
+ }
+
+ return true
+
+})
+
+export default AppDispatcher</code></pre>
+<p>We&#x2019;ve introduced the <code>Flux</code> module into this file to build our dispatcher. Let&#x2019;s add our actions now.</p>
+<h2 id="actions-last-stop-before-the-store">Actions &#x2013; Last Stop Before The Store</h2>
+<p>To start, let&#x2019;s create an <code>actions.js</code> file inside a newly created folder called <code>actions</code>. This file will feature the following content:</p>
+<pre><code class="language-javascript">// actions.js
+import config from '../config'
+import Cosmic from 'cosmicjs'
+import _ from 'lodash'
+
+// AppStore
+import AppStore from '../stores/AppStore'
+
+export function getStore(callback){
+ 
+ let pages = {}
+
+ Cosmic.getObjects(config, function(err, response){
+ 
+ let objects = response.objects
+ 
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old Globals
+ ======================== */
+ let globals = AppStore.data.globals
+ globals.text = response.object['text']
+ let metafields = globals.text.metafields
+ let menu_title = _.findWhere(metafields, { key: 'menu-title' })
+ globals.text.menu_title = menu_title.value
+
+ let footer_text = _.findWhere(metafields, { key: 'footer-text' })
+ globals.text.footer_text = footer_text.value
+
+ let site_title = _.findWhere(metafields, { key: 'site-title' })
+ globals.text.site_title = site_title.value
+
+ // Social
+ globals.social = response.object['social']
+ metafields = globals.social.metafields
+ let twitter = _.findWhere(metafields, { key: 'twitter' })
+ globals.social.twitter = twitter.value
+ let facebook = _.findWhere(metafields, { key: 'facebook' })
+ globals.social.facebook = facebook.value
+ let github = _.findWhere(metafields, { key: 'github' })
+ globals.social.github = github.value
+
+ // Nav
+ const nav_items = response.object['nav'].metafields
+ globals.nav_items = nav_items
+ 
+ AppStore.data.globals = globals
+
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old Pages
+ ======================== */
+ let pages = objects.type.page
+ AppStore.data.pages = pages
+
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old Articles
+ ======================== */
+ let articles = objects.type['post']
+ articles = _.sortBy(articles, 'order')
+ AppStore.data.articles = articles
+
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old Work Items
+ ======================== */
+ let work_items = objects.type['work']
+ work_items = _.sortBy(work_items, 'order')
+ AppStore.data.work_items = work_items
+ 
+ // Emit change
+ AppStore.data.ready = true
+ AppStore.emitChange()
+
+ // Trigger callback (from server)
+ if(callback){
+ callback(false, AppStore)
+ }
+
+ })
+}
+
+export function getPageData(page_slug, post_slug){
+ 
+ if(!page_slug || page_slug === 'blog')
+ page_slug = 'home'
+ 
+ // Get page info
+ const data = AppStore.data
+ const pages = data.pages
+ const page = _.findWhere(pages, { slug: page_slug })
+ const metafields = page.metafields
+ if(metafields){
+ const hero = _.findWhere(metafields, { key: 'hero' })
+ page.hero = config.bucket.media_url + '/' + hero.value
+
+ const headline = _.findWhere(metafields, { key: 'headline' })
+ page.headline = headline.value
+
+ const subheadline = _.findWhere(metafields, { key: 'subheadline' })
+ page.subheadline = subheadline.value
+ }
+
+ if(post_slug){
+ if(page_slug === 'home'){
+ const articles = data.articles
+ const article = _.findWhere(articles, { slug: post_slug })
+ page.title = article.title
+ }
+ if(page_slug === 'work'){
+ const work_items = data.work_items
+ const work_item = _.findWhere(work_items, { slug: post_slug })
+ page.title = work_item.title
+ }
+ }
+ AppStore.data.page = page
+ AppStore.emitChange()
+}
+
+export function getMoreItems(){
+ 
+ AppStore.data.loading = true
+ AppStore.emitChange()
+
+ setTimeout(function(){
+ let item_num = AppStore.data.item_num
+ let more_item_num = item_num + 5
+ AppStore.data.item_num = more_item_num
+ AppStore.data.loading = false
+ AppStore.emitChange()
+ }, 300)
+}</code></pre>
+<p>There are a few methods here that are exposed by this <code>actions.js</code> file. <code>getStore()</code> connects to the Cosmic JS API to serve our blog&#x2019;s content. <code>getPageData()</code> gets the page data from a provided <code>slug</code> (or page key). <code>getMoreItems()</code> controls how many items will be seen in our <code>BlogList</code> and <code>WorkList</code> components.</p>
+<p>When <code>getMoreItems()</code> is triggered, it first sets <code>AppStore.data.loading</code> to <code>true</code>. Then, 300 miliseconds later (for effect), allows 5 more items to be added to our list of blog posts or work items. Finally, it sets <code>AppStore.data.loading</code> to <code>false</code>.</p>
+<h2 id="configure-your-cosmic-js-cms">Configure Your Cosmic JS CMS</h2>
+<p>To begin recieving data from your cloud-hosted content API on <a href="https://cosmicjs.com">Cosmic JS</a>, let&#x2019;s create a <code>config.js</code> file. Open this file and paste this content:</p>
+<pre><code class="language-javascript">// config.js
+export default {
+ site: {
+ title: 'React Universal Blog'
+ },
+ bucket: {
+ slug: 'react-universal-blog',
+ media_url: 'https://cosmicjs.com/uploads'
+ }
+}</code></pre>
+<p>This means content will be coming from the Cosmic JS bucket <code>react-universal-blog</code>. To create content for your own blog or app, <a href="https://cosmicjs.com">sign up for a free account with Cosmic JS</a>. When asked to &#x201C;Add a New Bucket&#x201D;, click &#x201C;Install Starter Bucket&#x201D; and you&#x2019;ll be able to follow the steps to install the &#x201C;React Universal Blog&#x201D;. Once this is done, you can add your unique bucket&#x2019;s slug to this config file.</p>
+
+<p>Now that we have most of our React components and Flux architecture set up, let&#x2019;s finish up by editing our <code>app-server.js</code> file to render everything in server-side production. This file will have this code:</p>
+<pre><code class="language-javascript">// app-server.js
+import React from 'react'
+import { match, RoutingContext, Route, IndexRoute } from 'react-router'
+import ReactDOMServer from 'react-dom/server'
+import express from 'express'
+import hogan from 'hogan-express'
+import config from './config'
+
+// Actions
+import { getStore, getPageData } from './actions/actions'
+
+// Routes
+import routes from './routes'
+
+// Express
+const app = express()
+app.engine('html', hogan)
+app.set('views', __dirname + '/views')
+app.use('/', express.static(__dirname + '/public/'))
+app.set('port', (process.env.PORT || 3000))
+
+app.get('*',(req, res) =&gt; {
+
+ getStore(function(err, AppStore){
+
+ if(err){
+ return res.status(500).end('error')
+ }
+
+ match({ routes, location: req.url }, (error, redirectLocation, renderProps) =&gt; {
+ 
+ // Get page data for template
+ const slug_arr = req.url.split('/')
+ let page_slug = slug_arr[1]
+ let post_slug
+ if(page_slug === 'blog' || page_slug === 'work')
+ post_slug = slug_arr[2]
+ getPageData(page_slug, post_slug)
+ const page = AppStore.data.page
+ res.locals.page = page
+ res.locals.site = config.site
+
+ // Get React markup
+ const reactMarkup = ReactDOMServer.renderToStaticMarkup(&lt;RoutingContext {...renderProps}/&gt;)
+ res.locals.reactMarkup = reactMarkup
+
+ if (error) {
+ 
+ res.status(500).send(error.message)
+ 
+ } else if (redirectLocation) {
+ 
+ res.redirect(302, redirectLocation.pathname + redirectLocation.search)
+
+ } else if (renderProps) {
+ 
+ // Success!
+ res.status(200).render('index.html')
+ 
+ } else {
+ 
+ res.status(404).render('index.html')
+ 
+ }
+ })
+
+ })
+})
+
+app.listen(app.get('port'))
+
+console.info('==&gt; Server is listening in ' + process.env.NODE_ENV + ' mode')
+console.info('==&gt; Go to http://localhost:%s', app.get('port'))</code></pre>
+<p>This file uses our <code>getStore</code> action method to get our content from the Cosmic JS API server-side, then goes through React Router to determine which component will be mounted. Everything will then be rendered into static markup with <code>renderToStaticMarkup</code>. This output is then stored in a template variable to be used by our <code>views/index.html</code> file.</p>
+<p>Once again, let&#x2019;s update the <code>scripts</code> section of our <code>package.json</code> file so that it looks like the one shown below:</p>
+<pre><code class="language-javascript">"scripts": {
+ "start": "npm run production",
+ "production": "rm -rf public/index.html &amp;&amp; NODE_ENV=production webpack -p &amp;&amp; NODE_ENV=production node app.js",
+ "webpack-dev-server": "NODE_ENV=development PORT=8080 webpack-dev-server --content-base public/ --hot --inline --devtool inline-source-map --history-api-fallback",
+ "development": "cp views/index.html public/index.html &amp;&amp; NODE_ENV=development webpack &amp;&amp; npm run webpack-dev-server"
+}</code></pre>
+<p>We can now run in development mode with hot reloading and we can run in production mode with server-rendered markup. Run the following command to run the full React Universal Blog Application in production mode:</p>
+<pre><code class="language-">npm start</code></pre>
+<p>Our blog is now ready to view at <a href="http://localhost:3000">http://localhost:3000</a>. It can be viewed on the server side, the browser side and our content can be managed through <a href="https://cosmicjs.com">Cosmic JS</a>, our cloud-hosted content platform.</p>
+<h2 id="conclusions">Conclusions</h2>
+<p>React is a very sophisticated way to manage UI and data within an application. It&#x2019;s also a very good choice for rendering server-side content, to appease JavaScript-depraved web crawlers and for rendering UI browser-side to keep us browsing fast. And we can get the best results of both worlds by making our application universal.</p>
+<p>I really hope you enjoyed this article. Once again, <a href="https://github.com/sitepoint-editors/react-universal-blog/">the full code can be downloaded from GitHub</a>.</p>
+ </div>
+
+ </div>
+</body></html>

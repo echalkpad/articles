@@ -1,0 +1,84 @@
+<!DOCTYPE html><html><head><title>Promises - A gentle introduction</title></head><body>
+<h1>Promises - A gentle introduction</h1><p><a href="http://bytearcher.com/articles/es6-promise-then-beginner-tutorial/" target="_new">Original URL</a></p>
+<p><blockquote>In order to get anything done in Node.js, you are destined to use asynchronous functions. They prepare an operation and accept a callback that is to be called when the results are in. For your&hellip;</blockquote></p>
+<div><article class="vmargin-2">
+
+ <p>In order to get anything done in Node.js, you are destined to use asynchronous functions. They prepare an operation and accept a callback that is to be called when the results are in. For your program to work correctly, you typically need to the results of the previous call in your further steps. What you end up with is nesting rest of your script inside a callback. Doing this multiple times leads to code being nested multiple levels.</p>
+<p>Nesting code excessively in callbacks may seem counterintuitive and messy. Promises allow you to express a chain of dependent steps without having to excessively nest code.</p>
+<h2 id="callback-is-called-when-the-results-are-in">Callback is called when the results are in</h2>
+<p>Callbacks are the traditional way of making asynchronous calls. You make a call and pass a function argument that is called at a later time when the operation is complete.</p>
+<p>Let us demonstrate callbacks with an example. Let us write a program that will get the current time as a string from <code>http://www.timeapi.org/utc/now</code>, write it to disk and ultimately re-read it for printing.</p>
+<pre><code>var fs = require('fs');
+var request = require('request');
+
+request('http://www.timeapi.org/utc/now', { headers: { 'User-Agent': 'request' } }, (error, response, time) =&gt; {
+ fs.writeFile('time.txt', time, (err) =&gt; {
+ fs.readFile('time.txt', 'utf8', (err, readData) =&gt; {
+ // this block is nested three levels
+ console.log(readData);
+ });
+ });
+});</code></pre>
+
+<p>Notice how this short example goes to three levels of nested code.</p>
+<h2 id="promise-gives-you-something-to-work-on-right-now">Promise gives you something to work on right now</h2>
+<p>When performing an asynchronous call, it is impossible, by definition, to get the results at the time of making the call. This means that any further processing steps are not evaluated until the callback is called and the results arrive.</p>
+<p>With Promises, this approach is reversed and multiple processing steps are defined in one sitting. In order to do this, something is needed to represent the results while they don&#x2019;t exist yet.</p>
+<p>To avoid waiting for the results to arrive before defining next steps, a Promise is used as a stand-in for a result.</p>
+<blockquote>
+<p>Promises are a way of saying: <em>&#x201C;I can&#x2019;t give you the results right now, but here&#x2019;s something to work on.&#x201D;</em></p>
+</blockquote>
+<p>This stand-in can be used to schedule a dependent step that is to be executed when the actual results arrive. Multiple steps can be chained to create a sequence of steps.</p>
+<p>The example written using Promises looks like this.</p>
+<pre><code>var fs = require('fs-promise');
+var request = require('request-promise');
+
+request('http://www.timeapi.org/utc/now', { headers: { 'User-Agent': 'request' } }).then((time) =&gt; {
+ return fs.writeFile('time.txt', time);
+}).then(() =&gt; {
+ return fs.readFile('time.txt', 'utf8');
+}).then((readData) =&gt; {
+ // this block is nested one level
+ console.log(readData);
+});</code></pre>
+
+<p>In order to use Promises, the depended upon libraries were replaced with versions returning Promises. Notice how the code is nested at most one level instead of three levels.</p>
+<h2 id="-then-schedules-a-dependent-step"><code>.then()</code> schedules a dependent step</h2>
+<pre><code>...
+}).then((readData) =&gt; {
+...
+</code></pre>
+
+<p>A dependent step is scheduled with the <code>.then()</code> method. It takes a function argument that accepts one parameter for passing the results from the previous step. At most one result value can be passed on to the next step.</p>
+<pre><code>...
+ return fs.readFile('time.txt', 'utf8');
+}).then((readData) =&gt; {
+...
+</code></pre>
+
+<p>A step is ended by returning a value or returning another Promise. In the latter case the Promise is evaluated and its result value will be passed on to the next step.</p>
+<h2 id="-catch-handles-problems"><code>.catch()</code> handles problems</h2>
+<p>If <code>.then()</code> is used to define a normal next step, there is similar method <code>.catch()</code> that is used for handling errors. Errors can originate from throwing an exception in your step code or they can originate from the internal implementation of an API call.</p>
+<pre><code>fs.readFile('time.txt', 'utf8').then((data) =&gt; {
+ throw new Error();
+}).then(() =&gt; {
+ // skipped
+}).catch((e) =&gt; {
+ console.log('aborted', e);
+});</code></pre>
+
+<p>When an error occurs, execution of current function will stop and execution is continued at nearest following <code>.catch()</code> handler. This may cause skipping any amount <code>.then()</code> handlers in between.</p>
+<p>Using <code>catch()</code> handlers ease up error handling. It removes the need to pass on separate <code>err</code> objects as seen with callbacks.</p>
+<h2 id="things-to-watch-out-for">Things to watch out for</h2>
+<p>Promises are useful and help preventing code marching excessively to the right, but there are a couple of things to watch out.</p>
+<p>Only one value can be passed from a step to another. If you need to pass more than one value, you can compose an object literal and return it.</p>
+<p>If you need to reference more values than just the result of the immediate preceding step you need to arrange your code to allow this. There are various ways to achieve, for details see for example this <a href="http://stackoverflow.com/questions/28250680/how-do-i-access-previous-promise-results-in-a-then-chain">stackoverflow question</a>.</p>
+<p>All of these lead to nesting or otherwise complicating code. The goal of Promises was to create cleaner asynchronous code. In parts, Promises do not fully achieve this goal.</p>
+<h2 id="es6-specification">ES6 specification</h2>
+<p>Promises are not the only attempt at solving the infinite nesting callbacks problem. Other available options are libraries such as async, co, generators and fibers to name just a few. But, today Promises are part of the ES6 specification. That merit is hard to ignore when evaluating the available options. Are the other attempts any better? We can make no such promises.</p>
+
+
+ </article>
+
+ </div>
+</body></html>

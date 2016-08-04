@@ -1,0 +1,104 @@
+<!DOCTYPE html><html><head><title>The Anatomy of an SSH Connection</title></head><body>
+<h1>The Anatomy of an SSH Connection</h1><p><a href="http://necrux.com/the-anatomy-of-an-ssh-connection/" target="_new">Original URL</a></p>
+<p><blockquote>Over the last couple of days I have become increasingly interested in unraveling the mysteries behind establishing an SSH connection. The process is very intricate and some of the documentation seems&hellip;</blockquote></p>
+<div><div class="entry-content">
+	<p>Over the last couple of days I have become increasingly interested in unraveling the mysteries behind establishing an SSH connection. The process is very intricate and some of the documentation seems scattered, so I decided to write a bit about it in the hopes that someone else may benefit.</p>
+<p>Prior to writing this article I believed the SSH process to resemble something like this:</p>
+<p>1) Verify the host.<br>
+2) ?<br>
+3) Magic?<br>
+4) ??<br>
+5) Authenticate the user.<br>
+6) Profit.</p>
+<p>Shockingly, there is no real magic involved! The actual process looks something like this:</p>
+<p>1) Key Exchange.<br>
+2) Cipher Negotiation.<br>
+3) Message Authentication Code Negotiation.<br>
+4) Verify the host.<br>
+5) Authenticate the user.<br>
+6) Profit.</p>
+<p><strong>Key Exchange, Cipher Negotiation, &amp; Message Authentication Code Negotiation</strong></p>
+<p>Once the host has been verified, the client and server must agree on a key to use to encrypt the session. This is accomplished using a &#x201C;key exchange algorithm,&#x201D; or KexAlgorithm; the KexAlgorithm uses asymmetric encryption.</p>
+<p>Armed with a common key, the client and server must agree on the cipher that will be used, in conjunction with the key, to encrypt the session. It is important to note that once the actual session is established it will be using a shared key, i.e. symmetric encryption.</p>
+<p>Lastly the client and server have to agree on a &#x201C;message authentication code,&#x201D; or MAC. The MAC uses hashing algorithms to verify the integrity of the data that is transferred over the SSH connection.</p>
+<p>If at any point the client and server cannot agree on these 3 elements, the connection will fail. You are likely to see one of these errors:</p>
+<p><strong>KexAlgorithm Negotiation Failure</strong></p>
+<pre>Unable to negotiate a key exchange method</pre>
+<p><strong>Cipher Negotiation Failure</strong></p>
+<pre>no matching cipher found: client arcfour256 server aes128-ctr</pre>
+<p><strong>MAC Negotiation Failure</strong></p>
+<pre>no matching mac found: client hmac-md5 server hmac-sha2-512</pre>
+<p>As you can see, the cipher and MAC failures are a bit more verbose and allow you to easily see what algorithms the client and server accept, however the KexAlgorithm failure message is not as thorough. The easiest way to determine what the client and server accept is to start the SSH connection with level 2 verbosity debug output, <code>ssh -vv USER@HOST</code>. For this discussion we are only concerned about the kexinit portion of the output.</p>
+<p>NOTE: For the sake of brevity, the client and server used in my example only support a couple of algorithms. Your output will be quite a bit longer.</p>
+<pre>debug1: SSH2_MSG_KEXINIT sent
+debug1: SSH2_MSG_KEXINIT received
+debug2: kex_parse_kexinit: curve25519-sha256@libssh.org
+debug2: kex_parse_kexinit: ssh-rsa
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr
+debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: none,zlib@openssh.com,zlib
+debug2: kex_parse_kexinit: none,zlib@openssh.com,zlib
+debug2: kex_parse_kexinit:
+debug2: kex_parse_kexinit:
+debug2: kex_parse_kexinit: first_kex_follows 0
+debug2: kex_parse_kexinit: reserved 0
+debug2: kex_parse_kexinit: curve25519-sha256@libssh.org
+debug2: kex_parse_kexinit: ssh-rsa,ecdsa-sha2-nistp256
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr
+debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: none,zlib@openssh.com
+debug2: kex_parse_kexinit: none,zlib@openssh.com
+debug2: kex_parse_kexinit:
+debug2: kex_parse_kexinit:
+debug2: kex_parse_kexinit: first_kex_follows 0
+debug2: kex_parse_kexinit: reserved 0</pre>
+
+<p>Now lets dissect that output a bit further:</p>
+
+<p><strong>KexAlgorithms Accepted by the Client</strong></p>
+<pre>debug2: kex_parse_kexinit: curve25519-sha256@libssh.org</pre>
+<p><strong>Host Key Signature Types Accepted by the Client</strong> (see &#x201C;Host Verification&#x201D;)</p>
+<pre>debug2: kex_parse_kexinit: ssh-rsa</pre>
+<p><strong>Ciphers Accepted by the Client</strong></p>
+<pre>debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr</pre>
+<p><strong>MACs Accepted by the Client</strong></p>
+<pre>debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96</pre>
+<p><strong>KexAlgorithms Accepted by the Server</strong></p>
+<pre>debug2: kex_parse_kexinit: curve25519-sha256@libssh.org</pre>
+<p><strong>Host Key Types the Server Can Provide </strong>(see &#x201C;Host Verification&#x201D;)<strong><br>
+</strong></p>
+<pre>debug2: kex_parse_kexinit: ssh-rsa,ecdsa-sha2-nistp256</pre>
+<p><strong>Ciphers Accepted by the Server</strong></p>
+<pre>debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr</pre>
+<p><strong>MACs Accepted by the Server</strong></p>
+<pre>debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: hmac-sha1-96,hmac-md5-96</pre>
+<p>You are able to change any of the algorithms accepted by your client or server by using the <code>KexAlgorithms</code>, <code>Ciphers</code>, and <code>MACs</code> options in the client/server configuration files, <em>/etc/ssh/ssh_config</em> and <em>/etc/ssh/sshd_config</em> respectively. There is a forth option, <code>Cipher</code> (without the &#x2018;s&#x2019;), that affects ciphers accepted for SSH protocol 1; these changes will be ignored as protocol 1 ought to be disabled on all SSH servers. Newer SSH clients also have a built in command to see what algorithms the client can support:</p>
+<p><code>ssh -Q kex</code><br>
+<code>ssh -Q cipher</code><br>
+<code>ssh -Q mac</code></p>
+<p><strong>Host Verification</strong></p>
+<p>Each SSH server will have a unique &#x201C;host key&#x201D; that is randomly generated when the server is set-up; the server stores the key(s) in <em>/etc/ssh/ssh_host_*_key.pub</em>. When you attempt to make an SSH connection to the server, the client will use a &#x201C;host key signature algorithm&#x201D; to authenticate the host. Newer SSH clients have a simple command you can run to see the list of host key signature algorithms that you support, simply run <code>ssh -Q key</code>. You are able to modify which host key signature algorithms that you want to use by specifying <code>HostKeyAlgorthyms &lt;algorithm&gt;</code> in <em>/etc/ssh/ssh_config</em>. Doing so does NOT affect the output of <code>ssh -Q key</code> as the client still supports the other algorithms, you are just choosing not to use them.</p>
+<p>The first time you connect to an SSH server you will be greeted with the following message:</p>
+<pre>The authenticity of host 'localhost (::1)' can't be established.
+RSA key fingerprint is xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx.
+Are you sure you want to continue connecting (yes/no)?</pre>
+<p>Assuming you say yes, the server identify will be stored in <em>~/.ssh/known_hosts</em>. If at any point the &#x201C;host key&#x201D; of that server changes you will see something like this:</p>
+<pre>@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@</pre>
+<p>This <em>could</em> mean that something unseemly is happening, however in my world it is far more likely that the remote host identification has truly changed. If you decide the change to be legitimate you can easily remove the entry from <em>~/.ssh/known_hosts</em> by running <code>ssh-keygen -R HOST</code>; if the host is using a custom port then the syntax is <code>ssh-keygen -R [HOST]:PORT</code>. Alternatively you can manually edit <em>~/.ssh/known_hosts</em>, or delete the entire file (please don&#x2019;t). The benefit of using ssh-keygen is that the contents are automatically backed up to <em>~/.ssh/known_hosts.old</em>.</p>
+<p><strong>User Authentication</strong></p>
+<p>Finally we move on to user authentication. This part tends to be pretty well known and documentation on the matter is abundant, so I will not spend too much time on the subject. The 2 primary mechanisms to authenticate a user are password and public key. Public key authentication is obviously preferred and is a form of asymmetric encryption since it uses public and private keys. When running an SSH connection with level 1 verbosity debug output, <code>ssh -v USER@HOST</code>, you can see what user authentication mechanisms are allowed by the server:</p>
+<pre>debug1: Authentications that can continue: publickey,password</pre>
+------<strong>Share this post:</strong><a class="synved-social-button synved-social-button-share synved-social-size-48 synved-social-resolution-single synved-social-provider-facebook nolightbox" target="_blank" rel="nofollow" title="Share on Facebook" href="http://www.facebook.com/sharer.php?u=http%3A%2F%2Fnecrux.com%2Fthe-anatomy-of-an-ssh-connection%2F&amp;t=The%20Anatomy%20of%20an%20SSH%20Connection&amp;s=100&amp;p%5Burl%5D=http%3A%2F%2Fnecrux.com%2Fthe-anatomy-of-an-ssh-connection%2F&amp;p%5Bimages%5D%5B0%5D=&amp;p%5Btitle%5D=The%20Anatomy%20of%20an%20SSH%20Connection"><img alt="facebook" title="Share on Facebook" class="synved-share-image synved-social-image synved-social-image-share" width="48" src="http://necrux.com/wp-content/plugins/social-media-feather/synved-social/image/social/regular/96x96/facebook.png"></a><a class="synved-social-button synved-social-button-share synved-social-size-48 synved-social-resolution-single synved-social-provider-twitter nolightbox" target="_blank" rel="nofollow" title="Share on Twitter" href="http://twitter.com/share?url=http%3A%2F%2Fnecrux.com%2Fthe-anatomy-of-an-ssh-connection%2F&amp;text=Check%20out%20this%20tutorial"><img alt="twitter" title="Share on Twitter" class="synved-share-image synved-social-image synved-social-image-share" width="48" src="http://necrux.com/wp-content/plugins/social-media-feather/synved-social/image/social/regular/96x96/twitter.png"></a><a class="synved-social-button synved-social-button-share synved-social-size-48 synved-social-resolution-single synved-social-provider-google_plus nolightbox" target="_blank" rel="nofollow" title="Share on Google+" href="https://plus.google.com/share?url=http%3A%2F%2Fnecrux.com%2Fthe-anatomy-of-an-ssh-connection%2F"><img alt="google_plus" title="Share on Google+" class="synved-share-image synved-social-image synved-social-image-share" width="48" src="http://necrux.com/wp-content/plugins/social-media-feather/synved-social/image/social/regular/96x96/google_plus.png"></a><a class="synved-social-button synved-social-button-share synved-social-size-48 synved-social-resolution-single synved-social-provider-reddit nolightbox" target="_blank" rel="nofollow" title="Share on Reddit" href="http://www.reddit.com/submit?url=http%3A%2F%2Fnecrux.com%2Fthe-anatomy-of-an-ssh-connection%2F&amp;title=The%20Anatomy%20of%20an%20SSH%20Connection"><img alt="reddit" title="Share on Reddit" class="synved-share-image synved-social-image synved-social-image-share" width="48" src="http://necrux.com/wp-content/plugins/social-media-feather/synved-social/image/social/regular/96x96/reddit.png"></a><a class="synved-social-button synved-social-button-share synved-social-size-48 synved-social-resolution-single synved-social-provider-linkedin nolightbox" target="_blank" rel="nofollow" title="Share on Linkedin" href="http://www.linkedin.com/shareArticle?mini=true&amp;url=http%3A%2F%2Fnecrux.com%2Fthe-anatomy-of-an-ssh-connection%2F&amp;title=The%20Anatomy%20of%20an%20SSH%20Connection"><img alt="linkedin" title="Share on Linkedin" class="synved-share-image synved-social-image synved-social-image-share" width="48" src="http://necrux.com/wp-content/plugins/social-media-feather/synved-social/image/social/regular/96x96/linkedin.png"></a>	
+		</div>
+	</div>
+</body></html>

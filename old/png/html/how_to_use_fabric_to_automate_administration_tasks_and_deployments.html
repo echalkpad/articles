@@ -1,0 +1,414 @@
+<!DOCTYPE html><html><head><title>How To Use Fabric To Automate Administration Tasks And Deployments</title></head><body>
+<h1>How To Use Fabric To Automate Administration Tasks And Deployments</h1><p><a href="https://www.digitalocean.com/community/tutorials/how-to-use-fabric-to-automate-administration-tasks-and-deployments" target="_new">Original URL</a></p>
+<p><blockquote>Introduction Let's automate things. Everything. Let's also figure out a way to do this using a single tool. One that is easy to program, easy to use. And why not do all this with nothing but SSH&hellip;</blockquote></p>
+<div><div class="content-body tutorial-content tutorial-content-legacy">
+ <h3 id="introduction">Introduction</h3>
+
+
+
+<p>Let's automate things. Everything.</p>
+
+<p>Let's also figure out a way to do this using a single tool. One that is easy to program, easy to use. And why not do all this with nothing but SSH installed on the remote machine &#x2013; all commands scripted at a single location for executing locally or on any number of various servers.</p>
+
+<p>Does it not sound brilliant <em>and fab</em>? We agree.</p>
+
+<p>In this DigitalOcean article, <a href="http://fabfile.org"><strong><em>Fabric</em></strong></a> &#x2013; <em>the [system] administration and application deployment streamlining library</em> &#x2013; is our subject. We will learn how to install this wonderful tool and see just how easy things can become by simply automating mundane management tasks that would otherwise require jumping through hoops with bash hacks and hard-to-maintain, complex scripts.</p>
+
+<h2 id="glossary">Glossary</h2>
+
+
+
+<h3 id="1-what-is-fabric">1. What Is Fabric?</h3>
+
+
+
+<ol>
+<li>Fabric and Python Programming Language</li>
+<li>System/Server Administration</li>
+<li>Application Deployment</li>
+</ol>
+
+<h3 id="2-how-to-install-fabric-on-a-droplet-running-ubuntu-debian">2. How to Install Fabric on a Droplet Running Ubuntu / Debian</h3>
+
+
+
+<h3 id="3-fabric-39-s-features-and-integration-with-ssh">3. Fabric's Features and Integration with SSH</h3>
+
+
+
+<ol>
+<li><code>run</code> <em>(fabric.operations.run)</em></li>
+<li><code>sudo</code> <em>(fabric.operations.sudo)</em></li>
+<li><code>local</code> <em>(fabric.operations.local)</em></li>
+<li><code>get</code> <em>(fabric.operations.get)</em></li>
+<li><code>put</code> <em>(fabric.operations.put)</em></li>
+<li><code>prompt</code> <em>(fabric.operations.prompt)</em></li>
+<li><code>reboot</code> <em>(fabric.operations.reboot)</em></li>
+</ol>
+
+<h3 id="4-fabric-39-s-helpers-context-managers">4. Fabric's Helpers: Context Managers</h3>
+
+
+
+<ol>
+<li><code>cd</code> <em>(fabric.context_managers.cd)</em></li>
+<li><code>lcd</code> <em>(fabric.context_managers.lcd)</em></li>
+<li><code>path</code> <em>(fabric.context_managers.path)</em></li>
+<li><code>settings</code> <em>(fabric.context_managers.settings)</em></li>
+<li><code>prefix</code> <em>(fabric.context_managers.prefix)</em></li>
+</ol>
+
+<h3 id="5-example-fabfile-for-automating-management-tasks">5. Example fabfile For Automating Management Tasks</h3>
+
+
+
+<h2 id="what-is-fabric">What Is Fabric?</h2>
+
+
+
+<p>Fabric is a Python library (i.e. a tool to build <em>on</em>) used for interacting with SSH and computer systems [easily] to automate a wide range of tasks, varying from application deployment to general system administration.</p>
+
+<p>Albeit being Python-based, it does not mean that it is used strictly for working with other Python applications or tools. In fact, Fabric is there for you to achieve just about anything regardless of a specific language or a system. As long as the very basic requirements are met, you can take advantage of this excellent library.</p>
+
+<p>Fabric scripts are basic Python files. They are run using the <code>fab</code> tool that is shipped with with Fabric. All this does is include (i.e. <code>import ..</code>) your script (i.e. instructions to perform) and execute the provided procedure. </p>
+
+<p>Say "Hello Fab!" using Fabric (<code>fabfile.py</code>):</p>
+<pre class="code-pre "><code># def hello(who="world"):
+# print "Hello {who}!".format(who=who)
+
+$ fab hello:who=Fab
+Hello Fab!
+</code></pre>
+<h3 id="fabric-and-python-programming-language">Fabric and Python Programming Language</h3>
+
+
+
+<p>As we have briefly mentioned above, although Fabric can be used in a very large scale of scenarios, it is a Python based library and <em>fabfile</em>s need to be programmed using the Python Programming Language.</p>
+
+<p>Regardless of your experience with any other programming language (including Python), as you make your way through our Fabric articles, you will learn how to work with this tool and it shall not take you long to see how simplistic and wonderful it is.</p>
+
+<p>Python is an extremely popular, widely adopted general purpose (i.e. not created to solve a specific problem) programming language. It can be easily distinguished by the importance it puts on code readability and simplicity. To understand Python, check out the very short Python Enhancement Proposal (PEPs) 20 <a href="http://www.python.org/dev/peps/pep-0020/"><strong>The Zen of Python</strong></a>, followed by bit long <a href="http://www.python.org/dev/peps/pep-0008/">Style Guide for Python Code</a>.</p>
+
+<p>In order to have an overall understanding of what programming in Python might be like, you can read a few of the great articles listed at <a href="https://wiki.python.org/moin/BeginnersGuide/Programmers">Python Beginner's Guide</a>. </p>
+
+<h3 id="system-server-administration">System/Server Administration</h3>
+
+
+
+<p>One of the key areas for using Fabric is automating the everyday tasks of system (and server) administration. These jobs include pretty much everything that relates to:</p>
+
+<ul>
+<li><p>Building a server;</p></li>
+<li><p>Its maintenance, and;</p></li>
+<li><p>Monitoring.</p></li>
+</ul>
+
+<p>When you begin working with your very own droplet (which is a fully-fledged virtualised server with full control / access), things that appear as a mystery will quickly start to become familiar to you. As you deploy your applications and start dealing with their maintenance, it is only natural to expect that you will be running into some issues. However, when your application gains popularity and things start to grow, the need of managing multiple droplets and repeating everything over and over again ceases to become fun.</p>
+
+<p>That is exactly when you will wish you had met Fabric years ago. </p>
+
+<h3 id="application-deployment">Application Deployment</h3>
+
+
+
+<p>Deploying an application (regardless of it being a web site, an API, or a server) usually means setting up a system from scratch (or from a snapshot taken in time), preparing it by updating everything, downloading dependencies, setting up the file structure and permissions, followed by finally uploading your codebase - or downloading it using a SCM such as Git.</p>
+
+<p>During the development process, you are also likely to have commands that need to be routinely executed (ex: right before entering a deployment cycle).</p>
+
+<p>Being able to script these tasks (both local and remote) in a logically organized and -- most importantly -- programmable manner proves to be invaluable shortly after you realize how much time is being wasted repeating the same steps constantly, rendering everything error-prone during the process.</p>
+
+<p>This is exactly when Fabric comes to your aid in the form of a Python file that will know <em>what</em> to do and <em>where</em> to do it.</p>
+
+<h2 id="how-to-install-fabric-on-a-droplet-running-ubuntu-debian">How to Install Fabric on a Droplet Running Ubuntu / Debian</h2>
+
+
+
+<p>An easy and cohesive way of installing Fabric is by using the default operating system package manager <code>aptitude</code>.</p>
+
+<p>In order to install Fabric using <code>aptitude</code>, run the following:</p>
+<pre class="code-pre "><code>sudo aptitude install fabric
+
+# Alternatively, you can also use *pip*:
+# pip install fabric
+</code></pre>
+<h2 id="fabric-39-s-features-and-integration-with-ssh">Fabric's Features and Integration with SSH</h2>
+
+
+
+<p>Out of the box, any Python command (or procedure) and module can be utilised through Fabric - given that Fabric is indeed a Python library.</p>
+
+<p>What Fabric really brings to the table is its extensive and excellent integration with SSH that allows streamlining everything using simple scripts (i.e. <code>fabfile.py</code>).</p>
+
+<p>In this section, you can find a selection of tools (e.g. functions) that come with Fabric which can be used to interact with environments where commands you specify are executed.</p>
+
+<p><strong>Note:</strong> You can see and learn more about Fabric's operations by visiting its documentation <a href="http://docs.fabfile.org/en/1.4.0/api/core/operations.html">on the subject</a>.</p>
+
+<h3 id="run-fabric-operations-run">run (fabric.operations.run)</h3>
+
+
+
+<p>Fabric's <code>run</code> procedure is used for executing a shell command on one or more remote hosts.</p>
+
+<ul>
+<li><p>The output results of <em>run</em> can be captured using a variable.</p></li>
+<li><p>If command succeeded or failed can be checked using <code>.failed</code> and <code>.succeeded</code>.</p></li>
+</ul>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Create a directory (i.e. folder)
+run("mkdir /tmp/trunk/")
+
+# Uptime
+run("uptime")
+
+# Hostname
+run("hostname")
+
+# Capture the output of "ls" command
+result = run("ls -l /var/www")
+
+# Check if command failed
+result.failed
+</code></pre>
+<h3 id="sudo-fabric-operations-sudo">sudo (fabric.operations.sudo)</h3>
+
+
+
+<p>Along with <code>run</code>, the most widely used Fabric command is probably <code>sudo</code>. It allows the execution of a given set of commands and arguments with sudo (i.e. <em>superuser</em>) privileges on the remote host.</p>
+
+<p>If sudo command is used with an explicitly specified user, the execution will happen not as root but another (i.e. UID 1010).</p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Create a directory
+sudo("mkdir /var/www")
+
+# Create a directory as another user
+sudo("mkdir /var/www/web-app-one", user="web-admin")
+
+# Return the output
+result = sudo("ls -l /var/www")
+</code></pre>
+<h3 id="local-fabric-operations-local">local (fabric.operations.local)</h3>
+
+
+
+<p>As we have mentioned in our introduction, a single Fabric script (fabfile) can be used to perform actions both on the local machine and remote system(s). For this purpose, Fabric provides the <code>local</code> operative to run commands locally.</p>
+
+<p>Unlike run or sudo, however, interacting with the output of <code>local</code> the same way is not possible. Either output can be captured or printed -- the switch can be set with <code>capture</code> argument.</p>
+
+<p>Local helpers such as the <code>lcd</code> context manager (which is used for setting the <strong>local</strong> working directory) are <em>honoured</em> with <code>local</code>, the same way <code>run</code> (or <code>sudo</code>) honours the <code>cd</code> context manager.</p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Create a source distribution tar archive (for a Python App.)
+local("python setup.py sdist --formats=gztar", capture=False)
+
+# Extract the contents of a tar archive
+local("tar xzvf /tmp/trunk/app.tar.gz")
+
+# Remove a file
+local("rm /tmp/trunk/app.tar.gz")
+</code></pre>
+<h3 id="get-fabric-operations-get">get (fabric.operations.get)</h3>
+
+
+
+<p>The <code>get</code> command exists to download (i.e. pull) file(s) from the remote system to the computer where the Fabric is being used. It is similar to how <code>scp</code> works and comes in handy when you need to download backups, logging data or some other server related items.</p>
+
+<ul>
+<li><p>You can specify the remote path with the <code>remote_path</code> argument.</p></li>
+<li><p>You can specify the local - download - path with the <code>local_path</code> argument.</p></li>
+</ul>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Download some logs
+get(remote_path="/tmp/log_extracts.tar.gz", local_path="/logs/new_log.tar.gz")
+
+# Download a database back-up
+get("/backup/db.gz", "./db.gz")
+</code></pre>
+<h3 id="put-fabric-operations-put">put (fabric.operations.put)</h3>
+
+
+
+<p>When you need to upload files, <code>put</code> command can be used very similarly to <code>get</code>. You can again access the results of command's execution with <code>.failed</code> or <code>.succeeded</code>.</p>
+
+<ul>
+<li><p><code>local_path</code> - set the local path.</p></li>
+<li><p><code>remote_path</code> - set the remote path.</p></li>
+<li><p><code>use_sudo</code> - upload the file to anywhere on the remote machine using a nifty trick: upload to a temporary location then move.</p></li>
+<li><p><code>mode</code> - set the file mode (flags).</p></li>
+<li><p><code>mirror_local</code> - set the file flags (i.e. make executable) automatically by reading the local file's mode.</p></li>
+</ul>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Upload a tar archive of an application
+put("/local/path/to/app.tar.gz", "/tmp/trunk/app.tar.gz")
+
+# Use the context manager `cd` instead of "remote_path" arg.
+# This will upload app.tar.gz to /tmp/trunk/
+with cd("/tmp"):
+ put("local/path/to/app.tar.gz", "trunk")
+
+# Upload a file and set the exact mode desired
+upload = put("requirements.txt", "requirements.txt", mode=664)
+
+# Verify the upload
+upload.succeeded
+</code></pre>
+<h3 id="prompt-fabric-operations-prompt">prompt (fabric.operations.prompt)</h3>
+
+
+
+<p>When you find yourself in need of some extra flexibility working with Fabric, <code>prompt</code> will come to your rescue. This command does exactly what its name suggests and asks the user (i.e. one that is running the script) to input a certain data to use during the successive execution.</p>
+
+<p>If you are using a single file to manage with multiple applications, for example, you can use <code>prompt</code> to set one to perform the actions.</p>
+
+<p>Before starting with anything, <code>prompt</code> can also be used to query the port number to use. </p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Prompt the user
+port_number = prompt("Which port would you like to use?")
+
+# Prompt the user with defaults and validation
+port_number = prompt("Which port?", default=42, validate=int)
+</code></pre>
+<h3 id="reboot-fabric-operations-reboot">reboot (fabric.operations.reboot)</h3>
+
+
+
+<p>The <code>reboot</code> command is also self explanatory: it is used to reboot the remote system. By default, it waits two minutes (i.e. 120 seconds -&gt; <code>wait=120</code>) before doing its job.</p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Reboot the remote system
+reboot()
+
+# Reboot after 30 seconds
+reboot(wait=30)
+</code></pre>
+<h2 id="fabric-39-s-helpers-context-managers">Fabric's Helpers: Context Managers</h2>
+
+
+
+<p>Fabric's <em>context managers</em> are used with the Python's <code>with</code> statement. The reason for this is how sessions between execution of commands are <strong>not</strong> kept between <em>shell-less</em> connections. </p>
+
+<p><strong>Note:</strong> You can see and learn more about Fabric's context managers by visiting its documentation <a href="http://docs.fabfile.org/en/1.4.0/api/core/context_managers.html">on the subject</a>.</p>
+
+<h3 id="cd-fabric-context_managers-cd">cd (fabric.context_managers.cd)</h3>
+
+
+
+<p><code>cd</code> context manager allows keeping the directory state (i.e. where the following block of comments are to be executed). It is similar to running the <em>cd</em> command during an SSH session and running various different commands.</p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># The *cd* context manager makes enwrapped command's
+# execution relative to the stated path (i.e. "/tmp/trunk")
+with cd("/tmp/trunk"):
+ items = sudo("ls -l")
+
+# It is possible to "chain" context managers
+# The run commands gets executed, therefore at "/tmp/trunk"
+with cd("/tmp"):
+ with cd("/trunk"):
+ run("ls")
+</code></pre>
+<h3 id="lcd-fabric-context_managers-lcd">lcd (fabric.context_managers.lcd)</h3>
+
+
+
+<p>The <code>lcd</code> context manager (local cd) works very similarly to one above (cd); however, it only affects the local system's state.</p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Change the local working directory to project's
+# and upload a tar archive
+with lcd("~/projects/my_project"):
+ print "Uploading the project archive"
+ put("app.tar.gz", "/tmp/trunk/app.tar.gz")
+</code></pre>
+<h3 id="path-fabric-context_managers-path">path (fabric.context_managers.path)</h3>
+
+
+
+<p><code>path</code> context managers alters the PATH variable.</p>
+
+<h3 id="settings-fabric-context_managers-settings">settings (fabric.context_managers.settings)</h3>
+
+
+
+<p>When you need to temporarily (i.e. for a certain command chain), you can use the <code>settings</code> statement (i.e. override <code>env</code> values).</p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code># Perform actions using a different *user*
+with settings(user="user1"):
+ sudo("cmd")
+</code></pre>
+<h3 id="prefix-fabric-context_managers-prefix">prefix (fabric.context_managers.prefix)</h3>
+
+
+
+<p><code>prefix</code> statement does what its name suggests and wraps given <code>run</code> and <code>sudo</code> command with the specified one.</p>
+
+<p>Usage examples:</p>
+<pre class="code-pre "><code>with prefix("cmd arg."):
+ run("./start")
+# cmd arg. &amp;&amp; ./start
+</code></pre>
+<h2 id="example-fabfile-for-automating-management-tasks">Example fabfile For Automating Management Tasks</h2>
+
+
+
+<p>To begin learning how to program a <em>fabfile</em>s to automate a simple management task, let's create an empty <code>fabfile.py</code>.</p>
+
+<p>Run the following command to create a <code>fabfile.py</code> using the text editor nano:</p>
+<pre class="code-pre "><code>nano fabfile.py
+</code></pre>
+<p>Append the following code block updating the system and installing memcached:</p>
+<pre class="code-pre "><code># Fabfile to:
+# - update the remote system(s) 
+# - download and install an application
+
+# Import Fabric's API module
+from fabric.api import *
+
+
+env.hosts = [
+ 'server.domain.tld',
+ # 'ip.add.rr.ess
+ # 'server2.domain.tld',
+]
+# Set the username
+env.user = "root"
+
+# Set the password [NOT RECOMMENDED]
+# env.password = "passwd"
+
+def update_upgrade():
+ """
+ Update the default OS installation's
+ basic default tools.
+ """
+ run("aptitude update")
+ run("aptitude -y upgrade")
+
+def install_memcached():
+ """ Download and install memcached. """
+ run("aptitude install -y memcached")
+
+def update_install():
+
+ # Update
+ update_upgrade()
+
+ # Install
+ install_memcached()
+</code></pre>
+<p>Save and exit using CTRL+X and confirm with with Y.</p>
+
+<p>Now you can start automating your mundane server management tasks using Fabric and its features explained here.</p>
+<pre class="code-pre "><code># Automate everything!
+fab update_install
+</code></pre>
+
+
+ </div>
+</div>
+</body></html>

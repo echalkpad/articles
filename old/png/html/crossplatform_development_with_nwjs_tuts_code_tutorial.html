@@ -1,0 +1,1187 @@
+<!DOCTYPE html><html><head><title>Cross-Platform Development With NW.js - Tuts+ Code Tutorial</title></head><body>
+<h1>Cross-Platform Development With NW.js - Tuts+ Code Tutorial</h1><p><a href="https://code.tutsplus.com/tutorials/cross-platform-development-with-nwjs--cms-23281" target="_new">Original URL</a></p>
+<p><blockquote>More applications are taking advantage of web technologies. For example, Brackets, Peppermint, and Pinegrow are programmer editors made from HTML, JavaScript, and CSS. This allows for using familiar&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>More applications are taking advantage of web technologies. For example, <a href="http://brackets.io/">Brackets</a>, <a href="http://osxpeppermint.com/">Peppermint</a>, and <a href="http://pinegrow.com/">Pinegrow</a> are programmer editors made from HTML, JavaScript, and CSS. This allows for using familiar tools, but also makes applications more cross-platform in nature. In this tutorial, I will show you how to use NW.js for making a simple programmer&#x2019;s editor that you can use in Windows, Mac OS X, and Linux.</p>
+
+<h2>Introduction and Downloading NW.js</h2>
+
+<p><a href="http://nwjs.io/">NW.js</a>, originally known as Node Webkit, is the packaging of Node.js and WebKit HTML render in a package for running local applications. The NW.js version is using <a href="https://iojs.org/">io.js</a>, a more current version of the V8 JavaScript engine with more ES6 support. Since io.js is 100% compatible with the latest Node.js, all libraries and programs using Node.js are usable with io.js as well.</p>
+
+<p>To get started, download all three OS versions from <a href="http://nwjs.io/">NW.js</a> or just the versions you want to run the project. I will be developing on my MacBook Air, but you can use any system you want. The project is <strong>Fun Editor</strong>: an easy to use, single document code editor. It is built with the Linux motto: A single task done well!</p>
+
+<h2>Getting the Parts</h2>
+
+<p>To get started, <a href="http://nodejs.org/">node</a> or <a href="https://iojs.org/">io.js</a> has to be installed on your system. Once you install node or io.js, the <code class="inline">npm</code> command will be on your system. This command is for installing different JavaScript libraries.</p><p>The first library is <a target="_blank" rel="external" href="http://bower.io/">Bower</a>. Type the following in a command line prompt:</p>
+<pre class="brush: bash noskimlinks noskimwords">npm install -g bower</pre>
+
+<p>On some systems, you might need to use <code class="inline">sudo</code> before the <code class="inline">npm</code> command to run it in super user mode. <br></p>
+
+<p>The <code class="inline">bower</code> command is a package manager for many web technologies. It gives an easy way to add web related items to your project. </p>
+
+<p>To do custom actions to the DOM, this editor will make use of <a href="http://zeptojs.com/">Zepto.js</a> JavaScript library instead of jQuery. Since Fun Editor will use the library for DOM work only, Zepto fits the bill at a fraction of the size.</p>
+
+<p>Create a new directory for the project. In the directory with the command line, type the following:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">bower install less
+bower install zepto</pre>
+
+<p>There will now be a new directory called <code class="inline">bower_components</code>. In this directory, bower installed the <code class="inline">less</code> and <code class="inline">zepto</code> libraries. That was much easier than finding the web site and downloading.</p>
+
+<p>The <a href="http://ace.c9.io/#nav=about">Ace</a> JavaScript library is the base for this editor. It is a flexible and easy to use editor in JavaScript designed for embedding into web sites. To install, type the following in the terminal in our project directory:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">git clone git://github.com/ajaxorg/ace.git
+</pre>
+
+<p>There is now a new directory <code class="inline">ace</code>. All of the sources for the library are in this directory. The library needs to be compiled to the compact format to speed up loading. In the command line, type:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">cd ace
+npm install
+node Makefile.dryice.js full -m --target ./build</pre>
+
+<p>These commands put you into the <code class="inline">ace</code> directory, install all needed libraries for the <code class="inline">ace</code> editor, and create the minimized library files in the <code class="inline">build</code> sub-directory.</p>
+
+<p>This project will use the&#xA0;<code class="inline">node-watch</code> library to know if the file in the editor has changed. This library activates a callback function whenever the specified file changes. To install this library in to our project, the project directory needs to be a node package directory. In the command line in the project directory, type the following:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">cd ..
+npm init</pre>
+
+<p>The <code class="inline">npm</code> program will ask several questions about the project. Once you answer the questions, a <code class="inline">package.json</code> file is in the project directory. The <code class="inline">npm</code> command will store the names of all libraries installed in this file. That way, giving the project file to someone else enables them to create the same working environment.</p>
+
+<p>Now to install the <code class="inline">node-watch</code> library, type the following:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">npm install node-watch --save
+</pre>
+
+<p>Once finished, there is a <code class="inline">node_modules</code> directory with the library inside. The <code class="inline">&#x2013;save</code> flag told <code class="inline">npm</code> to save the library into the project and not globally.</p>
+
+<p>The last piece of software to install is <a href="http://emmet.io/">Emmet</a>. You cannot have a code editor without Emmet. Get the Emmet code from <a href="https://raw.githubusercontent.com/nightwing/emmet-core/master/emmet.js">Emmet on GitHub</a> and save it to the file <code class="inline">emmet.js</code> in the <code class="inline">js</code> directory.</p>
+
+<p>Now that all the pieces are in place in the project folder, everything is ready to put it together!</p>
+
+<h2>Putting It All Together</h2>
+
+<p>The first item needed for a NW.js project is its project file. Unfortunately, the node project file uses the same file name. Since the node project file is not needed during development, it can be moved aside until needed again. In the command line in the project directory, type the following:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">mv package.json node.package.json
+touch package.json</pre>
+
+<p>These commands moved the original <code>package.json </code>file to <code class="inline">node.package.json</code> and created an empty file called <code>package.json.</code> In the <code>package.json</code>file, type the following:</p>
+
+<pre class="brush: javascript noskimlinks noskimwords">{
+ "description": "A very small code editor.",
+ "main": "main.html",
+ "name": "Fun Editor",
+ "version": "1.0",
+ "window": {
+ "height": 600,
+ "width": 650,
+ "show": false,
+ "title": "Fun Editor",
+ "toolbar": false,
+ "icon": "icon.png"
+ }
+}
+</pre>
+
+<p>This file tells NW.js how to launch the program. The different fields are:</p>
+
+<h4><strong>description</strong></h4>
+
+<p>This should be a short description of the program and what it does.</p>
+
+<h4><strong>main</strong></h4>
+
+<p>This is the main HTML file to open. This file should contain all the HTML for the main page of the program. </p>
+
+<h4><strong>name</strong></h4>
+
+<p>This is the name of the program.</p>
+
+<h4><strong>version</strong></h4>
+
+<p>This should be a version number for the program.</p>
+
+<h4><strong>window</strong></h4>
+
+<p>This is a json array of values to describe the User Interface of the program. This array has the following items:</p>
+
+<h4><strong>height</strong></h4>
+
+<p>This is a number of pixels for the height of the program window when started.</p>
+
+<h4><strong>width</strong></h4>
+
+<p>This is the number of pixels for the width of the program window when started.</p>
+
+<h4><strong>show</strong></h4>
+
+<p>This is a Boolean telling NW.js whether or not to show the main windows upon loading. I have it set to <em>true</em>. If you set it to <em>false</em>, make sure there is some way to activate it later.</p>
+
+<h4><strong>title</strong></h4>
+
+<p>This is the default title for the program. It will be used when loaded, until some code in the program changes it.</p>
+
+<h4><strong>toolbar</strong></h4>
+
+<p>This Boolean tells NW.js whether or not to have a toolbar. Since FunEditor is a minimalistic editor, this is set to <em>false</em>. But, if you ever need to use the Dev Tools to debug your editor, you can set this to <em>true</em> and an icon for the Dev Tools will be there.</p>
+
+<h4><strong>icon</strong></h4>
+
+<p>This is a relative path of the icon to use for the program. The project directory should be the base for the reference to this file.</p>
+
+<p>Since a <code class="inline">main.html</code> file is in the configuration, it is the next file made. In the project directory, create the <code class="inline">main.html</code> file and put this code in it: </p>
+
+
+<pre class="brush: html noskimlinks noskimwords">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+ &lt;head&gt;
+		&lt;title&gt;Fun Editor&lt;/title&gt;
+		&lt;script type="text/javascript" src="bower_components/zepto/zepto.min.js"&gt;&lt;/script&gt;
+		&lt;script type="text/javascript" src="js/emmet.js"&gt;&lt;/script&gt;
+		&lt;script type="text/javascript" src="ace/build/src-min-noconflict/ace.js"&gt;&lt;/script&gt;
+		&lt;script type="text/javascript" src="ace/build/src-min-noconflict/ext-emmet.js"&gt;&lt;/script&gt;
+		&lt;script type="text/javascript" src="ace/build/src-min-noconflict/ext-language_tools.js"&gt;&lt;/script&gt;
+		&lt;script type="text/javascript" src="ace/build/src-min-noconflict/ext-spellcheck.js"&gt;&lt;/script&gt;
+		&lt;script type="text/javascript" src="ace/build/src-min-noconflict/keybinding-vim.js"&gt;&lt;/script&gt;
+		&lt;script type="text/javascript" src="js/FunEditor.js"&gt;&lt;/script&gt;
+		&lt;link rel="stylesheet/less" type="text/css" href="less/default.less"&gt;
+		&lt;script type="text/javascript" src="bower_components/less/dist/less.min.js"&gt;&lt;/script&gt;
+	&lt;/head&gt;
+
+	&lt;body&gt;
+		&lt;div id="editor"&gt;&lt;/div&gt;
+
+		&lt;div class="info"&gt;
+			&lt;span id="editMode" class="statuslineitem"&gt;Normal&lt;/span&gt;
+			&lt;span class="title statuslineitem"&gt;
+			&lt;span class="arrow-right-editMode statuslineitem"&gt;&lt;/span&gt;
+			&lt;span id="title"&gt;No file&lt;/span&gt;
+			&lt;/span&gt;
+			&lt;span class="mode statuslineitem"&gt;
+				&lt;span class="arrow-right-title statuslineitem"&gt;&lt;/span&gt;
+			&lt;span id="mode"&gt;JavaScript&lt;/span&gt;
+			&lt;/span&gt;
+			&lt;span class="linenum statuslineitem"&gt;
+				&lt;span class="arrow-right-mode statuslineitem"&gt;&lt;/span&gt;
+			&lt;span id="linenum"&gt;1&lt;/span&gt;
+			&lt;/span&gt;
+			&lt;span class="colnum statuslineitem"&gt;
+				&lt;span class="arrow-right-linenum statuslineitem"&gt;&lt;/span&gt;
+			&lt;span id="colnum"&gt;1&lt;/span&gt;
+			&lt;/span&gt;
+			&lt;span class="arrow-right-colnum statuslineitem"&gt;&lt;/span&gt;
+		&lt;/div&gt;
+
+		&lt;input style="display:none;" id="openFile" type="file" /&gt;
+		&lt;input style="display:none;" id="saveFile" type="file" /&gt;
+	&lt;/body&gt;
+&lt;/html&gt;</pre>
+
+
+<p>That is the main program. It is a simple HTML page that is mostly a list of JavaScript files to load, one Less file for styling everything, a div with an <code class="inline">id</code> of <code class="inline">editor</code> for the editor, and a div with an <code class="inline">id</code> of <code class="inline">info</code> and some spans for doing the status line. I took the styling for the status line from my tutorial on <a href="https://computers.tutsplus.com/tutorials/getting-spiffy-with-powerline--cms-20740">Getting Spiffy With Powerline</a>. It doesn&#x2019;t use Powerline&#x2014;it just looks like it. At the bottom are two inputs that do not get displayed. These are for the NW.js open file dialog and save file dialog.</p>
+
+<p>Good coding practices would say to load the JavaScript at the end of the page. Since the window for the page is not shown until the program tells it to show, it does not matter.</p>
+
+<p>To make the HTML look right, styling is the next item to create. Create a new directory called <code class="inline">less</code> in the project directory. Then create the file <code class="inline">default.less</code> and add this to it:</p>
+
+<pre class="brush: css noskimlinks noskimwords">@StatusLineEditMode: rgb(98, 105, 255);
+@StatusLineTitle: rgb(98, 247, 255);
+@StatusLineMode: rgb(98, 255, 149);
+@StatusLineLineNum: rgb(224, 217, 87);
+@StatusLineColNum: rgb(87, 212, 224);
+@StatusLineBackground: white;
+
+body {
+ margin: 0;
+ padding: 0;
+ margin-top: 0;
+ overflow: hidden;
+}
+
+#editor {
+ position: absolute;
+ top: 0px;
+ bottom: 25px;
+ left: 0;
+ right: 0;
+ margin: 0px;
+ padding: 0px;
+}
+
+.info {
+ position: absolute;
+ display: inline;
+ bottom: 0px;
+ font-family: monospace;
+ white-space: nowrap;
+ bottom: 0;
+ background: @StatusLineBackground;
+ padding: 0px;
+ height: 25px;
+ left: 0;
+ width: 100%;
+}
+
+.statuslineitem {
+ height: 25px;
+ line-height: 25px;
+ text-align: center;
+ vertical-align: middle;
+ margin: 0px;
+ padding-top: 0px;
+ padding-bottom: 0px;
+ padding-right: 3px;
+ padding-left: 0px;
+ border: 0px;
+ float: left;
+}
+
+.arrow-right-editMode {
+ width: 0;
+	height: 0;
+	border-top: 13px solid transparent;
+	border-bottom: 13px solid transparent;
+
+	border-left: 13px solid @StatusLineEditMode;
+	margin: 0px;
+	padding: 0px;
+	margin-left: 0px;
+}
+
+.arrow-right-title {
+	width: 0;
+	height: 0;
+	border-top: 13px solid transparent;
+	border-bottom: 13px solid transparent;
+
+	border-left: 13px solid @StatusLineTitle;
+	margin: 0px;
+	padding: 0px;
+	margin-left: 0px;
+}
+
+.arrow-right-mode {
+	width: 0;
+	height: 0;
+	border-top: 13px solid transparent;
+	border-bottom: 13px solid transparent;
+
+	border-left: 13px solid @StatusLineMode;
+	margin: 0px;
+	padding: 0px;
+	margin-left: 0px;
+}
+
+.arrow-right-linenum {
+	width: 0;
+	height: 0;
+	border-top: 13px solid transparent;
+	border-bottom: 13px solid transparent;
+
+	border-left: 13px solid @StatusLineLineNum;
+	margin: 0px;
+	padding: 0px;
+	margin-left: 0px;
+}
+
+.arrow-right-colnum {
+	width: 0;
+	height: 0;
+	border-top: 13px solid transparent;
+	border-bottom: 13px solid transparent;
+
+	border-left: 13px solid @StatusLineColNum;
+	margin: 0px;
+	padding: 0px;
+}
+
+#editMode {
+ background: @StatusLineEditMode;
+ padding-left: 5px;
+}
+
+#title {
+ background: @StatusLineTitle;
+ padding-left: 5px;
+}
+
+#mode {
+ background: @StatusLineMode;
+ padding-left: 5px;
+}
+
+#linenum {
+ background: @StatusLineLineNum;
+ padding-left: 5px;
+}
+
+#colnum {
+ background: @StatusLineColNum;
+ padding-left: 5px;
+}
+
+#editMode {
+ background: @StatusLineEditMode;
+ padding-left: 5px;
+}
+
+.title {
+ background: @StatusLineTitle;
+}
+
+.mode {
+ background: @StatusLineMode;
+}
+
+.linenum {
+ background: @StatusLineLineNum;
+}
+
+.colnum {
+ background: @StatusLineColNum;
+}</pre>
+
+
+<p>This styling information is to make the editor div position absolute and take up all the browser window area except for 25 px at the bottom. That area is for the status line.</p>
+
+<p>At the top of the file, you will notice several Less variable definitions. Since the same colors get used in more than one place (i.e. the span for line number and its &#x201C;arrow&#x201D; span afterwards), I made them into a Less variable. That way, I only have to change one item to change all of them. Stylus or SASS could be used as well, but Less allows for dynamically changing them in the code. Great for theme changing down the road.</p>
+
+<p>Now for the main program file. In the <code class="inline">js</code> directory, create a file called <code class="inline">FunEditor.js</code> and place the following code:</p>
+
+<pre class="brush: javascript noskimlinks noskimwords">//
+// Program: 	Fun Editor
+//
+// Description: 	This is a basic editor built using NW.js.
+//			This is more of a project to learn how to use
+//			NW.js, but I am finding that I really like
+//			the editor!
+//
+// Author:		Richard Guay (raguay@customct.com)
+// License: 		MIT
+//
+
+//
+// Class:		FunEditor
+//
+// Description: 	This class contains the information and functionality
+//			of the Fun Editor. There should be only one instance
+//			of this class per editor.
+//
+// Class Variables:
+// 					editor 		Keeps the Editor object
+// 					menu 		keeps the menu object for the pop-up
+//								menu.
+// 					menuEdit 		Edit menu for the popup menu
+// 					menuEditMain 	The Edit menu for the main menu
+// 					menuFile 		File menu for the popup menu
+// 					menuFileMain 	File menu for the main menu
+// 					nativeMenuBar 	The menu bar for OSX Main menu
+// 					hasWriteAccess 	boolean for if the file is
+//									writable or not.
+// 					origFileName 	Last file name opened.
+// 					watch		The node-watch library object.
+// 					osenv		The osenv library object.
+// 					gui 			The NW.js gui library
+//								object.
+// 					fs			The fs library object.
+// 					clipboard 		The clipboard library object.
+//
+function FunEditor() {}
+
+FunEditor.prototype.filesOpened = 0;
+FunEditor.prototype.saving = false;
+FunEditor.prototype.editor = null;
+FunEditor.prototype.menu = null;
+FunEditor.prototype.menuEdit = null;
+FunEditor.prototype.menuFile = null;
+FunEditor.prototype.menuEditMain = null;
+FunEditor.prototype.menuFileMain = null;
+FunEditor.prototype.nativeMenuBar = null;
+FunEditor.prototype.fileEntry = null;
+FunEditor.prototype.hasWriteAccess = false;
+FunEditor.prototype.origFileName = "";
+FunEditor.prototype.theme = {};
+FunEditor.prototype.lastCursor = { line: 0, col: 0 };
+FunEditor.prototype.watch = require("node-watch");
+FunEditor.prototype.gui = require("nw.gui");
+FunEditor.prototype.fs = require("fs");
+FunEditor.prototype.osenv = require("osenv");
+FunEditor.prototype.os = require("os");
+
+var FE = new FunEditor();
+
+FunEditor.prototype.clipboard = FE.gui.Clipboard.get();
+FunEditor.prototype.win = FE.gui.Window.get();
+
+//
+// Function:	handleDocumentChange
+//
+// Description: 	This function is called whenever the document
+//			is changed. This function will get the title set,
+//			remove the old document name from the window
+//			list, set the syntax highlighting based on the
+//			file extension, and update the status line.
+//
+// Inputs:
+// 			title 	Title of the new document
+//
+FunEditor.prototype.handleDocumentChange = function(title) {
+	 //
+	 // Setup the default syntax highlighting mode.
+	 //
+	 var mode = "ace/mode/javascript";
+	 var modeName = "JavaScript";
+
+	 //
+	 // Set the new file name. If the title is blank, reflect that for
+	 // setting a new one later.
+	 //
+	 this.fileEntry = title;
+
+	 //
+	 // Set the syntax highlighting based on the file ending.
+	 //
+	 if (title) {
+	 	//
+	 	// Set up file watching with node-watch. The file being edited is
+	 	// watched for changes. If the file changes, then reload the file
+	 	// into the editor.
+	 	//
+		this.watch(this.fileEntry, function() {
+			//
+			// The file changed. Load it into the editor. Needs implemented:
+			// ask the user if they want the file to be reloaded.
+			//
+			if(! FE.saving ) {
+ 				FE.readFileIntoEditor(FE.fileEntry);
+			}
+		});
+
+		//
+		// If there is a title, then setup everything by that title.
+		// The title will be the file name.
+		//
+		if(this.os.platform() == "win32") {
+		 title = title.match(/[^\\]+$/)[0];
+		} else {
+		 title = title.match(/[^/]+$/)[0];
+		}
+		if (this.origFileName.indexOf(title) == -1) {
+			//
+			// Remove whatever the old file was loaded and put in
+			// the new file.
+			//
+			this.origFileName = title;
+		}
+
+		//
+		// Check for OS permissions for writing. NOTE: Not implemented.
+		//
+		this.hasWriteAccess = true;
+
+		//
+		// Set the document's title to the file name.
+		//
+		document.getElementById("title").innerHTML = title;
+		document.title = title;
+
+		//
+		// Set the syntax highlighting mode based on extension of the file.
+		//
+		if (title.match(/\.js$/)) {
+			mode = "ace/mode/javascript";
+			modeName = "JavaScript";
+		} else if (title.match(/\.html$/)) {
+			mode = "ace/mode/html";
+			modeName = "HTML";
+		} else if (title.match(/\.css$/)) {
+			mode = "ace/mode/css";
+			modeName = "CSS";
+		} else if (title.match(/\.less$/)) {
+			mode = "ace/mode/less";
+			modeName = "LESS";
+		} else if (title.match(/\.md$/)) {
+			mode = "ace/mode/markdown";
+			modeName = "Markdown";
+		} else if (title.match(/\.ft$/)) {
+			mode = "ace/mode/markdown";
+			modeName = "FoldingText";
+		} else if (title.match(/\.markdown$/)) {
+			mode = "ace/mode/markdown";
+			modeName = "Markdown";
+		} else if (title.match(/\.php$/)) {
+			mode = "ace/mode/php";
+			modeName = "PHP";
+		}
+	} else {
+		//
+		// Setting an empty document. Leave syntax highlighting as the last
+		// file.
+		//
+		document.getElementById("title").innerHTML = "[no document loaded]";
+		this.origFileName = "";
+	}
+
+	//
+	// Tell the Editor and setup the status bar with the syntax highlight mode.
+	//
+	this.editor.getSession().setMode(mode);
+	document.getElementById("mode").innerHTML = modeName;
+};
+
+//
+// Function: setCursorLast
+//
+// Description: Set the cursor to the last stored state.
+//
+FunEditor.prototype.setCursorLast = function() {
+ this.editor.moveCursorTo(this.lastCursor.line, this.lastCursor.col);
+}
+
+//
+// Function: 		newFile
+//
+// Description: 	This function is called to set the global
+//			variables properly for a new empty file.
+//
+// Inputs:
+//
+FunEditor.prototype.newFile = function() {
+	this.fileEntry = null;
+	this.hasWriteAccess = false;
+	this.handleDocumentChange(null);
+	this.editor.setValue("");
+};
+
+//
+// Function: 	readFileIntoEditor
+//
+// Description: 	This function handles the reading of the file
+//			contents into the editor. If reading fails, a
+//			log entry is created.
+//
+// Inputs:
+//			theFileEntry 	The path and file name
+//
+FunEditor.prototype.readFileIntoEditor = function(theFileEntry) {
+	this.fs.readFile(theFileEntry, function(err, data) {
+		if (err) {
+			console.log("Error Reading file.");
+		}
+
+		//
+		// Set the file properties.
+		//
+		FE.handleDocumentChange(theFileEntry);
+
+		//
+		// Set the file contents.
+		//
+		FE.editor.setValue(String(data));
+
+		//
+		// Remove the selection.
+		//
+		FE.editor.session.selection.clearSelection();
+
+		//
+		// Put the cursor to the last know position.
+		//
+		FE.setCursorLast();
+	});
+};
+
+//
+// Function:	writeEditorToFile
+//
+// Description: 	This function takes what is in the editor
+//			and writes it out to the file.
+//
+// Inputs:
+//			theFileEntry 	File to write the contents to.
+//
+FunEditor.prototype.writeEditorToFile = function(theFileEntry) {
+	var str = this.editor.getValue();
+	this.fs.writeFile(theFileEntry, str, function(err) {
+		if (err) {
+			console.log("Error Writing file.");
+			return;
+		}
+	});
+};
+
+//
+// Function: 	copyFunction
+//
+// Description: 	This function takes the current selection and copies it
+//			to the clipboard.
+//
+FunEditor.prototype.copyFunction = function() {
+	this.clipboard.set(this.editor.getCopyText());
+};
+
+//
+// Function: 	cutFunction
+//
+// Description: 	This function cuts out the current selection and copies it
+//			to the clipboard.
+//
+FunEditor.prototype.cutFunction = function() {
+	this.clipboard.set(this.editor.getCopyText());
+	this.editor.session.replace(this.editor.selection.getRange(),"");
+};
+
+//
+// Function: 	pasteFunction
+//
+// Description: 	This function takes the clipboard and pastes it to the
+// current location.
+//
+FunEditor.prototype.pasteFunction = function() {
+	this.editor.session.replace(this.editor.selection.getRange(), this.clipboard.get());
+};
+
+//
+// Function: 	openFile
+//
+// Description: 	This function opens the select a file dialog for opening
+//			into the editor.
+//
+FunEditor.prototype.openFile = function() {
+	$("#openFile").trigger("click");
+};
+
+//
+// Function: 	saveFile
+//
+// Description: 	This function saves to the currently open file or
+// 			opens the save file dialog.
+//
+FunEditor.prototype.saveFile = function() {
+ this.saving = true;
+	if (this.fileEntry &amp;&amp; this.hasWriteAccess) {
+		this.writeEditorToFile(this.fileEntry);
+	} else {
+		$("#saveFile").trigger("click");
+	}
+	this.saving = false;
+};
+
+//
+// Function:	initMenus
+//
+// Description:	This function setups the right click menu and system used
+//			in the editor.
+//
+// Inputs:
+//
+FunEditor.prototype.initMenus = function() {
+	this.menu = new this.gui.Menu();
+	this.menuFile = new this.gui.Menu();
+	this.menuEdit = new this.gui.Menu();
+	this.menuFile.append(new this.gui.MenuItem({
+		label: "New",
+		click: function() {
+			FE.newFile();
+		}
+	}));
+	this.menuFile.append(new this.gui.MenuItem({
+		label: "Open",
+		click: function() {
+			FE.openFile();
+		}
+	}));
+	this.menuFile.append(new this.gui.MenuItem({
+		label: "Save",
+		click: function() {
+			FE.saveFile();
+		}
+	}));
+
+	this.menuEdit.append(new this.gui.MenuItem({
+		label: "Copy",
+		click: function() {
+			FE.copyFunction();
+		}
+	}));
+	 this.menuEdit.append(new this.gui.MenuItem({
+		 label: "Cut",
+		 click: function() {
+			FE.cutFunction();
+		 }
+	 }));
+	 this.menuEdit.append(new this.gui.MenuItem({
+		 label: "Paste",
+		 click: function() {
+		 	FE.pasteFunction();
+		 }
+	 }));
+
+	 this.menuFileMain = new this.gui.Menu();
+	 this.menuEditMain = new this.gui.Menu();
+	 this.menuFileMain.append(new this.gui.MenuItem({
+		 label: "New",
+		 click: function() {
+		 	FE.newFile();
+		 }
+	 }));
+	 this.menuFileMain.append(new this.gui.MenuItem({
+		 label: "Open",
+		 click: function() {
+		 	FE.openFile();
+		 }
+	 }));
+	 this.menuFileMain.append(new this.gui.MenuItem({
+		label: "Save",
+		click: function() {
+			FE.saveFile();
+		}
+	 }));
+
+	 this.menuEditMain.append(new this.gui.MenuItem({
+		label: "Copy",
+		click: function() {
+			FE.copyFunction();
+		}
+	 }));
+	 this.menuEditMain.append(new this.gui.MenuItem({
+		label: "Cut",
+		click: function() {
+			FE.cutFunction();
+		}
+	 }));
+	 this.menuEditMain.append(new this.gui.MenuItem({
+		label: "Paste",
+		click: function() {
+			FE.pasteFunction();
+		}
+	 }));
+
+	 this.menu.append(new this.gui.MenuItem({
+		label: "File",
+		submenu: FE.menuFile
+	 }));
+
+	 this.menu.append(new this.gui.MenuItem({
+		label: "Edit",
+		submenu: FE.menuEdit
+	 }));
+
+	 //
+	 // Create the main Mac menu also.
+	 //
+	 this.nativeMenuBar = new this.gui.Menu({
+		type: "menubar"
+	 });
+
+	 if(this.os.platform() == "darwin") {
+		 this.nativeMenuBar.createMacBuiltin("Fun Editor", {
+			hideEdit: true,
+			hideWindow: true
+		 });
+	}
+
+	 this.nativeMenuBar.append(new this.gui.MenuItem({
+		label: "File",
+		submenu: FE.menuFileMain
+	 }));
+
+	 this.nativeMenuBar.append(new this.gui.MenuItem({
+		label: "Edit",
+		submenu: FE.menuEditMain
+	 }));
+	 this.win.menu = this.nativeMenuBar;
+
+	//
+	// Add the menu to the contextmenu event listener.
+	//
+	document.getElementById("editor").addEventListener("contextmenu",
+		function(ev) {
+			ev.preventDefault();
+			FE.menu.popup(ev.x, ev.y);
+			return false;
+		}
+	);
+};
+
+//
+// Function: 		onChosenFileToOpen
+//
+// Description: 	This function is called whenever a open
+//			file dialog is closed with a file selection.
+//			This is an automatically made function in
+//			NW.js that needs to be set by your app.
+//
+// Inputs:
+//			theFileEntry 		The path to the file selected.
+//
+onChosenFileToOpen = function(theFileEntry) {
+	FE.readFileIntoEditor(theFileEntry);
+};
+
+//
+// Function: 		onChosenFileToSave
+//
+// Description: 	When a file is selected to save into, this
+//			function is called. It is originally set by
+//			NW.js.
+//
+// Inputs:
+//			theFileEntry 		The path to the file selected.
+//
+onChosenFileToSave = function(theFileEntry) {
+	 FE.writeEditorToFile(theFileEntry);
+};
+
+//
+// Function: 		onload
+//
+// Description: 	This function is setup by NW.js to be
+// 					called when the page representing the application
+// 					is loaded. The application overrides this by
+// 					assigning it's own function.
+//
+// 					Here, we initialize everything needed for the
+// 					Editor. It also loads the initial document for
+// 					the editor, any plugins, and theme.
+//
+// Inputs:
+//
+onload = function() {
+
+	 //
+	 // Initialize the context menu.
+	 //
+	 FE.initMenus();
+
+	 //
+	 // Set the change function for saveFile and openFile.
+	 //
+	 $("#saveFile").change(function(evt) {
+		onChosenFileToSave($(this).val());
+	});
+	$("#openFile").change(function(evt) {
+		onChosenFileToOpen($(this).val());
+	});
+
+	FE.editor = ace.edit("editor");
+	FE.editor.$blockScrolling = Infinity;
+	FE.editor.setTheme("ace/theme/solarized_dark");
+	FE.editor.getSession().setMode("ace/mode/javascript");
+	FE.editor.setKeyboardHandler("ace/keyboard/vim");
+	FE.editor.setOption("enableEmmet", true);
+	FE.editor.setOption("selectionStyle","text");
+	FE.editor.setOption("highlightActiveLine",true);
+	FE.editor.setOption("cursorStyle","slim");
+	FE.editor.setOption("autoScrollEditorIntoView",true);
+	FE.editor.setOption("tabSize",4);
+	FE.editor.setOption("enableSnippets",true);
+	FE.editor.setOption("spellcheck",true);
+	FE.editor.setOption("wrap",true);
+	FE.editor.setOption("enableBasicAutocompletion",true);
+	FE.editor.setOption("enableLiveAutocompletion",false);
+	FE.editor.commands.addCommand({
+		name: "myCopy",
+		bindKey: {win: "Ctrl-C", mac: "Command-C"},
+		exec: function(editor) {
+			FE.copyFunction();
+		},
+		readOnly: false
+	});
+	FE.editor.commands.addCommand({
+		name: "myPaste",
+		bindKey: {win: "Ctrl-V", mac: "Command-V"},
+		exec: function(editor) {
+			FE.pasteFunction();
+		},
+		readOnly: false
+	});
+	FE.editor.commands.addCommand({
+		name: "myCut",
+		bindKey: {win: "Ctrl-X", mac: "Command-X"},
+		exec: function(editor) {
+			FE.cutFunction();
+		},
+		readOnly: false
+	});
+	FE.editor.commands.addCommand({
+		name: "mySave",
+		bindKey: {win: "Ctrl-S", mac: "Command-S"},
+		exec: function(editor) {
+			FE.saveFile();
+		},
+		readOnly: false
+	});
+
+	//
+	// Tie into the Vim mode save function. FE one took some digging to find!
+	//
+	FE.editor.state.cm.save = function() {
+		FE.saveFile();
+	}
+
+	//
+	// Setup on events listeners. The first one is listen for cursor
+	// movements to update the position in the file in the status line.
+	// Next, setup the listener for Vim mode changing to update the
+	// status line. Lastly, run function on window closing to remove
+	// the current file from the open file list.
+	//
+	FE.editor.on("changeStatus", function() {
+		//
+		// Get the current cursor to set the row and column.
+		//
+		var cursor = FE.editor.selection.lead;
+		document.getElementById("linenum").innerHTML = cursor.row + 1;
+		document.getElementById("colnum").innerHTML = cursor.column + 1;
+
+ 		//
+ 		// Save a copy of the cursor location.
+ 		//
+ 		FE.lastCursor.line = cursor.row;
+ 		FE.lastCursor.col = cursor.column;
+
+		//
+		// Get the text mode to set the Normal, Visual, or Insert vim
+		// modes in the status line.
+		//
+		var mode = FE.editor.keyBinding.getStatusText(editor);
+		if (mode == "") {
+			document.getElementById("editMode").innerHTML = "Normal";
+		} else if (mode == "VISUAL") {
+			document.getElementById("editMode").innerHTML = "Visual";
+		} else if (mode == "INSERT") {
+			document.getElementById("editMode").innerHTML = "Insert";
+		}
+	});
+
+	//
+	// Capture the Ace editor's copy and paste signals to get
+	// or put to the system clipboard.
+	//
+	FE.editor.on("copy",function(text) {
+		FE.clipboard.set(text);
+	});
+	FE.editor.on("paste", function(e) {
+		e.text = FE.clipboard.get();
+	});
+
+	//
+	// Capture the window close and make
+	// sure the file has been saved.
+	//
+	 FE.win.on("close", function() {
+	 	//
+	 	// Make sure the contents are saved.
+	 	//
+	 	if (this.fileEntry &amp;&amp; this.hasWriteAccess) {
+		 	FE.saveFile();
+		 }
+
+	 	//
+	 	// Close the program.
+	 	//
+		this.close(true);
+	 });
+
+	 //
+	 // Setup for having a new empty file loaded.
+	 //
+	 FE.newFile();
+	 onresize();
+
+	 //
+	 // Show the program and set the focus (focus does not work!).
+	 //
+	 FE.win.show();
+	 FE.win.focus();
+};
+
+//
+// Function: 		onresize
+//
+// Description: 	Another NW.js function that is called every time
+//			the application is resized.
+//
+// Inputs:
+//
+onresize = function() {
+};
+</pre>
+
+<p>At the top of the file, you will see the declaration of the FunEditor object and some variables. After the variables, there are three <code class="inline">require</code> statements. These statements load the <code class="inline">node-watch</code> library for watching a file change, the <code class="inline">nw.gui</code> library which allows for interaction with the graphical user interface, the <code class="inline">fs</code> library which allows access to the file system, and the <code class="inline">os</code> library for working with the operating system. The <code class="inline">gui</code>, <code class="inline">fs</code>, and <code class="inline">os</code> libraries are part of the NW.js program, while the <code class="inline">node-watch</code> is a <code class="inline">npm</code> downloaded library<strong></strong>.</p>
+
+<p>With the <code class="inline">gui</code> library, the <code class="inline">FunEditor.clipboard</code> variable contains the clipboard object for accessing the system clipboard. Likewise, the <code class="inline">FunEditor.win</code> variable contains the window object for the main windows created by NW.js for this program.</p>
+
+<p>After the libraries and global variables are loaded, several helper functions are created. All functions that start with <code class="inline">FunEditor</code> are functions for running the editor and are not specific to NW.js. The other functions are required by NW.js.</p>
+
+<p>I described each function here:</p>
+
+<h3>FunEditor.handleDocumentChange</h3>
+
+<p>This function loads the editor with the correct syntax highlighting based on the document loaded. It also sets the window title and the document name in the status line. When the window title is set, it checks the operating system being used with <code class="inline">FunEditor.os.platform()</code>. If it is a Windows operating system, the search for the last directory separator has to be different since Windows uses <code class="inline">\</code>, while OS X and Linux use&#xA0;<code class="inline">/</code>.<br></p>
+
+<p>This function also sets up file watching using <code class="inline">FunEditor.watch</code>. When the file given to the function is changed, the callback function reloads the file in to the editor.</p>
+
+<h3>FunEditor.setCursorLast</h3>
+
+<p>This function will set the cursor to the last saved location. The location is saved every time the cursor is moved and recorded in the status line. Whenever the file is reloaded after a changed, this function is used to put the cursor back to the last known location.</p>
+
+<h3>FunEditor.newFile</h3>
+
+<p>This function is for creating a new, blank file.</p>
+
+<h3>FunEditor.readFileIntoEditor</h3>
+
+<p>This function uses the <code class="inline">FunEditor.fs</code> library reference variable to read in the file from the file system and place it into the editor. It then clears the selection and puts the cursor at the last known location.</p>
+
+<h3>FunEditor.writeEditorToFile</h3>
+
+<p>This function takes the current state of the editor and saves it to the file system using the <code class="inline">FunEditor.fs</code> variable.</p>
+
+<h3>FunEditor.copyFunction</h3>
+
+<p>This function uses the NW.js library to take the currently selected text and put it in to the system clipboard.</p>
+
+<h3>FunEditor.cutFunction</h3>
+
+<p>This function is the same as <code class="inline">FunEditor.copyFunction</code>, except that it deletes the selected text from the editor.</p>
+
+<h3>FunEditor.pasteFunction</h3>
+
+<p>This function takes the clipboard contents using the NW.js library for the clipboard and pastes it to the current cursor location in the editor.</p>
+
+<h3>FunEditor.openFile</h3>
+
+<p>This function opens the system open file dialog by triggering a click on the hidden input element. This is particular to NW.js as well.</p>
+
+<h3>FunEditor.saveFile</h3>
+
+<p>This function saves the editor contents to the file if it was loaded from a file and that file has write access. Otherwise, it opens the system save as dialog for the user to select a file. This also works by triggering a click on the hidden <code class="inline">saveFile</code> element.</p>
+
+<h3>FunEditor.initMenus</h3>
+
+<p>This function creates the graphical menu elements for an in-context menu and the system menu. This makes use of the <code class="inline">FunEditor.gui</code> library.</p>
+
+<p>The main menu for Mac OS X has added functionality. In that section, the <code class="inline">FunEditor.os</code> library tells the software platform. If it is Mac OS X, then perform the extra functions needed for the main menu.</p>
+
+<h3>Onchosenfiletoopen</h3>
+
+<p>This NW.js defined function gets the file selected when the <strong>Open</strong> file dialog gets closed. This function will then load that file into the editor using the <code class="inline">FunEditor.readFileIntoEditor</code> function.</p>
+
+<h3>Onchosenfiletosave</h3>
+
+<p>This NW.js defined function gets the file selected when the <strong>Save As</strong> file dialog gets closed. This function will then save the editor contents to the given file using the <code class="inline">FunEditor.writeEditorToFile</code> function.</p>
+
+<h3>Onload</h3>
+
+<p>This NW.js function is called whenever everything defined in the <code class="inline">main.html</code> file gets loaded into NW.js. It's equivalent to the <code>document.onload = function(){};</code> or the jQuery <code>$(document).ready(funcition(){});</code>.</p>
+
+<p>This function gets the editor ready with the desired preferences. The theme is solarized dark, the keyboard to vim layout, active line highlighting, etc. The editor keyboard shortcuts for copy, paste, cut, and save are set with their Windows and Mac defaults. The ace editor takes care of cross-platform issues.</p>
+
+<p>Once the editor is initialized, listeners for the <code class="inline">changeStatus</code>, <code class="inline">copy</code>, <code class="inline">paste</code>, and <code class="inline">save</code> editor events are set up. These allow the editor to enforce the use of the system clipboard inside of the ace editor and update the line and column information in the status line. The <code class="inline">changeStatus</code> listener updates the vim mode and current cursor location.</p>
+
+<p>I also dug into the save function that Vim mode has (<code class="inline">:w</code>). This took some work, but I finally figured it out as well. Ace editor borrows code from Code Mirror to create the Vim keyboard layout. It works, but is not a robust solution.</p>
+
+<h3>Onresize</h3>
+
+<p>This NW.js defined function gets called whenever the window is resized. For the FunEditor, nothing needs to be done.</p>
+
+<h2>Running On Different Platforms</h2>
+
+<p>That's all the programming for the editor. Now, to run it on each platform. If you haven&#x2019;t already downloaded the NW.js for each platform, do it now and follow the instructions for each platform. Take all the files in the project directory and compress them in to a zip archive. When done, change the name of the archive to <code class="inline">FunEditor.nw</code>.</p><p>On every platform, you can always go to the command line and run the<strong> </strong><code class="inline">nw</code> command in the project directory. Unfortunately, the basic install does not put the executable file in the system path. Therefore, depending on the shell you are using, you can create an <code class="inline">nw</code> alias to the executable file. While developing, I use this in the project directory to test:</p><pre class="brush: bash noskimlinks noskimwords">nw .</pre>
+
+<p>Once I have the <code class="inline">FunEditor.nw</code> created, I use:</p><pre class="brush: bash noskimlinks noskimwords">nw FunEditor.nw</pre><p>Once verified working, I start the packaging for my other systems.<br></p><h2>Mac</h2>
+
+<p>Once NW.js gets installed on the Mac, you will have the <code class="inline">nwjs.app</code> file in your <strong>Applications</strong> directory. In the directory in which you compressed the application, you can run the program with the following command line:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">/Applications/nwjs.app/Contents/MacOS/nwjs FunEditor.nw</pre>
+
+
+<p>To make a clickable package, change the <code class="inline">FunEditor.nw</code> file to <code class="inline">app.nw</code>. Copy the <code class="inline">/Applications/nwjs.app</code> to <code class="inline">/Applications/FunEditor.app</code>. In <strong>Finder</strong>, right click on the application and select <strong>Show Contents</strong>. Place the <code class="inline">app.nw</code> file in the <strong>Resources</strong> directory and change the icon to one that you like. I include one in the download. Remember to keep the <code class="inline">nw.icns</code> file name.</p><p>To get the proper name in the menu, you will have to change the <code class="inline">info.plist</code> file. Open it up and change the contents to:<br></p><pre class="brush: xml noskimlinks noskimwords">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"&gt;
+&lt;plist version="1.0"&gt;
+&lt;dict&gt;
+ &lt;key&gt;BuildMachineOSBuild&lt;/key&gt;
+	&lt;string&gt;12F45&lt;/string&gt;
+	&lt;key&gt;CFBundleDevelopmentRegion&lt;/key&gt;
+	&lt;string&gt;en&lt;/string&gt;
+	&lt;key&gt;CFBundleDisplayName&lt;/key&gt;
+	&lt;string&gt;FunEditor&lt;/string&gt;
+	&lt;key&gt;CFBundleExecutable&lt;/key&gt;
+	&lt;string&gt;nwjs&lt;/string&gt;
+	&lt;key&gt;CFBundleIconFile&lt;/key&gt;
+	&lt;string&gt;nw.icns&lt;/string&gt;
+	&lt;key&gt;CFBundleIdentifier&lt;/key&gt;
+	&lt;string&gt;io.nwjs.nw&lt;/string&gt;
+	&lt;key&gt;CFBundleInfoDictionaryVersion&lt;/key&gt;
+	&lt;string&gt;6.0&lt;/string&gt;
+	&lt;key&gt;CFBundleName&lt;/key&gt;
+	&lt;string&gt;FunEditor&lt;/string&gt;
+	&lt;key&gt;CFBundlePackageType&lt;/key&gt;
+	&lt;string&gt;APPL&lt;/string&gt;
+	&lt;key&gt;CFBundleShortVersionString&lt;/key&gt;
+	&lt;string&gt;1.0&lt;/string&gt;
+	&lt;key&gt;CFBundleVersion&lt;/key&gt;
+	&lt;string&gt;1.0&lt;/string&gt;
+	&lt;key&gt;DTSDKBuild&lt;/key&gt;
+	&lt;string&gt;12F37&lt;/string&gt;
+	&lt;key&gt;DTSDKName&lt;/key&gt;
+	&lt;string&gt;macosx10.8&lt;/string&gt;
+	&lt;key&gt;DTXcode&lt;/key&gt;
+	&lt;string&gt;0511&lt;/string&gt;
+	&lt;key&gt;DTXcodeBuild&lt;/key&gt;
+	&lt;string&gt;5B1008&lt;/string&gt;
+	&lt;key&gt;LSFileQuarantineEnabled&lt;/key&gt;
+	&lt;false/&gt;
+	&lt;key&gt;LSMinimumSystemVersion&lt;/key&gt;
+	&lt;string&gt;10.6.0&lt;/string&gt;
+	&lt;key&gt;NSPrincipalClass&lt;/key&gt;
+	&lt;string&gt;NSApplication&lt;/string&gt;
+	&lt;key&gt;NSSupportsAutomaticGraphicsSwitching&lt;/key&gt;
+	&lt;true/&gt;
+	&lt;key&gt;SCMRevision&lt;/key&gt;
+	&lt;string&gt;df30fb73b312044486237d93cf96f3606862f2a3&lt;/string&gt;
+&lt;/dict&gt;
+&lt;/plist&gt;<br></pre>
+
+
+
+
+<p>I took the <code class="inline">info.plist</code> file for NW.js, removed everything that is specific for it launching files with the <code class="inline">nw</code> extension, changed the version to 1.0, and changed the name to <code class="inline">FunEditor</code>.</p><figure class="post_image"><img src="https://cms-assets.tutsplus.com/uploads/users/71/posts/23281/image/Cross-PlatformDevNodeWebkit-02.jpg" alt="FunEditor on Mac OS X"><figcaption>FunEditor on Mac OS X</figcaption></figure><p>Once that is done, you have a clickable application for <strong>FunEditor</strong>.</p>
+
+<h2>Windows</h2>
+
+<p>The easiest way to run the editor on Windows is to use a batch file. Create a file <code class="inline">FunEditor.bat</code> somewhere in your system path. Type the following into the file:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">&lt;path to nw.exe&gt;\nw.exe &lt;path to FunEditor&gt;\FunEdit.nw</pre><figure class="post_image"><img src="https://cms-assets.tutsplus.com/uploads/users/71/posts/23281/image/Cross-PlatformDevNodeWebkit-03.jpg" alt="FunEditor on Windows 7"><figcaption>FunEditor on Windows 7<br></figcaption></figure><p>When you double click the batch file, the FunEditor will open.</p>
+
+
+
+
+
+<h2>Linux</h2>
+
+<p>Once you have the NW.js program downloaded, make sure the directory with it is on your path. Create a script file that will call the NW.js program with your program. Create a file in your path called <code class="inline">FunEditor</code> with this:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">#!/usr/bin/bash
+nwjs="&lt;path to nwjs directory&gt;/nwjs";
+fe="&lt;path to the FunEditor.nw file&gt;";
+
+$nwjs $fe</pre>
+
+<p>Save and set to executable permissions with:</p>
+
+<pre class="brush: bash noskimlinks noskimwords">chmod a+x FunEditor</pre>
+
+<p>If you run that command now, it should launch the editor for Linux!</p><figure class="post_image"><img src="https://cms-assets.tutsplus.com/uploads/users/71/posts/23281/image/Cross-PlatformDevNodeWebkit-01.jpg" alt="FunEditor on Arch Linux"><figcaption>FunEditor on Arch Linux</figcaption></figure>
+
+
+
+<p>On my Arch Linux, FunEditor is fun to use!</p>
+
+<h2>Conclusion</h2>
+
+<p>With this project, you learned how to take advantage of <a href="http://nwjs.io/">NW.js</a> to create an editor runnable on Windows, Linux, and Mac OS X. This project has much room for improvements. Have fun making this little editor into your dream editor and use it on every operating system!</p></div></div>
+</body></html>

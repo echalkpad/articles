@@ -1,0 +1,114 @@
+<!DOCTYPE html><html><head><title>Extending layer 2 across container hosts</title></head><body>
+<h1>Extending layer 2 across container hosts</h1><p><a href="https://www.flockport.com/flockport-labs-extending-layer-2-across-container-hosts/" target="_new">Original URL</a></p>
+<p><blockquote>This post is to consolidate all our LXC networking guides and also explore some advanced container networking that have limited use but are interesting nonetheless hence the Flockport labs monicker.&hellip;</blockquote></p>
+<div><div id="mk-text-block-234" class="mk-text-block ">This post is to consolidate all our <a title="Flockport news and guides" href="http://www.flockport.com/news" target="_blank">LXC networking guides</a> and also explore some advanced container networking that have limited use but are interesting nonetheless hence the Flockport labs monicker. Experimental containers will now be posted under this label in our <a title="Flockport containers" href="http://www.flockport.com/containers/" target="_blank">container section. </a>
+<p>We previously looked at <a title="Flockport LXC Networking Guide" href="http://www.flockport.com/lxc-networking-guide/" target="_blank">basic LXC container networking; bridging, NAT, static IPs, public IPs</a> etc and then at <a title="Flockport LXC Advanced Networking Guide" href="http://www.flockport.com/lxc-advanced-networking-guide/" target="_blank">connecting LXC containers across hosts</a> with<a title="Connect LXC hosts with GRE tunnels" href="http://www.flockport.com/connecting-lxc-hosts-with-gre-tunnels/" target="_blank"> GRE tunnels</a> or secure<a title="LXC VPN TINC" href="http://www.flockport.com/building-distributed-mesh-networks-of-lxc-hosts/" target="_blank"> Tinc </a>or <a title="Flockport LXC IPSEC VPN Guide" href="http://www.flockport.com/connect-lxc-hosts-and-containers-with-ipsec-vpns/" target="_blank">IPSEC VPNs.</a></p>
+<p>We also covered <a title="LXC load balancing and failover" href="http://www.flockport.com/load-balancing-and-failover-with-lxc-containers/" target="_blank">basic failover and load balancing with Keepalived and Nginx </a>and <a title="LXC failover and loadbalancing with Keepalived and LVS" href="http://www.flockport.com/load-balancing-and-failover-of-lxc-containers-part-ii/" target="_blank">with LVS</a>. These networking guides apply to both LXC and VM networking in Linux in general with KVM or Xen for instance.</p>
+<p>This would be a good time to brush up. This guide explores a few advanced LXC networking possibilities that depend on a fair understanding of LXC and VM networking.</p>
+<p>We will cover extending layer 2 across remote LXC hosts with L2tpv3 or Ethernet over GRE in Part I and using LXC's support for multiple network interfaces to explore using a container as a router and touch on using VMs of software routers like Vyatta, Vyos or Pfsense to route your container or VM networks in Part II. We also cover <a title="Flockport labs - LXC and VXLAN" href="https://www.flockport.com/flockport-labs-lxc-and-vxlan/" target="_blank">using VXLAN separately</a>.</p>
+<p>Jump directly to <a href="https://www.flockport.com/flockport-labs-extending-layer-2-across-container-hosts/#extendingl2">Extending Layer 2 across LXC hosts</a> if you are up to date on LXC networking.</p>
+<p><b>LXC Networking Refresh</b><br>
+The default LXC installation creates what is a known as a NAT bridge, this is a standalone software bridge that is created on the host (a software bridge is like a switch and is a basic functionality provided by the Linux kernel)</p>
+<p>Your containers or VMs connect to this bridge and get IPs in a private subnet. The routing is done by some iptables rules.</p>
+<p>The default lxcbr0 is this kind of a bridge. Bridging, DHCP and basic routing is configured by the lxc-net script. The virbr0 bridge used by Virt Manager for KVM is similar.</p>
+<p>Take a look at the /etc/init.d/lxc-net script (in/etc/init/lxc-net in Ubuntu) Here is what the script does in short:</p>
+<pre>1. brctl addbr lxcbr0 ----- adds bridge
+2. ifconfig lxcbr0 10.0.3.1 netmask 255.255.255.0 up ----- gives the bridge an IP and brings it up
+3. Starts a dnsmasq instance with a specified interface lxcbr0 with DHCP subnet range 10.0.3.2-10.0.3.254
+4. iptables -t nat -A POSTROUTING -s 10.0.3..0/24 ! -d 10.0.3.0/24 -j ACCEPT ----- Adds an iptables masquerading rule for lxcbr0 so containers can access the net</pre>
+<p>In the default lxcbr0 network, containers are isolated in a private 10.0.3.0/24 subnet within the host and can only be accessed by each other and the host.</p>
+<p>To access the containers from beyond the host you would need to use port forwarding ie forward port 80 of the host to port 80 of the container to for instance make a web server in the container available on the host and the network. You can of course forward 'n' number of host ports to various containers but you cannot forward the same port to multiple containers.</p>
+<p>If you are in an internal network you can use basic routing&#xA0; to connect containers across hosts with the IP route utility. A typical command to connect to let's say the 10.0.4.0/24 container network on a host with IP 192.168.1.10 from 192.168.1.5 would look like this.</p>
+<p><code>ip route add 10.0.4.0/24 via 192.168.1.10</code></p>
+<p>To make this kind of routing work you need to ensure containers subnets are different across hosts.</p>
+<p>You can set static IPs inside the container using /etc/network/interfaces file (depending on how your container OS configures networking) or via the dnsmasq instance configured for the lxcbr0 network on the host by associating specific containers to IPs in the /etc/lxc/dnsmasq file.</p>
+<p>In a NAT type network there is no way to associate a public IP to the container. If your host has a public IP you can associate that IP with a container with 1-1 NAT mapping or if you have 2 public IPs use basic IP aliasing to associate the public IP to a container via NAT mapping.</p>
+<p><b>LXC Host Bridge</b><br>
+That was the NAT bridge. You can also create a different network for LXC containers in which containers are on the same network as your host. This is a direct bridge creating by bridging your physical interface usually eth0 to a bridge say br0 which containers and VMs then connect to.</p>
+<p>If the host is 192.168.1.5 the containers will be in the same subnet 192.168.1.0/24. This is a flat network and easier to work with with no NAT layer between containers and the network. Containers connecting to this interfaces get their IP and networking services directly from the router your host is connected to.</p>
+<p>In case this is a public network you can easily associate public IPs to the containers, and they can be directly accessed from the internet. If you bridge the other hosts on this network to their respective eth0 and connect their containers to br0 interfaces, all you hosts and containers will be on the same network and thus be directly accessible by all containers and hosts.</p>
+<p>If you have 2 network interfaces in the host you can bridge eth1 to br1 for instance, to put containers across hosts in their own network via the br1 interface. Static IPs can be configured inside the container or the router.</p>
+<p><b>Container networking in the cloud</b><br>
+For cloud vps instances you can use either of the above methods depending on the cloud provider. You can use a private NAT network and use port forwarding to access resources on the container, associate public IP via NAT mapping or if the cloud provider allows you to bridge or gives you private networks, you can become more creative in building your container network.</p>
+<p>At this point its important to remember a lot of cloud, vps, server providers may not support bridging and most do not support things like multicast so services like Keepalived, LVS or an overlay protocol like VXLAN that uses multicast may not work in these networks, unless they support unicast.</p>
+<p><b>Connect containers across several hosts over layer 3</b><br>
+We already showed you how to connect containers across hosts on the same network with a simple routing rule. You can connect containers across several remote hosts with IPSEC VPNs, plain GRE tunnels or the awesome tool Tinc for mesh networks and VPNs. Containers and VMs that you connect across hosts need to be on different subnets.</p>
+<p>We have detailed guides on these in our <a title="Flockport News and Guides" href="http://www.flockport.com/news/" target="_blank">News and Guides section</a>.</p>
+<p>You can think of these as overlay networks. But remember building VPNs across the public internet has a performance penalty; via the encryption of packets, latencies between your hosts and mtu issues. But these are tried and tested methods to build resilient networks and offer distributed services.</p></div> <div id="mk-text-block-982" class="mk-text-block ">You can actually extend layer 2 across hosts beyond your network through a layer 3 tunnel. This basically means creating a 'distributed virtual switch' across hosts that may not be in the same private network, and are connected by public IPs over networks.
+<p>Please remember layer 2 over large latencies can be problematic and like all types of tunnels mtu issues need to be addressed. Simplicity is always the best way, and extending layer 2 across hosts is relatively simple to do but may not be simple to run.</p>
+<p>A distributed switch across multiple hosts is an extremely powerful capability to have for networking containers and VMs opening up a host of possibilities. The normal bridges you create in Linux via the inbuilt bridge or soft switches like OpenVSwitch (OVS) are limited to the host. Linux does not have a distributed switch like <a title="VMware virtual distributed switch" href="http://www.vmware.com/in/products/vsphere/features/distributed-switch" target="_blank">VMware's VDS</a>.</p>
+<p>Imagine if you could have a bridge that spans both local and remote hosts, that your containers or VMs connect to on the same layer 2 network! You can do this with Ethernet over GRE or l2tpv3, and use ipsec to encrypt the tunnels.</p>
+<p>One of the host bridges can act as the router and offer DHCP service. Application and services which depend on layer 2 like Keepalived, LVS etc benefit from this.</p>
+<p>We are going to create a bridge on 2 remote hosts over their public IPs and connect the bridges with Ethernet over GRE or L2tpv3 so containers connecting to these bridges are on the same layer 2 network. We are using Debian Wheezy with kernel 3.14 from backports, and LXC 1.0.1 from the <a title="Flockport getting started guide" href="http://www.flockport.com/start" target="_blank">Flockport repo</a> for this guide.</p>
+<p>We will first show you how to do this with Ethernet over GRE and then L2tpv3. The main difference is Ethernet over GRE is less well known while L2tpv3 is more widely used for l2 extension and uses UDP, and thus could be more flexible.</p>
+<p><b>Extending L2 with Ethernet over GRE</b><br>
+First create a bridge on both the remote hosts and bring it up. Let's call this bridge superbr0, you are course free to use any name you want.</p>
+<pre>brctl addbr superbr0
+ifconfig superbr0 up</pre>
+<p>Then lets connect the superbr0 across the 2 hosts with public IP 1.1.1.1 and 2.2.2.2 with a tunnel.</p>
+<p>First on Host A<br>
+<code>ip link add testgre type gretap remote 2.2.2.2 local 1.1.1.1. ttl 255</code></p>
+<p>Then on Host B<br>
+<code>ip link add testgre type gretap remote 1.1.1.1 local 2.2.2.2 ttl 255</code></p>
+<p>For Ethernet over GRE we use the gretap device. Our interface/tunnel name is testgre, this can be a name of your choice. Let's connect it to our bridge. Do this on both Host A and Host B</p>
+<p><code>brctl addif superbr0 testgre</code></p>
+<p>Now our raw network is ready. Both superbr0 bridges are connected to each other over the testgre tunnel and any VM or container which connects to the superbr0 bridge on either host will be on the same layer 2 network. Neat! You can extend to more hosts by adding more gretap tunnels.</p>
+<p>You can add static IPs to containers on both sides and and test it, but let's use dnsmasq and iptables to add basic DHCP and routing capabilities to the bridge. To do this let's use the superbr0 on host A as our router. First let's give it an IP</p>
+<p><code>ifconfig superbr0 10.0.2.1 netmask 255.255.255.0 up</code></p>
+<p>Now let's configure dnsmasq to serve this interface. In /etc/dnsmasq.conf add our newly minted bridge superbr0 to interface, add 10.0.2.1 to listen-address, uncomment bind-interfaces and give it a dhcp range of 10.0.2.2,10.0.2.254. Restart Dnsmasq and it should be ready to offer IPs on the superbr0 interface.</p>
+<pre>interface=superbr0
+listen-address=10.0.2.1
+bind-interfaces
+dhcp-range=10.0.2.2,10.0.2.254,12h</pre>
+<p>You can also use a standalone instance of dnsmasq launched from a command line like this:</p>
+<pre>dnsmasq --strict-order --bind-interfaces --pid-file=/var/run/dnsmasq-superbr0.pid --listen-address 10.0.2.1 --dhcp-range 10.0.2.2,10.0.2.254 --dhcp-lease-max=253 --dhcp-no-override --interface=superbr0</pre>
+<p>Connect any containers on Host A and B to the superbr0 interface and you should see them getting IPs in the 10.0.2.0/24 range given by dnsmasq we just configured on Host A.</p>
+<p>To provide internet access to your containers and VMs add a simple masquerading rule on Host A.</p>
+<p><code>iptables -t nat -A POSTROUTING -s 10.0.2.0/24 ! -d 10.0.2.0/24 -j MASQUERADE</code></p>
+<p>If you would prefer to have an external router serve the superbr0 interface then add the physical interface that connects to your router to superbr0. In this case you DO NOT need to give the bridge an IP and configure dnsmasq and iptables.</p>
+<p>So now containers on both side are on the same layer 2 network. But what if want to extend this to more physical container hosts?</p>
+<p>To do this you need a switch and a second network interface card on your host A or B. What we do is connect the second network interface eth1 to the switch and add it to the superbr0 interface.</p>
+<p><code>brctl addif superbr0 eth1</code></p>
+<p>So now any physical device connecting to the switch is connected to the superbr0 interface and will get its IPs from the router configured for this interface.</p>
+<p>To put any containers and VM in these additional hosts on the same interface you will have to bridge eth0 on the additional hosts to br0 and connect the containers and VMs to br0 on them. You can similarly do this on the other side of the tunnel on Host B to extend to other hosts.</p>
+<p>Also remember containers on both sides do not have to be limited to the extended layer 2 network on superbr0. You can add multiple network interfaces to the containers and connect them to local networks giving you more possibilities on routing and outbound connectivity.</p>
+<p><b>Extending Layer 2 with L2TPV3</b><br>
+The principle is the same, only l2tpv3 uses UDP by default. You need to load the l2tp_eth module on both hosts before starting.</p>
+<p>First on Host A</p>
+<pre>modprobe l2tp_eth
+ip l2tp add tunnel tunnel_id 1000 peer_tunnel_id 2000 encap udp local 1.1.1.1 remote 2.2.2.2 udp_sport 6000 udp_port 5000
+ip l2tp add session tunnel_id 1000 session_id 3000 peer_session_id 4000</pre>
+<p>On Host B we switch the values</p>
+<pre>modprobe l2tp_eth
+ip l2tp add tunnel tunnel_id 2000 peer_tunnel_id 1000 encap udp local 2.2.2.2 remote 2.2.2.2 udp_sport 5000 udp_port 6000
+ip l2tp add session tunnel_id 2000 session_id 4000 peer_session_id 3000</pre>
+<p>Check the tunnel on both Hosts</p>
+<p><code>ip l2tp show tunnel</code></p>
+<p>Now add the l2tpv3 tunnel interface to your bridge on both hosts. Like for our Ethernet over GRE tunnel we will use the superbr0 bridge.</p>
+<p><code>brctl addif superbr0 l2tpeth0</code></p>
+<p>To configure DHCP, routing and other options you can use the instructions for the Ethernet over GRE above. Apart from the the tunnel interface everything else remains the same. You extend this to more hosts by adding more l2tpv3 tunnels. Both protocols have a lot more options to explore.</p>
+<p>You can also use the awesome vpn/mesh network app Tinc in switch mode to extend layer 2 across hosts. The difference is l2tpv3, Ethernet over GRE operates in kernel mode while Tinc operates in user mode.</p>
+<p>Mikrotik for instance uses Ethernet over GRE for their <a title="Mikrotik EOIP" href="http://wiki.mikrotik.com/wiki/Manual:Interface/EoIP" target="_blank">EOIP solution</a> or layer 2 extension and provides hardware acceleration for up to 500 MBit/s. Cisco, Juniper etc have their own L2 extension protocols like <a title="Cisco OVT" href="http://www.cisco.com/c/en/us/solutions/data-center-virtualization/overlay-transport-virtualization-otv/index.html" target="_blank">OVT</a>, using <a title="Cisco MPLS" href="http://www.cisco.com/c/en/us/products/collateral/data-center-virtualization/data-center-interconnect/white_paper_c11_493718.html" target="_blank">MPLS</a> etc.</p>
+<p>New standards for networking in the cloud and virtualization around building SDNs (software defined networking) are fast maturing to enable some of the capabilities we cover in this guide on a large scale.</p>
+<p><a title="VXLAN Overlays" href="http://blogs.vmware.com/vsphere/2013/05/vxlan-series-how-vtep-learns-and-creates-forwarding-table-part-5.html" target="_blank">VXLAN which extends layer 2 across multiple hosts using VTEPs</a> is fairly interesting but depends on multicast which most organizations, service and cloud providers don't support. Cisco, Juniper and others are working on their own <a title="Cisco VXLAN unicast" href="http://www.cisco.com/c/en/us/products/collateral/switches/nexus-7000-series-switches/guide_c07-728863.html" target="_blank">'enhanced vxlan' extensions with unlticast support</a>.</p>
+<p>Cumulus Linux along with Metacloud - recently acquired by Cisco, have been working on VXLAN unicast and have released a <a title="VXLAN VXFLD" href="https://github.com/CumulusNetworks/vxfld" target="_blank">VXFLD project</a> with some tools.</p>
+<p>The Linux kernel supports VXLAN in both multicast and unicast modes. You need a relatively recent version of the kernel 3.14+ and the iproute2 package 3.14+. We have a <a title="Flockport labs - LXC and VXLAN" href="http://www.flockport.com/flockport-labs-lxc-and-vxlan/" target="_blank">follow up post on VXLAN here</a>.</p>
+<p>But these are still maturing and not yet ready to go. If you are interested in networking <a title="Networkheresy" href="http://networkheresy.com" target="_blank">networkheresy</a>, <a title="Scott Lowe" href="http://blog.scottlowe.org/" target="_blank">Scott Lowe</a> and <a title="Ipspace" href="http://www.ipspace.net/Main_Page" target="_blank">ipspace </a>are 3 great blogs that cover next generation networking in depth.</p>
+<p><a title="Use an LXC container as a router" href="http://www.flockport.com/use-an-lxc-container-as-a-router/" target="_blank">In Part II we are going to cover using LXC containers as routers</a> which is similar to how one would use VMs of software routers like Vyatta, Vyos or Pfsense. LXC supports multiple network interfaces and is a great way to experiment with networking and networking namespaces. With 2 interfaces one could be connected to your wan and the other your lan letting an LXC container operate as a router. There are very limited use cases for this, but its a great way to simulate networks and manage routing for other containers in the cloud.</p>
+<p><b>Further reading and resources</b></p>
+<p><a title="Flockport App Store" href="https://www.flockport.com/store/" target="_blank">Flockport App store</a></p>
+<p><a title="Start" href="https://www.flockport.com/start/" target="_blank">Flockport LXC Installer and VM</a></p>
+<p><a title="Flockport LXC Guides" href="https://www.flockport.com/guides/" target="_blank">Flockport LXC Guides</a></p>
+<p><b>Flockport Networking Series</b></p>
+<p><a title="Flockport labs - Use an LXC container as a router" href="http://www.flockport.com/use-an-lxc-container-as-a-router/" target="_blank">Flockport labs - using an LXC container as a router</a></p>
+<p><a title="Flockport LXC Networking Guide" href="http://www.flockport.com/lxc-networking-guide/" target="_blank">LXC Networking Guide</a></p>
+<p><a title="Flockport LXC Advanced Networking Guide" href="http://www.flockport.com/lxc-advanced-networking-guide" target="_blank">LXC Advanced Networking Guide</a></p>
+<p><a title="Connect LXC hosts with GRE tunnels" href="http://www.flockport.com/connecting-lxc-hosts-with-gre-tunnels/" target="_blank">Connect LXC hosts with GRE tunnels</a></p>
+<p><a title="Connect LXC hosts with an IPSEC VPN" href="http://www.flockport.com/connect-lxc-hosts-with-an-ipsec-vpn/" target="_blank">Connect LXC hosts and containers with IPSEC VPNs</a></p>
+<p><a title="Build Distributed Mesh Networks" href="http://www.flockport.com/building-distributed-mesh-networks-of-lxc-hosts/" target="_blank">Connect LXC hosts and containers with Tinc VPNs</a></p>
+<p><a title="Load balancing and failover with LXC containers" href="http://www.flockport.com/load-balancing-and-failover-with-lxc-containers/" target="_blank">Load balancing and failover with LXC containers</a></p>
+<p><a title="Build distributed storage nodes with LXC and Gluster" href="http://www.flockport.com/build-distributed-storage-nodes-with-lxc-and-gluster/" target="_blank">Build distributed storage nodes with LXC and Gluster</a></p></div> <div class="mk-content-box mk-shortcode notitle"><span class="content-box-heading"><i class="mk-"></i> </span><div class="content-box-content"><h3 id="fancy-title-434" class="mk-shortcode mk-fancy-title simple-style "><span>Stay updated on Flockport news</span></h3>
+
+</div></div>
+	</div>
+</body></html>

@@ -1,0 +1,71 @@
+# James Anthony Majeski, M.D., Ph.D. Obituary
+
+[Original URL](http://hosting-25037.tributes.com/obituary/show/James-Anthony-Majeski-101385279)
+
+> James Anthony Majeski, M.D., Ph.D., 69, of Mount Pleasant, South Carolina, husband of Elizabeth Durst Majeski, Ed.D passed away at home on Saturday, May 24, 2014\. A Mass of Christian Burial will be...
+
+[![Local Florists](http://d3trabu2dfbdfb.cloudfront.net/3/1/3160335_125x125.jpeg "Local Florists")](http://jhenrystuhr.com/florists/)
+
+<span class="notranslate">James</span>
+
+ 
+
+<span class="notranslate">Anthony</span>
+
+ 
+
+<span class="notranslate">Majeski</span>
+
+, M.D., Ph.D., 69, of Mount Pleasant, South Carolina, husband of Elizabeth Durst 
+
+<span class="notranslate">Majeski</span>
+
+, Ed.D passed away at home on Saturday, May 24, 2014\. A Mass of Christian Burial will be held at 1:30 PM on Wednesday, May 28, 2014 in Christ Our King Catholic Church, 1149 Russell Drive. Prayers of Final Commendation and Farewell will be held immediately following in Mount Pleasant Memorial Gardens. The family will receive friends Tuesday, May 27, 2014 from 6:00 pm to 8:00 pm in J. HENRY STUHR, INC. MOUNT PLEASANT CHAPEL, 1494 Mathis Ferry Road.
+
+<span class="notranslate">James</span>
+
+ was born January 29, 1945 in Newark, New Jersey, son of the late 
+
+<span class="notranslate">Anthony</span>
+
+ A. 
+
+<span class="notranslate">Majeski</span>
+
+ and Irene Haydinyak 
+
+<span class="notranslate">Majeski</span>
+
+. He was a graduate of The Citadel where he received his B.S. Degree, The University of South Carolina School of Graduate Studies from which he received his M.S. Degree, The Medical University of South Carolina College of Graduate Studies from which he received his Ph.D. Degree, and the Medical University of South Carolina College of Medicine from which he received his M.D. Degree. He served his surgical residency at The University of Cincinnati from 1974 to 1980\. Dr. Majeski's Fellowship was with Transplantation Surgery at the University of Cincinnati, and he was certified by The American Board of Surgery and The American Board of Clinical Vascular Surgery. He was a veteran of the U.S. Air Force Reserve with the rank of First Lieutenant. He received the Eagle Scout Award with Silver Palm, the Department of V.A. Service Award - 30 years, and the Physician's Recognition Award with Commendation, AMA. Dr. 
+
+<span class="notranslate">Majeski</span>
+
+ served as the Chief of the Vascular Surgery Service at the Ralph H. Johnson Veteran's Administration Hospital and was Clinical Professor Emeritus of Surgery at the Medical University of South Carolina. He was the editor of the Journal of the South Carolina Medical Association and was Chief of Surgery at the East Cooper Hospital from 1994 until 1996\. Dr. 
+
+<span class="notranslate">Majeski</span>
+
+ published over 130 articles in peer reviewed medical journals and multiple chapters in medical textbooks. He was a member of Christ Our King Catholic Church.
+
+He is survived by his wife of 40 years, Elizabeth Durst Majeski; his children, Elizabeth Irene 
+
+<span class="notranslate">Majeski</span>
+
+, M.D., Ph.D. and her husband, Jason Stroud, M.D. of Mt. Pleasant, SC, 
+
+<span class="notranslate">James</span>
+
+ A. 
+
+<span class="notranslate">Majeski</span>
+
+, Jr. and his wife, Suzanne 
+
+<span class="notranslate">Majeski</span>
+
+ of Mt. Pleasant, SC, and Marie Katharine 
+
+<span class="notranslate">Majeski</span>
+
+ of Mt. Pleasant, SC; his granddaughters, Jessica Elizabeth Stroud, Grace Katharine Stroud, and Hayden Olivia Stroud; his sister, Diane Majeski-Felle and her husband, Robert Felle of Union, NJ; and his beloved dog, Brook.
+
+In lieu of flowers, memorials may be made to The University of Texas M.D. Anderson Cancer Center, 1515 Holcombe Blvd., Houston, TX 77030 ([www.mdanderson.org](http://www.mdanderson.org)).

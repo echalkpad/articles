@@ -1,0 +1,433 @@
+<!DOCTYPE html><html><head><title>Introduction to Docker and Kubernetes</title></head><body>
+<h1>Introduction to Docker and Kubernetes</h1><p><a href="http://code.tutsplus.com/articles/introduction-to-docker-and-kubernetes--cms-25406" target="_new">Original URL</a></p>
+<p><blockquote>Large-scale distributed systems made of multiple cooperating services are becoming increasingly important. These systems run on clusters of hundreds, thousands or more servers. Developing, deploying&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>Large-scale distributed systems made of multiple cooperating services are becoming increasingly important. These systems run on clusters of hundreds, thousands or more servers. Developing, deploying and maintaining these systems efficiently and economically is a tall order.</p>
+
+<p>Virtualization and more recently containerization enable flexible sharing and management of resources. Docker made containerization popular. Check out this Envato Tuts+ article for a great
+introduction: <a href="http://code.tutsplus.com/tutorials/the-hitchhikers-guide-to-docker-and-modulus--cms-24770">The Hitchhiker&#x2019;s Guide to Docker and Modulus</a>.</p>
+
+<p>Google has been running its immense software and data centers on containerization for years and accumulated a <em>lot</em> of experience and knowhow. Kubernetes is an open-source project by Google that brings all that knowledge to the masses.</p>
+
+<p>In this article, I&#x2019;ll explore Docker briefly and then dive deeply into Kubernetes. I&#x2019;ll use as a running example a Python 3 quote REST API service. Let&#x2019;s jump in.</p>
+
+<h2>The Quote Service</h2>
+
+<p>The <a href="https://github.com/the-gigi/quote-service">quote service</a> is a REST API
+that lets you add quotes and get a list of all quotes. It is implemented as
+a Python 3 web service using the excellent <a href="https://github.com/timothycrosley/hug">hug</a>
+library. It exposes a single endpoint called /quotes. You can get all quotes
+or post a new quote. Let&#x2019;s add a few quotes:</p>
+
+<pre class="noskimlinks noskimwords">curl http://localhost:8000/quotes -d "quote=TV is chewing gum for the eyes. ~ Frank Lloyd Wright"
+curl http://localhost:8000/quotes -d "quote=It is better to die on your feet than live on your knees. ~ Emiliano Zapata"
+curl http://localhost:8000/quotes -d "quote=We must be very careful when we give advice to younger people: sometimes they follow it! ~ Edsger W. Dijkstra"
+</pre>
+
+<p>If you browse to <code class="inline">http://localhost:8000/quotes</code> you&#x2019;ll get:
+<code class="inline">
+[
+ "TV is chewing gum for the eyes. ~ Frank Lloyd Wright",
+ "It is better to die on your feet than live on your knees. ~ Emiliano Zapata",
+ "We must be very careful when we give advice to younger people: sometimes they follow it! ~ Edsger W. Dijkstra"
+]
+</code>
+If you just want to see HUG&#x2019;s auto-generated documentation, browse to:
+<code class="inline">http://localhost:8000</code></p>
+
+<pre class="noskimlinks noskimwords">{
+ "404": "The API call you tried to make was not defined. Here's a definition of the API to help you get going :)",
+ "documentation": {
+ "/quotes": {
+ "GET": {
+ "examples": [
+ "http://localhost:8000/quotes"
+ ],
+ "outputs": {
+ "content_type": "application/json",
+ "format": "JSON (Javascript Serialized Object Notation)"
+ }
+ },
+ "POST": {
+ "outputs": {
+ "content_type": "application/json",
+ "format": "JSON (Javascript Serialized Object Notation)"
+ },
+ "inputs": {
+ "quote": {
+ "type": "Basic text / string value"
+ }
+ }
+ }
+ }
+ }
+}
+</pre>
+
+<h2>Docker Basics</h2>
+
+<p>I will not explain too much about Docker and only apply it to the quote
+service.</p>
+
+<h3>Dockerizing a Python App</h3>
+
+<p>First we need a <a href="http://docs.docker.com/engine/reference/builder/">Dockerfile</a>.
+It performs the following steps:</p>
+
+<ol>
+ <li>Based off the latest ubuntu image</li>
+ <li>Installs Python 3 and a few other dependencies</li>
+ <li>Copy the quote-service directory</li>
+ <li>Installs the quote-service dependencies from the requirement.txt file</li>
+ <li>Exposes the 8000 port</li>
+ <li>Launch the quote-service via hug</li>
+</ol>
+
+<pre class="noskimlinks noskimwords">FROM ubuntu:latest
+MAINTAINER Gigi Sayfan "the.gigi@gmail.com"
+RUN apt-get update -y
+RUN apt-get install -y python3 python3-pip python3-dev build-essential
+COPY . /quote-service
+WORKDIR /quote-service
+RUN pip3 install -r requirements.txt
+EXPOSE 8000
+ENTRYPOINT hug -f app.py
+</pre>
+
+<h3>Building an Image</h3>
+
+<p>The next step is to build a Docker image. This is as simple as:</p>
+
+<p><code class="inline">docker build .</code></p>
+
+<p>I also like to tag images:</p>
+
+<p><code class="inline">docker tag 715624b7e22a g1g1/quote-service</code></p>
+
+<p><code class="inline">g1g1</code> is my user name on Docker Hub.</p>
+
+<p>To verify the image was built successfully, type:</p>
+
+<pre class="noskimlinks noskimwords">docker ps --all
+</pre>
+
+<p>You should see the new image:</p>
+
+<pre class="noskimlinks noskimwords">CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
+715624b7e22a g1g1/quote-service "/bin/sh -c 'hug -f a" 4 hours ago Up 35 minutes 0.0.0.0:8000-&gt;8000/tcp agitated_northcutt
+</pre>
+
+<h3>Pushing an Image to Docker Hub</h3>
+
+<p>When you create an image, you can also push it to <a href="https://hub.docker.com/">Docker Hub</a>, so it can be
+used by other people (or yourself on a different machine).</p>
+
+<p><code class="inline">docker push g1g1/quote-service</code></p>
+
+<p>Note that you need to create an account on Docker Hub and log in locally using:</p>
+
+<p><code class="inline">docker login</code></p>
+
+<h3>Running a Dockerized App</h3>
+
+<p>Ok. Let&#x2019;s run the quote service image and expose port 8000 to the host.</p>
+
+<p><code class="inline">docker run -i -t -p 8000 g1g1/quote-service</code></p>
+
+<p>You should see:
+<code class="inline">
+/#######################################################################\
+ `.----``..-------..``.----.
+ :/:::::--:---------:--::::://.
+ .+::::----##/-/oo+:-##----:::://
+ `//::-------/oosoo-------::://. ## ## ## ## #####
+ .-:------./++o/o-.------::-` </code> ## ## ## ## ##
+ <code class="inline">----.-./+o+:..----. </code>.:///. ######## ## ## ##
+ <code class="inline"> `----.-::::::------ `.-:::://. ## ## ## ## ## ####
+ ://::--.</code> -:<code class="inline">...-----...` `:--::::::-.` ## ## ## ## ## ##
+ :/:::::::::-:- </code>``` .:::::-.<code class="inline"> ## ## #### ######
+ </code><code class="inline">.--:::::::. .:::.</code>
+ ``..::. .:: EMBRACE THE APIs OF THE FUTURE
+ ::- .:-
+ -::<code class="inline"> ::- VERSION 1.9.6
+ </code>::- -::<code class="inline">
+ -::-</code> -::-
+########################################################################
+ Copyright (C) 2015 Timothy Edmund Crosley
+ Under the MIT License</p>
+
+<p>Serving on port 8000&#x2026;
+```
+This is pretty cool. Before you try to access your awesome quote service on
+port 8000, you may need to perform some extra work depending on your environment.</p>
+
+<p>If you run on Mac OS X using VirtualBox and <a href="http://docs.docker.com/machine/get-started/">docker-machine</a>,
+you may need to publish port 8000 on VirtualBox to make it accessible on the
+host.</p>
+
+<p>Assuming you did try browsing to <code class="inline">http://localhost:8000/quotes</code>. Oh, no.
+Internal server error! What happened?</p>
+
+<p>Let&#x2019;s look at the code:</p>
+
+<pre class="noskimlinks noskimwords">redis_host = os.environ.get('QUOTE_STORE_SERVICE_HOST', 'localhost')
+redis_server = redis.StrictRedis(host=redis_host, port=6379, db=0)
+</pre>
+
+<p>The quote service is trying to connect to a redis server. The host address
+could be configured as an environment variable, and if it&#x2019;s not set it will
+default to localhost. Unfortunately, redis is not installed by default and
+it&#x2019;s not running inside the container. Let&#x2019;s fix it temporarily. To get
+shell access into the container, type the following command:</p>
+
+<p><code class="inline">docker exec -it 715624b7e22a /bin/bash</code></p>
+
+<p>Then you&#x2019;ll get shell access to the container, and you can install redis:</p>
+
+<p><code class="inline">root@715624b7e22a:/quote-service# apt-get install redis-server</code></p>
+
+<p>Finally, run redis:
+<code class="inline">
+root@715624b7e22a:/quote-service# redis-server
+[25] 29 Nov 00:14:24.546 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
+ _._
+ _.-``__ ''-._
+ _.-`` `. `_. ''-._ Redis 2.8.4 (00000000/0) 64 bit
+ .-`` .-</code>. ```\/ <em>.,</em> &#x2018;&#x2019;-._
+ ( &#x2018; , .-<code class="inline"> | </code>, ) Running in stand alone mode
+ |<code class="inline">-._</code>-&#x2026;-<code class="inline"> __...-.</code><code class="inline">-._|'</code> <em>.-&#x2018;| Port: 6379
+ | <code class="inline">-._ </code>.</em> / <em>.-&#x2018; | PID: 25
+ <code class="inline">-._ </code>-.</em> <code class="inline">-./ _.-' _.-'
+ |</code>-.<em><code class="inline">-._ </code>-.<strong>.-&#x2018; _.-&#x2018;_.-&#x2018;|
+ | <code class="inline">-._</code>-._ _.-&#x2018;_.-&#x2018; | http://redis.io
+ <code class="inline">-._ </code>-._<code class="inline">-.__.-'_.-' _.-'
+ |</code>-._<code class="inline">-._ </code>-.</strong>.-&#x2018; _.-&#x2018;</em>.-&#x2018;|
+ | <code class="inline">-._</code>-._ <em>.-&#x2018;</em>.-&#x2018; |
+ <code class="inline">-._ </code>-.<em><code class="inline">-.__.-'_.-' _.-'
+ </code>-.</em> <code class="inline">-.__.-' _.-'
+ </code>-._ _.-&#x2018;
+ `-.__.-&#x2018;</p>
+
+<p>[25] 29 Nov 00:14:24.547 # Server started, Redis version 2.8.4
+[25] 29 Nov 00:14:24.547 # WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add &#x2018;vm.overcommit_memory = 1&#x2019; to /etc/sysctl.conf and then reboot or run the command &#x2018;sysctl vm.overcommit_memory=1&#x2019; for this to take effect.
+[25] 29 Nov 00:14:24.547 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii DB loaded from disk: 0.000 seconds
+[25] 29 Nov 00:14:24.547 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii The server is now ready to accept connections on port 6379
+```
+Now, you can start adding quotes and getting quotes through the <code class="inline">http://localhost:8000/quotes</code> endpoint.</p>
+
+<p>Placing the application (quote service) and the database (redis) works
+in a pinch for one server. But, obviously that doesn&#x2019;t scale. Enter Kubernetes.</p>
+
+<h2>Kubernetes Basics</h2>
+
+<p>Kubernetes, a.k.a. <strong>k8s</strong>, is an opinionated framework for managing and orchestrating multiple containers. It has its own way of doing things, which is usually very good. It is still under development, so there are still a few rough edges here and there. Kubernetes has a lot of concepts and is very flexible. I&#x2019;ll explain and demonstrate the concepts by applying them to the quote service.</p>
+
+<h3>Setting Up a Cluster</h3>
+
+<p>There are many ways to set up a Kubernetes cluster. Kubernetes can run on bare metal, on Google Container engine, on AWS, on bare metal (with Linux), and locally on any OS using virtual machines. For the purpose of this article, I created a cluster of one master and two minions using the <a href="https://github.com/rimusz/coreos-osx-gui-kubernetes-cluster">CoreOS OSX GUI k8s Cluster</a>. On Mac OS X it provides a nice little menu where you can access many cluster management tools.</p>
+
+<p>Follow the instructions and you&#x2019;ll be good to go in no time.</p>
+
+<p>If you&#x2019;re not using Mac OSX or just don&#x2019;t care much for GUI, you can use <a href="https://github.com/pires/kubernetes-vagrant-coreos-cluster">this project</a> to set up a test cluster in a Vagrant VM.</p>
+
+<p>I will use the command line from now on.</p>
+
+<h3>The kubectl Command-Line Tool</h3>
+
+<p>kubectl is the Swiss Army knife of Kubernetes. You can fully control and manage your cluster from the comfort of your console using nothing but kubectl.</p>
+
+<p>Here is the list of commands:
+<code class="inline">
+ get Display one or many resources
+ describe Show details of a specific resource
+ create Create a resource by filename or stdin
+ update Update a resource by filename or stdin.
+ delete Delete a resource by filename, stdin, resource and ID, or by resources and label selector.
+ namespace SUPERCEDED: Set and view the current Kubernetes namespace
+ log Print the logs for a container in a pod.
+ rolling-update Perform a rolling update of the given ReplicationController.
+ resize Set a new size for a Replication Controller.
+ exec Execute a command in a container.
+ port-forward Forward one or more local ports to a pod.
+ proxy Run a proxy to the Kubernetes API server
+ run-container Run a particular image on the cluster.
+ stop Gracefully shut down a resource by id or filename.
+ expose Take a replicated application and expose it as Kubernetes Service
+ label Update the labels on a resource
+ config config modifies kubeconfig files
+ cluster-info Display cluster info
+ api-versions Print available API versions.
+ version Print the client and server version information.
+ help Help about any command
+</code></p>
+
+<p>Feel free to use the help command or the documentation to investigate what each does. Many of them are used for performing manual operations that are better done using configuration files in a large-scale, scalable, distributed system, but it is indispensable for quick exploration and troubleshooting. The most common commands I&#x2019;ll use a lot are: get, create, delete and start.</p>
+
+<h3>Pods</h3>
+
+<p>A pod is the basic unit of deployment and management in Kubernetes. A pod is a group of one or more containers. You can specify a pod using a dedicated YAML file or as part of a Kubernetes service (see below). A pod is always deployed on a single host, and all the containers in a pod can access each other through localhost. All the pod&#x2019;s containers are always started, stopped and scaled together.</p>
+
+<p>To check out all the pods in the cluster, type:</p>
+
+<p><code class="inline">kubectl get pods</code></p>
+
+<p>The result will be something like:
+<code class="inline">
+NAME READY STATUS RESTARTS AGE
+quote-frontend-4kyns 1/1 Running 0 1h
+quote-frontend-v4xk1 1/1 Running 0 1h
+quote-store-controller-y4ya1 1/1 Running 0 23h
+</code>
+### Volumes</p>
+
+<p>Containers are not supposed to maintain persistent state. When a container crashes or restarts, its local file system is wiped out. If you want to keep persistent state, you should use persistent volumes. Since everything in Kubernetes is based on pods, you need to define volumes in a pod as well.
+Here is a pod definition file with a persistent volume:
+<code class="inline">
+apiVersion: v1
+kind: Pod
+metadata:
+ name: quote-store
+ labels:
+ app: quote-api
+ role: persistent-storage
+ spec:
+ containers:
+ - name: redis
+ image: redis
+ volumeMounts:
+ - name: quote-store-volume
+ mountPath: /data/redis
+ volumes:
+ - name: quote-store-volume
+ emptyDir: {}
+</code>
+Note that persistent volumes are limited to the node and will survive container crashes and restarts, but <em>not</em> node/host failures. You still need to do the work of replicating and backing up important data.</p>
+
+<h3>Replication Controllers</h3>
+
+<p>One of the most important features of Kubernetes is its ability to manage and easily scale up and down the number of pods. Typically, you&#x2019;ll have different types of pods in your system, and you&#x2019;ll want to be able to specify how many pods of each type should be up and running.</p>
+
+<p>Say hello to replication controllers. A replication controller has a pod template that defines a group of containers, a set of labels to identify these pods, and the number of desired pods. The replication controller makes sure that the number of running pods identified by its labels always matches the desired number. If a pod terminates, the replication controller will immediately create a new one.</p>
+
+<p>There are several interesting use cases supported by replication controllers, like high-availability, elastic scaling and rolling updates. For example, you can add and remove pods from the dominion of a replication controller by changing their label.</p>
+
+<p>Replication controllers are specified in a YAML file, of course. Here is an example:
+```
+apiVersion: v1
+kind: ReplicationController</p>
+
+<p>metadata:
+ name: quote-frontend
+spec:
+ replicas: 2
+ # selector identifies the set of Pods that this
+ # replication controller is responsible for managing
+ selector:
+ app: quote-api
+ role: frontend
+ # podTemplate defines the &#x2018;cookie cutter&#x2019; used for creating
+ # new pods when necessary
+ template:
+ metadata:
+ labels:
+ # Important: these labels need to match the selector above
+ # The api server enforces this constraint.
+ app: quote-api
+ role: frontend
+ spec:
+ containers:
+ - name: quote-service
+ image: g1g1/quote-service
+ env:
+ - name: GET_HOSTS_FROM
+ # value: dns
+ value: env
+ ports:
+ - containerPort: 8000
+```
+The template&#x2019;s spec for the quote-service container uses the <a href="https://hub.docker.com/r/g1g1/quote-service/">g1g1/quote-service</a> image I pushed earlier to Docker Hub. Note the <code class="inline">env</code> section where information sharing across pods can occur through either DNS or environment variables.</p>
+
+<p>To create a replication controller, type:</p>
+
+<p><code class="inline">kubectl create -f &lt;replication controller filename&gt;</code></p>
+
+<p>To view the current replication controllers in the cluster, type:</p>
+
+<p><code class="inline">kubectl get rc</code></p>
+
+<p>You should see something like:
+<code class="inline">
+CONTROLLER CONTAINER(S) IMAGE(S) SELECTOR REPLICAS AGE
+quote-frontend quote-service g1g1/quote-service app=quote-api,role=frontend 2 1h
+quote-store-controller master redis app=quote-api,role=persistent-storage 1 1d
+</code>
+### Services</p>
+
+<p>A service exposes its pod to the rest of the cluster and possibly externally via either environment variables or DNS. For example, the quote service is made of two types of pods: a redis store pod and a front-end pod. The front-end container should be able to find the store container, and clients should be able to hit a single public endpoint to access the service.</p>
+
+<p>The Kubernetes service is implemented in yet another YAML file. Each component of your system that needs to be accessed by other components should have its own service file. Here are the two service files for the quote service components:</p>
+
+<h4>srv-quote-frontend.yaml</h4>
+<pre class="noskimlinks noskimwords">apiVersion: v1
+kind: Service
+metadata:
+ name: quote-frontend
+spec:
+ type: NodePort
+ ports:
+ - port: 8000 # the port that this service should serve on
+ # the container on each pod to connect to, can be a name
+ # (e.g. 'www') or a number (e.g. 80)
+ targetPort: 80
+ protocol: TCP
+ # just like the selector in the replication controller,
+ # but this time it identifies the set of pods to load balance
+ # traffic to.
+ selector:
+ app: quote-api
+ role: frontend
+</pre>
+<p>#### srv-quote-store.yaml
+<code class="inline">
+apiVersion: v1
+kind: Service
+metadata:
+ name: quote-store
+spec:
+ ports:
+ - port: 6379 # the port that this service should serve on
+ targetPort: 6379
+ # just like the selector in the replication controller,
+ # but this time it identifies the set of pods to load balance
+ # traffic to.
+ selector:
+ app: quote-api
+ role: persistent-storage
+</code>
+The host and port of each service are made available to every container in the cluster.
+For example, if you run an interactive shell on one of the frontend containers:</p>
+
+<p><code class="inline">kubectl quote-frontend-4kyns exec -i -t bash</code></p>
+
+<p>Then you can verify that environment contains the necessary host and port information to connect to the quote store.
+<code class="inline">
+root@quote-frontend-4kyns:/quote-service# env | grep STORE
+QUOTE_STORE_PORT_6379_TCP_ADDR=10.100.234.192
+QUOTE_STORE_PORT_6379_TCP_PROTO=tcp
+QUOTE_STORE_SERVICE_PORT=6379
+QUOTE_STORE_PORT_6379_TCP_PORT=6379
+QUOTE_STORE_PORT=tcp://10.100.234.192:6379
+QUOTE_STORE_PORT_6379_TCP=tcp://10.100.234.192:6379
+QUOTE_STORE_SERVICE_HOST=10.100.234.192
+</code>
+Just, to refresh your memory, this is exactly what the frontend does:
+<code class="inline">
+redis_host = os.environ.get('QUOTE_STORE_SERVICE_HOST', 'localhost')
+redis_server = redis.StrictRedis(host=redis_host, port=6379, db=0)
+</code>
+## Conclusion</p>
+
+<p>Docker and Kubernetes are exciting technologies. This article barely scratched the surface of what&#x2019;s possible. The benefits are enormous, but the infrastructure, tooling and best practices are still evolving. If you are even remotely connected to large-scale distributed systems, I encourage you to at least stay on top of these technologies and ideally dip your toes in and actually try to use them. There are many ways to experiment and learn without wholesale migration of your entire production infrastructure.</p>
+
+<p>As far as Kubernetes goes, there are a few other alternatives for multi-container management and orchestration, such as the incumbent Mesos and Docker&#x2019;s own compose. I believe Kubernetes is more architecturally sound, has a lot of momentum, and is better than the alternatives.</p>
+</div></div>
+</body></html>

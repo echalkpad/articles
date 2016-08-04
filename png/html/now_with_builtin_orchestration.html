@@ -1,0 +1,81 @@
+<!DOCTYPE html><html><head><title>Now with Built-in Orchestration!</title></head><body>
+<h1>Now with Built-in Orchestration!</h1><p><a href="https://blog.docker.com/2016/06/docker-1-12-built-in-orchestration/" target="_new">Original URL</a></p>
+<p><blockquote>Three&#xA0;years ago, Docker made an esoteric Linux kernel technology called containerization simple and accessible to everyone.&#xA0;Today, we are doing the same for container orchestration.&hellip;</blockquote></p>
+<div><div class="entry-content">
+															<p>Three&#xA0;years ago, Docker made an esoteric Linux kernel technology called containerization simple and accessible to everyone.&#xA0;Today, we are doing the same for container orchestration.</p>
+<p>Container orchestration is what is needed to transition from deploying containers individually on a single host, to deploying complex multi-container apps on many machines. It requires a distributed platform, independent from infrastructure, that stays online through the entire lifetime of your application, surviving hardware failure and software updates. Orchestration is at the same stage today as containerization was 3 years ago.&#xA0;There are two options: either you need an army of technology experts to cobble together a complex ad hoc system, or you have to rely on a company with a lot of experts to take care of everything for you as long as you buy all hardware, services, support, software from them.&#xA0;There is a word for that, it&#x2019;s called lock-in.</p>
+<p>Docker users have been sharing with us that neither option is acceptable. Instead, you need a platform that makes orchestration usable by everyone, without locking you in. Container orchestration would be easier to implement, more portable, secure, resilient, and faster if it was built into the platform.</p>
+<p>Starting with Docker 1.12, we have added features to the core Docker Engine to make multi-host and multi-container orchestration easy. We&#x2019;ve added new API objects, like Service and Node, that will let you use the Docker API to deploy and manage apps on a group of Docker Engines called a swarm. With Docker 1.12, the best way to orchestrate Docker is Docker!</p>
+<a href="https://www.docker.com/getdocker"><img title="" src="http://img.scoop.it/q5ZcSVcr06OuoljzvFbsvrnTzqrqzN7Y9aBZTaXoQ8Q=" alt=""></a>&#xA0;
+<p>The Docker 1.12 design is based on four principles:</p>
+<ul class="indented">
+<li><span>Simple</span><span>&#xA0;Yet Powerful</span>&#xA0;&#x2013; Orchestration is a central part of modern distributed applications; it&#x2019;s so central that we have seamlessly built it into our core Docker Engine. Our approach to orchestration follows our philosophy about containers: no setup, only a small number of simple concepts to learn, and an &#x201C;it just works&#x201D; user experience.</li>
+<li><span>Resilient</span>&#xA0;&#x2013; Machines fail all the time. Modern systems should expect these failures to occur regularly and adapt without any application downtime that&#x2019;s why a zero single-point-of-failure design is a must.</li>
+<li><span>Secure</span>&#xA0;&#x2013; Security should be the default.&#xA0;Barriers to strong security &#x2014; certificate generation, having to understand PKI &#x2014; should be removed. But advanced users should still be able to control and audit every aspect of certificate signing and issuance.</li>
+<li><span>Optional Features and Backward Compatibility</span>&#xA0;&#x2013; With millions of users, preserving backwards compatibility is a must for Docker Engine.&#xA0;All new features are optional, and you don&#x2019;t incur any overhead (memory, cpu) if you don&#x2019;t use them. Orchestration in Docker Engine aligns with our platform&#x2019;s batteries included but swappable approach allowing users to continue using any third-party orchestrator that is built on Docker Engine.</li>
+</ul>
+
+
+<p>Let&#x2019;s take a look at how the new features in Docker 1.12 work.</p>
+
+<h3>Creating Swarms with One Decentralized Building Block</h3>
+<p>It all starts with creating a swarm&#x2013;a self-healing group of engines&#x2013;which for the bootstrap node is as simple as:</p>
+<p>docker swarm init</p>
+<p>Under the hood this creates a <a href="https://raft.github.io/raft.pdf">Raft</a>&#xA0;consensus group of one node. This first node has the role of manager, meaning it accepts commands and schedule tasks. As you join more nodes to the swarm, they will by default be workers, which simply execute containers dispatched by the manager. You can optionally add additional manager nodes.&#xA0;The manager nodes will be part of the Raft consensus group. We use an optimized Raft store in which reads are serviced directly from memory&#xA0;which makes scheduling performance fast.</p>
+
+<h3>Creating and Scaling Services</h3>
+<p>Just as you run a single container with docker run, you can now start a replicated, distributed, load balanced process on a swarm of Engines with docker service:</p>
+<p>docker service create &#x2013;name frontend &#x2013;replicas 5 -p 80:80/tcp nginx:latest</p>
+<p>This command declares a desired state on your swarm&#xA0;of 5 nginx containers, reachable as a single, internally load balanced service on port 80 of any node in your swarm. Internally, we make this work using <a href="http://www.linuxvirtualserver.org/software/ipvs.html">Linux IPVS</a>,&#xA0;an in-kernel Layer 4 multi-protocol load balancer that&#x2019;s been in the Linux kernel for more than 15 years. With IPVS routing packets inside the kernel, swarm&#x2019;s routing mesh delivers high performance container-aware load-balancing.</p>
+<p>When you create services, you can optionally create replicated or global services. Replicated services mean any number of containers that you define will be spread across the available hosts.&#xA0;Global services, by contrast, schedule one instance the same container on every host in the swarm.</p>
+<p>Let&#x2019;s turn to how Docker provides resiliency.&#xA0;Swarm mode enabled engines are self-healing, meaning that they are aware of the application you defined and will continuously check and reconcile the environment when things go awry.&#xA0;For example, if you unplug one of the machines running an nginx instance, a new container will come up on another node.&#xA0;Unplug&#xA0;the network switch for half the machines in your swarm, and the other half will take over, redistributing the containers amongst themselves. For updates, you now have flexibility in how you re-deploy services once you make a change. You can set a rolling or parallel update of the containers on your swarm.</p>
+<p>Want to scale up to 100 instances? It&#x2019;s as simple as:</p>
+<p>docker service scale frontend=100</p>
+<p>A typical two-tier (web+db) application would be created like this:</p>
+<p>docker network create -d overlay mynet<br>
+docker service create &#x2013;name frontend &#x2013;replicas 5 -p 80:80/tcp \<br>
+&#x2013;network mynet mywebapp<br>
+docker service create &#x2013;name redis &#x2013;network mynet redis:latest</p>
+<p>This is the basic architecture of this application:</p>
+<a href="https://www.docker.com/getdocker"><img title="" src="http://img.scoop.it/bdEKWLMnOnahqAX3rCPOQrnTzqrqzN7Y9aBZTaXoQ8Q=" alt=""></a>&#xA0;
+<h3>Security</h3>
+<p>A core principle for Docker 1.12 is creating a zero configuration, secure-by-default, out of the box experience for the Docker platform. One of the major hurdles that administrators often face with deploying applications into production is running them securely, Docker 1.12 allows an administrator to follow the exact same steps setting up a demo cluster that they would to setup a secure production cluster.</p>
+<p>Security is not something you can bolt-on after the fact. That is why Docker 1.12 comes with mutually authenticated TLS, providing authentication, authorization and encryption to the communications of every node participating in the swarm, out of the box.</p>
+<p>When starting your first manager, Docker Engine will generate a new Certificate Authority (CA) and a set of initial certificates for you. After this initial step, every node joining the swarm will automatically be issued a new certificate with a randomly generated ID, and their current role in the swarm&#xA0;(manager or worker). These&#xA0;certificates will be used as their cryptographically secure node identity for the lifetime of their participation in this swarm, and will be used by the managers to ensure secure dissemination of tasks and other updates.</p>
+<a href="https://www.docker.com/getdocker"><img title="" src="http://img.scoop.it/7M1ysO8rHO8VyFkrebWxT7nTzqrqzN7Y9aBZTaXoQ8Q=" alt=""></a>&#xA0;
+<p>One of the biggest barriers of adoption of TLS has always been the difficulty of creating, configuring and maintaining the necessary Public Key Infrastructure&#xA0;(PKI). With Docker 1.12, everything not only gets setup and configured with safe defaults for you, but we also automated one of the most painful parts of dealing with TLS certificates: certificate rotation.</p>
+<p>Under the hood, every node participating in the swarm&#xA0;is constantly refreshing its certificates, ensuring that potentially leaked or compromised certificates are no longer valid. The frequency with which certificates are rotated can be configured by the user, and set as low as every 30 minutes.</p>
+<p>If you would like to use your own Certificate Authority, we also support an external-CA mode, where the managers in the swarm simply relay the Certificate Signing Requests of the nodes attempting to join the cluster to a remote URL.</p>
+
+<h3>Bundles</h3>
+<p>Docker 1.12 introduces a new file format called a <a href="https://github.com/docker/docker/blob/master/experimental/docker-stacks-and-bundles.md">Distributed Application Bundle</a>&#xA0;(experimental build only).&#xA0;Bundle&#xA0;is a new abstraction on top of service&#xA0;focused on the full stack application.</p>
+<p>A Docker Bundle file is a declarative specification of a set of services that mandates:</p>
+<ul class="indented">
+<li>What specific image revision to run</li>
+<li>What networks to create</li>
+<li>How containers in those services must be networked to run</li>
+</ul>
+<p>Bundle files are fully portable and are perfect deployment artifacts for software delivery pipelines because they let you ship fully spec&#x2019;ed and versioned multi-container Docker apps.</p>
+<p>The bundle file spec is simple and open, and you can create bundles however you want. To get you started, Docker Compose has experimental support for creating bundle files&#xA0;and with Docker 1.12 and swarm mode enabled, you can deploy the bundle files.</p>
+<p>Bundles are an efficient mechanism for moving multi-service apps from developer laptops through CI to production. It&#x2019;s experimental, and we&#x2019;re looking for feedback from the community.</p>
+
+<h3>Under the hood of Docker 1.12</h3>
+<p>When you take a look under the hood, Docker 1.12 uses a number of other interesting technologies.&#xA0;Inter-node communication is done using <a href="http://www.grpc.io/">gRPC</a>, which gives us HTTP/2 benefits like connection multiplexing and header compression. Our data structures are transmitted efficiently thanks to <a href="https://developers.google.com/protocol-buffers/">protobufs</a>.<br>
+<span class="embed-youtube"><iframe class="youtube-player" type="text/html" width="1140" height="672" src="https://www.youtube.com/embed/F7hoq0KwHD4?version=3&amp;rel=1&amp;fs=1&amp;autohide=2&amp;showsearch=0&amp;showinfo=1&amp;iv_load_policy=1&amp;wmode=transparent"></iframe></span><br>
+Check out these additional resources on Docker 1.12:</p>
+
+
+<div class="tm-click-to-tweet">
+
+<p><a href="https://twitter.com/share?text=%23Docker+1.12%3A+Now+with+built-in+orchestration%21+%23swarmmode&amp;via=docker&amp;related=docker&amp;url=https://blog.docker.com/2016/06/docker-1-12-built-in-orchestration/" target="_blank" class="tm-ctt-btn">Click To Tweet</a>
+</p>
+</div>
+
+
+<h3><b>Learn More about Docker</b></h3>
+
+																<span class="tags"><a href="https://blog.docker.com/tag/docker-1-12/" rel="tag">docker 1.12</a>, <a href="https://blog.docker.com/tag/docker-orchestration/" rel="tag">Docker orchestration</a>, <a href="https://blog.docker.com/tag/dockercon/" rel="tag">dockercon</a>, <a href="https://blog.docker.com/tag/orchestration/" rel="tag">orchestration</a></span>
+								</div>	
+				
+			</div>
+</body></html>

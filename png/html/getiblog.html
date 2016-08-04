@@ -1,0 +1,100 @@
+<!DOCTYPE html><html><head><title>getiblog</title></head><body>
+<h1>getiblog</h1><p><a href="http://blog.getify.com/concurrently-javascript-1/" target="_new">Original URL</a></p>
+<p><blockquote>What is concurrency? How is it different from parallelism? JavaScript is single-threaded on the event loop, so how does its asynchrony fit into the mix? These are great questions, but sadly, I think&hellip;</blockquote></p>
+<div><div class="entry">
+						
+						<p>What is concurrency? How is it different from parallelism? JavaScript is single-threaded on the event loop, so how does its asynchrony fit into the mix?</p>
+<p>These are great questions, but sadly, I think most JS developers are not really asking them enough. The concepts behind writing concurrent code are incredibly important, but we tend to only focus on the API provided to us by some library or framework. These APIs have a tremendous capability to shape our thoughts about the underlying functionalities, and often not in accurate or productive ways.</p>
+<p>I want us to talk first about the concepts around concurrency before we focus on what we can do with some API or pattern. <strong>Don&#x2019;t worry:</strong> following parts of this blog post series will talk more about APIs, if that&#x2019;s what really gets you excited. But don&#x2019;t skip over these concepts.</p>
+<h3 id="parallelism">Parallelism</h3>
+<p>Parallelism in computing is when two or more <em>things</em> are happening at exactly the same instant. Practically speaking, this happens only when there&#x2019;s two separate cores in the system&#x2019;s CPU, so at any given moment, different electrical impulses are firing.</p>
+<p>BTW, the <em>things</em> we&#x2019;re talking about happening in parallel are not <em>big</em> tasks like network requests and responses. Instead, we&#x2019;re talking about very low-level actions, like adding two numbers together or performing a bitwise operation on a single number. Let&#x2019;s call these <strong>operations</strong> rather than <strong>tasks</strong>.</p>
+<p>It may be hard to picture it, but the high-level things we do in programming like sorting numbers, making database queries, or styling the text with a custom font &#x2013; they really do break down to (lots of) these very low-level operations.</p>
+<h4 id="concurrency">Concurrency</h4>
+<p>Concurrency means two or more <em>things</em> are happening in the same time period. But here, the <em>things</em> are tasks, not operations. So, compare concurrency to parallelism.</p>
+<p>See how they&#x2019;re similar but also distinct?</p>
+<p>Concurrency speaks to the idea of having two high-level tasks &#x2013; like an Ajax request/response cycle and a repainting of the page after a scroll event &#x2013; happening &#x201C;at the same time&#x201D;.</p>
+<p>Each task&#x2019;s low-level operations might or might not be happening in parallel. Concurrency doesn&#x2019;t necessarily imply parallelism, but includes parallelism conceptually.</p>
+<h4 id="threads">Threads</h4>
+<p>Parallelism is usually modeled in programming through a construct called <strong>threads</strong>.</p>
+<p>In a really rough sense, we can think of a thread as an ordered list of operations to be performed by the system. A system level thread would be the set of tasks that a CPU core is going to perform. So if a computer has 4 cores, there would be at most 4 system threads that could be processing 4 separate lists of operations.</p>
+<p>That entire set of operations could be conceptually composed together to look like one or more high level tasks we might be working with in our programs.</p>
+<p>Of course, if your computer only has 4 cores, and thus only 4 possible system level threads at any given moment, that&#x2019;s going to be rather limiting and difficult for the dozen or more programs you have open right now to trade off on what they need to get done.</p>
+<p>So your operating system will provide OS level (virtual) threads on demand to programs that ask for them. At any given moment, there could be dozens, hundreds, even thousands of these spinning. It&#x2019;s up to the OS to <em>schedule</em> these virtual threads across the actual system threads (CPU cores).</p>
+<p>The OS is pretty good at this scheduling, so even if there are many more virtual threads than system threads, the processing of all those operations will still procede as if they&#x2019;re all happening truly in parallel.</p>
+<h3 id="async">Async</h3>
+<p>Now, what about asynchrony? JavaScript programmers will likely be familiar with the notion that JS is asynchronous, and some will have even heard that JavaScript is &#x201C;single threaded&#x201D;.</p>
+<p>That&#x2019;s true. From the language perspective, the JS code makes the assumption that no two lines in the same program instance will ever be executing at exactly the same time.</p>
+<p>In fact, normal JS functions have &#x201C;run to completion&#x201D; semantics, meaning that in fact no function that&#x2019;s currently running can be preemtively interrupted by another function. Of course, function <strong>A</strong> can <em>call</em> function <strong>B</strong>. But <strong>B</strong> can never be scheduled to start running in parallel with <strong>A</strong>.</p>
+<p>That means <strong>A</strong> never needs to worry about any side effects that <strong>B</strong> may have on the program state, except from the moment <strong>A</strong> invokes <strong>B</strong> to when <strong>B</strong> fully completes.</p>
+<p>This semantic is significantly simplifying in terms of ease of writing correct, bug-free code.</p>
+<p>JavaScript trades out the power of multi-threading parallelism for much simpler language mechanics. Because the event-loop is so efficient, JS programs can achieve impressive amounts of performance even though they&#x2019;re only running on a single thread.</p>
+<p>Of course, JS programmers have some role to play there. The better we are at breaking up tasks into operations, the more effective the JS engine can be at scheduling these operations on the single thread event loop.</p>
+<h3 id="coordination">Coordination</h3>
+<p>When you have two separate lists of operations to perform that are entirely <em>independent</em> &#x2013; they don&#x2019;t depend on each other in ordering, and they don&#x2019;t use any <em>shared resources</em> &#x2013; modern parallel threaded programming is mostly a no brainer.</p>
+<p>But much more commonly, you need to coordinate some <em>dependency</em> between the threads. Coordination is the hard part.</p>
+<h4 id="coordinating-parallel">Parallel</h4>
+<p>Imagine you have two different tasks to perform with several operations in each task. Let&#x2019;s visualize that situation with two lists:</p>
+<p>Task A:</p>
+<ul>
+<li>operation 1a</li>
+<li>operation 2a</li>
+<li>operation 3a</li>
+</ul>
+<p>Task B:</p>
+<ul>
+<li>operation 1b</li>
+<li>operation 2b</li>
+<li>operation 3b</li>
+</ul>
+<p>If <strong>Task A</strong> is a file reading operation and <strong>Task B</strong> is a file writing operation, and they happen to be against the same file, you can probably imagine how the order of these operations is pretty important. If you can&#x2019;t know, and indeed control predictably, the order of operations, your program will have a different outcome each time it runs.</p>
+<p>That sort of situation is not <em>always</em> an error, but it&#x2019;s often seen as one, and given the label: &#x201C;race condition&#x201D;.</p>
+<p>To avoid race conditions, your program needs to decide what type of coordination needs to occur. For example, you may say <strong>A</strong> needs to wait for all of <strong>B</strong> to finish before it starts. That&#x2019;s the easiest of the coordinations. But it&#x2019;s also the least interesting to explore conceptually.</p>
+<p>What if <strong>1a</strong> is &#x201C;open a file handle&#x201D; and <strong>1b</strong> is &#x201C;open a file handle&#x201D;? It would seem like those two things could happen at the same time, right? But if <strong>2a</strong> is &#x201C;read the contents of the file&#x201D; and <strong>2b</strong> is &#x201C;write some more text to the file&#x201D;, the order of those two really matters. Finally, <strong>3a</strong> and <strong>3b</strong> are both &#x201C;close the file handle&#x201D;, and again, these operations are OK to happen in parallel.</p>
+<p>Our desired result may be that we want the new contents being written to the file to also be read back out. Or, we may want the opposite: reading before writing.</p>
+<p>The desired coordination could be visualized as such (the two columns are two separate threads where the operations happen in parallel):</p>
+
+<p>There&#x2019;s several components of coordination to consider here. First, <strong>1a</strong> and <strong>1b</strong> need to be instructed to occur in parallel.</p>
+<p>Next, <strong>2b</strong> needs to be instructed to wait for both <strong>1a</strong> and <strong>1b</strong> to finish, regardless of which order that might occur in. Consequently, <strong>2a</strong> needs to wait for <strong>2b</strong> to finish before it runs. Finally, <strong>3a</strong> and <strong>3b</strong> need to wait for <strong>2a</strong> to finish, and then need to fire in parallel.</p>
+<h4 id="async-parallel">Async / Parallel</h4>
+<p>Whether we&#x2019;re talking about truly parallel programming, or async (single-threaded) programming like in JS, coordination of concurrency is absolutely foundational for effective programming.</p>
+<p>The coordination we&#x2019;re talking about here should be fairly straightforward to conceptualize. But modern concurrency is fantastically more complicated. We need to figure out how to build up higher patterns from lower level ideas.</p>
+<p>The coordination steps we just talked about can be thought of in two categories:</p>
+<ul>
+<li>things happening in parallel</li>
+<li>things happening in series</li>
+</ul>
+<p>For &#x201C;things happening in parallel&#x201D;, our only concern is that we be able to wait for all the <em>things</em> in a set to complete before moving on. For &#x201C;things happening in series&#x201D;, we need to be able to wait for a <em>thing</em> to complete before moving on to the next <em>thing</em>.</p>
+<p>Hopefully you can see how we can build all other higher order notions of concurrent programming by mixing and building on top of these two building blocks.</p>
+<h3 id="javascript-concurrency">JavaScript Concurrency</h3>
+<p>The coordination concepts we&#x2019;ve layed out in this post are expressable in some form or another in JS. But why would we choose one form over another? Because the understandability of our code is at least as important as the functionality of our code.</p>
+<p>Starting with the humble <strong>callback</strong>: to express a series, you call one callback at the end of the previous one. to express a parallel group, you call multiple callbacks in a row, and you use some shared (global or closured) varaiable(s) to maintain and coordinate the state.</p>
+<p><strong>Thunks</strong> are a pattern for organizing closure in callbacks to eliminate ordering (time) complexity. So it&#x2019;s much easier to express both series and parallel with them. IOW, we have the same capability &#x2013; concurrent coordination &#x2013; but our chosen pattern improves the code readability.</p>
+<p><strong>Promises</strong> are like thunks but with more trustability and a nicer API. So, concurrency is even better with promises than with thunks. A series is a promise chain, and a parallel group is achieved with <code>Promise.all(..)</code>.</p>
+<p><strong>Generators</strong> (+ Promises) achieve almost perfect sync-looking async code, which makes expressing our coordinated concurrency look even closer to how our brains work.</p>
+<p>But there&#x2019;s more higher order patterns for even more sophisticated concurrency. In subsequent parts of this blog post series, we&#x2019;re going to look at <strong>reactive programming</strong> (event-concurrency) and <strong>CSP</strong> (channel-concurrency).</p>
+<p>Our goal is to get better about using the conceptuals we&#x2019;ve covered here to express concurrency in our programs in more <em>reason</em>able ways.</p>
+						
+												<p>
+						<a rel="nofollow" href="http://twitter.com/share?_=1701050996&amp;original_referer=http%3A%2F%2Fblog.getify.com%2Fconcurrently-javascript-1%2F&amp;related=AustinJS%3AAustin.JavaScript%20monthly%20meetup%20group&amp;text=Concurrently+JavaScript+%28part+1%29&amp;url=http%3A%2F%2Fblog.getify.com%2Fconcurrently-javascript-1%2F" class="twitter-share-button ignore-external-link">Tweet</a>
+						</p>
+						
+						
+						
+						
+						
+						
+
+
+
+	
+	
+
+
+	
+						
+						
+					</div>
+					
+				</div>
+</body></html>

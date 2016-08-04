@@ -1,0 +1,88 @@
+<!DOCTYPE html><html><head><title>Lilliput DisplayLink USB Monitor UM-70 (17e9:02a9) with QNAP TS-110 on Debian Linux (armel)</title></head><body>
+<h1>Lilliput DisplayLink USB Monitor UM-70 (17e9:02a9) with QNAP TS-110 on Debian Linux (armel)</h1><p><a href="http://karuppuswamy.com/wordpress/2011/04/11/lilliput-displaylink-usb-monitor-um-70-17e902a9-with-qnap-ts-110-on-debian-linux-armel/" target="_new">Original URL</a></p>
+<p><blockquote>Some times before I posted about how I got this monitor working in Ubuntu How to get Lilliput DisplayLink based USB Monitor UM-70 (17e9:02a9) working in Ubuntu Linux. This post is about&hellip;</blockquote></p>
+<div>
+		
+		
+
+<div class="entry clearfix">
+			<p>Some times before I posted about how I got this monitor working in Ubuntu <a href="http://karuppuswamy.com/wordpress/2010/07/19/how-to-get-lilliput-displaylink-based-usb-monitor-um-70-17e902a9-working-in-ubuntu-linux/">How to get Lilliput DisplayLink based USB Monitor UM-70 (17e9:02a9) working in Ubuntu Linux</a>. This post is about DisplayLink&#x2019;s USB monitor from Lilliput working on QNAP TS-110 home NAS server. The configuration is as below:</p>
+<p>Hardware: QNAP TS-110 Home NAS box, UM-70 Lilliput monitor connected to USB Port</p>
+<p>Software: Debian GNU/Linux 6.0 (Squeeze) with kernel 2.6.32-5-kirkwood</p>
+<p>The idea is to use this NAS server as media display for home. This monitor is configured to display Slide show, a Analog Clock, a monthly Calendar, Weather forecast for 5 days and Quote of the day. Weather forecast uses home internet connection to retrieve live data.</p>
+<p>Here is a quick view on what I did to get this monitor working with headless NAS server.</p>
+<p>1. Installed Debian 6.0 (Squeeze) with kernel 2.6.32-5-kirkwood.</p>
+<blockquote><p>root@debian:~# uname -a<br>
+Linux debian 2.6.32-5-kirkwood #1 Tue Mar 8 10:56:14 UTC 2011 armv5tel GNU/Linux</p></blockquote>
+<p>2. Ensure that <strong>udlfb</strong> module loaded.</p>
+<p>root@debian:~# lsmod | grep udlfb</p>
+<blockquote><p>udlfb&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 15115&#xA0; 2<br>
+fb&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 38994&#xA0; 5 udlfb<br>
+fb_sys_fops&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 1041&#xA0; 1 udlfb<br>
+sysimgblt&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 1717&#xA0; 1 udlfb<br>
+sysfillrect&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 2836&#xA0; 1 udlfb<br>
+syscopyarea&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 2604&#xA0; 1 udlfb<br>
+usbcore&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 122487&#xA0; 6 snd_usb_audio,snd_usb_lib,usbhid,udlfb,ehci_hcd</p></blockquote>
+<p>Ensure that you get green display when the system is up.</p>
+<p>3. Download Displaylink xorg video module (xserver-xorg-video-displaylink_0.3.orig.tar.gz) from Ubuntu repository <a title="xserver-xorg-video-displaylink_0.3.orig.tar.gz" href="http://archive.ubuntu.com/ubuntu/pool/universe/x/xserver-xorg-video-displaylink/xserver-xorg-video-displaylink_0.3.orig.tar.gz" target="_blank">here</a>.</p>
+<p>4. Install the dependent packages to compile the above module.</p>
+<blockquote><p>root@debian:~# apt-get install xinit xserver-xorg xserver-xorg-dev xfonts-base libusb-dev xorg-dev git-core build-essential linux-headers-2.6</p></blockquote>
+<p>5. Extract the downloaded module</p>
+<blockquote><p>root@debian:~# tar zxvf xserver-xorg-video-displaylink_0.3.orig.tar.gz<br>
+root@debian:~# cd xf86-video-displaylink/</p></blockquote>
+<p>6. Edit the source code of above module for a small change</p>
+<p>Open <em><strong>src/displaylink.c</strong></em> with your favorite editor and comment the following lines:</p>
+<blockquote><p>//#include &#x201C;xf86Resources.h&#x201D;<br>
+//#include &#x201C;xf86RAC.h&#x201D;<br>
+// pScrn-&gt;racMemFlags = RAC_FB | RAC_COLORMAP | RAC_CURSOR | RAC_VIEWPORT;<br>
+// pScrn-&gt;racIoFlags = RAC_FB | RAC_COLORMAP | RAC_CURSOR | RAC_VIEWPORT;<br>
+// xf86CrtcScreenInit (pScreen);</p></blockquote>
+<p>7. Compile and install this xorg module</p>
+<blockquote><p>root@debian:~# ./configure</p>
+<p>root@debian:~# make &amp;&amp; make install</p></blockquote>
+<p>This should install /usr/local/lib/xorg/modules/drivers/displaylink_drv.so</p>
+<p>8. Configure the /etc/X11/xorg.conf file as shown below:</p>
+<blockquote><p>#################################################</p>
+<p>Section &#x201C;ServerLayout&#x201D;<br>
+Identifier&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;Server Layout&#x201D;<br>
+Screen&#xA0; 0&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;DisplayLinkScreen&#x201D; 0 0<br>
+EndSection</p>
+<p>#################################################</p>
+<p>Section &#x201C;Files&#x201D;<br>
+ModulePath&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;/usr/lib/xorg/modules&#x201D;<br>
+ModulePath&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;/usr/local/lib/xorg/modules&#x201D;<br>
+ModulePath&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;/usr/local/lib/xorg/modules/drivers&#x201D;<br>
+EndSection</p>
+<p>############### DisplayLink Stuff ###############</p>
+<p>Section &#x201C;Device&#x201D;<br>
+Identifier&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;DisplayLinkDevice&#x201D;<br>
+Driver&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;displaylink&#x201D;<br>
+Option&#xA0; &#x201C;fbdev&#x201D; &#x201C;/dev/fb0&#x201D;<br>
+Option&#xA0; &#x201C;DPI&#x201D; &#x201C;140&#xD7;140&#x201D;<br>
+EndSection</p>
+<p>Section &#x201C;Monitor&#x201D;<br>
+Identifier&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;DisplayLinkMonitor&#x201D;<br>
+#&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; DisplaySize&#xA0;&#xA0;&#xA0;&#xA0; 152 92<br>
+EndSection</p>
+<p>Section &#x201C;Screen&#x201D;<br>
+Identifier&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;DisplayLinkScreen&#x201D;<br>
+Device&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;DisplayLinkDevice&#x201D;<br>
+Monitor&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x201C;DisplayLinkMonitor&#x201D;<br>
+SubSection &#x201C;Display&#x201D;<br>
+Depth&#xA0;&#xA0; 16<br>
+Modes&#xA0;&#xA0; &#x201C;800&#xD7;480&#x201D;<br>
+EndSubSection<br>
+EndSection</p>
+<p>#################################################</p></blockquote>
+<p>You are done! Now install gdm or kdm or use startx to start your X session and enjoy the power of linux. Here is my media display working on top of fluxbox and gdesklets.</p>
+<div id="attachment_2275" class="wp-caption aligncenter"><a href="http://karuppuswamy.com/wordpress/wp-content/uploads/2011/04/Media-Display.jpg" rel="lightbox[2273]" title="Media-Display"><img class="size-medium wp-image-2275" title="Media-Display" src="http://karuppuswamy.com/wordpress/wp-content/uploads/2011/04/Media-Display-450x337.jpg" alt="" width="450"></a><p class="wp-caption-text">Media Display</p></div>
+
+<p><strong>Reference</strong>: http://forum.doozan.com/read.php?2,2073,3169,quote=1</p>
+			
+						
+		</div>
+			
+		
+
+	</div>
+</body></html>

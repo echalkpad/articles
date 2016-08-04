@@ -1,0 +1,323 @@
+<!DOCTYPE html><html><head><title>How to Build Node.js Barcode Reader on Windows, Linux and Mac</title></head><body>
+<h1>How to Build Node.js Barcode Reader on Windows, Linux and Mac</h1><p><a href="http://www.codeproject.com/Articles/1078098/How-to-Build-Node-js-Barcode-Reader-on-Windows-Lin" target="_new">Original URL</a></p>
+<p><blockquote>More and more Web developers tend to choose Node.js to build their Website because it is convenient to build complex server-side Web applications using only JavaScript. To extend and empower the&hellip;</blockquote></p>
+<div><div id="contentdiv" class="text">
+						
+
+
+
+<p>More and more Web developers tend to choose Node.js to build their Website because it is convenient to build complex server-side Web applications using only JavaScript. To extend and empower the functionalities of Node.js applications on different platforms, Node.js allows developers to create addons in C/C++. In this post, let&#x2019;s take a glimpse of how easy to build a custom Node module on Windows, Linux, and Mac by wrapping <a href="http://www.dynamsoft.com/Products/Dynamic-Barcode-Reader.aspx?ccid=cp" rel="nofollow">Dynamsoft Barcode Reader SDK</a>, as well as how to integrate the module to quickly implement an online barcode reader.</p>
+
+<ul class="download">
+	<li><a href="http://www.codeproject.com/KB/showcase/1078098/nodejs-barcode-for-win-linux-mac.zip">Download Node.js Barcode Demo - 526.1 KB</a></li>
+</ul>
+
+<h2>Introduction</h2>
+
+<p>Dynamsoft Barcode Reader provides C/C++ shared libraries for Windows, Linux, and Mac. The ultimate benefit is that any high-level programming languages, such as JavaScript, Python, Java, Ruby, PHP and so on, are capable of wrapping C/C++ APIs using an extension or an addon. No matter which programming language you are familiar with, the SDK will expedite the coding work of barcode reader app with a few lines of code.</p>
+
+<h2>Supported 1D/2D Barcode Types</h2>
+
+<ul>
+	<li>Code 39, Code 93, Code 128, Codabar, Interleaved 2 of 5, EAN-8, EAN-13, UPC-A, UPC-E,Industrial 2 of 5</li>
+	<li>QRCode</li>
+	<li>DataMatrix</li>
+	<li>PDF417</li>
+</ul>
+
+<h2>Supported Image Types</h2>
+
+<ul>
+	<li>BMP, JPEG, PNG, GIF, TIFF, PDF</li>
+</ul>
+
+<h2>Environment</h2>
+
+
+
+
+
+<h2>Node.js Barcode Addon</h2>
+
+<p>Node.js Addons are dynamically-linked shared objects written in C/C++. If you have never touched this part before, you&#x2019;d better follow the <a href="https://nodejs.org/dist/latest-v5.x/docs/api/addons.html" rel="nofollow">official tutorial</a> to get started.</p>
+
+<h3>Create Addon</h3>
+
+<p>Create <em>dbr.cc</em> and add a method <code>DecodeFile</code>:</p>
+
+<pre lang="C++"><span class="code-keyword">#include</span><span class="code-preprocessor"> <span class="code-keyword">&lt;</span><span class="code-leadattribute">node.h</span><span class="code-keyword">&gt;</span>
+</span><span class="code-keyword">#include</span><span class="code-preprocessor"> <span class="code-keyword">&lt;</span><span class="code-leadattribute">string.h</span><span class="code-keyword">&gt;</span>
+</span><span class="code-keyword">#include</span><span class="code-preprocessor"> <span class="code-string">"</span><span class="code-string">If_DBR.h"</span>
+</span><span class="code-keyword">#include</span><span class="code-preprocessor"> <span class="code-string">"</span><span class="code-string">BarcodeFormat.h"</span>
+</span><span class="code-keyword">#include</span><span class="code-preprocessor"> <span class="code-string">"</span><span class="code-string">BarcodeStructs.h"</span>
+</span><span class="code-keyword">#include</span><span class="code-preprocessor"> <span class="code-string">"</span><span class="code-string">ErrorCode.h"</span>
+</span> 
+<span class="code-keyword">using</span> <span class="code-keyword">namespace</span> v8;
+ 
+<span class="code-keyword">void</span> DecodeFile(<span class="code-keyword">const</span> FunctionCallbackInfo&lt;Value&gt;&amp; args) {
+ 
+}
+ 
+<span class="code-keyword">void</span> Init(Handle&lt;Object&gt; exports) {
+ NODE_SET_METHOD(exports, <span class="code-string">"</span><span class="code-string">decodeFile"</span>, DecodeFile);
+}
+ 
+NODE_MODULE(dbr, Init)</pre>
+
+<p>Parse parameters that passed from JavaScript:</p>
+
+<pre lang="C++">Isolate* isolate = Isolate::GetCurrent();
+HandleScope scope(isolate);
+<span class="code-sdkkeyword">String</span>::Utf8Value license(args[<span class="code-digit">0</span>]-&gt;ToString());
+<span class="code-sdkkeyword">String</span>::Utf8Value fileName(args[<span class="code-digit">1</span>]-&gt;ToString());
+<span class="code-keyword">char</span> *pFileName = *fileName;
+<span class="code-keyword">char</span> *pszLicense = *license;
+<span class="code-keyword">__int64</span> llFormat = args[<span class="code-digit">2</span>]-&gt;IntegerValue();
+Local&lt;Function&gt; cb = Local&lt;Function&gt;::Cast(args[<span class="code-digit">3</span>]);</pre>
+
+<p>Decode barcode image:</p>
+
+<pre lang="C++"><span class="code-keyword">int</span> iMaxCount = 0x7FFFFFFF;
+ReaderOptions ro = {<span class="code-digit">0</span>};
+pBarcodeResultArray pResults = NULL;
+ro.llBarcodeFormat = llFormat;
+ro.iMaxBarcodesNumPerPage = iMaxCount;
+ 
+DBR_InitLicense(pszLicense);
+<span class="code-keyword">int</span> ret = DBR_DecodeFile(pFileName, &amp;ro, &amp;pResults);</pre>
+
+<p>Convert barcode formats to String:</p>
+
+<pre lang="C++"><span class="code-keyword">const</span> <span class="code-keyword">char</span> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii GetFormatStr(<span class="code-keyword">__int64</span> format)
+{
+ <span class="code-keyword">if</span> (format == CODE_39)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">CODE_39"</span>;
+ <span class="code-keyword">if</span> (format == CODE_128)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">CODE_128"</span>;
+ <span class="code-keyword">if</span> (format == CODE_93)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">CODE_93"</span>;
+ <span class="code-keyword">if</span> (format == CODABAR)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">CODABAR"</span>;
+ <span class="code-keyword">if</span> (format == ITF)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">ITF"</span>;
+ <span class="code-keyword">if</span> (format == UPC_A)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">UPC_A"</span>;
+ <span class="code-keyword">if</span> (format == UPC_E)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">UPC_E"</span>;
+ <span class="code-keyword">if</span> (format == EAN_13)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">EAN_13"</span>;
+ <span class="code-keyword">if</span> (format == EAN_8)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">EAN_8"</span>;
+ <span class="code-keyword">if</span> (format == INDUSTRIAL_25)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">INDUSTRIAL_25"</span>;
+ <span class="code-keyword">if</span> (format == QR_CODE)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">QR_CODE"</span>;
+ <span class="code-keyword">if</span> (format == PDF417)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">PDF417"</span>;
+ <span class="code-keyword">if</span> (format == DATAMATRIX)
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">DATAMATRIX"</span>;
+ 
+ <span class="code-keyword">return</span> <span class="code-string">"</span><span class="code-string">UNKNOWN"</span>;
+}</pre>
+
+<p>Convert results to v8 object:</p>
+
+<pre lang="C++">Local&lt;Array&gt; barcodeResults = Array::New(isolate);
+ 
+<span class="code-keyword">for</span> (<span class="code-keyword">int</span> i = <span class="code-digit">0</span>; i &lt; count; i++)
+{
+ tmp = ppBarcodes[i];
+ 
+ Local&lt;Object&gt; result = <span class="code-sdkkeyword">Object</span>::New(isolate);
+ result-&gt;Set(<span class="code-sdkkeyword">String</span>::NewFromUtf8(isolate, <span class="code-string">"</span><span class="code-string">format"</span>), <span class="code-sdkkeyword">String</span>::NewFromUtf8(isolate, GetFormatStr(tmp-&gt;llFormat)));
+ result-&gt;Set(<span class="code-sdkkeyword">String</span>::NewFromUtf8(isolate, <span class="code-string">"</span><span class="code-string">value"</span>), <span class="code-sdkkeyword">String</span>::NewFromUtf8(isolate, tmp-&gt;pBarcodeData));
+ 
+ barcodeResults-&gt;Set(Number::New(isolate, i), result);
+}</pre>
+
+<h3>Build Addon</h3>
+
+<p>Prerequisites:</p>
+
+
+
+<p>Install node-gyp:</p>
+
+<pre lang="C++">npm install -g node-gyp</pre>
+
+<p>Create <b>binding.gyp</b> for multiplatform compilation:</p>
+
+<pre lang="C++">{
+ <span class="code-string">"</span><span class="code-string">targets"</span>: [
+ {
+ <span class="code-string">'</span><span class="code-string">target_name'</span>: <span class="code-string">"</span><span class="code-string">dbr"</span>,
+ <span class="code-string">'</span><span class="code-string">sources'</span>: [ <span class="code-string">"</span><span class="code-string">dbr.cc"</span> ],
+ <span class="code-string">'</span><span class="code-string">conditions'</span>: [
+ [<span class="code-string">'</span><span class="code-string">OS=="linux"'</span>, {
+ <span class="code-string">'</span><span class="code-string">defines'</span>: [
+ <span class="code-string">'</span><span class="code-string">LINUX_DBR'</span>,
+ ],
+ <span class="code-string">'</span><span class="code-string">include_dirs'</span>: [
+ <span class="code-string">"</span><span class="code-string">/home/xiao/Dynamsoft/BarcodeReader4.0/Include"</span>
+ ],
+ <span class="code-string">'</span><span class="code-string">libraries'</span>: [
+ <span class="code-string">"</span><span class="code-string">-lDynamsoftBarcodeReaderx64"</span>, <span class="code-string">"</span><span class="code-string">-L/home/xiao/Dynamsoft/BarcodeReader4.0/Redist"</span>
+ ],
+ <span class="code-string">'</span><span class="code-string">copies'</span>: [
+ {
+ <span class="code-string">'</span><span class="code-string">destination'</span>: <span class="code-string">'</span><span class="code-string">build/Release/'</span>,
+ <span class="code-string">'</span><span class="code-string">files'</span>: [
+ <span class="code-string">'</span><span class="code-string">/home/xiao/Dynamsoft/BarcodeReader4.0/Redist/libDynamsoftBarcodeReaderx64.so'</span>
+ ]
+ }]
+ }],
+ [<span class="code-string">'</span><span class="code-string">OS=="win"'</span>, {
+ <span class="code-string">'</span><span class="code-string">defines'</span>: [
+ <span class="code-string">'</span><span class="code-string">WINDOWS_DBR'</span>,
+ ],
+ <span class="code-string">'</span><span class="code-string">include_dirs'</span>: [
+ <span class="code-string">"</span><span class="code-string">F:\Program Files (x86)\Dynamsoft\Barcode Reader 4.1\Components\C_C++\Include"</span>
+ ],
+ <span class="code-string">'</span><span class="code-string">libraries'</span>: [
+ <span class="code-string">"</span><span class="code-string">-lF:\Program Files (x86)\Dynamsoft\Barcode Reader 4.1\Components\C_C++\Lib\DBRx64.lib"</span>
+ ],
+ <span class="code-string">'</span><span class="code-string">copies'</span>: [
+ {
+ <span class="code-string">'</span><span class="code-string">destination'</span>: <span class="code-string">'</span><span class="code-string">build/Release/'</span>,
+ <span class="code-string">'</span><span class="code-string">files'</span>: [
+ <span class="code-string">'</span><span class="code-string">F:\Program Files (x86)\Dynamsoft\Barcode Reader 4.1\Components\C_C++\Redist\DynamsoftBarcodeReaderx64.dll'</span>
+ ]
+ }]
+ }],
+ [<span class="code-string">'</span><span class="code-string">OS=="mac"'</span>, {
+ <span class="code-string">'</span><span class="code-string">defines'</span>: [
+ <span class="code-string">'</span><span class="code-string">MAC_DBR'</span>,
+ ],
+ <span class="code-string">'</span><span class="code-string">include_dirs'</span> : [
+ <span class="code-string">"</span><span class="code-string">/Applications/Dynamsoft/Barcode\ Reader\ 4.1/Include"</span>
+ ],
+ <span class="code-string">'</span><span class="code-string">libraries'</span>: [
+ <span class="code-string">"</span><span class="code-string">-lDynamsoftBarcodeReader"</span>
+ ]
+ }]
+ ]
+ }
+ ]
+}</pre>
+
+<p>Replace the DBR Installation Directory with yours.</p>
+
+<p>Configure the building environment:</p>
+
+<pre lang="C++">node-gyp configure</pre>
+
+<p>Probably you will see the following error when configuring the environment on <strong>Mac</strong>:</p>
+
+<pre lang="C++">error: xcode-select: error: tool <span class="code-string">'</span><span class="code-string">xcodebuild'</span> requires Xcode, but active developer directory <span class="code-string">'</span><span class="code-string">/Library/Developer/CommandLineTools'</span> is a command line tools instance</pre>
+
+<p>Here is the solution:</p>
+
+<pre lang="C++">sudo xcode-select --<span class="code-keyword">switch</span> /Applications/Xcode.app/Contents/Developer</pre>
+
+<p>Build the project:</p>
+
+<pre lang="C++">node-gyp build</pre>
+
+<h2>Online Barcode Reader</h2>
+
+<p>You have successfully built the Node barcode reader module. Now it is time to create a simple barcode reader app.</p>
+
+<p>Install <b>Express</b> and <b>Formidable</b>:</p>
+
+<pre lang="C++">npm install express
+npm install formidable</pre>
+
+<p>Create a simple Website using <b>Express</b>:</p>
+
+<pre lang="C++">var formidable = require(<span class="code-string">'</span><span class="code-string">formidable'</span>);
+var util = require(<span class="code-string">'</span><span class="code-string">util'</span>);
+var express = require(<span class="code-string">'</span><span class="code-string">express'</span>);
+var fs = require(<span class="code-string">'</span><span class="code-string">fs'</span>);
+var app = express();
+var path = require(<span class="code-string">'</span><span class="code-string">path'</span>);
+var dbr = require(<span class="code-string">'</span><span class="code-string">./build/Release/dbr'</span>);
+var http = require(<span class="code-string">'</span><span class="code-string">http'</span>);
+ 
+fs.readFile(<span class="code-string">'</span><span class="code-string">./license.txt'</span>, <span class="code-string">'</span><span class="code-string">utf8'</span>, function(err, data) {
+ 
+ app.use(express.<span class="code-keyword">static</span>(__dirname));
+ app.use(function(req, res, next) {
+ res.header(<span class="code-string">"</span><span class="code-string">Access-Control-Allow-Origin"</span>, <span class="code-string">"</span><span class="code-string">*"</span>);
+ res.header(<span class="code-string">"</span><span class="code-string">Access-Control-Allow-Methods"</span>, <span class="code-string">"</span><span class="code-string">PUT, POST, GET, DELETE, OPTIONS"</span>);
+ res.header(<span class="code-string">"</span><span class="code-string">Access-Control-Allow-Headers"</span>, <span class="code-string">"</span><span class="code-string">X-Requested-With, content-type"</span>);
+ res.header(<span class="code-string">"</span><span class="code-string">Access-Control-Allow-Credentials"</span>, <span class="code-keyword">true</span>);
+ next();
+ });
+ 
+ var server = app.listen(<span class="code-digit">2016</span>, function() {
+ var host = server.address().address;
+ var port = server.address().port;
+ console.log(<span class="code-string">'</span><span class="code-string">listening at http://%s:%s'</span>, host, port);
+ });
+});</pre>
+
+<p>Use <strong>Formidable</strong> to extract the image data from <strong>Form</strong>.</p>
+
+<pre lang="C++">app.post(<span class="code-string">'</span><span class="code-string">/upload'</span>, function(req, res) {
+ var form = <span class="code-keyword">new</span> formidable.IncomingForm();
+ form.parse(req, function(err, fields, files) {
+ var dir = <span class="code-string">'</span><span class="code-string">uploads'</span>;
+ 
+ fs.mkdir(dir, function(err) {
+ var flag = fields.uploadFlag;
+ var barcodeType = parseInt(fields.barcodetype);
+ 
+ console.log(<span class="code-string">'</span><span class="code-string">flag: '</span> + flag);
+ 
+ <span class="code-keyword">if</span> (flag === <span class="code-string">'</span><span class="code-string">1'</span>) { fs.readFile(files.fileToUpload.path, function(err, data) {
+ var fileName = path.join(__dirname, dir, files.fileToUpload.name);
+ console.log(fileName);
+ fs.writeFile(fileName, data, function(err) {
+ <span class="code-keyword">if</span> (err) <span class="code-keyword">throw</span> err;
+ 
+ });
+ });
+ 
+ } <span class="code-keyword">else</span> { var tmpFileName = path.join(__dirname, dir, <span class="code-string">'</span><span class="code-string">tmp.jpg'</span>);
+ var tmp = fs.createWriteStream(tmpFileName);
+ var url = fields.fileToDownload;
+ console.log(<span class="code-string">'</span><span class="code-string">url: '</span> + url);
+ http.get(url, function(response) {
+ response.pipe(tmp);
+ tmp.on(<span class="code-string">'</span><span class="code-string">finish'</span>, function() {
+ tmp.close(function() {
+ 
+ });
+ });
+ });
+ }
+ });
+ 
+ });
+ });</pre>
+
+<p>Import the barcode module to decode the image file.</p>
+
+<pre lang="C++">decodeBarcode(res, license, tmpFileName, barcodeType);</pre>
+
+<p>Run the app:</p>
+
+<pre lang="C++">node server.js</pre>
+
+<p>Visit <em>http://localhost:2016/index.htm</em>:</p>
+
+<p><img height="819px" src="http://www.codeproject.com/KB/showcase/1078098/image01.png" width="590px"></p>
+
+<p>Do you want to build a barcode reader app on Windows, Linux or Mac? Download the sample code and get your hands dirty now. For more information about <a href="http://www.dynamsoft.com/Products/Dynamic-Barcode-Reader.aspx?ccid=cp" rel="nofollow">Dynamsoft Barcode Reader</a>, please contact <a href="mailto:support@dynamsoft.com" rel="nofollow">support@dynamsoft.com</a>.</p>
+
+
+						</div>
+						
+
+						</div>
+</body></html>

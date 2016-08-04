@@ -1,0 +1,223 @@
+<!DOCTYPE html><html><head><title>Testing JavaScript with PhantomJS - Tuts+ Code Tutorial</title></head><body>
+<h1>Testing JavaScript with PhantomJS - Tuts+ Code Tutorial</h1><p><a href="http://code.tutsplus.com/tutorials/testing-javascript-with-phantomjs--net-28243" target="_new">Original URL</a></p>
+<p><blockquote>I don't think I need to convince you that testing your JavaScript code is a good idea. But, it can sometimes prove tedious to test JavaScript code that requires a DOM. This means you need to test&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>I don't think I need to convince you that testing your JavaScript code is a good idea. But, it can sometimes prove tedious to test JavaScript code that requires a DOM. This means you need to test your code in the browser and can't use the terminal, right? Wrong, actually: enter <a href="http://phantomjs.org/">PhantomJS</a>.</p>
+
+
+<p>What exactly is PhantomJS? Well, here's a blurb from the <a href="http://phantomjs.org/">PhantomJS website</a>:</p>
+<blockquote>
+<p>PhantomJS is a headless WebKit with JavaScript API.</p>
+</blockquote>
+<p>As you know, Webkit is the layout engine that Chrome, Safari, and a few other niche browsers use. So PhantomJS is a browser, but a headless browser. This means that the rendered web pages are never actually displayed. This may sound weird to you; so you can think of it as a programmable browser for the terminal. We'll look at a simple example in a minute, but we first need to install PhantomJS.</p>
+
+<h2>Installing PhantomJS</h2>
+<p>Installing PhantomJS is actually pretty simple: it's just a single binary that you download and stick in your terminal path. On the <a href="http://phantomjs.org/download.html">PhantomJS download page</a>, choose your operating system and download the correct package. Then move the binary file from the downloaded package to a directory inside your terminal path (I like to put this kind of thing in <code>~/bin</code>).</p>
+<p>If you're on Mac OS X, there's a simpler way to install PhantomJS (and this is actually the method I used). Just use Homebrew, like this:</p>
+<pre class="brush: bash">brew update &amp;&amp; brew install phantomjs</pre>
+<p>You should now have PhantomJS installed. You can double-check your installation by running this:</p>
+<pre class="brush: bash">phantomjs --version</pre>
+<p>I'm seeing 1.7.0; you?</p>
+
+<h2>A Small Example</h2>
+<p>Let's start with a small example.</p>
+<h6>simple.js</h6>
+<pre class="brush: js">console.log("we can log stuff out.");
+
+function add(a, b) {
+ return a + b;
+}
+
+conslole.log("We can execute regular JS too:", add(1, 2));
+
+phantom.exit();</pre>
+<p>Go ahead and and run this code by issuing the following command:</p>
+<pre class="brush: bash">phantomjs simple.js</pre>
+<p>You should see the output from the two <code>console.log</code> lines in your terminal window.</p>
+<p>Sure, this is simple, but it makes a good point: PhantomJS can execute JavaScript just like a browser. However, this example doesn't have any PhantomJS-specific code...well, apart from the last line. That's an important line for every PhantomJS script because it exits the script. This might not make sense here, but remember that JavaScript doesn't always execute linearly. For example, you might want to put the <code>exit()</code> call in a callback function. </p>
+<p>Let's look at a more complex example.</p>
+
+<h2>Loading Pages</h2>
+<p>Using the PhantomJS API, we can actually load any URL and work with the page from two perspectives:</p>
+<ul>
+<li>as JavaScript on the page.</li>
+<li>as a user looking at the page.</li>
+</ul>
+<p>Let's start by choosing to load a page. Create a new script file and add the following code:</p>
+<h6>script.js</h6>
+<pre class="brush: js">var page = require('webpage').create();
+
+page.open('http://net.tutsplus.com', function (s) {
+ console.log(s);
+ phantom.exit();
+});</pre>
+<p>We start by loading PhantomJS' <code>webpage</code> module and creating a webpage object. We then call the <code>open</code> method, passing it a URL and a callback function; it's inside this callback function that we can interact with the actual page. In the above example, we just log the status of the request, provided by the callback function's parameter. If you run this script (with <code>phantomjs script.js</code>), you should get 'success' printed in the terminal.</p>
+<p>But let's make this more interesting by loading a page and executing some JavaScript on it. We start with the above code, but we then make a call to <code>page.evaluate</code>:</p>
+<pre class="brush: js">page.open('http://net.tutsplus.com', function () {
+ var title = page.evaluate(function () {
+ var posts = document.getElementsByClassName("post");
+ posts[0].style.backgroundColor = "#000000";
+ return document.title;
+ });
+ page.clipRect = { top: 0, left: 0, width: 600, height: 700 };
+ page.render(title + ".png");
+ phantom.exit();
+});</pre>
+<blockquote class="pullquote"><p>PhantomJS is a browser, but a headless browser.</p></blockquote>
+<p>The function that we pass to <code>page.evaluate</code> executes as JavaScript on the loaded web page. In this case, we find all elements with the <code>post</code> class; then, we set the background of the first post to black. Finally, we return the <code>document.title</code>. This is a nice feature, returning a value from our <code>evaluate</code> callback and assigning it to a variable (in this case, <code>title</code>).</p>
+<p>Then, we set the <code>clipRect</code> on the page; these are the dimensions for the screenshot we take with the <code>render</code> method. As you can see, we set the <code>top</code> and <code>left</code> values to set the starting point, and we also set a <code>width</code> and <code>height</code>. Finally, we call <code>page.render</code>, passing it a name for the file (the <code>title</code> variable). Then, we end by calling <code>phantom.exit()</code>. </p>
+<p>Go ahead and run this script, and you should have an image that looks something like this:</p>
+<div class="tutorial_image"><img src="https://cdn.tutsplus.com/net/uploads/legacy/2161_phantom/black.png" alt="" title="" border="0"></div>
+<p>You can see both sides of the PhantomJS coin here: we can execute JavaScript from inside the page, and also execute from the outside, on the page instance itself. </p>
+<p>This has been fun, but not incredibly useful. Let's focus on using PhantomJS when testing our DOM-related JavaScript.</p>
+
+<h2>Testing with PhantomJS</h2>
+<blockquote class="pullquote"><p>Yeoman uses PhantomJS in its testing procedure, and it's virtually seamless.</p></blockquote>
+<p>For a lot of JavaScript code, you can test without needing a DOM, but there are times when your tests need to work with HTML elements. If you're like me and prefer to run tests on the command line, this is where PhantomJS comes into play.</p>
+<p>Of course, PhantomJS is not a testing library, but many of the other popular testing libraries can run on top of PhantomJS. As you can see from <a href="https://github.com/ariya/phantomjs/wiki/Headless-Testing">the PhantomJS wiki page on headless testing</a>, PhantomJS test runners are available for pretty much every testing library you might want to use. Let's look at how to use PhantomJS with Jasmine and Mocha. </p>
+<p>First, Jasmine and a disclaimer: there isn't a good PhantomJS runner for Jasmine at this time. If you use Windows and Visual Studio, you should check out <a href="http://chutzpah.codeplex.com/">Chutzpah</a>, and Rails developers should try <a href="https://github.com/netzpirat/guard-jasmine">guard-jasmine</a>. But other than that, Jasmine+PhantomJS support is sparse.</p>
+<blockquote><p>For this reason, I recommend you use Mocha for DOM-related tests.</p></blockquote>
+<p>HOWEVER.</p>
+<p>It's possible that you already have a project using Jasmine and want to use it with PhantomJS. One project, <a href="https://github.com/jcarver989/phantom-jasmine">phantom-jasmine</a>, takes a little bit of work to set up, but it should do the trick. </p>
+<p>Let's begin with a set of JasmineJS tests. Download the code for this tutorial (link at the top), and check out the <code>jasmine-starter</code> folder. You'll see that we have a single <code>tests.js</code> file that creates a DOM element, sets a few properties, and appends it to the body. Then, we run a few Jasmine tests to ensure that process did indeed work correctly. Here's the contents of that file:</p>
+<h6>tests.js</h6>
+<pre class="brush: js">describe("DOM Tests", function () {
+ var el = document.createElement("div");
+ el.id = "myDiv";
+ el.innerHTML = "Hi there!";
+ el.style.background = "#ccc";
+ document.body.appendChild(el);
+
+ var myEl = document.getElementById('myDiv');
+ it("is in the DOM", function () {
+ expect(myEl).not.toBeNull();
+ });
+
+ it("is a child of the body", function () {
+ expect(myEl.parentElement).toBe(document.body);
+ });
+
+ it("has the right text", function () {
+ expect(myEl.innerHTML).toEqual("Hi there!");
+ });
+
+ it("has the right background", function () {
+ expect(myEl.style.background).toEqual("rgb(204, 204, 204)");
+ });
+});</pre>
+<p>The <code>SpecRunner.html</code> file is fairly stock; the only difference is that I moved the script tags into the body to ensure the DOM completely loads before our tests run. You can open the file in a browser and see that all the tests pass just fine.</p>
+<p>Let's transition this project to PhantomJS. First, clone the <a href="https://github.com/jcarver989/phantom-jasmine">phantom-jasmine</a> project:</p>
+<pre class="brush: js">git clone git://github.com/jcarver989/phantom-jasmine.git</pre>
+<p>This project isn't as organized as it could be, but there are two important parts you need from it:</p>
+<ul>
+<li>the PhantomJS runner (which makes Jasmine use a PhantomJS DOM).</li>
+<li>the Jasmine console reporter (which gives the console output).</li>
+</ul>
+<p>Both of these files reside in the <code>lib</code> folder; copy them into <code>jasmine-starter/lib</code>. We now need to open our <code>SpecRunner.html</code> file and adjust the <code>&lt;script /&gt;</code> elements. Here's what they should look like:</p>
+<pre class="brush: html">&lt;script src="lib/jasmine-1.2.0/jasmine.js"&gt;&lt;/script&gt;
+&lt;script src="lib/jasmine-1.2.0/jasmine-html.js"&gt;&lt;/script&gt;
+&lt;script src="lib/console-runner.js"&gt;&lt;/script&gt;
+&lt;script src="tests.js"&gt;&lt;/script&gt;
+
+&lt;script&gt;
+ var console_reporter = new jasmine.ConsoleReporter()
+ jasmine.getEnv().addReporter(new jasmine.HtmlReporter());
+ jasmine.getEnv().addReporter(console_reporter);
+ jasmine.getEnv().execute();
+&lt;/script&gt;</pre>
+<p>Notice that we have two reporters for our tests: an HTML reporter and a console reporter. This means <code>SpecRunner.html</code> and its tests can run in both the browser and the console. That's handy. Unfortunately, we do need to have that <code>console_reporter</code> variable because it's used inside the CoffeeScript file we're about to run.</p>
+<p>So, how do we go about actually running these tests on the console? Assuming you're in the <code>jasmine-starter</code> folder on the terminal, here's the command:</p>
+<pre class="brush: bash">phantomjs lib/run\_jasmine\_test.coffee ./SpecRunner.html</pre>
+<p>We're running the <code>run\_jasmine\_test.coffee</code> script with PhantomJS and passing our <code>SpecRunner.html</code> file as a parameter. You should see something like this:</p>
+<div class="tutorial_image"><img src="https://cdn.tutsplus.com/net/uploads/legacy/2161_phantom/jasmine-success.png" alt="" title="" border="0"></div>
+<p>Of course, if a test fails, you'll see something like the following:</p>
+<div class="tutorial_image"><img src="https://cdn.tutsplus.com/net/uploads/legacy/2161_phantom/jasmine-error.png" alt="" title="" border="0"></div>
+<p>If you plan on using this often, it might be a good idea to move <code>run\_jasmine\_test.coffee</code> to another location (like <code>~/bin/run\_jasmine\_test.coffee</code>) and create a terminal alias for the whole command. Here's how you'd do that in a Bash shell:</p>
+<pre class="brush: bash">alias phantom-jasmine='phantomjs /path/to/run\_jasmine\_test.coffee'</pre>
+<p>Just throw that in your <code>.bashrc</code> or <code>.bash_profile</code> file. Now, you can just run:</p>
+<pre class="brush: bash">phantom-jasmine SpecRunner.html</pre>
+<p>Now your Jasmine tests work just fine on the terminal via PhantomJS. You can see the final code in the <code>jasmine-total</code> folder in the download.</p>
+
+<h2>PhantomJS and Mocha</h2>
+<p>Thankfully, it's much easier to integrate Mocha and PhantomJS with <a href="http://metaskills.net/mocha-phantomjs/">mocha-phantomjs</a>. It's super-easy to install if you have NPM installed (which you should):</p>
+<pre class="brush: bash">npm install -g mocha-phantomjs</pre>
+<p>This command installs a <code>mocha-phantomjs</code> binary that we'll use to run our tests.</p>
+<p>In a <a href="http://net.tutsplus.com/tutorials/javascript-ajax/better-coffeescript-testing-with-mocha">previous tutorial</a>, I showed you how to use Mocha in the terminal, but you'll do things differently when using it to test DOM code. As with Jasmine, we'll start with an HTML test reporter that can run in the browser. The beauty of this is we'll be able to run that same file on the terminal for console test results with PhantomJS; just like we could with Jasmine.</p>
+<p>So, let's build a simple project. Create a project directory and move into it. We'll start with a <code>package.json</code> file:</p>
+<pre class="brush: js">{
+ "name": "project",
+ "version": "0.0.1",
+ "devDependencies": {
+ "mocha": "*",
+ "chai" : "*"
+ }
+}</pre>
+<p>Mocha is the test framework, and we'll use Chai as our assertion library. We install these by running NPM.</p>
+<p>We'll call our test file <code>test/tests.js</code>, and here are its tests:</p>
+<pre class="brush: js">describe("DOM Tests", function () {
+ var el = document.createElement("div");
+ el.id = "myDiv";
+ el.innerHTML = "Hi there!";
+ el.style.background = "#ccc";
+ document.body.appendChild(el);
+
+ var myEl = document.getElementById('myDiv');
+ it("is in the DOM", function () {
+ expect(myEl).to.not.equal(null);
+ });
+
+ it("is a child of the body", function () {
+ expect(myEl.parentElement).to.equal(document.body);
+ });
+
+ it("has the right text", function () {
+ expect(myEl.innerHTML).to.equal("Hi there!");
+ });
+
+ it("has the right background", function () {
+ expect(myEl.style.background).to.equal("rgb(204, 204, 204)");
+ });
+});</pre>
+<p>They're very similar to the Jasmine tests, but the Chai assertion syntax is a bit different (so, don't just copy your Jasmine tests). </p>
+<p>The last piece of the puzzle is the <code>TestRunner.html</code> file:</p>
+<pre class="brush: html">&lt;html&gt;
+ &lt;head&gt;
+ &lt;title&gt; Tests &lt;/title&gt;
+ &lt;link rel="stylesheet" href="./node_modules/mocha/mocha.css" /&gt;
+ &lt;/head&gt;
+ &lt;body&gt;
+ &lt;div id="mocha"&gt;&lt;/div&gt;
+ &lt;script src="./node_modules/mocha/mocha.js"&gt;&lt;/script&gt;
+ &lt;script src="./node_modules/chai/chai.js"&gt;&lt;/script&gt;
+ &lt;script&gt;
+ mocha.ui('bdd'); 
+ mocha.reporter('html');
+ var expect = chai.expect;
+ &lt;/script&gt;
+ &lt;script src="test/test.js"&gt;&lt;/script&gt;
+ &lt;script&gt;
+ if (window.mochaPhantomJS) { mochaPhantomJS.run(); }
+ else { mocha.run(); }
+ &lt;/script&gt;
+ &lt;/body&gt;
+&lt;/html&gt;</pre>
+<p>There are several important factors here. First, notice that this is complete enough to run in a browser; we have the CSS and JavaScript from the node modules that we installed. Then, notice the inline script tag. This determines if PhantomJS is loaded, and if so, runs the PhantomJS functionality. Otherwise, it sticks with raw Mocha functionality. You can try this out in the browser and see it work.</p>
+<p>To run it in the console, simply run this:</p>
+<pre class="brush: bash">mocha-phantomjs TestRunner.html</pre>
+<p>Voila! Now you're tests run in the console, and it's all thanks to PhantomJS.</p>
+
+<h2>PhantomJS and Yeoman</h2>
+<p>I'll bet you didn't know that the popular <a href="http://yeoman.io/">Yeoman</a> uses PhantomJS in its testing procedure, and it's vritually seemless. Let's look at a quick example. I'll assume you have Yeoman all set up.</p>
+<p>Create a new project directory, run <code>yeoman init</code> inside it, and answer 'No' to all the options. Open the <code>test/index.html</code> file, and you'll find a script tag near the bottom with a comment telling you to replace it with your own specs. Completely ignore that good advice and put this inside the <code>it</code> block:</p>
+<pre class="brush: js">var el = document.createElement("div");
+expect(el.tagName).to.equal("DIV");</pre>
+<p>Now, run <code>yeoman test</code>, and you'll see that the test runs fine. Now, open <code>test/index.html</code> file in the browser. It works! Perfect!</p>
+<p>Of course, there's a lot more you can do with Yeoman, so check out <a href="http://yeoman.io/">the documentation</a> for more.</p>
+
+<h2>Conclusion</h2>
+<blockquote class="pullquote"><p>Use the libraries that extend PhantomJS to make your testing simpler.
+</p></blockquote>
+<p>If you're using PhantomJS on its own, there isn't any reason to learn about PhantomJS itself; you can just know it exists and use the libraries that extend PhantomJS to make your testing simpler. </p>
+<p>I hope this tutorial has encouraged you to look into PhantomJS. I recommend starting with the <a href="https://github.com/ariya/phantomjs/wiki/Examples">example files</a> and <a href="https://github.com/ariya/phantomjs/wiki">documentation</a> that PhantomJS offers; they'll really open your eyes to what you can do with PhantomJS--everything from page automation to network sniffing.</p>
+<p>So, <em>can</em> you think of a project that PhantomJS would improve? Let's hear about it in the comments!</p>
+</div></div>
+</body></html>

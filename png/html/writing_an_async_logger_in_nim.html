@@ -1,0 +1,467 @@
+<!DOCTYPE html><html><head><title>Writing an Async Logger in Nim</title></head><body>
+<h1>Writing an Async Logger in Nim</h1><p><a href="http://hookrace.net/blog/writing-an-async-logger-in-nim/" target="_new">Original URL</a></p>
+<p><blockquote>2016-01-28 Surprisingly I'm working on HookRace again. I might share a few interesting code snippets and thoughts in this blog along the way. I'm still going with Nim as the programming language. For&hellip;</blockquote></p>
+<div><div class="post">
+ 
+ <span class="post-date">2016-01-28</span>
+ <p>Surprisingly I'm working on <a href="http://hookrace.net/blog/what-is-hookrace/">HookRace</a> again. I might
+share a few interesting code snippets and thoughts in this blog along the way.
+I'm still going with <a href="http://nim-lang.org/">Nim</a> as the programming language.</p>
+
+<p>For an easy start let's write a logging module that can be used everywhere in
+the game's server as well as client. There are mostly three aspects that I care
+about:</p>
+
+<ul>
+<li>Can be configured to write to different files and/or stdout</li>
+<li>Writes to the disk asynchronously, preventing any blocking when the disk is
+overloaded</li>
+<li>Reasonable performance</li>
+</ul>
+
+<p>Follow along if you want to witness how fun it is to write code in Nim!</p>
+
+
+
+<h2 id="motivation">Motivation</h2>
+
+<p>A few logger implementations for Nim already exist:</p>
+
+<ul>
+<li><a href="http://nim-lang.org/docs/logging.html">logging</a>: A simple logger in the
+standard library. Configurable, but no async writing</li>
+<li><a href="https://github.com/nim-appkit/omnilog">omnilog</a>: An advanced logger with
+lots of features, no async writing</li>
+<li><a href="https://github.com/FedericoCeratto/nim-syslog">syslog</a>: A bit too high level
+for my taste and no Windows support</li>
+</ul>
+
+<p>We could adapt the logging or omnilog modules to our requirements, mainly by
+adding async writing. For now let's write our own simple logging module from
+scratch instead. If it turns out to be usable after a few iterations one might
+merge it with an existing module. Also, this post would be rather boring if I
+just ended up using an existing logger.</p>
+
+<h2 id="implementation">Implementation</h2>
+
+<p>Let's start with the simplest logger possible:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">proc </span><span class="nf">log</span><span class="o">*</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="n">echo</span> <span class="n">text</span>
+
+<span class="n">log</span> <span class="s">"Hello World!"</span></code></pre></div>
+
+<p>We have a procedure <code>log</code> that is exported (<code>*</code>). It takes a value <code>text</code> of
+type <code>string</code> and prints this text to the standard output. Super simple and
+can be used like this from another file (or the same one):</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="kn">import</span> <span class="n">logger</span>
+<span class="n">log</span> <span class="s">"Hello World!"</span></code></pre></div>
+
+<p>This simply prints <code>Hello World</code> to the terminal for now when we execute it. We
+want to keep using the logger in this exact format.</p>
+
+<p>Next step: Add a fancy logging format:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="kn">import</span> <span class="n">strutils</span><span class="p">,</span> <span class="n">times</span>
+
+<span class="k">proc </span><span class="nf">log</span><span class="o">*</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="n">echo</span> <span class="s">"[</span><span class="si">$#</span><span class="si">$#</span><span class="s">]: </span><span class="si">$#</span><span class="s">"</span> <span class="o">%</span> <span class="o">[</span><span class="n">getDateStr</span><span class="p">(),</span> <span class="n">getClockStr</span><span class="p">(),</span> <span class="n">text</span><span class="o">]</span></code></pre></div>
+
+<p>This uses the <a href="http://nim-lang.org/docs/strutils.html">strutils</a> and
+<a href="http://nim-lang.org/docs/times.html">times</a> modules from Nim's standard
+library. The
+<a href="http://nim-lang.org/docs/strutils.html#%,string,openArray%5Bstring%5D">%</a>
+operator formats the string <code>"[$# $#]: $#"</code> with a date, clock and our text
+into <code>[2016-01-28 20:04:43]: Hello World!</code></p>
+
+<p>It would also be nice if we could see which module is actually invoking the
+logger. The
+<a href="http://nim-lang.org/docs/system.html#instantiationInfo,">instantiationInfo</a>
+proc can be used to retrieve the filename and line of a template instatiation
+at compile time. So let's make our logger a template, this also improves
+performance because we don't even need a function call at runtime anymore:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">template</span> <span class="n">log</span><span class="o">*</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="k">const</span> <span class="n">module</span> <span class="o">=</span> <span class="n">instantiationInfo</span><span class="p">().</span><span class="n">filename</span>
+ <span class="n">echo</span> <span class="s">"[</span><span class="si">$#</span><span class="si">$#</span><span class="s">][</span><span class="si">$#</span><span class="s">]: </span><span class="si">$#</span><span class="s">"</span> <span class="o">%</span> <span class="o">[</span><span class="n">getDateStr</span><span class="p">(),</span> <span class="n">getClockStr</span><span class="p">(),</span>
+ <span class="n">module</span><span class="p">,</span> <span class="n">text</span><span class="o">]</span></code></pre></div>
+
+<p>We end up with this output:</p>
+<div class="highlight"><pre><code class="language-text">[2016-01-28 20:14:04][example.nim]: Hello World!
+</code></pre></div>
+<p>Let's get rid of the <code>.nim</code> at the end:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">const</span> <span class="n">module</span> <span class="o">=</span> <span class="n">instantiationInfo</span><span class="p">().</span><span class="n">filename</span><span class="o">[</span><span class="mi">0</span> <span class="p">..</span> <span class="p">^</span><span class="mi">5</span><span class="o">]</span></code></pre></div>
+
+<p><code>[0 .. ^5]</code> gives us the part of the string from position 0 (from the start) to
+position 5 from the end. New output:</p>
+<div class="highlight"><pre><code class="language-text">[2016-01-28 20:14:04][example]: Hello World!
+</code></pre></div>
+<p>Perfect! We'll keep this exact output format.</p>
+
+<p>Now let's add the ability to log to multiple files simultaneously. We also just
+handle <code>stdout</code> as a regular file:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">type</span> <span class="n">Logger</span> <span class="o">=</span> <span class="k">object</span>
+ <span class="n">file</span><span class="p">:</span> <span class="n">File</span>
+
+<span class="kd">var</span> <span class="n">loggers</span> <span class="o">=</span> <span class="n">newSeq</span><span class="o">[</span><span class="n">Logger</span><span class="o">]</span><span class="p">()</span>
+
+<span class="k">proc </span><span class="nf">addLogger</span><span class="o">*</span><span class="p">(</span><span class="n">file</span><span class="p">:</span> <span class="n">File</span><span class="p">)</span> <span class="o">=</span>
+ <span class="n">loggers</span><span class="p">.</span><span class="n">add</span> <span class="n">Logger</span><span class="p">(</span><span class="n">file</span><span class="p">:</span> <span class="n">file</span><span class="p">)</span>
+
+<span class="k">template</span> <span class="n">log</span><span class="o">*</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="k">let</span>
+ <span class="n">module</span> <span class="o">=</span> <span class="n">instantiationInfo</span><span class="p">().</span><span class="n">filename</span><span class="o">[</span><span class="mi">0</span> <span class="p">..</span> <span class="p">^</span><span class="mi">5</span><span class="o">]</span>
+ <span class="n">str</span> <span class="o">=</span> <span class="s">"[</span><span class="si">$#</span><span class="si">$#</span><span class="s">][</span><span class="si">$#</span><span class="s">]: </span><span class="si">$#</span><span class="s">"</span> <span class="o">%</span> <span class="o">[</span><span class="n">getDateStr</span><span class="p">(),</span> <span class="n">getClockStr</span><span class="p">(),</span>
+ <span class="n">module</span><span class="p">,</span> <span class="n">text</span><span class="o">]</span>
+ <span class="k">for</span> <span class="n">logger</span> <span class="ow">in</span> <span class="n">loggers</span><span class="p">:</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">writeLine</span> <span class="n">str</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">flushFile</span></code></pre></div>
+
+<p>By flushing the file we make sure that the output is actually written to the
+file right now, not just once the buffer is full. That's important to us, for
+example if the program crashes and we'd lose the last few lines of the log
+otherwise.</p>
+
+<p>Now we have to register a few loggers before we can log something, but that's
+the only change:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="kn">import</span> <span class="n">logger</span>
+
+<span class="n">addLogger</span> <span class="n">stdout</span>
+<span class="n">addLogger</span> <span class="n">open</span><span class="p">(</span><span class="s">"example.log"</span><span class="p">,</span> <span class="n">fmWrite</span><span class="p">)</span>
+
+<span class="n">log</span> <span class="s">"Hello World!"</span></code></pre></div>
+
+<p>Now we write our log message to stdout as well as a file. If we used the
+<code>fmAppend</code> file mode instead of <code>fmWrite</code> we could append to the log file,
+right now we're overwriting it every time we run our example program.</p>
+
+<p>Here comes our main problem: What happens if we're logging while the game
+server is running regularly, but the write to the disk takes a few milliseconds
+or even longer! The game server gets delayed and our performance is terrible!</p>
+
+<h2 id="adding-a-thread">Adding a Thread</h2>
+
+<p>So let's add a separate thread to write the log messages. In Nim each thread
+has its own heap, so we can't directly pass a string to another thread. Instead
+we will communicate with our new thread using a
+<a href="http://nim-lang.org/docs/channels.html">channel</a>, similarly to Go channels. We
+start by defining a <code>Message</code> type to send over our channel:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">type</span>
+ <span class="n">MessageKind</span> <span class="o">=</span> <span class="k">enum</span>
+ <span class="n">write</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">stop</span>
+
+ <span class="n">Message</span> <span class="o">=</span> <span class="k">object</span>
+ <span class="k">case</span> <span class="n">kind</span><span class="p">:</span> <span class="n">MessageKind</span>
+ <span class="k">of</span> <span class="n">write</span><span class="p">:</span>
+ <span class="n">module</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="kt">string</span>
+ <span class="k">of</span> <span class="n">update</span><span class="p">:</span>
+ <span class="n">loggers</span><span class="p">:</span> <span class="kt">seq</span><span class="o">[</span><span class="n">Logger</span><span class="o">]</span>
+ <span class="k">of</span> <span class="n">stop</span><span class="p">:</span>
+ <span class="kp">nil</span>
+
+<span class="kd">var</span> <span class="n">channel</span><span class="p">:</span> <span class="n">Channel</span><span class="o">[</span><span class="n">Message</span><span class="o">]</span></code></pre></div>
+
+<p>We define three kinds of messages:</p>
+
+<ul>
+<li><code>write</code>: Write a new log message</li>
+<li><code>update</code>: Update the set of files to log to</li>
+<li><code>stop</code>: Stop the logging thread</li>
+</ul>
+
+<p>Our new proc for logging looks like this:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">proc </span><span class="nf">threadLog</span> <span class="p">{.</span><span class="n">thread</span><span class="p">.}</span> <span class="o">=</span>
+ <span class="kd">var</span> <span class="n">loggers</span> <span class="o">=</span> <span class="n">newSeq</span><span class="o">[</span><span class="n">Logger</span><span class="o">]</span><span class="p">()</span>
+
+ <span class="k">while</span> <span class="kp">true</span><span class="p">:</span>
+ <span class="k">let</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">recv</span> <span class="n">channel</span>
+ <span class="k">case</span> <span class="n">msg</span><span class="p">.</span><span class="n">kind</span>
+ <span class="k">of</span> <span class="n">write</span><span class="p">:</span>
+ <span class="k">let</span> <span class="n">str</span> <span class="o">=</span> <span class="s">"[</span><span class="si">$#</span><span class="si">$#</span><span class="s">][</span><span class="si">$#</span><span class="s">]: </span><span class="si">$#</span><span class="s">"</span> <span class="o">%</span> <span class="o">[</span><span class="n">getDateStr</span><span class="p">(),</span> <span class="n">getClockStr</span><span class="p">(),</span>
+ <span class="n">msg</span><span class="p">.</span><span class="n">module</span><span class="p">,</span> <span class="n">msg</span><span class="p">.</span><span class="n">text</span><span class="o">]</span>
+
+ <span class="k">for</span> <span class="n">logger</span> <span class="ow">in</span> <span class="n">loggers</span><span class="p">:</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">writeLine</span> <span class="n">str</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">flushFile</span>
+ <span class="k">of</span> <span class="n">update</span><span class="p">:</span>
+ <span class="n">loggers</span> <span class="o">=</span> <span class="n">msg</span><span class="p">.</span><span class="n">loggers</span>
+ <span class="k">of</span> <span class="n">stop</span><span class="p">:</span>
+ <span class="k">break</span></code></pre></div>
+
+<p>The thread keeps running until it receives a <code>stop</code> message. Calling <code>recv</code> on
+a channel blocks until a message is received. Now that the main load is moved
+to a new thread, what do we do in our <code>log</code> template and <code>addLogger</code> proc?</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">template</span> <span class="n">log</span><span class="o">*</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="k">const</span> <span class="n">module</span> <span class="o">=</span> <span class="n">instantiationInfo</span><span class="p">().</span><span class="n">filename</span><span class="o">[</span><span class="mi">0</span> <span class="p">..</span> <span class="p">^</span><span class="mi">5</span><span class="o">]</span>
+ <span class="n">channel</span><span class="p">.</span><span class="n">send</span> <span class="n">Message</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">write</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">module</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="n">t</span><span class="p">)</span>
+
+<span class="k">proc </span><span class="nf">addLogger</span><span class="o">*</span><span class="p">(</span><span class="n">file</span><span class="p">:</span> <span class="n">File</span><span class="p">)</span> <span class="o">=</span>
+ <span class="n">loggers</span><span class="p">.</span><span class="n">add</span> <span class="n">Logger</span><span class="p">(</span><span class="n">file</span><span class="p">:</span> <span class="n">file</span><span class="p">)</span>
+ <span class="n">channel</span><span class="p">.</span><span class="n">send</span> <span class="n">Message</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">update</span><span class="p">,</span> <span class="n">loggers</span><span class="p">:</span> <span class="n">loggers</span><span class="p">)</span></code></pre></div>
+
+<p>Simple enough! We also need to initialize the channel and run the thread:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="n">open</span> <span class="n">channel</span>
+<span class="kd">var</span> <span class="n">thread</span><span class="p">:</span> <span class="n">Thread</span><span class="o">[</span><span class="n">void</span><span class="o">]</span>
+<span class="n">thread</span><span class="p">.</span><span class="n">createThread</span> <span class="n">threadLog</span></code></pre></div>
+
+<p>Now we have to compile with <code>nim --threads:on c example</code> to get thread support,
+or we simply add a <code>nim.cfg</code> that contains <code>threads: on</code>. Finally we run our code again and ... nothing happens, no log message is printed.</p>
+
+<p>The problem is that we finish the program too quickly. This kills the thread
+before it can receive our logging message. So let's add a proc that manages the
+shutdown process more gracefully:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">proc </span><span class="nf">stopLog</span> <span class="p">{.</span><span class="n">noconv</span><span class="p">.}</span> <span class="o">=</span>
+ <span class="n">channel</span><span class="p">.</span><span class="n">send</span> <span class="n">Message</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">stop</span><span class="p">)</span>
+ <span class="n">joinThread</span> <span class="n">thread</span>
+ <span class="n">close</span> <span class="n">channel</span>
+
+ <span class="k">for</span> <span class="n">logger</span> <span class="ow">in</span> <span class="n">loggers</span><span class="p">:</span>
+ <span class="k">if</span> <span class="n">logger</span><span class="p">.</span><span class="n">file</span> <span class="ow">notin</span> <span class="o">[</span><span class="n">stdout</span><span class="p">,</span> <span class="n">stderr</span><span class="o">]</span><span class="p">:</span>
+ <span class="n">close</span> <span class="n">logger</span><span class="p">.</span><span class="n">file</span>
+
+<span class="n">addQuitProc</span> <span class="n">stopLog</span></code></pre></div>
+
+<p>That's it, our logger works! For more convenience we can add log levels and
+corresponding templates:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">type</span> <span class="n">Level</span><span class="o">*</span> <span class="p">{.</span><span class="n">pure</span><span class="p">.}</span> <span class="o">=</span> <span class="k">enum</span>
+ <span class="n">debug</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">warn</span><span class="p">,</span> <span class="n">error</span><span class="p">,</span> <span class="n">fatal</span>
+
+<span class="kd">var</span> <span class="n">logLevel</span><span class="o">*</span> <span class="o">=</span> <span class="n">Level</span><span class="p">.</span><span class="n">info</span>
+
+<span class="k">template</span> <span class="n">debug</span><span class="o">*</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="k">if</span> <span class="n">logLevel</span> <span class="o">&lt;=</span> <span class="n">Level</span><span class="p">.</span><span class="n">debug</span><span class="p">:</span>
+ <span class="k">const</span> <span class="n">module</span> <span class="o">=</span> <span class="n">instantiationInfo</span><span class="p">().</span><span class="n">filename</span><span class="o">[</span><span class="mi">0</span> <span class="p">..</span> <span class="p">^</span><span class="mi">5</span><span class="o">]</span>
+ <span class="n">channel</span><span class="p">.</span><span class="n">send</span> <span class="n">Message</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">write</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">module</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="n">t</span><span class="p">)</span>
+
+<span class="k">template</span> <span class="n">info</span><span class="o">*</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="k">if</span> <span class="n">logLevel</span> <span class="o">&lt;=</span> <span class="n">Level</span><span class="p">.</span><span class="n">info</span><span class="p">:</span>
+ <span class="k">const</span> <span class="n">module</span> <span class="o">=</span> <span class="n">instantiationInfo</span><span class="p">().</span><span class="n">filename</span><span class="o">[</span><span class="mi">0</span> <span class="p">..</span> <span class="p">^</span><span class="mi">5</span><span class="o">]</span>
+ <span class="n">channel</span><span class="p">.</span><span class="n">send</span> <span class="n">Message</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">write</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">module</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="n">t</span><span class="p">)</span>
+
+<span class="p">...</span></code></pre></div>
+
+<p>What if we want to log not just strings? We can instead accept any kind and
+number of arguments and stringify them automatically using <code>$</code>:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">proc </span><span class="nf">send</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="kt">string</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">varargs</span><span class="o">[</span><span class="kt">string</span><span class="o">]</span><span class="p">)</span> <span class="o">=</span>
+ <span class="kd">var</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">Message</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">write</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">module</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="s">""</span><span class="p">)</span>
+ <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+ <span class="n">msg</span><span class="p">.</span><span class="n">text</span><span class="p">.</span><span class="n">add</span> <span class="n">arg</span>
+ <span class="n">channel</span><span class="p">.</span><span class="n">send</span> <span class="n">msg</span>
+
+<span class="k">template</span> <span class="n">log</span><span class="o">*</span><span class="p">(</span><span class="n">args</span><span class="p">:</span> <span class="n">varargs</span><span class="o">[</span><span class="kt">string</span><span class="p">,</span> <span class="p">`</span><span class="o">$</span><span class="p">`</span><span class="o">]</span><span class="p">)</span> <span class="o">=</span>
+ <span class="k">const</span> <span class="n">module</span> <span class="o">=</span> <span class="n">instantiationInfo</span><span class="p">().</span><span class="n">filename</span><span class="o">[</span><span class="mi">0</span> <span class="p">..</span> <span class="p">^</span><span class="mi">5</span><span class="o">]</span>
+ <span class="n">send</span> <span class="n">module</span><span class="p">,</span> <span class="n">args</span></code></pre></div>
+
+<p>Now we can call our logger like this:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="kd">var</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="n">info</span> <span class="s">"All "</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="s">" Bananas"</span></code></pre></div>
+<div class="highlight"><pre><code class="language-text">[2016-01-28 21:57:34][example]: All 12 Bananas
+</code></pre></div>
+<p>For more advanced formatting one might want to use the excellent
+<a href="http://lyro.bitbucket.org/strfmt/">strfmt</a> library:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="kn">import</span> <span class="n">strfmt</span>
+<span class="kd">var</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="kd">var</span> <span class="n">y</span> <span class="o">=</span> <span class="mf">3.4</span>
+<span class="n">info</span> <span class="s">"{} + {:.2f} == {}"</span><span class="p">.</span><span class="n">fmt</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">.</span><span class="kt">float</span> <span class="o">+</span> <span class="n">y</span><span class="p">)</span>
+<span class="n">info</span> <span class="s">interp"I have </span><span class="si">$x</span><span class="s"> Bananas!"</span></code></pre></div>
+<div class="highlight"><pre><code class="language-text">[2016-01-28 22:24:01][example]: 12 + 3.40 == 15.4
+[2016-01-28 22:24:01][example]: I have 12 Bananas!
+</code></pre></div>
+<p>Everything works great and we can be sure that hard disk latency will not bite
+us. But how is the performance?</p>
+
+<h2 id="optimization">Optimization</h2>
+
+<p>First let's come up with a simple program that allows us to measure
+performance:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="kn">import</span> <span class="n">logger</span>
+
+<span class="n">addLogger</span> <span class="n">open</span><span class="p">(</span><span class="s">"bench.log"</span><span class="p">,</span> <span class="n">fmWrite</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="mi">1</span> <span class="p">..</span> <span class="mi">1_000_000</span><span class="p">:</span>
+ <span class="n">log</span> <span class="s">"Hello World!"</span></code></pre></div>
+
+<table><thead>
+<tr>
+<th>Build Command</th>
+<th>Runtime</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>nim c bench</code> (unoptimized)</td>
+<td>31.9 s</td>
+</tr>
+<tr>
+<td><code>nim -d:release c bench</code> (optimized)</td>
+<td>12.1 s</td>
+</tr>
+</tbody></table>
+
+<p>12 seconds to write a million log messages. I guess that's good enough for my
+use case. We'd rather run out of free disk space than have too little
+performance like this.</p>
+
+<p>Anyway, let's see if there are any low hanging fruits. We could look at the
+code and try to isolate some parts to figure out what takes long. Or we compile
+the benchmark with debugger support using <code>nim -d:release --debugger:native c
+bench</code> and invoke it with <code>valgrind --tool=callgrind ./bench</code>. Afterwards
+kcachegrind can help us analyze the function calls:</p>
+
+<p><img src="http://hookrace.net/public/kcachegrind.png"></p>
+
+<p>What stands out is that <code>getDateStr</code> and <code>getClockStr</code> take 33% and 32%
+respectively of the total time! Since the time string only changes once every
+second we can cache it:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">proc </span><span class="nf">threadLog</span> <span class="p">{.</span><span class="n">thread</span><span class="p">.}</span> <span class="o">=</span>
+ <span class="kd">var</span>
+ <span class="n">loggers</span> <span class="o">=</span> <span class="n">newSeq</span><span class="o">[</span><span class="n">Logger</span><span class="o">]</span><span class="p">()</span>
+ <span class="n">lastTime</span><span class="p">:</span> <span class="n">Time</span>
+ <span class="n">timeStr</span> <span class="o">=</span> <span class="s">""</span>
+
+ <span class="k">while</span> <span class="kp">true</span><span class="p">:</span>
+ <span class="k">let</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">recv</span> <span class="n">channel</span>
+ <span class="k">case</span> <span class="n">msg</span><span class="p">.</span><span class="n">kind</span>
+ <span class="k">of</span> <span class="n">write</span><span class="p">:</span>
+ <span class="k">let</span> <span class="n">newTime</span> <span class="o">=</span> <span class="n">getTime</span><span class="p">()</span>
+ <span class="k">if</span> <span class="n">newTime</span> <span class="o">!=</span> <span class="n">lastTime</span><span class="p">:</span>
+ <span class="n">timeStr</span> <span class="o">=</span> <span class="n">getLocalTime</span><span class="p">(</span><span class="n">newTime</span><span class="p">).</span><span class="n">format</span> <span class="s">"yyyy-MM-dd HH:mm:ss"</span>
+ <span class="n">lastTime</span> <span class="o">=</span> <span class="n">newTime</span>
+
+ <span class="k">let</span> <span class="n">str</span> <span class="o">=</span> <span class="s">"[</span><span class="si">$#</span><span class="s">][</span><span class="si">$#</span><span class="s">]: </span><span class="si">$#</span><span class="s">"</span> <span class="o">%</span> <span class="o">[</span><span class="n">timeStr</span><span class="p">,</span> <span class="n">msg</span><span class="p">.</span><span class="n">module</span><span class="p">,</span> <span class="n">msg</span><span class="p">.</span><span class="n">text</span><span class="o">]</span>
+
+ <span class="k">for</span> <span class="n">logger</span> <span class="ow">in</span> <span class="n">loggers</span><span class="p">:</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">writeLine</span> <span class="n">str</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">flushFile</span>
+ <span class="p">...</span></code></pre></div>
+
+<p><code>getTime()</code> gets the time in seconds, so we only format a new <code>timeStr</code> when a
+new second has arrived.</p>
+
+<table><thead>
+<tr>
+<th>Code Change</th>
+<th>Runtime</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Cache time string</td>
+<td>4.4 s</td>
+</tr>
+</tbody></table>
+
+<p>Flushing the file after each write still consumes a lot of time. Unfortunately this
+can't be seen using valgrind because valgrind's instrumentation slows down the
+entire program so much that the flushing itself becomes insignificant.</p>
+
+<p>The trick is to flush the file only when we're actually done writing, that
+means when we have no more messages waiting in the channel:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">if</span> <span class="n">channel</span><span class="p">.</span><span class="n">peek</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">flushFile</span></code></pre></div>
+
+<table><thead>
+<tr>
+<th>Code Change</th>
+<th>Runtime</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Flush only when necessary</td>
+<td>2.1 s</td>
+</tr>
+</tbody></table>
+
+<p>A general tip when optimizing Nim code is to prevent string allocations and
+copying. Instead of using <code>writeLine</code> we can add the newline directly and call
+<code>write</code>:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">let</span> <span class="n">str</span> <span class="o">=</span> <span class="s">"[</span><span class="si">$#</span><span class="s">][</span><span class="si">$#</span><span class="s">]: </span><span class="si">$#</span><span class="se">\n</span><span class="s">"</span> <span class="o">%</span> <span class="o">[</span><span class="n">timeStr</span><span class="p">,</span> <span class="n">msg</span><span class="p">.</span><span class="n">module</span><span class="p">,</span> <span class="n">msg</span><span class="p">.</span><span class="n">text</span><span class="o">]</span>
+
+<span class="k">for</span> <span class="n">logger</span> <span class="ow">in</span> <span class="n">loggers</span><span class="p">:</span>
+ <span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">write</span> <span class="n">str</span></code></pre></div>
+
+<p>We can use the same message and simply reset its text string instead of
+allocating a new one every time:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="kd">var</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">Message</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">write</span><span class="p">,</span> <span class="n">system</span><span class="p">:</span> <span class="s">""</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="s">""</span><span class="p">)</span>
+<span class="k">proc </span><span class="nf">send</span><span class="p">(</span><span class="n">moduleName</span><span class="p">:</span> <span class="kt">string</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">varargs</span><span class="o">[</span><span class="kt">string</span><span class="p">,</span> <span class="p">`</span><span class="o">$</span><span class="p">`</span><span class="o">]</span><span class="p">)</span> <span class="o">=</span>
+ <span class="n">msg</span><span class="p">.</span><span class="n">system</span> <span class="o">=</span> <span class="n">moduleName</span>
+ <span class="n">msg</span><span class="p">.</span><span class="n">text</span><span class="p">.</span><span class="n">setLen</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+ <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+ <span class="n">msg</span><span class="p">.</span><span class="n">text</span><span class="p">.</span><span class="n">add</span> <span class="n">arg</span>
+ <span class="n">channel</span><span class="p">.</span><span class="n">send</span> <span class="n">msg</span></code></pre></div>
+
+<p>These two changes don't have a huge effect, but it's better than nothing:</p>
+
+<table><thead>
+<tr>
+<th>Code Change</th>
+<th>Runtime</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Prevent allocations</td>
+<td>1.8 s</td>
+</tr>
+</tbody></table>
+
+<p>Another idea is to use a non-locking <code>write</code> since we only write from one
+thread anyway. The POSIX C function <code>fwrite_unlocked</code> can easily be imported
+and used in Nim:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">proc </span><span class="nf">fwriteUnlocked</span><span class="p">(</span><span class="n">buf</span><span class="p">:</span> <span class="n">pointer</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="kt">int</span><span class="p">,</span> <span class="n">f</span><span class="p">:</span> <span class="n">File</span><span class="p">):</span> <span class="kt">int</span> <span class="p">{.</span>
+ <span class="n">importc</span><span class="p">:</span> <span class="s">"fwrite_unlocked"</span><span class="p">,</span> <span class="n">noDecl</span><span class="p">.}</span>
+
+<span class="k">proc </span><span class="nf">writeUnlocked</span><span class="p">(</span><span class="n">f</span><span class="p">:</span> <span class="n">File</span><span class="p">,</span> <span class="n">s</span><span class="p">:</span> <span class="kt">string</span><span class="p">)</span> <span class="o">=</span>
+ <span class="k">if</span> <span class="n">fwriteUnlocked</span><span class="p">(</span><span class="n">cstring</span><span class="p">(</span><span class="n">s</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="n">s</span><span class="p">.</span><span class="n">len</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span> <span class="o">!=</span> <span class="n">s</span><span class="p">.</span><span class="n">len</span><span class="p">:</span>
+ <span class="k">raise</span> <span class="n">newException</span><span class="p">(</span><span class="n">IOError</span><span class="p">,</span> <span class="s">"cannot write string to file"</span><span class="p">)</span>
+
+<span class="n">logger</span><span class="p">.</span><span class="n">file</span><span class="p">.</span><span class="n">writeUnlocked</span> <span class="n">str</span></code></pre></div>
+
+<p>Unfortunately this does not have any effect on performance.</p>
+
+<p>So now we can log <code>"Hello World"</code> a million times in 1.8 seconds. For
+comparison, simply printing <code>"Hello World"</code> a million times, without any
+formatting or asynchronous writing, takes 2.4 seconds already when redirecting
+stdout to a file:</p>
+
+<div class="highlight"><pre><code class="language-nimrod"><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="mi">1</span> <span class="p">..</span> <span class="mi">1_000_000</span><span class="p">:</span>
+ <span class="n">echo</span> <span class="s">"Hello World!"</span></code></pre></div>
+
+<p>This is of course because of the flushing that happens internally in <code>echo</code>. If
+we opt to use a raw <code>write</code> directly we can write the million strings in just
+0.2 s, so there is still headroom for further improvements.</p>
+
+<h2 id="final-words">Final words</h2>
+
+<p>We implemented a simple logger, saw a few cool Nim features along the way and
+finally improved the performance by a factor of 6.</p>
+
+<p>An even better optimization would be not to use channels for inter-thread
+communication. After all even the <a href="http://nim-lang.org/docs/channels.html">channels
+documentation</a> notes that they are
+slow. Instead we could create a data structue in the heap shared between
+threads and use this. But I doubt that I will need more performance for
+logging, so this is good enough for now.</p>
+
+<p>The resulting code of this post and future HookRace code can be found on
+<a href="https://github.com/hookrace/hookrace/">GitHub</a>.</p>
+
+</div>
+
+</div>
+</body></html>

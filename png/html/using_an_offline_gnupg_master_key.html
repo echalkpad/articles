@@ -1,0 +1,247 @@
+<!DOCTYPE html><html><head><title>Using an offline GnuPG master key</title></head><body>
+<h1>Using an offline GnuPG master key</h1><p><a href="http://www.incenp.org/notes/2015/using-an-offline-gnupg-master-key.html" target="_new">Original URL</a></p>
+<p><blockquote>OpenPGP subkeys have many benefits (well summarized on this Debian wiki page), one of them being that if you have both an encryption subkey and a signing subkey (at least), you don&#x2019;t need your&hellip;</blockquote></p>
+<div><section>
+ 
+ <p>OpenPGP subkeys have many benefits (well summarized on this <a href="https://wiki.debian.org/Subkeys">Debian wiki page</a>), one of
+them being that if you have both an encryption subkey and a signing
+subkey (at least), you don&#x2019;t need your master private key for your daily
+usage of OpenPGP&#x2014;you will only need it for signing someone else&#x2019;s key or
+to modify your own key (adding or revoking User IDs, adding or revoking
+subkeys, updating the preferences, etc.).</p>
+ <p>Consequently, your private master key can be put offline most of the
+time, and brought back to your computer only on those few occasions
+where it is required.</p>
+ <p>There are already <a href="https://alexcabal.com/creating-the-perfect-gpg-keypair/">many</a>
+<a href="http://wiki.fsfe.org/Card_howtos/Card_with_subkeys_using_backups#Removing_the_master_key_from_the_keyring">pages</a>
+on the web describing how to do that. However, most of them, if not all
+of them, predate the recent release of GnuPG 2.1, so I thought an update
+on that topic would be worthwhile.</p>
+ <h2>How to remove the master private key from your keyring</h2>
+ <h3>Step 1: Back up the original keyring</h3>
+ <p>Let&#x2019;s assume you have the following private keyring:</p>
+ <pre class="console">$ <strong>gpg2 --list-secret-keys</strong>
+/home/alice/.gnupg/pubring.kbx
+------------------------------
+sec rsa4096/CB2F38F25B491A54 2014-12-31 [SC] [expires: 2017-12-30]
+uid [ultimate] Alice &lt;alice@example.org&gt;
+ssb rsa2048/04BB7F8FDEC5E5D9 2014-12-31 [S] [expires: 2015-12-31]
+ssb rsa2048/BBB6B86627C2D43A 2014-12-31 [E] [expires: 2015-12-31]</pre>
+ <p>Export the private master key and its private subkeys:</p>
+ <pre class="console">$ <strong>gpg2 --armor --output alice-private-keys.asc --export-secret-key alice@example.org</strong></pre>
+ <p>Store the exported private keys in a secure place (not on your
+computer). You may also print a hardcopy with a tool like <a href="http://www.jabberwocky.com/software/paperkey/">Paperkey</a>:</p>
+ <pre class="console">$ <strong>gpg2 --export-secret-key alice@example.org | paperkey | lpr</strong></pre>
+ <h3>Step 2: Remove the private master key from the keyring</h3>
+ <p>The &#x201C;classic&#x201D; method for doing that is to export your private
+subkeys, then delete all your private keys (the master private key and
+the private subkeys), and import back the private subkeys (because GnuPG
+prior to version 2.1 had no option to delete the master key only).</p>
+ <p>With GnuPG 2.1 however, there is a more direct method. First, find
+the <em>keygrip</em> of your master key:</p>
+ <pre class="console">$ <strong>gpg2 --list-secret-keys --with-keygrip</strong>
+/home/alice/.gnupg/pubring.kbx
+------------------------------
+sec rsa4096/CB2F38F25B491A54 2014-12-31 [SC] [expires: 2017-12-30]
+ Keygrip = <em>D4DF0C35D3E22FA6AC37DA2E54FB03F73616A3CB</em>
+uid [ultimate] Alice &lt;alice@example.org&gt;
+ssb rsa2048/04BB7F8FDEC5E5D9 2014-12-31 [S] [expires: 2015-12-31]
+ Keygrip = 21B2EDF018D7CAF0B45644FDB753DD42307C4425
+ssb rsa2048/BBB6B86627C2D43A 2014-12-31 [E] [expires: 2015-12-31]
+ Keygrip = 2E149DA9C5E46E0DECC6A17EFD8B5FB1DF1E1BAB</pre>
+ <p>Then send a <code>DELETE_KEY</code> command to the GnuPG Agent:</p>
+ <pre class="console">$ <strong>gpg-connect-agent "DELETE_KEY D4DF0C35D3E22FA6AC37DA2E54FB03F73616A3CB" /bye</strong></pre>
+ <p>Confirm that you want to delete the key when the agent ask you
+so.</p>
+ <div class="note">
+ <p>For reference, the &#x201C;classic&#x201D; method (which still works with GnuPG
+ 2.1) is as follows:</p>
+ <p>First, export the subkeys:</p>
+ <pre class="console">$ <strong>gpg2 --armor --output private-subkeys.asc --export-secret-subkeys alice@example.org</strong></pre>
+ <p>Then delete the private master key and its subkeys:</p>
+ <pre class="console">$ <strong>gpg2 --delete-secret-key alice@example.org</strong>
+
+sec rsa4096/CB2F38F25B491A54 2014-12-31 Alice &lt;alice@example.org&gt;
+
+Delete this key from the keyring? (y/N) <strong>y</strong>
+This is a secret key! - really delete? (y/N) <strong>y</strong></pre>
+ <p>Then import back the subkeys you have just exported:</p>
+ <pre class="console">$ <strong>gpg2 --import private-subkeys.asc</strong>
+gpg: key CB2F38F25B491A54: "Alice &lt;alice@example.org&gt;" not changed
+gpg: key CB2F38F25B491A54: secret key imported
+gpg: Total number processed: 4
+gpg: unchanged: 1
+gpg: secret keys read: 4
+gpg: secret keys imported: 2</pre>
+ </div>
+ <h3>Step 3: Ensure that the private master key has been removed</h3>
+ <p>List the contents of your private keyring again:</p>
+ <pre class="console">$ <strong>gpg2 --list-secret-keys</strong>
+/home/alice/.gnupg/pubring.kbx
+------------------------------
+sec# rsa4096/CB2F38F25B491A54 2014-12-31 [SC] [expires: 2017-12-30]
+uid [ultimate] Alice &lt;alice@example.org&gt;
+ssb rsa2048/04BB7F8FDEC5E5D9 2014-12-31 [S] [expires: 2015-12-31]
+ssb rsa2048/BBB6B86627C2D43A 2014-12-31 [E] [expires: 2015-12-31]
+ssb rsa2048/7D2233B8833E70AF 2014-12-31 [A] [expires: 2015-12-31]</pre>
+ <p>No matter which method above you have used, you should see the
+<code>#</code> symbol after the <code>sec</code> keyword, confirming
+that the private master key is not usable.</p>
+ <p>If you want to be really sure, try to do something that requires the
+private master key, such as adding a new dummy User ID to your
+keyring:</p>
+ <pre class="console">$ <strong>gpg2 --edit-key alice@example.org</strong>
+Secret key is available.
+
+pub rsa4096/CB2F38F25B491A54
+ created: 2014-12-31 expires: 2017-12-30 usage: SC 
+ trust: ultimate validity: ultimate
+sub rsa2048/04BB7F8FDEC5E5D9
+ created: 2014-12-31 expires: 2015-12-31 usage: S 
+sub rsa2048/BBB6B86627C2D43A
+ created: 2014-12-31 expires: 2015-12-31 usage: E 
+sub rsa2048/7D2233B8833E70AF
+ created: 2014-12-31 expires: 2015-12-31 usage: A 
+[ultimate] (1). Alice &lt;alice@example.org&gt;
+
+gpg&gt; <strong>adduid</strong>
+Real name: <strong>Dummy</strong>
+Email address: <strong>dummy@example.org</strong>
+Comment: 
+You selected this USER-ID:
+ "Dummy &lt;dummy@example.org&gt;"
+
+Change (N)ame, (C)omment, (E)mail or (O)kay/(Q)uit? <strong>O</strong>
+gpg: <em>signing failed: No secret key</em>
+gpg: <em>signing failed: No secret key</em>
+
+gpg&gt; <strong>quit</strong></pre>
+ <p>Note the <code>signing failed: No secret key</code> messages.</p>
+ <h2>How to use the offline master key</h2>
+ <p>There are several ways to make GnuPG temporarily use the offline
+master key. The method I am currently using goes along the following
+lines.</p>
+ <p>Let&#x2019;s assume you have stored the <code>alice-private-keys.asc</code>
+file (generated in step 1 above) on a USB stick, and that, when the
+stick is mounted, the file is available at a location such as
+<code>/run/media/alice/mystick/alice-private-keys.asc</code>.</p>
+ <p>Create a temporary directory to use as a temporary GnuPG home:</p>
+ <pre class="console">$ <strong>mkdir ~/gpgtmp</strong>
+$ <strong>chmod 0700 ~/gpgtmp</strong></pre>
+ <p>Import your complete private keyring on that directory from your
+backup file:</p>
+ <pre class="console">$ <strong>gpg2 --homedir ~/gpgtmp --import /run/media/alice/mystick/alice-private-keys.asc</strong>
+gpg: keybox &#x2018;gpgtmp/pubring.kbx&#x2019; created
+gpg: gpgtmp/trustdb.gpg: trustdb created
+gpg: key 5B491A54: public key "Alice &lt;alice@example.org&gt;" imported
+gpg: key 5B491A54: secret key imported
+gpg: Total number processed: 4
+gpg: imported: 1
+gpg: secret keys read: 4
+gpg: secret keys imported: 3</pre>
+ <p>You may now unmount your USB stick and put it back in its safe
+place.</p>
+ <p>Now edit the key you want to sign. Use the temporary directory as
+GnuPG home, but add the public keyring from your normal GnuPG home
+directory:</p>
+ <pre class="console">$ <strong>gpg2 --homedir ~/gpgtmp --keyring ~/.gnupg/pubring.kbx --edit-key bob@example.com</strong></pre>
+ <div class="note">
+ <p>If you were using GnuPG 2.0 prior to GnuPG 2.1, your public keyring
+ is probably still in the &#x201C;legacy&#x201D; format and will be called
+ <code>pubring.gpg</code> instead of <code>pubring.kbx</code>.</p>
+ </div>
+ <p>When you have finished, terminate the GnuPG Agent which was started
+in the temporary directory, and wipe out that directory:</p>
+ <pre class="console">$ <strong>gpg-connect-agent --homedir ~/gpgtmp KILLAGENT /bye</strong>
+$ <strong>rm -rf ~/gpgtmp</strong></pre>
+ <p>A drawback of this method is that since you are not using your normal
+GnuPG&#x2019;s home directory, any configuration file in that directory will be
+ignored. If that is a concern, you may copy or symlink your
+<code>$GNUPGHOME/gpg.conf</code> file into the temporary directory
+before invoking GnuPG.</p>
+ <p>I strongly suggest using a small script to automatize the above
+commands&#x2014;such as this one&#x200B;<sup><a class="footnote-call" href="http://www.incenp.org/notes/2015/using-an-offline-gnupg-master-key.html#footnote1" id="fcall1">1</a></sup>:</p>
+ <pre class="file">#!/bin/bash
+
+# The DOS label of your USB stick
+LABEL=mystick
+
+# The pathname to the file containing your private keys
+# on that stick
+KEYFILE=alice-private-keys.asc
+
+# Identify the device file corresponding to your USB stick
+device=$(/sbin/findfs $LABEL)
+
+if [ -n "$device" ]; then
+ # Mount the stick
+ udisksctl mount --block-device $device
+
+ # Create temporary GnuPG home directory
+ tmpdir=$(mktemp -d -p $XDG_RUNTIME_DIR gpg.XXXXXX)
+
+ # Import the private keys
+ gpg2 --homedir $tmpdir --import /run/media/$USER/$LABEL/$KEYFILE
+
+ # Unmount the stick
+ udisksctl unmount --block-device $device
+
+ # Launch GnuPG from the temporary directory,
+ # with the default public keyring
+ # and with any arguments given to us on the command line
+ gpg2 --homedir $tmpdir --keyring ${GNUPGHOME:-$HOME/.gnupg}/pubring.kbx $@
+
+ # Cleaning up
+ [ -f $tmpdir/S.gpg-agent ] &amp;&amp; gpg-connect-agent --homedir $tmpdir KILLAGENT /bye
+ rm -rf $tmpdir
+fi</pre>
+ <h2>Some further thoughts</h2>
+ <h3>Splitting the master key in parts</h3>
+ <p>If you don&#x2019;t like the idea to keep your offline master key on a
+single USB stick,<sup><a class="footnote-call" href="http://www.incenp.org/notes/2015/using-an-offline-gnupg-master-key.html#footnote2" id="fcall2">2</a></sup> you may want to use a <em>N-of-M secret sharing scheme</em> to
+split the backup file in <em>M</em> parts, in such a way that <em>N</em>
+parts at least are needed to reconstruct the file.</p>
+ <p>For example, using <a href="http://www.digital-scurf.org/software/libgfshare">libgfshare</a>&#x2019;s
+implementation of <a href="http://dl.acm.org/citation.cfm?doid=359168.359176">Shamir&#x2019;s
+ Secret Sharing Scheme</a>:</p>
+ <pre class="console">$ <strong>gfsplit -n 2 -m 3 alice-private-keys.asc</strong></pre>
+ <p>This will produce three files of the form
+<code>alice-private-keys.asc.NNN</code>, any two of which will be needed
+to reconstruct the original file. You may then store each of them on a
+different support.</p>
+ <h3>Another method: Manipulating GnuPG Agent&#x2019;s key files directly</h3>
+ <p>Currently (with GnuPG 2.1), GnuPG Agent stores each private key in a
+separate file <code>$GNUPGHOME/private-keys-v1.d/NNN&#x2026;NNN.key</code>,
+where <em>NNN&#x2026;NNN</em> is the 20-bytes long keygrip of the key.</p>
+ <p>This allows a different and much simpler method to put the master
+private key offline, and bringing it back only when needed.</p>
+ <p>Back up the private key and delete it from the private keyring in a
+single step simply by moving the corresponding file from the
+<code>$GNUPGHOME/private-keys-v1.d</code> directory (once you know its
+keygrip):</p>
+ <pre class="console">$ <strong>mv ~/.gnupg/private-keys-v1.d/D4DF0C35D3E22FA6AC37DA2E54FB03F73616A3CB.key \
+ /run/media/alice/mystick/</strong></pre>
+ <p>To use the master key when needed, copy or symlink it from your
+storage device back into the private keys directory, perform the
+operation requiring the master key, then delete the file or symlink. No
+more need to use a temporary GnuPG home directory.</p>
+ <div class="note">
+ <p>A few remarks regarding this method:</p>
+ <ul>
+ <li>the private key is stored in its protected form, so it is as
+ well protected using this method as it was using the
+ <code>--export-secret-key</code> option above;</li>
+ <li>GnuPG Agent only caches the passphrase protecting the key, never
+ the key itself&#x2014;it reads the key from file everytime the key is
+ required, which means that as soon as the key file is removed from
+ the agent&#x2019;s directory, the key is no longer available;</li>
+ <li>a possible cause of concern is that this method depends on what
+ may be considered as implementation details of GnuPG Agent, which
+ may very well change in future GnuPG versions&#x2014;by contrast the first
+ method above only depends on GnuPG&#x2019;s public interface.</li>
+ </ul>
+ </div>
+ 
+ </section>
+ </div>
+</body></html>

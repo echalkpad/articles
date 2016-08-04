@@ -1,0 +1,342 @@
+<!DOCTYPE html><html><head><title>A Dive Into Plain JavaScript</title></head><body>
+<h1>A Dive Into Plain JavaScript</h1><p><a href="http://blog.adtile.me/2014/01/16/a-dive-into-plain-javascript/" target="_new">Original URL</a></p>
+<p><blockquote>While I&#x2019;ve worked over a decade building various websites, it has only been the past 3 years that I&#x2019;ve started learning more on how to work with plain JavaScript, instead of using&hellip;</blockquote></p>
+<div><article>
+ 
+ 
+ <p>While I&#x2019;ve worked over a decade building various websites, it has only been the past 3 years that I&#x2019;ve started learning more on how to work with plain JavaScript, instead of using jQuery always as the starting point. The fact that I&#x2019;m learning a dozen new things every day now, has made working on <a href="http://www.adtile.me/">Adtile&#x2019;s JavaScript SDK</a> feel more like building an open source project than &#x201C;actual work,&#x201D; and I have to say I like that a lot.</p>
+
+<p>Today, I&#x2019;m going to share some of the basic things I&#x2019;ve learned during the past years, which will hopefully also help you to dive into the world of plain JavaScript, making it easier to decide whether or not you will need jQuery in your next project.</p>
+
+<h2>Progressive Enhancement</h2>
+
+<p>While libraries like <a href="http://jquery.com">jQuery</a> help to forget most of the browser inconsistencies, you really become familiar with them once you start using plain JavaScript for everything. To avoid writing JavaScript that&#x2019;s full of browser hacks and code which only solves browser compatibility issues, I recommend building a progressively enhanced experience using feature detection to only target the more modern browsers. This doesn&#x2019;t mean that browsers like IE7 don&#x2019;t see anything at all, it just means that they get a more basic experience without JavaScript enhancements.</p>
+
+<h3>Here&#x2019;s How We&#x2019;re Doing It</h3>
+
+<p>We have a separate JavaScript partial which has all the feature tests. The actual list of tests is often much longer, but let&#x2019;s get back to this a bit later. To rule out some of the older browsers we use these two tests:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">test</span> <span class="o">=</span> <span class="p">{</span>
+ <span class="na">addEventListener</span> <span class="p">:</span> <span class="o">!!</span><span class="nb">window</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">,</span>
+ <span class="na">querySelectorAll</span> <span class="p">:</span> <span class="o">!!</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre>
+
+<p>Then, in the main application partial, we detect if these features are supported by using this simple <code>"if"</code> statement below. If they aren&#x2019;t supported, the browser won&#x2019;t execute any of this code:</p>
+<pre class="highlight javascript"><code><span class="k">if</span> <span class="p">(</span><span class="nx">test</span><span class="p">.</span><span class="nx">addEventListener</span> <span class="o">&amp;&amp;</span> <span class="nx">test</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">init</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre>
+
+<p>These two tests make sure that we have a native way of using CSS selectors in our JavaScript <code>(querySelectorAll)</code>, a way to easily add and remove events <code>(addEventListener)</code> and also that the browser&#x2019;s standards support is better than what IE8 has. Read more about this technique called &#x201C;Cutting the mustard&#x201D; from <a href="http://responsivenews.co.uk/post/18948466399/cutting-the-mustard">BBC&#x2019;s blog</a>.</p>
+
+<h3>Browser Support</h3>
+
+<p>Here&#x2019;s a rough list of the browsers which support the features we are testing, and will hence keep executing the JavaScript:</p>
+
+<ul>
+<li>IE9+</li>
+<li>Firefox 3.5+</li>
+<li>Opera 9+</li>
+<li>Safari 4+</li>
+<li>Chrome 1+</li>
+<li>iPhone and iPad iOS1+</li>
+<li>Android phone and tablets 2.1+</li>
+<li>Blackberry OS6+</li>
+<li>Windows 7.5+</li>
+<li>Mobile Firefox</li>
+<li>Opera Mobile</li>
+</ul>
+
+<h2>The Basics, Plain JavaSript Way</h2>
+
+<p>Let&#x2019;s start looking how the most basic and often needed functionalities work in plain JavaScript, compared to jQuery. For each example, I&#x2019;m going to provide both the jQuery and plain JavaScript approach.</p>
+
+<h3>Document Ready</h3>
+
+<p>With jQuery, many of you are probably used to using document.ready like so:</p>
+<pre class="highlight javascript"><code><span class="nx">$</span><span class="p">(</span><span class="nb">document</span><span class="p">).</span><span class="nx">ready</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="c1">// Code</span>
+<span class="p">});</span>
+</code></pre>
+
+<p>But did you know that you can just put all of your JavaScript at the bottom of your page and that does basically the same thing? JavaScript has also an event listener for the DOM content loaded event which you can use instead of jQuery&#x2019;s document.ready:</p>
+<pre class="highlight javascript"><code><span class="nb">document</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"DOMContentLoaded"</span><span class="p">,</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="c1">// Code</span>
+<span class="p">},</span> <span class="kc">false</span><span class="p">);</span>
+</code></pre>
+
+<h3>Selectors API</h3>
+
+<p>JavaScript&#x2019;s native selectors API is very good. It works with CSS selectors and is very similar to what jQuery provides. If you are used to writing this in jQuery:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">element</span> <span class="o">=</span> <span class="nx">$</span><span class="p">(</span><span class="s2">"div"</span><span class="p">);</span>
+</code></pre>
+
+<p>You can now replace that with:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">element</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"div"</span><span class="p">);</span>
+</code></pre>
+
+<p>Or, to select all div&#x2019;s inside some container:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">elements</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s2">".container div"</span><span class="p">);</span>
+</code></pre>
+
+<p>You can also query against a specific element to find it&#x2019;s children:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">navigation</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"nav"</span><span class="p">);</span>
+<span class="kd">var</span> <span class="nx">links</span> <span class="o">=</span> <span class="nx">navigation</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s2">"a"</span><span class="p">);</span>
+</code></pre>
+
+<p>Quite straightforward, easy to understand, and doesn&#x2019;t really require much more writing now does it? To go a little further, we could even build a tiny JavaScript library for ourselves for simple DOM querying. Here&#x2019;s something that Andrew Lunny <a href="http://remysharp.com/2013/04/19/i-know-jquery-now-what/#backToTheFutureToday-heading">has came up with</a>:</p>
+<pre class="highlight javascript"><code><span class="c1">// This gives us simple dollar function and event binding</span>
+<span class="kd">var</span> <span class="nx">$</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">.</span><span class="nx">bind</span><span class="p">(</span><span class="nb">document</span><span class="p">);</span>
+<span class="nx">Element</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">on</span> <span class="o">=</span> <span class="nx">Element</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">;</span>
+
+<span class="c1">// This is how you use it</span>
+<span class="nx">$</span><span class="p">(</span><span class="s2">".element"</span><span class="p">)[</span><span class="mi">0</span><span class="p">].</span><span class="nx">on</span><span class="p">(</span><span class="s2">"touchstart"</span><span class="p">,</span> <span class="nx">handleTouch</span><span class="p">,</span> <span class="kc">false</span><span class="p">);</span>
+</code></pre>
+
+<h3>Traversing the DOM</h3>
+
+<p>Traversing the DOM with plain JavaScript is a bit harder than it is with jQuery. But not too hard. Here are some simple examples:</p>
+<pre class="highlight javascript"><code><span class="c1">// Getting the parent node</span>
+<span class="kd">var</span> <span class="nx">parent</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"div"</span><span class="p">).</span><span class="nx">parentNode</span><span class="p">;</span>
+
+<span class="c1">// Getting the next node</span>
+<span class="kd">var</span> <span class="nx">next</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"div"</span><span class="p">).</span><span class="nx">nextSibling</span><span class="p">;</span>
+
+<span class="c1">// Getting the previous node</span>
+<span class="kd">var</span> <span class="nx">next</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"div"</span><span class="p">).</span><span class="nx">previousSibling</span><span class="p">;</span>
+
+<span class="c1">// Getting the first child element</span>
+<span class="kd">var</span> <span class="nx">child</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"div"</span><span class="p">).</span><span class="nx">children</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+
+<span class="c1">// Getting the last child</span>
+<span class="kd">var</span> <span class="nx">last</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"div"</span><span class="p">).</span><span class="nx">lastElementChild</span><span class="p">;</span>
+</code></pre>
+
+<h3>Adding and Removing Classes</h3>
+
+<p>With jQuery, adding, removing and checking if an element has certain classes is really simple. It&#x2019;s a bit more complex with plain JavaScript, but not too much so. Giving element a class called <code>"foo"</code> and replacing all the current classes:</p>
+<pre class="highlight javascript"><code><span class="c1">// Select an element</span>
+<span class="kd">var</span> <span class="nx">element</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">".some-class"</span><span class="p">);</span>
+
+<span class="c1">// Give class "foo" to the element</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">className</span> <span class="o">=</span> <span class="s2">"foo"</span><span class="p">;</span>
+</code></pre>
+
+<p>Adding a class without replacing the current classes:</p>
+<pre class="highlight javascript"><code><span class="nx">element</span><span class="p">.</span><span class="nx">className</span> <span class="o">+=</span> <span class="s2">" foo"</span><span class="p">;</span>
+</code></pre>
+
+<p>Removing <code>"no-js"</code> class from html-element and replacing it with <code>"js"</code>:</p>
+<pre class="highlight html"><code><span class="nt">&lt;html</span> <span class="na">class=</span><span class="s">"no-js"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;head&gt;</span>
+ <span class="nt">&lt;script&gt;</span>
+ <span class="nb">document</span><span class="p">.</span><span class="nx">documentElement</span><span class="p">.</span><span class="nx">className</span> <span class="o">=</span> <span class="s2">"js"</span><span class="p">;</span>
+ <span class="nt">&lt;/script&gt;</span>
+&#x2026;&#x2026;
+</code></pre>
+
+<p>That was quite straightforward, right? Next step, removing only certain classes, is a bit more complex. I&#x2019;ve been using this small helper function in a separate partial called util.js. It takes 2 parameters: element and the class you want to remove:</p>
+<pre class="highlight javascript"><code><span class="c1">// removeClass, takes two params: element and classname</span>
+<span class="kd">function</span> <span class="nx">removeClass</span><span class="p">(</span><span class="nx">el</span><span class="p">,</span> <span class="nx">cls</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">var</span> <span class="nx">reg</span> <span class="o">=</span> <span class="k">new</span> <span class="nb">RegExp</span><span class="p">(</span><span class="s2">"(\\s|^)"</span> <span class="o">+</span> <span class="nx">cls</span> <span class="o">+</span> <span class="s2">"(\\s|$)"</span><span class="p">);</span>
+ <span class="nx">el</span><span class="p">.</span><span class="nx">className</span> <span class="o">=</span> <span class="nx">el</span><span class="p">.</span><span class="nx">className</span><span class="p">.</span><span class="nx">replace</span><span class="p">(</span><span class="nx">reg</span><span class="p">,</span> <span class="s2">" "</span><span class="p">).</span><span class="nx">replace</span><span class="p">(</span><span class="sr">/</span><span class="se">(</span><span class="sr">^</span><span class="se">\s</span><span class="sr">*</span><span class="se">)</span><span class="sr">|</span><span class="se">(\s</span><span class="sr">*$</span><span class="se">)</span><span class="sr">/g</span><span class="p">,</span><span class="s2">""</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre>
+
+<p>Then, in the main application partial, I&#x2019;ve been using it like so:</p>
+<pre class="highlight javascript"><code><span class="nx">removeClass</span><span class="p">(</span><span class="nx">element</span><span class="p">,</span> <span class="s2">"foo"</span><span class="p">);</span>
+</code></pre>
+
+<p>If you also want to check an element against some class, kind of like jQuery&#x2019;s <code>hasClass</code> works, you could add this in your utils:</p>
+<pre class="highlight javascript"><code><span class="c1">// hasClass, takes two params: element and classname</span>
+<span class="kd">function</span> <span class="nx">hasClass</span><span class="p">(</span><span class="nx">el</span><span class="p">,</span> <span class="nx">cls</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">el</span><span class="p">.</span><span class="nx">className</span> <span class="o">&amp;&amp;</span> <span class="k">new</span> <span class="nb">RegExp</span><span class="p">(</span><span class="s2">"(\\s|^)"</span> <span class="o">+</span> <span class="nx">cls</span> <span class="o">+</span> <span class="s2">"(\\s|$)"</span><span class="p">).</span><span class="nx">test</span><span class="p">(</span><span class="nx">el</span><span class="p">.</span><span class="nx">className</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre>
+
+<p>&#x2026;and use it like so:</p>
+<pre class="highlight javascript"><code><span class="c1">// Check if an element has class "foo"</span>
+<span class="k">if</span> <span class="p">(</span><span class="nx">hasClass</span><span class="p">(</span><span class="nx">element</span><span class="p">,</span> <span class="s2">"foo"</span><span class="p">))</span> <span class="p">{</span>
+
+ <span class="c1">// Show an alert message if it does</span>
+ <span class="nx">alert</span><span class="p">(</span><span class="s2">"Element has the class!"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre>
+
+<h3>Introducing HTML5 classList API</h3>
+
+<p>If you only need to support more modern browsers like IE10+, Chrome, Firefox, Opera and Safari, you could also start using HTML5&#x2019;s classList functionality which makes adding and removing classes even easier.</p>
+
+<p>This is something, that I ended up doing with our latest Developer Docs, as the functionality I was developing, was more like an enhancement to the UI and not really something that would break the experience if it wasn&#x2019;t present.</p>
+
+<p>You can feature detect if the browser supports it by using this simple <code>"if"</code> statement:</p>
+<pre class="highlight javascript"><code><span class="k">if</span> <span class="p">(</span><span class="s2">"classList"</span> <span class="k">in</span> <span class="nb">document</span><span class="p">.</span><span class="nx">documentElement</span><span class="p">)</span> <span class="p">{</span>
+ <span class="c1">// classList is supported, now do something with it</span>
+<span class="p">}</span>
+</code></pre>
+
+<p>Adding, removing and toggling classes with classList:</p>
+<pre class="highlight javascript"><code><span class="c1">// Adding a class</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">classList</span><span class="p">.</span><span class="nx">add</span><span class="p">(</span><span class="s2">"bar"</span><span class="p">);</span>
+
+<span class="c1">// Removing a class</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">classList</span><span class="p">.</span><span class="nx">remove</span><span class="p">(</span><span class="s2">"foo"</span><span class="p">);</span>
+
+<span class="c1">// Checking if has a class</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">classList</span><span class="p">.</span><span class="nx">contains</span><span class="p">(</span><span class="s2">"foo"</span><span class="p">);</span>
+
+<span class="c1">// Toggle a class</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">classList</span><span class="p">.</span><span class="nx">toggle</span><span class="p">(</span><span class="s2">"active"</span><span class="p">);</span>
+</code></pre>
+
+<p>One other benefit of using classList is that it will perform much better than using the raw className property. If you had an element like this:</p>
+<pre class="highlight html"><code><span class="nt">&lt;div</span> <span class="na">id=</span><span class="s">"test"</span> <span class="na">class=</span><span class="s">"one two three"</span><span class="nt">&gt;&lt;/div&gt;</span>
+</code></pre>
+
+<p>Which you&#x2019;d want to manipulate:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">element</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"#test"</span><span class="p">);</span>
+<span class="nx">addClass</span><span class="p">(</span><span class="nx">element</span><span class="p">,</span> <span class="s2">"two"</span><span class="p">);</span>
+<span class="nx">removeClass</span><span class="p">(</span><span class="nx">element</span><span class="p">,</span> <span class="s2">"four"</span><span class="p">);</span>
+</code></pre>
+
+<p>For each of these methods the className property would be read from and then written to, triggering a browser repaint. However, this is not the case if we use the relevant classList methods instead:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">element</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">"#test"</span><span class="p">);</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">classList</span><span class="p">.</span><span class="nx">add</span><span class="p">(</span><span class="s2">"two"</span><span class="p">);</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">classList</span><span class="p">.</span><span class="nx">remove</span><span class="p">(</span><span class="s2">"four"</span><span class="p">);</span>
+</code></pre>
+
+<p>With classList the underlying className is only altered when necessary. Given that we are adding a class that is already present and removing a class that isn&#x2019;t, the className is never touched, meaning we&#x2019;ve just avoided two repaints!</p>
+
+<h3>Event Listeners</h3>
+
+<p>Adding and removing event listeners from elements is almost as simple in plain JavaScript as it&#x2019;s in jQuery. Things get a bit more complex when you have to add multiple event listeners, but I&#x2019;ll explain that in a bit. The simplest example, which will just pop out an alert message when an element is clicked, is as follows:</p>
+<pre class="highlight javascript"><code><span class="nx">element</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"click"</span><span class="p">,</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="nx">alert</span><span class="p">(</span><span class="s2">"You clicked"</span><span class="p">);</span>
+<span class="p">},</span> <span class="kc">false</span><span class="p">);</span>
+</code></pre>
+
+<p>To achieve this same functionality on all of the elements on a given page, we have to loop through each element, and give them all eventListeners:</p>
+<pre class="highlight javascript"><code><span class="c1">// Select all links</span>
+<span class="kd">var</span> <span class="nx">links</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s2">"a"</span><span class="p">);</span>
+
+<span class="c1">// For each link element</span>
+<span class="p">[].</span><span class="nx">forEach</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">links</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">el</span><span class="p">)</span> <span class="p">{</span>
+
+ <span class="c1">// Add event listener</span>
+ <span class="nx">el</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"click"</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">event</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">event</span><span class="p">.</span><span class="nx">preventDefault</span><span class="p">();</span>
+ <span class="nx">alert</span><span class="p">(</span><span class="s2">"You clicked"</span><span class="p">);</span>
+ <span class="p">},</span> <span class="kc">false</span><span class="p">);</span>
+
+<span class="p">});</span>
+</code></pre>
+
+<p>One of JavaScript&#x2019;s greatest features related to event listeners is the fact that <code>"addEventListener"</code> can take an object as a second argument that will automatically look for a method called <code>"handleEvent"</code> and call it. <a href="https://twitter.com/ryanseddon">Ryan Seddon</a> has covered this technique thoroughly <a href="http://www.thecssninja.com/javascript/handleevent">in his article</a>, so I&#x2019;m just gonna give a fast example and you can read more about it from his blog:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">object</span> <span class="o">=</span> <span class="p">{</span>
+ <span class="na">init</span><span class="p">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="nx">button</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"click"</span><span class="p">,</span> <span class="k">this</span><span class="p">,</span> <span class="kc">false</span><span class="p">);</span>
+ <span class="nx">button</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">"touchstart"</span><span class="p">,</span> <span class="k">this</span><span class="p">,</span> <span class="kc">false</span><span class="p">);</span>
+ <span class="p">},</span>
+ <span class="nx">handleEvent</span><span class="err">:</span> <span class="kd">function</span><span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">switch</span><span class="p">(</span><span class="nx">e</span><span class="p">.</span><span class="nx">type</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">case</span> <span class="s2">"click"</span><span class="err">:</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">action</span><span class="p">();</span>
+ <span class="k">break</span><span class="p">;</span>
+ <span class="k">case</span> <span class="s2">"touchstart"</span><span class="err">:</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">action</span><span class="p">();</span>
+ <span class="k">break</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="p">},</span>
+ <span class="nx">action</span><span class="err">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="nx">alert</span><span class="p">(</span><span class="s2">"Clicked or touched!"</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">};</span>
+
+<span class="c1">// Init</span>
+<span class="nx">object</span><span class="p">.</span><span class="nx">init</span><span class="p">();</span>
+</code></pre>
+
+<h3>Manipulating the DOM</h3>
+
+<p>Manipulating the DOM with plain JavaScript might sound like a horrible idea at first, but it really isn&#x2019;t much more complex that using jQuery. Below, we have an example that selects an element from the DOM, clones it, manipulates the clone&#x2019;s styles with JavaScript and then replaces the original element with the manipulated one.</p>
+<pre class="highlight javascript"><code><span class="c1">// Select an element</span>
+<span class="kd">var</span> <span class="nx">element</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s2">".class"</span><span class="p">);</span>
+
+<span class="c1">// Clone it</span>
+<span class="kd">var</span> <span class="nx">clone</span> <span class="o">=</span> <span class="nx">element</span><span class="p">.</span><span class="nx">cloneNode</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span>
+
+<span class="c1">// Do some manipulation off the DOM</span>
+<span class="nx">clone</span><span class="p">.</span><span class="nx">style</span><span class="p">.</span><span class="nx">background</span> <span class="o">=</span> <span class="s2">"#000"</span><span class="p">;</span>
+
+<span class="c1">// Replaces the original element with the new cloned one</span>
+<span class="nx">element</span><span class="p">.</span><span class="nx">parentNode</span><span class="p">.</span><span class="nx">replaceChild</span><span class="p">(</span><span class="nx">clone</span><span class="p">,</span> <span class="nx">element</span><span class="p">);</span>
+</code></pre>
+
+<p>If you don&#x2019;t want to replace anything in the DOM, but instead append the newly created div inside the <code>&lt;body&gt;</code>, you could do it like this:</p>
+<pre class="highlight javascript"><code><span class="nb">document</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">appendChild</span><span class="p">(</span><span class="nx">clone</span><span class="p">);</span>
+</code></pre>
+
+<p>If you feel like you&#x2019;d want to read even more about different DOM methods, I&#x2019;d suggest you to head over to Peter-Paul Koch&#x2019;s <a href="http://quirksmode.org/dom/core/">DOM Core tables</a>.</p>
+
+<h2>Diving Deeper</h2>
+
+<p>I&#x2019;m going to share two bit more advanced techniques here, which I&#x2019;ve recently discovered. These are both functionalities we have needed while building <a href="http://www.adtile.me/">Adtile</a>, so you might find these useful too.</p>
+
+<h3>Determining Max-Width of Responsive Images in JS</h3>
+
+<p>This is one of my own favorites, and it&#x2019;s very useful if you ever need to manipulate fluid images with JavaScript. As browsers return the current <strong>resized</strong> dimensions of an image by default, we have to come up with some other solution. Luckily, modern browsers now have a way of doing this:</p>
+<pre class="highlight javascript"><code><span class="kd">var</span> <span class="nx">maxWidth</span> <span class="o">=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">naturalWidth</span><span class="p">;</span>
+</code></pre>
+
+<p>This will give us image&#x2019;s <code>max-width: 100%</code> value in pixels and it&#x2019;s supported in IE9, Chrome, Firefox, Safari and Opera. We can also take this further and add support for older browsers by loading the image into an in-memory object:</p>
+<pre class="highlight javascript"><code><span class="c1">// Get image's max-width:100%; in pixels</span>
+<span class="kd">function</span> <span class="nx">getMaxWidth</span><span class="p">(</span><span class="nx">img</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">var</span> <span class="nx">maxWidth</span><span class="p">;</span>
+
+ <span class="c1">// Check if naturalWidth is supported</span>
+ <span class="k">if</span> <span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">naturalWidth</span> <span class="o">!==</span> <span class="kc">undefined</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">maxWidth</span> <span class="o">=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">naturalWidth</span><span class="p">;</span>
+
+ <span class="c1">// Not supported, use in-memory solution as fallback</span>
+ <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+ <span class="kd">var</span> <span class="nx">image</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Image</span><span class="p">();</span>
+ <span class="nx">image</span><span class="p">.</span><span class="nx">src</span> <span class="o">=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">src</span><span class="p">;</span>
+ <span class="nx">maxWidth</span> <span class="o">=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">width</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="c1">// Return the max-width</span>
+ <span class="k">return</span> <span class="nx">maxWidth</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre>
+
+<p>You should note that the images must be fully loaded before checking for the width. This is what we&#x2019;ve been using to make sure they have dimensions:</p>
+<pre class="highlight javascript"><code><span class="kd">function</span> <span class="nx">hasDimensions</span><span class="p">(</span><span class="nx">img</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="o">!!</span><span class="p">((</span><span class="nx">img</span><span class="p">.</span><span class="nx">complete</span> <span class="o">&amp;&amp;</span> <span class="k">typeof</span> <span class="nx">img</span><span class="p">.</span><span class="nx">naturalWidth</span> <span class="o">!==</span> <span class="s2">"undefined"</span><span class="p">)</span> <span class="o">||</span> <span class="nx">img</span><span class="p">.</span><span class="nx">width</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre>
+
+<h3>Determining if an Element is in the Viewport</h3>
+
+<p>You can get the position of any element on the page using <a href="https://developer.mozilla.org/en-US/docs/Web/API/Element.getBoundingClientRect">getBoundingClientRect</a> method. Below is a simple function showing how simple and powerful it can be. This function takes one parameter, which is the element you want to check. It will return true when the element is visible:</p>
+<pre class="highlight javascript"><code><span class="c1">// Determine if an element is in the visible viewport</span>
+<span class="kd">function</span> <span class="nx">isInViewport</span><span class="p">(</span><span class="nx">element</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">var</span> <span class="nx">rect</span> <span class="o">=</span> <span class="nx">element</span><span class="p">.</span><span class="nx">getBoundingClientRect</span><span class="p">();</span>
+ <span class="kd">var</span> <span class="nx">html</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">documentElement</span><span class="p">;</span>
+ <span class="k">return</span> <span class="p">(</span>
+ <span class="nx">rect</span><span class="p">.</span><span class="nx">top</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span>
+ <span class="nx">rect</span><span class="p">.</span><span class="nx">left</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span>
+ <span class="nx">rect</span><span class="p">.</span><span class="nx">bottom</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="nb">window</span><span class="p">.</span><span class="nx">innerHeight</span> <span class="o">||</span> <span class="nx">html</span><span class="p">.</span><span class="nx">clientHeight</span><span class="p">)</span> <span class="o">&amp;&amp;</span>
+ <span class="nx">rect</span><span class="p">.</span><span class="nx">right</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="nb">window</span><span class="p">.</span><span class="nx">innerWidth</span> <span class="o">||</span> <span class="nx">html</span><span class="p">.</span><span class="nx">clientWidth</span><span class="p">)</span>
+ <span class="p">);</span>
+<span class="p">}</span>
+</code></pre>
+
+<p>The above function could be used by adding a &#x201C;scroll&#x201D; event listener to the window and then calling <code>isInViewport()</code>.</p>
+
+<h2>Conclusion</h2>
+
+<p>Whether or not you should use <a href="http://jquery.com/">jQuery</a> in your next project depends a lot on what you are building. If it&#x2019;s something that requires large amounts of front-end code, you should probably use it. However, if you&#x2019;re building a JavaScript plugin or a library, you might want to consider sticking with just plain JavaScript. Using plain JavaScript means fewer requests and less data to load. It also means that you aren&#x2019;t forcing developers to add jQuery to their project just because of that dependency.</p>
+
+ </article>
+ </div>
+</body></html>

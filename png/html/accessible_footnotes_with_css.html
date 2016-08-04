@@ -1,0 +1,160 @@
+<!DOCTYPE html><html><head><title>Accessible Footnotes with CSS</title></head><body>
+<h1>Accessible Footnotes with CSS</h1><p><a href="http://www.sitepoint.com/accessible-footnotes-css/" target="_new">Original URL</a></p>
+<p><blockquote>I was playing with CSS counters the other day and thought about using them to deal with footnotes. According to Plagiarism which has a surprisingly long entry on the matter, footnotes are: [&#x2026;]&hellip;</blockquote></p>
+<div><section class="article_body">
+
+ <p>I was playing with <a href="http://www.sitepoint.com/understanding-css-counters-and-their-use-cases/">CSS counters</a> the other day and thought about using them to deal with footnotes. According to <a href="http://www.plagiarism.org/citing-sources/what-are-footnotes/">Plagiarism</a> which has a surprisingly long entry on the matter, footnotes are:</p>
+<blockquote>
+<p>[&#x2026;] notes placed at the bottom of a page. They cite references or comment on a designated part of the text above it.</p>
+</blockquote>
+<p>You often see them in papers when the author wants to add a piece of information or cite a reference without doing it in the middle of the content or using parentheses. Usually, footnotes are represented with a number according to the position of the footnote in the document, then the same numbers are present at the bottom of the document, adding extra content.</p>
+<p>The problem with footnotes on the web is that they can be a pain to maintain. If you happen to work on the same document often, changing the order of sections, adding references along the way, it might be tedious to have to re-number all existing footnotes. For example, if you have 3 existing references to footnotes in a document, and you want to add another one, but on a piece of content that occurs before all the others, you have to re-number them all. Not great&#x2026;</p>
+<p>We could use CSS counters to make this whole thing much easier. What if we did not have to maintain the numbering by hand and it could be done automatically? The only thing we would have to pay attention to, is that the order of the actual notes in the footer respect the order of appearance of the references in the text.</p>
+<h2 id="creating-a-sample-document">Creating a sample document</h2>
+<p>Let&#x2019;s create a sample document so we can get started.</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;article&gt;
+ &lt;h1&gt;CSS-Powered Footnotes&lt;/h1&gt;
+
+ &lt;p&gt;Maintaining &lt;a href="#footnotes"&gt;footnotes&lt;/a&gt; manually can be a pain. 
+ By using &lt;a href="#css"&gt;CSS&lt;/a&gt; &lt;a href="#css-counters"&gt;counters&lt;/a&gt; to add 
+ the numbered references in the text and an ordered list to display the actual 
+ footnotes in the footer, it becomes extremely easy.&lt;/p&gt;
+
+ &lt;footer&gt;
+ &lt;ol&gt;
+ &lt;li id="footnotes"&gt;Footnotes are notes placed at the bottom of a page. They 
+ cite references or comment on a designated part of the text above it.&lt;/li&gt;
+
+ &lt;li id="css"&gt;Cascading Style Sheets&lt;/li&gt;
+
+ &lt;li id="css-counters"&gt;CSS counters are, in essence, variables maintained by 
+ CSS whose values may be incremented by CSS rules to track how many times 
+ they're used.&lt;/li&gt;
+ &lt;/ol&gt;
+ &lt;/footer&gt;
+&lt;/article&gt;
+</pre>
+<p>Our example is lightweight: we have some content in an <code>&lt;article&gt;</code> element, which contains some links (<code>&lt;a&gt;</code>) pointed at in-document IDs, mapped to the notes in the <code>&lt;footer&gt;</code> of the article.</p>
+<p>With a few styles, it might look like this:</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2015/06/1434403915footnotes-1.png" alt="Accessible footnotes with CSS &#x2013; raw version" width="800" class="aligncenter size-full wp-image-108008"></p>
+<h2 id="making-it-accessible">Making it accessible</h2>
+<p>Before actually getting onto the counters thing, we should make sure our markup is fully accessible for screen-readers. The first thing we want to do is add a title to our footer that will serve as a description or our footnote references. We&#x2019;ll hide this title with CSS so it doesn&#x2019;t show up visually.</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;footer&gt;
+ &lt;h2 id="footnote-label"&gt;Footnotes&lt;/h2&gt;
+ &lt;ol&gt;
+ ...
+ &lt;/ol&gt;
+&lt;/footer&gt;
+</pre>
+<p>Then, we want to describe all our references with this title, using the <code>aria-describedby</code> attribute:</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;p&gt;Maintaining &lt;a aria-describedby="footnote-label" href="#footnotes"&gt;footnotes&lt;/a&gt; 
+manually can be a pain. By using &lt;a aria-describedby="footnote-label" href="#css"&gt;CSS&lt;/a&gt; 
+&lt;a aria-describedby="footnote-label" href="#css-counters"&gt;counters&lt;/a&gt; to add the 
+numbered references in the text and an ordered list to display the actual footnotes 
+in the footer, it becomes extremely easy.&lt;/p&gt;
+</pre>
+<p>Now screen reader users will understand when links are references to footnotes.</p>
+<h2 id="adding-the-references">Adding the references</h2>
+<p>I know what you&#x2019;re thinking: <i>He said there would be CSS counters. Where are the CSS counters?</i> Well worry not, my friend, they are coming.</p>
+<p>What we are going to do is increment a counter for every link in the document that has an <code>aria-describedby</code> attribute set to <code>footnote-label</code>. Then we&#x2019;ll display the counter using the <code>::after</code> pseudo-element. From there, it&#x2019;s all about applying CSS styles.</p>
+<pre class="brush: css; title: ; notranslate" title="">
+/**
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii Initialiazing a `footnotes` counter on the wrapper
+ */
+article {
+ counter-reset: footnotes;
+}
+
+/**
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii Inline footnotes references
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1. Increment the counter at each new reference
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 2. Reset link styles to make it appear like regular text
+ */
+a[aria-describedby="footnote-label"] {
+ counter-increment: footnotes; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 1 */
+ text-decoration: none; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 2 */
+ color: inherit; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 2 */
+ cursor: default; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 2 */
+ outline: none; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 2 */
+}
+
+/**
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii Actual numbered references
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1. Display the current state of the counter (e.g. `[1]`)
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 2. Align text as superscript
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 3. Make the number smaller (since it's superscript)
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 4. Slightly offset the number from the text
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 5. Reset link styles on the number to show it's usable
+ */
+a[aria-describedby="footnote-label"]::after {
+ content: '[' counter(footnotes) ']'; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 1 */
+ vertical-align: super; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 2 */
+ font-size: 0.5em; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 3 */
+ margin-left: 2px; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 4 */
+ color: blue; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 5 */
+ text-decoration: underline; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 5 */
+ cursor: pointer; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old 5 */
+}
+
+/**
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii Resetting the default focused styles on the number
+ */
+a[aria-describedby="footnote-label"]:focus::after {
+ outline: thin dotted;
+ outline-offset: 2px;
+}
+</pre>
+<p>Now it looks like this:</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2015/06/1434403907footnotes-2.png" alt="Accessible footnotes with CSS" width="800" class="aligncenter size-full wp-image-108006"></p>
+<p>Pretty nice, huh? As a final touch, when heading to a footnote from a reference, we want to highlight the note in the footer so we actually see what is the note being referred to, which we can do using the <code>:target</code> pseudo-class:</p>
+<pre class="brush: css; title: ; notranslate" title="">
+footer :target {
+ background: yellow;
+}
+</pre>
+<p>It is a bit raw, so feel free to customise. Although I must say I like the pure yellow for a highlight &#x2013; it looks so authentic:</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2015/06/1434403911footnotes-3.png" alt="Accessible footnotes with CSS &#x2013; A footnote is targeted" width="800" class="aligncenter size-full wp-image-108007"></p>
+
+<p>Our demo needs one final element to be fully accessible (as well as pretty cool): back-to-content links. Think about it: You focus a reference, head to the relevant note in the footer, read it and then&#x2026; nothing. You need a way to go back to where you left!</p>
+<p>Providing those links is not that hard: we only need to add a unique ID attribute to each reference in the content so they can be linked to. I decided to go simple and take the ID they refer to, and simply append <code>-ref</code> to it:</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;p&gt;Maintaining &lt;a aria-describedby="footnote-label" href="#footnotes" id="footnotes-ref"&gt;footnotes&lt;/a&gt; 
+manually can be a pain. By using &lt;a aria-describedby="footnote-label" href="#css" id="css-ref"&gt;CSS&lt;/a&gt; 
+&lt;a aria-describedby="footnote-label" href="#css-counters" id="css-counters-ref"&gt;counters&lt;/a&gt; 
+to add the numbered references in the text and an ordered list to display the actual 
+footnotes in the footer, it becomes extremely easy.&lt;/p&gt;
+</pre>
+<p>Then each list item from the footer has its own link heading to the relevant <code>id</code> we just added. The content of the link is the <em>backlink</em> Unicode icon (&#x21A9;), and it has an <code>aria-label</code> attribute with a value of &#x201C;Back to content&#x201D;.</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+&lt;ol&gt;
+ &lt;li id="footnotes"&gt;Footnotes are notes placed at the bottom of a page. 
+ They cite references or comment on a designated part of the text above it. 
+ &lt;a href="#footnotes-ref" aria-label="Back to content"&gt;&#x21A9;&lt;/a&gt;&lt;/li&gt;
+ &lt;li id="css"&gt;Cascading Style Sheets 
+ &lt;a href="#css-ref" aria-label="Back to content"&gt;&#x21A9;&lt;/a&gt;&lt;/li&gt;
+ &lt;li id="css-counters"&gt;CSS counters are, in essence, variables maintained 
+ by CSS whose values may be incremented by CSS rules to track how many 
+ times they're used. &lt;a href="#css-counters-ref" aria-label="Back to content"&gt;&#x21A9;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+</pre>
+<p>To target those links in CSS, we can rely on the <code>aria-label</code> attribute the same way we did for <code>aria-describedby</code>:</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+[aria-label="Back to content"] {
+ font-size: 0.8em;
+}
+</pre>
+<p>Here is what the final demo looks like:</p>
+<p class="codepen">See the Pen <a href="http://codepen.io/SitePoint/pen/QbMgvY/">Accessible footnotes with CSS</a> by SitePoint (<a href="http://codepen.io/SitePoint">@SitePoint</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+
+<h2 id="final-thoughts">Final thoughts</h2>
+<p>With nothing but a couple of lines of CSS and a few ARIA attributes, we managed to create CSS-powered footnotes that are accessible and do not need any JavaScript. How cool is that?</p>
+<p>On topic, I highly recommend <a href="http://www.smashingmagazine.com/2013/08/20/semantic-css-with-intelligent-selectors/">Semantic CSS with intelligent selectors</a> from <a href="https://twitter.com/heydonworks">Heydon Pickering</a>. Also, be sure to check out <a href="https://ffoodd.github.io/a11y.css/">a11y.css</a> from <a href="https://twitter.com/ffoodd_fr">Ga&#xEB;k Poupard</a> to check the accessibility of your pages.</p>
+<p><em>Huge thanks to <a href="https://twitter.com/heydonworks">Heydon Pickering</a> for his valuable help regarding accessibility in this demo.</em></p>
+
+ </section>
+
+ </div>
+</body></html>

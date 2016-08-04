@@ -1,0 +1,203 @@
+<!DOCTYPE html><html><head><title>How to Perform Network Sniffing with Tshark</title></head><body>
+<h1>How to Perform Network Sniffing with Tshark</h1><p><a href="http://linoxide.com/linux-how-to/network-sniffing-tshark/" target="_new">Original URL</a></p>
+<p><blockquote>This time let's talk about Tshark, a powerful command-line network analyzer that comes with the well known Wireshark. It works like Tcpdump,&#xA0;but with powerful decoders and filters, capable to&hellip;</blockquote></p>
+<div><div class="entry">
+
+
+
+							
+
+
+
+							
+
+
+							
+
+
+							<p>This time let's talk about Tshark, a powerful command-line network analyzer that comes with the well known Wireshark. It works like Tcpdump,&#xA0;but with powerful decoders and filters, capable to capture information of different network layers or protocols, and display in different format and layouts.</p>
+<p>Used to analyze network traffic in real-time or read pcap/pcapng files to look for information, digging into details of connections, helping to identify network anomalies, problems or trends. Helping&#xA0;network and security professionals&#xA0;to be ahead of the user and their needs, &#xA0;prevent &#xA0;problems and security threats or solve them before&#xA0;it is too late.</p>
+<div id="attachment_13116" class="wp-caption aligncenter"><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark-simple.jpg"><img class="size-large wp-image-13116" src="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark-simple-1024x564.jpg" alt="sample Tshark session" width="1024"></a><p class="wp-caption-text">sample Tshark session</p></div>
+<h2>Table of &#xA0;contents</h2>
+<ul>
+<li>Intro</li>
+<li>Filters
+<ul>
+<li>Capture filters</li>
+<li>Display filters</li>
+</ul>
+</li>
+<li>Output
+
+</li>
+</ul>
+<h2>Intro</h2>
+<h5>Why Tshark</h5>
+<p>Tshark works like tcpdump, ngrep and others, however as it provides the protocol decoding features of Wireshark, you will be much more confortable&#xA0;reading its output as it makes network analysis on terminal more human.</p>
+<p>Tshark is a terminal application capable of doing virtually anything you do with Wireshark, but with no need for&#xA0;clicks or screens. This makes it great when you need to do some scripting, such as&#xA0;cron&#xA0;scheduled captures, send the data to sed, awk, perl, mail, database or so.</p>
+<p>Tshark is a great fit for remote packet capture, on devices such as gateways, you just need to&#xA0;login ssh and use as you would do &#xA0;on localhost.</p>
+<h2>Capture, read and write packets</h2>
+<p>In our first run on Tshark try&#xA0;to call it with no&#xA0;parameters, this will start capturing packets on the default network interface.</p>
+<blockquote>
+<p>tshark</p>
+</blockquote>
+<p>There may be more than one interface on your machine and you may need to specify which one you want use.&#xA0;To get a list of available interfaces use the <strong>-D</strong></p>
+<blockquote>
+<p>tshark -D</p>
+</blockquote>
+<p>Once you find out which interface to use, call Tshark with the <strong>-i</strong> option and &#xA0;an interface name or number reported by the -D option.</p>
+<blockquote><p>tshark -i eth1</p></blockquote>
+<blockquote><p>tshark -i 3</p></blockquote>
+<p>Now that you can capture the packets over the network, you may want to save them for later inspection, this can be done with the <strong>-w</strong> option.</p>
+<blockquote><p>tshark -i wlan0 -w /tmp/traffic.pcap</p></blockquote>
+<p>To analyze the packets from the previously saved traffic.pcap file, use the <strong>-r</strong> option, this will read packets from the instead of a network interface. Note also that you don't need superuser rights to read from files.</p>
+<blockquote><p>tshark -r /tmp/traffic.pcap</p></blockquote>
+<p>By default name resolution is performed, you may &#xA0;use <strong>-n</strong> and disable this for a best performance in some cases.</p>
+<blockquote><p>tshark -n</p></blockquote>
+<h2>Filters</h2>
+<p>If you are on a busy network, you may have screen like on the Matrix movies, with all kind information, flowing too fast and almost&#xA0;impossible to read. To solve this problem Tshark provides two types of filters that will let you see beyond the chaos.</p>
+<h4>Capture filters</h4>
+<p>You can use the traditional pcap/bpf &#xA0;filter to select what to capture from your interface.</p>
+<p>Search for packets relaated to the 192.168.1.100 host on port 80 or 53.</p>
+<blockquote>
+<p>tshark -i 2 -f "host 192.168.1.100 and (dst port 53 or 80)"</p>
+</blockquote>
+<p>Ignore packets on multicast and broadcast domains</p>
+<blockquote><p>tshark -i eth3 -f "not broadcast and not multicast"</p></blockquote>
+<h4>Display filters</h4>
+<p>Display &#xA0;filters are &#xA0;set with <strong>-Y</strong> &#xA0;and have the following &#xA0;syntax</p>
+<p>To see all connections from &#xA0;host 192.168.1.1</p>
+<blockquote>
+<p>tshark -i eth0 -Y "ip.addr==192.168.1.1"</p>
+</blockquote>
+<p>Display HTTP requests&#xA0;on TCP port 8800</p>
+<blockquote>
+<p>tshark -i eth0 -Y "tcp.port== 8800 and http.request"</p>
+</blockquote>
+<p>Display all but ICMP and ARP packets</p>
+<blockquote>
+<p>tshark -i eth0 -Y "not arp or icmp"</p>
+</blockquote>
+<h2>Formatting</h2>
+<p>Sometimes you need more or less information from the network packets to be displayed, also you may need to specify how/where to show this information. The following options let you do exactly this.</p>
+<p>Use <strong>-V</strong>&#xA0;to make Tshark verbose and display details about packets, from frame number, protocol field, to packet data or flags.</p>
+<p>The <strong>-O</strong> option is much like the -V option,&#xA0;however this will show details of a specific protocol</p>
+<blockquote>
+<p>tshark -i eth2 -O &#xA0;icmp</p>
+</blockquote>
+<p>Use the <strong>-T</strong> option to output data in different formats, this can be very handy when you need a specific format to your analysis. such as when you are using Tshark to fill some database</p>
+<blockquote><p>tshark -i wlan0 -O icmp -T fields -e frame.number -e data</p></blockquote>
+<p>If you choose fields to the -T option, you must set the <strong>-e</strong>&#xA0;option at least once, this will tell Tshark wich field of information to display, you can use this option multiple times to display more fields</p>
+<blockquote>
+<p>tshark -r nmap_OS_scan_succesful -Y "tcp.ack" -T fields -e frame.number -e ip.src -e tcp.seq -e tcp.ack -e tcp.flags.str -e tcp.flags -e tcp.analysis.acks_frame</p>
+</blockquote>
+<div id="attachment_13127" class="wp-caption aligncenter"><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/nmap_standard_scan.jpg"><img class="size-full wp-image-13127" src="http://blog.linoxide.com/wp-content/uploads/2016/02/nmap_standard_scan.jpg" alt="Nmap standard scan" width="761"></a><p class="wp-caption-text">Nmap standard scan</p></div>
+<p>To get a complete list of the possible fields to use with the -e flag use -G option as below</p>
+<blockquote><p>tshark -G fields | less</p></blockquote>
+<p>Further formatting can be done with the -E flag, you can show/hide headers, set quote character &#xA0;and more.</p>
+<p>Look at the &#xA0;following command that combine these options&#xA0;to produce a CSV&#xA0;file.</p>
+<blockquote><p>tshark -r captured.cap -T fields -e frame.number -e frame.encap_type -e frame.protocols -e frame.len -e ip.addr -E separator=, -E quote=d &gt; outfile.csv</p></blockquote>
+<div id="attachment_13115" class="wp-caption aligncenter"><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark-csv-fields1.jpg"><img class="size-full wp-image-13115" src="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark-csv-fields1.jpg" alt="Tshark output of selected fields in CSV format" width="643"></a><p class="wp-caption-text">Tshark output of selected fields in CSV format</p></div>
+<h2>Statistics</h2>
+<p>Sometimes you may&#xA0;want an analytical report, in this case use <strong>-z</strong> option followed by one of the many report types available.</p>
+<p>Report on SMB , DNS and&#xA0;IP protocols.</p>
+<blockquote><p>tshark -i ens1 -z smb,srt -z dns,tree -z http,tree -z hosts</p></blockquote>
+<div id="attachment_13051" class="wp-caption aligncenter"><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark_statistics_smb_ip.jpg"><img class="size-full wp-image-13051" src="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark_statistics_smb_ip.jpg" alt="Tshark SMB statistics" width="818"></a><p class="wp-caption-text">Tshark SMB statistics</p></div>
+<p>List of IP conversations</p>
+<blockquote><p>tshark -r cap.pcap -z conv,ip</p></blockquote>
+<div id="attachment_13114" class="wp-caption aligncenter"><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/statistic_conv_ip.jpg"><img class="size-full wp-image-13114" src="http://blog.linoxide.com/wp-content/uploads/2016/02/statistic_conv_ip.jpg" alt="IP conversations report" width="948"></a><p class="wp-caption-text">IP conversations report</p></div>
+<p>To get a list of the available reports try the -z help option.</p>
+<blockquote><p>tshark -z help</p></blockquote>
+<h2>Secure sockets</h2>
+<p>You can also analyze encrypted connections like SSL, the following example is showing the HTTP within the secure socket layer</p>
+<div id="attachment_13050" class="wp-caption aligncenter"><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark-ssl.png"><img class="size-full wp-image-13050" src="http://blog.linoxide.com/wp-content/uploads/2016/02/tshark-ssl.png" alt="Details of an HTTP connection over SSL" width="708"></a><p class="wp-caption-text">Details of an HTTP connection over SSL</p></div>
+<p>Here we are displaying packets on the TCP&#xA0;port 443, telling Tshark to be verbose with the HTTP protocol, do segmentation on SSL, search the private key on the PEM formatted server-x.key file and dump debug information on the debug-ssl.log file.</p>
+<blockquote><p>tshark -r encrypted-packets.pcap -Y "tcp.port == 443" -O http \</p>
+<p>-o "ssl.desegment_ssl_records: TRUE" \</p>
+<p>-o "ssl.desegment_ssl_application_data: TRUE" \</p>
+<p>-o "ssl.keys_list: 127.0.0.1,443,http,server-x.key" \</p>
+<p>-o "ssl.debug_file: debug-ssl.log"</p></blockquote>
+<h2>Conclusion</h2>
+<p>This is how to start using Tshark to sniff &#xA0;out packets from your networks, &#xA0;help you to figure out where to look when problems arise,&#xA0;debug your network services, inspect security and &#xA0;analyze the general health.</p>
+<p>For more information take a look the links below</p>
+<ul>
+<li><a href="http://www.wireshark.org" target="_blank">Wireshark/Tshark homepage</a></li>
+<li><a href="https://www.wireshark.org/docs/dfref/" target="_blank">Display Filter Referrence</a></li>
+<li><a href="https://wiki.wireshark.org/SampleCaptures" target="_blank">Sample cature files</a></li>
+</ul>
+<p>Thanks for reading!</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+							
+
+
+
+							
+
+
+							
+							<p class="cats"><strong>Category</strong>: <a href="http://linoxide.com/category/linux-how-to/" rel="category tag">LINUX HOWTO</a>, <a href="http://linoxide.com/category/netwrk/" rel="category tag">NETWORK</a></p>
+
+
+
+						</div>
+
+
+
+						
+
+
+						
+
+
+						
+
+
+
+
+
+	
+
+
+
+
+					</div>
+</body></html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html><html><head><title>Andrew Scala</title></head><body>
+<h1>Andrew Scala</h1><p><a href="http://andrewscala.com/meteor/" target="_new">Original URL</a></p>
+<p><blockquote>This tutorial is available in: Chinese thanks to @XguoX_L Korean thanks to @pismute Spanish thanks to Miquel serra caldentey French thanks to Etienne Balit Introduction Want to learn how this new,&hellip;</blockquote></p>
+<div><div id="post-body">
+	<p><em>This tutorial is available in:</em></p>
+
+<p><a href="http://xguox.me/blog/2013/03/08/learn-meteor-fundamentals-and-best-practices/">Chinese</a> thanks to <a href="https://twitter.com/XguoX_L">@XguoX_L</a></p>
+
+<p><a href="http://dogfeet.github.com/articles/2012/meteor-fundametals-and-best-practices.html">Korean</a> thanks to <a href="https://twitter.com/pismute">@pismute</a></p>
+
+<p><a href="http://experienciasmeteorjs.blogspot.com.es/2013/03/traduccion-de-un-articulo-de-andrew.html">Spanish</a> thanks to <em>Miquel serra caldentey</em></p>
+
+<p><a href="http://www.etiennebalit.com/2013/04/meteor-b-a-ba-et-bonnes-pratiques/">French</a> thanks to <em>Etienne Balit</em></p>
+
+<h2 id="introduction">Introduction</h2>
+
+<p>Want to learn how this new, fandangled <a href="http://meteor.com/">Meteor</a> thing works? Great, you&#x2019;re in the right spot. I want to show you around a Meteor project and give you some best practice tips for you to keep in mind when you want to make your own Meteor application.</p>
+
+<h2 id="what_is_meteor">What is Meteor?</h2>
+
+<p>Meteor lets you create extraordinarily dynamic pages with frighteningly little code. Keep in mind that Meteor is super-beta. Version <code>0.5.7</code> at the time of this writing. Don&#x2019;t be surprised if it doesn&#x2019;t work perfectly!</p>
+
+<p>It&#x2019;s written in Javascript on <a href="http://nodejs.org/">Node.js</a>, and consequently most of the code that you will be writing will also be Javascript. Not too much of a surprise there. If you want to brush up on your Javascript, take a look at <a href="http://bonsaiden.github.com/JavaScript-Garden/">Javascript Garden</a>, it&#x2019;s an excellent resource.</p>
+
+<p>For storing data, Meteor uses <a href="http://www.mongodb.org/">MongoDB</a>. Despite using MongoDB, Meteor actually uses minimongo as the interface. It&#x2019;s fairly full featured but doesn&#x2019;t exactly have all of the methods that the standard MongoDB interface has. You don&#x2019;t need to actually know how MongoDB works exactly, but I would recommend taking a look at Meteor&#x2019;s <a href="http://docs.meteor.com/#collections">docs for Collections</a> to get a good idea of what you&#x2019;re in for.</p>
+
+<p>Meteor currently uses <a href="http://handlebarsjs.com/">handlebars</a> for the template engine. Right now, that&#x2019;s the only choice you have, though supposedly in the future the ability to drop in a different template engine will become available.</p>
+
+<p>At the end of the day, you&#x2019;re still making websites so you&#x2019;re still going to need to know some HTML and CSS as well.</p>
+
+<h2 id="the_basics">The Basics</h2>
+
+<p>A Meteor project consists of mostly just Javascript files. If you place a <code>*.js</code> file anywhere in your project, Meteor will automatically load it up and run it. Every Javascript file you write in a Meteor project is deployed to both the server and the client (well not exactly, as you&#x2019;ll see in a moment). This is one of the things that makes Meteor really, really cool: since everything you&#x2019;re writing is Javascript, you can write a function once and use it for both the server and the client!</p>
+
+<p>It actually gets cooler than that. You can also do other &#x201C;magical&#x201D; things like put <code>*.less</code> files anywhere in your project, and they will automatically be compiled and sent to the client and included on the page.</p>
+
+<p>There are times that you want to separate your server code from your client code. Thankfully, Meteor has a couple flags to help you out: <code>Meteor.isServer</code> and <code>Meteor.isClient</code>.</p>
+
+<p>In the example below, the Javascript console in the browser will log &#x201C;Hi. I&#x2019;m CLIENT&#x201D;, and the Meteor output on the server will print &#x201C;Hi. I&#x2019;m SERVER&#x201D;.</p>
+<div class="highlight"><pre><code class="javascript"><span class="c1">// This function is available on both the client and the server.</span>
+<span class="kd">var</span> <span class="nx">greet</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">"Hi. I'm "</span> <span class="o">+</span> <span class="nx">name</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="c1">// Everything in here is only run on the server.</span>
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isServer</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">greet</span><span class="p">(</span><span class="s2">"SERVER"</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="c1">// Everything in here is only run on the client.</span>
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isClient</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">greet</span><span class="p">(</span><span class="s2">"CLIENT"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>It&#x2019;s really simple. Code sharing between the client and server makes it so that you can maximize code reuse, which ideally reduces development time.</p>
+
+<h2 id="project_structure">Project Structure</h2>
+
+<p>There are times where you don&#x2019;t want to share everything between the client and the server, though. If you have some private algorithms executing on your server, you don&#x2019;t want Meteor to be sending that down to the client for the world to see. Meteor provides two &#x201C;special&#x201D; directories that will help segregate code between the client and the server: <code>[project_root]/client/</code> and <code>[project_root]/server/</code>. Javascript in the server directory will not be sent to the client and will only be executed on the server. Code in the client directory will only be run on the client. This is nice because it relieves us of having to use <code>Meteor.isClient</code> and <code>Meteor.isServer</code> all over the place. Instead, just put your client code in the client directory and leave it at that!</p>
+
+<p>The project structure is important when considering which files get loaded before others. Lets say that you have two files and one depends on the other having loaded first. How do you know what order your Javascript files are getting loaded in? Here are the rules:</p>
+
+<ol>
+<li>Files in <code>[project_root]/lib</code> are loaded first. Obviously, put libraries in this directory.</li>
+
+<li>Files are sorted by directory depth. Deeper files are loaded first.</li>
+
+<li>Files are sorted in alphabetical order.</li>
+
+<li><code>main.*</code> files are loaded last. These are nice for code that needs to be run after every other script and library has loaded.</li>
+</ol>
+
+<p>Meteor has some special directories that help you deal with breaking apart client/server code and deal with load order:</p>
+
+<ul>
+<li><code>[project_root]/lib/</code> - Files in this directory will get loaded before your client/server code starts.</li>
+
+<li><code>[project_root]/client/</code> - Files here are only sent to the client&#x2019;s browser and aren&#x2019;t available or run from the server.</li>
+
+<li><code>[project_root]/server/</code> - Files here are only run on the server and aren&#x2019;t available on the client.</li>
+
+<li><code>[project_root]/public/</code> - Meteor serves static media from this directory. If you put image.jpg in here, feel free to refer to it directly as image.jpg in your html.</li>
+
+<li><code>[project_root]/.meteor/</code> - Meteor keeps special, project related info in here, like which modules you&#x2019;ve installed. <em>You really shouldn&#x2019;t need to poke around in here.</em></li>
+</ul>
+
+<h2 id="reactivity">Reactivity</h2>
+
+<p>Meteor saves you the hassle of manually replacing portions of your page when the data changes. It does this by having &#x201C;reactive&#x201D; data sources and contexts. A reactive context is just a function that will get re-run if it contains a reactive data source that gets updated. This is a little hard to wrap your mind around initially, so the following example should clear things up.</p>
+
+<p>Below we have the html page and a Meteor <a href="http://docs.meteor.com/#templates">Template</a> called <code>cool_dude</code>, and a function in the client Javascript which will give a value of <code>username</code> for the template to render.</p>
+<div class="highlight"><pre><code class="html"><span class="nt">&lt;html&gt;</span>
+ <span class="nt">&lt;head&gt;</span>
+ <span class="nt">&lt;/head&gt;</span>
+ <span class="nt">&lt;body&gt;</span>
+ |{|&gt; cool_dude |}|
+ <span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</code></pre></div><div class="highlight"><pre><code class="html"><span class="nt">&lt;template</span> <span class="na">name=</span><span class="s">"cool_dude"</span><span class="nt">&gt;</span>
+ <span class="nt">&lt;p</span> <span class="na">class=</span><span class="s">"important"</span><span class="nt">&gt;</span>|{| username |}| sure is one cool dude!<span class="nt">&lt;/p&gt;</span>
+<span class="nt">&lt;/template&gt;</span>
+</code></pre></div><div class="highlight"><pre><code class="javascript"><span class="c1">// On the client:</span>
+<span class="nx">Template</span><span class="p">.</span><span class="nx">cool_dude</span><span class="p">.</span><span class="nx">username</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="s2">"Andrew Scala"</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div>
+<p>When the page renders, it will say &#x201C;Andrew Scala sure is one cool dude!&#x201D; (which is true).</p>
+
+<p>Templates are reactive contexts: if it depends on a reactive data source to render, then it will re-render itself whenever that data source changes. The client-side <code>Session</code> is a reactive data source. It will store information like a key-value pair on the client only, and it will be erased when the page is refreshed.</p>
+
+<p>Lets change the template context to use a reactive data source:</p>
+<div class="highlight"><pre><code class="javascript"><span class="c1">// When the app starts,</span>
+<span class="c1">// associate the key "username" with the string "Andrew Scala"</span>
+<span class="nx">Meteor</span><span class="p">.</span><span class="nx">startup</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="nx">Session</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="s2">"username"</span><span class="p">,</span> <span class="s2">"Andrew Scala"</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="nx">Template</span><span class="p">.</span><span class="nx">cool_dude</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">Session</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s2">"username"</span><span class="p">);</span>
+<span class="p">};</span>
+</code></pre></div>
+<p>The template now is pulling the value <code>username</code> from the Session value <code>"username"</code>. We now have a reactive data source in a reactive context. If the value stored in Session for <code>"username"</code> ever changes, the template will automatically get re-rendered on the page with the new value. Lets set a new value for <code>"username"</code>:</p>
+<div class="highlight"><pre><code class="javascript"><span class="nx">Session</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="s2">"username"</span><span class="p">,</span> <span class="s2">"Bill Murray"</span><span class="p">);</span>
+</code></pre></div>
+<p>Immediately after this call, regardless of where it is in the code, the page will now say &#x201C;Bill Murray sure is one cool dude!&#x201D; (which is also true).</p>
+
+<p>I&#x2019;d list the other reactive contexts and data sources here, but you can read about them for yourself in Meteor&#x2019;s <a href="http://docs.meteor.com/#reactivity">Reactivity Docs</a>.</p>
+
+
+
+<p>The server publishes data for the client to use, and the client subscribes to the server&#x2019;s published data. It&#x2019;s difficult to understand the relationship between the server&#x2019;s published data and the client&#x2019;s subscription at first. The rule of thumb is this: <strong>The client should only be able to access data that it requires to operate at the current point in time, nothing more</strong>. For example, if you have a chat application, the client should <em>not</em> be receiving messages from every chat channel on your website, but only the messages in the channel that the user is visiting. Nor should it know about users inside other channels.</p>
+
+<p>Here&#x2019;s an example of poorly created publish/subscription. The client can see every message in the database:</p>
+<div class="highlight"><pre><code class="javascript"><span class="kd">var</span> <span class="nx">Messages</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Meteor</span><span class="p">.</span><span class="nx">Collection</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">);</span>
+
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isServer</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">publish</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">,</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">Messages</span><span class="p">.</span><span class="nx">find</span><span class="p">({});</span>
+ <span class="p">});</span>
+<span class="p">}</span>
+
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isClient</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>The client can now do <code>Messages.find({})</code> and have access to every message in the database. Bad.</p>
+
+<p>We can fix this by specifying a parameter during the subscription which narrows down all the messages to something that the client actually needs (the messages in the channel <code>"cool_people_channel"</code>):</p>
+<div class="highlight"><pre><code class="javascript"><span class="kd">var</span> <span class="nx">Messages</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Meteor</span><span class="p">.</span><span class="nx">Collection</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">);</span>
+
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isServer</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">publish</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">channel_name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">Messages</span><span class="p">.</span><span class="nx">find</span><span class="p">({</span><span class="nx">channel</span><span class="o">:</span> <span class="nx">channel_name</span><span class="p">});</span>
+ <span class="p">});</span>
+<span class="p">}</span>
+
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isClient</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">,</span> <span class="s2">"cool_people_channel"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Now, when the client connects and does a <code>Messages.find({})</code> to get a list of messages, it only gets the ones listed in the <code>"cool_people_channel"</code> channel.</p>
+
+<p>Finally, lets say the chat channel is something that can and will change. We don&#x2019;t want to be locked into only seeing the messages that exist in <code>"cool_people_channel"</code>. Taking our newfound knowledge of Meteor&#x2019;s &#x201C;reactivity&#x201D;, we can create a dynamic subscription off of a session variable:</p>
+<div class="highlight"><pre><code class="javascript"><span class="kd">var</span> <span class="nx">Messages</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Meteor</span><span class="p">.</span><span class="nx">Collection</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">);</span>
+
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isServer</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">publish</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">channel_name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">Messages</span><span class="p">.</span><span class="nx">find</span><span class="p">({</span><span class="nx">channel</span><span class="o">:</span> <span class="nx">channel_name</span><span class="p">});</span>
+ <span class="p">});</span>
+<span class="p">}</span>
+
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isClient</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Session</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="s2">"current_channel"</span><span class="p">,</span> <span class="s2">"cool_people_channel"</span><span class="p">);</span>
+
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">autorun</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="s2">"messages"</span><span class="p">,</span> <span class="nx">Session</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s2">"current_channel"</span><span class="p">));</span>
+ <span class="p">});</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><a href="http://docs.meteor.com/#meteor_autorun">Meteor.autorun</a> is a reactive context, meaning everything inside will get re-run if a reactive data source changes inside. We&#x2019;re storing the channel we&#x2019;re in inside the Session under <code>"current_channel"</code>. If that session value changes, then the subscription is renewed and we have access to different messages! If the user wanted to join a the channel &#x201C;breakfast talk&#x201D;, we would run <code>Session.set("current_channel", "breakfast_talk")</code>, which would trigger the autorun, and give us access to messages in the &#x201C;breakfast_talk&#x201D; channel only.</p>
+
+<p>There are times where you may want to publish the entire collection to the client. Think carefully about what the client actually needs. It may be wise to only send certain fields from that collection rather than entire documents.</p>
+
+<h2 id="server_methods">Server Methods</h2>
+
+<p>Since the client shouldn&#x2019;t be allowed to do anything other than look at what&#x2019;s in the database, you&#x2019;re surely wondering how to get the client to actually store information. The solution is to use Meteor&#x2019;s <a href="http://docs.meteor.com/#methods_header">server methods</a>. The idea is that you define all the functions on the server that do dangerous stuff like modify and update data, and then let the client call those functions and get return values like regular functions. The client never sees the implementation and doesn&#x2019;t personally modify the data. The server does all the work.</p>
+
+<p>To add a user to your database, lets suppose there&#x2019;s a method called <code>create_user</code> that takes a username and lets the server do the inserting. It&#x2019;ll give the client an ObjectID back so it can fetch user info and do whatever it wants with it later.</p>
+<div class="highlight"><pre><code class="javascript"><span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isServer</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">methods</span><span class="p">({</span>
+ <span class="nx">create_user</span><span class="o">:</span> <span class="kd">function</span><span class="p">(</span><span class="nx">username</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">"CREATING USER"</span><span class="p">);</span>
+ <span class="kd">var</span> <span class="nx">USER_id</span> <span class="o">=</span> <span class="nx">Users</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="nx">username</span><span class="p">});</span>
+ <span class="k">return</span> <span class="nx">user_id</span><span class="p">;</span>
+ <span class="p">},</span>
+ <span class="p">});</span>
+<span class="p">}</span>
+
+<span class="c1">// Remember, the client's browser only ever sees the code below:</span>
+<span class="k">if</span><span class="p">(</span><span class="nx">Meteor</span><span class="p">.</span><span class="nx">isClient</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">var</span> <span class="nx">username</span> <span class="o">=</span> <span class="s2">"Andrew Scala"</span><span class="p">;</span>
+
+ <span class="nx">Meteor</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="s2">"create_user"</span><span class="p">,</span> <span class="nx">username</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">error</span><span class="p">,</span> <span class="nx">user_id</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">Session</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="s2">"user_id"</span><span class="p">,</span> <span class="nx">user_id</span><span class="p">);</span>
+ <span class="p">});</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>In this example, my user_id gets set into the client&#x2019;s Session, and any templates that use my user_id will be updated right away.</p>
+
+<h2 id="thanks">Thanks</h2>
+
+<p>Ready to build a real Meteor application now? Stay tuned, part 2 is coming along which will walk you through making an entire app!</p>
+
+<p><strong>Update 1/30/13</strong> I know I said there would be a part 2 coming along, but it&#x2019;s going to take a significant amount of time to make and I simply don&#x2019;t have time for that right now.<br>Hopefully in the future I&#x2019;ll get around to it, but I can&#x2019;t promise it anymore.</p>
+
+<p><strong>Update 3/8/13</strong> Updating tutorial to reflect updates to Meteor thanks to <a href="https://twitter.com/tmeasday">@tmeasday</a></p>
+
+<p>If you&#x2019;ve found this useful, be sure to let me know! I really appreciate it.</p>
+
+<p>Cheers,</p>
+
+<p>Andrew Scala</p>
+
+	<a id="email-link" href="mailto:agscala@gmail.com">email</a>
+	<a id="twitter-link" href="https://twitter.com/agscala">twitter</a>
+	<a id="archive-link" href="http://andrewscala.com/">post archive</a>
+
+	
+ 
+ 
+ <a href="http://disqus.com" class="dsq-brlink">comments powered by </a>
+</div>
+
+	</div>
+</body></html>

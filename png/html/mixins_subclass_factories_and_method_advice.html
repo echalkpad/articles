@@ -1,0 +1,683 @@
+<!DOCTYPE html><html><head><title>Mixins, Subclass Factories, and Method Advice</title></head><body>
+<h1>Mixins, Subclass Factories, and Method Advice</h1><p><a href="http://raganwald.com/2015/12/28/mixins-subclass-factories-and-method-advice.html" target="_new">Original URL</a></p>
+<p><blockquote>Mixins solve a very common problem in class-centric OOP: For non-trivial applications, there is a very messy many-to-many relationship between behaviour and classes, and it does not neatly decompose&hellip;</blockquote></p>
+<div><section id="main_content">
+ 
+ 
+
+
+
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+
+
+ 
+ <p><em>Mixins</em> solve a very common problem in class-centric OOP: For non-trivial applications, there is a very messy <em>many-to-many</em> relationship between behaviour and classes, and it does not neatly decompose into a tree. In this essay, we gloss over the benefits of using mixins, instead we will focus on some of the limitations and ways to overcome them.</p>
+
+<p>(For more on why mixins matter in the first place, you may want to review <a href="http://raganwald.com/2015/06/10/mixins.html">Prototypes are Objects (and why that matters)</a>, <a href="http://raganwald.com/2015/06/17/functional-mixins.html">Functional Mixins in ECMAScript 2015</a>, and <a href="http://raganwald.com/2015/06/26/decorators-in-es7.html">Using ES.later Decorators as Mixins</a>.)</p>
+
+<p><a href="https://www.flickr.com/photos/howardlake/4834299551/"><img src="http://raganwald.com/assets/images/crossed-wires.jpg" alt="Crossed Wires"></a></p>
+
+<h3 id="simple-mixins">simple mixins</h3>
+
+<p>As noted above, for non-trivial applications, there is a very messy <em>many-to-many</em> relationship between behaviour and classes. However, JavaScript&#x2019;s single-inheritance model forces us to organize behaviour in trees, which can only represent one-to-many relationships.</p>
+
+<p>The mixin solution to this problem is to leave classes in a single inheritance hierarchy, and to mix additional behaviour into individual classes as needed. Here&#x2019;s a vastly simplified functional mixin for classes:<sup id="fnref:simplified"><a href="http://raganwald.com/2015/12/28/mixins-subclass-factories-and-method-advice.html#fn:simplified" class="footnote">1</a></sup></p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">function</span> <span class="nx">mixin</span> <span class="p">(</span><span class="nx">behaviour</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">instanceKeys</span> <span class="o">=</span> <span class="nx">Reflect</span><span class="p">.</span><span class="nx">ownKeys</span><span class="p">(</span><span class="nx">behaviour</span><span class="p">);</span>
+ <span class="kd">let</span> <span class="nx">typeTag</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">'isa'</span><span class="p">);</span>
+
+ <span class="kd">function</span> <span class="nx">_mixin</span> <span class="p">(</span><span class="nx">clazz</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">property</span> <span class="nx">of</span> <span class="nx">instanceKeys</span><span class="p">)</span>
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">property</span><span class="p">,</span> <span class="p">{</span>
+ <span class="nx">value</span><span class="o">:</span> <span class="nx">behaviour</span><span class="p">[</span><span class="nx">property</span><span class="p">],</span>
+ <span class="nx">writable</span><span class="o">:</span> <span class="kc">true</span>
+ <span class="p">});</span>
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">typeTag</span><span class="p">,</span> <span class="p">{</span> <span class="nx">value</span><span class="o">:</span> <span class="kc">true</span> <span class="p">});</span>
+ <span class="k">return</span> <span class="nx">clazz</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">_mixin</span><span class="p">,</span> <span class="nx">Symbol</span><span class="p">.</span><span class="nx">hasInstance</span><span class="p">,</span> <span class="p">{</span>
+ <span class="nx">value</span><span class="o">:</span> <span class="p">(</span><span class="nx">i</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="o">!!</span><span class="nx">i</span><span class="p">[</span><span class="nx">typeTag</span><span class="p">]</span>
+ <span class="p">});</span>
+ <span class="k">return</span> <span class="nx">_mixin</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
+
+<p>This is more than enough to do a lot of very good work in JavaScript, but it&#x2019;s just the starting point. Here&#x2019;s how we put it to work:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">BookCollector</span> <span class="o">=</span> <span class="nx">mixin</span><span class="p">({</span>
+ <span class="nx">addToCollection</span> <span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">collection</span><span class="p">().</span><span class="nx">push</span><span class="p">(</span><span class="nx">name</span><span class="p">);</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">},</span>
+ <span class="nx">collection</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">_collected_books</span> <span class="o">||</span> <span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">_collected_books</span> <span class="o">=</span> <span class="p">[]);</span>
+ <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="kr">class</span> <span class="nx">Person</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">first</span><span class="p">,</span> <span class="nx">last</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">rename</span><span class="p">(</span><span class="nx">first</span><span class="p">,</span> <span class="nx">last</span><span class="p">);</span>
+ <span class="p">}</span>
+ <span class="nx">fullName</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">firstName</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="k">this</span><span class="p">.</span><span class="nx">lastName</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="nx">rename</span> <span class="p">(</span><span class="nx">first</span><span class="p">,</span> <span class="nx">last</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">firstName</span> <span class="o">=</span> <span class="nx">first</span><span class="p">;</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">lastName</span> <span class="o">=</span> <span class="nx">last</span><span class="p">;</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">let</span> <span class="nx">Executive</span> <span class="o">=</span> <span class="nx">BookCollector</span><span class="p">(</span>
+ <span class="kr">class</span> <span class="kr">extends</span> <span class="nx">Person</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">title</span><span class="p">,</span> <span class="nx">first</span><span class="p">,</span> <span class="nx">last</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kr">super</span><span class="p">(</span><span class="nx">first</span><span class="p">,</span> <span class="nx">last</span><span class="p">);</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">title</span> <span class="o">=</span> <span class="nx">title</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">fullName</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="err">`</span><span class="nx">$</span><span class="p">{</span><span class="k">this</span><span class="p">.</span><span class="nx">title</span><span class="p">}</span> <span class="nx">$</span><span class="p">{</span><span class="kr">super</span><span class="p">.</span><span class="nx">fullName</span><span class="p">()}</span><span class="err">`</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="p">}</span>
+<span class="p">);</span>
+
+<span class="kd">let</span> <span class="nx">president</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Executive</span><span class="p">(</span><span class="s1">'President'</span><span class="p">,</span> <span class="s1">'Barak'</span><span class="p">,</span> <span class="s1">'Obama'</span><span class="p">);</span>
+
+<span class="nx">president</span>
+ <span class="p">.</span><span class="nx">addToCollection</span><span class="p">(</span><span class="s2">"JavaScript Allong&#xE9;"</span><span class="p">)</span>
+ <span class="p">.</span><span class="nx">addToCollection</span><span class="p">(</span><span class="s2">"Kestrels, Quirky Birds, and Hopeless Egocentricity"</span><span class="p">);</span>
+
+<span class="nx">president</span><span class="p">.</span><span class="nx">collection</span><span class="p">()</span>
+ <span class="c1">//=&gt; ["JavaScript Allong&#xE9;","Kestrels, Quirky Birds, and Hopeless Egocentricity"]</span></code></pre></div>
+
+<h3 id="multiple-inheritance">multiple inheritance</h3>
+
+<p>If you want to mix behaviour into a class, mixins do the job very nicely. But sometimes, people want more. They want <strong>multiple inheritance</strong>. Meaning, what they really want is for class <code>Executive</code> to inherit from <code>Person</code> <em>and</em> from <code>BookCollector</code>.</p>
+
+<p>What&#x2019;s the difference between <code>Executive</code> mixing <code>BookCollector</code> in and <code>Executive</code> inheriting from <code>BookCollector</code>?</p>
+
+<ol>
+ <li>
+ <p>If <code>Executive</code> mixes <code>BookCollector</code> in, the properties <code>addToCollection</code> and <code>collection</code> become own properties of <code>Executive</code>&#x2019;s prototype. If <code>Executive</code> inherits from <code>BookCollector</code>, they don&#x2019;t.</p>
+ </li>
+ <li>
+ <p>If <code>Executive</code> mixes <code>BookCollector</code> in, <code>Executive</code> can&#x2019;t override methods of <code>BookCollector</code>. If <code>Executive</code> inherits from <code>BookCollector</code>, it can.</p>
+ </li>
+ <li>
+ <p>If <code>Executive</code> mixes <code>BookCollector</code> in, <code>Executive</code> can&#x2019;t override methods of <code>BookCollector</code>, and therefore it can&#x2019;t make a method that overrides a method of <code>BookCollector</code> and then uses <code>super</code> to call the original. If <code>Executive</code> inherits from <code>BookCollector</code>, it can.</p>
+ </li>
+</ol>
+
+<p>If JavaScript had multiple inheritance, we could extend a class with more than one superclass:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">class</span> <span class="nx">Todo</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="nx">name</span> <span class="o">||</span> <span class="s1">'Untitled'</span><span class="p">;</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="k">do</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">undo</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">toHTML</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">name</span><span class="p">;</span> <span class="c1">// highly insecure</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kr">class</span> <span class="nx">Coloured</span> <span class="p">{</span>
+ <span class="nx">setColourRGB</span> <span class="p">({</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">})</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">};</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span><span class="p">;</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">let</span> <span class="nx">yellow</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">red</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">green</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">grey</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">};</span>
+
+<span class="kd">let</span> <span class="nx">oneDayInMilliseconds</span> <span class="o">=</span> <span class="mi">1000</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">24</span><span class="p">;</span>
+
+<span class="kr">class</span> <span class="nx">TimeSensitiveTodo</span> <span class="kr">extends</span> <span class="nx">Todo</span><span class="p">,</span> <span class="nx">Coloured</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">,</span> <span class="nx">deadline</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kr">super</span><span class="p">(</span><span class="nx">name</span><span class="p">);</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">=</span> <span class="nx">deadline</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">slack</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">-</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+
+ <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">done</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">grey</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">red</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="nx">oneDayInMilliseconds</span><span class="p">){</span>
+ <span class="k">return</span> <span class="nx">yellow</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">return</span> <span class="nx">green</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">toHTML</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">rgb</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">getColourRGB</span><span class="p">();</span>
+
+ <span class="k">return</span> <span class="err">`</span><span class="o">&lt;</span><span class="nx">span</span> <span class="nx">style</span><span class="o">=</span><span class="s2">"color: #${rgb.r}${rgb.g}${rgb.b};"</span><span class="o">&gt;</span><span class="nx">$</span><span class="p">{</span><span class="kr">super</span><span class="p">.</span><span class="nx">toHTML</span><span class="p">()}</span><span class="o">&lt;</span><span class="err">/span&gt;`;</span>
+ <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
+
+<p>This hypothetical <code>TimeSensitiveTodo</code> extends both <code>Todo</code> and <code>Coloured</code>, and it overrides <code>toHTML</code> from <code>Todo</code> as well as overriding <code>getColourRGB</code> from <code>Coloured</code>.</p>
+
+<p>However, JavaScript does not have &#x201C;true&#x201D; multiple inheritance, and therefore this code does not work. But we can simulate multiple inheritance for cases like this. The way it works is to step back and ask ourselves, &#x201C;What would we do if we didn&#x2019;t have mixins or multiple inheritance?&#x201D;</p>
+
+<p>The answer is, we&#x2019;d force a square multiple inheritance peg into a round single inheritance hole, like this:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">class</span> <span class="nx">Todo</span> <span class="p">{</span>
+ <span class="c1">// ...</span>
+<span class="p">}</span>
+
+<span class="kr">class</span> <span class="nx">ColouredTodo</span> <span class="kr">extends</span> <span class="nx">Todo</span> <span class="p">{</span>
+ <span class="c1">// ...</span>
+<span class="p">}</span>
+
+<span class="kr">class</span> <span class="nx">TimeSensitiveTodo</span> <span class="kr">extends</span> <span class="nx">ColouredTodo</span> <span class="p">{</span>
+ <span class="c1">// ...</span>
+<span class="p">}</span></code></pre></div>
+
+<p>By making <code>ColouredTodo</code> extend <code>Todo</code>, <code>TimeSensitiveTodo</code> can extend <code>ColouredTodo</code> and override methods from both. This is exactly what most programmers do, and we know that it is an anti-pattern, as it leads to duplicated class behaviour and deep class hierarchies.</p>
+
+<p>But.</p>
+
+<p>What if, instead of manually creating this hierarchy, we use our simple mixins to do the work for us? We can take advantage of the fact that <a href="http://raganwald.com/2015/06/04/classes-are-expressions.html">classes are expressions</a>, like this:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">Coloured</span> <span class="o">=</span> <span class="nx">mixin</span><span class="p">({</span>
+ <span class="nx">setColourRGB</span> <span class="p">({</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">})</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">};</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">},</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span><span class="p">;</span>
+ <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="kd">let</span> <span class="nx">ColouredTodo</span> <span class="o">=</span> <span class="nx">Coloured</span><span class="p">(</span><span class="kr">class</span> <span class="kr">extends</span> <span class="nx">Todo</span> <span class="p">{});</span></code></pre></div>
+
+<p>Thus, we have a <code>ColouredTodo</code> that we can extend and override, but we also have our <code>Coloured</code> behaviour in a mixin we can use anywhere we like without duplicating its functionality in our code. The full solution looks like this:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">class</span> <span class="nx">Todo</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="nx">name</span> <span class="o">||</span> <span class="s1">'Untitled'</span><span class="p">;</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="k">do</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">undo</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">toHTML</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">name</span><span class="p">;</span> <span class="c1">// highly insecure</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">let</span> <span class="nx">Coloured</span> <span class="o">=</span> <span class="nx">mixin</span><span class="p">({</span>
+ <span class="nx">setColourRGB</span> <span class="p">({</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">})</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">};</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">},</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span><span class="p">;</span>
+ <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="kd">let</span> <span class="nx">ColouredTodo</span> <span class="o">=</span> <span class="nx">Coloured</span><span class="p">(</span><span class="kr">class</span> <span class="kr">extends</span> <span class="nx">Todo</span> <span class="p">{});</span>
+
+<span class="kd">let</span> <span class="nx">yellow</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">red</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">green</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">grey</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">};</span>
+
+<span class="kd">let</span> <span class="nx">oneDayInMilliseconds</span> <span class="o">=</span> <span class="mi">1000</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">24</span><span class="p">;</span>
+
+<span class="kr">class</span> <span class="nx">TimeSensitiveTodo</span> <span class="kr">extends</span> <span class="nx">ColouredTodo</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">,</span> <span class="nx">deadline</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kr">super</span><span class="p">(</span><span class="nx">name</span><span class="p">);</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">=</span> <span class="nx">deadline</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">slack</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">-</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+
+ <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">done</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">grey</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">red</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="nx">oneDayInMilliseconds</span><span class="p">){</span>
+ <span class="k">return</span> <span class="nx">yellow</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">return</span> <span class="nx">green</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">toHTML</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">rgb</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">getColourRGB</span><span class="p">();</span>
+
+ <span class="k">return</span> <span class="err">`</span><span class="o">&lt;</span><span class="nx">span</span> <span class="nx">style</span><span class="o">=</span><span class="s2">"color: #${rgb.r}${rgb.g}${rgb.b};"</span><span class="o">&gt;</span><span class="nx">$</span><span class="p">{</span><span class="kr">super</span><span class="p">.</span><span class="nx">toHTML</span><span class="p">()}</span><span class="o">&lt;</span><span class="err">/span&gt;`;</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">let</span> <span class="nx">task</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">TimeSensitiveTodo</span><span class="p">(</span><span class="s1">'Finish blog post'</span><span class="p">,</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">()</span> <span class="o">+</span> <span class="nx">oneDayInMilliseconds</span><span class="p">);</span>
+
+<span class="nx">task</span><span class="p">.</span><span class="nx">toHTML</span><span class="p">()</span>
+ <span class="c1">//=&gt; &lt;span style="color: #FFFF00;"&gt;Finish blog post&lt;/span&gt;</span></code></pre></div>
+
+<p>The key snippet is <code>let ColouredTodo = Coloured(class extends Todo {});</code>, it turns a mixin into a subclass that can be extended and overridden. We can turn this pattern into a function:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">subclassFactory</span> <span class="o">=</span> <span class="p">(</span><span class="nx">behaviour</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">mixBehaviourInto</span> <span class="o">=</span> <span class="nx">mixin</span><span class="p">(</span><span class="nx">behaviour</span><span class="p">);</span>
+
+ <span class="k">return</span> <span class="p">(</span><span class="nx">superclazz</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">mixBehaviourInto</span><span class="p">(</span><span class="kr">class</span> <span class="kr">extends</span> <span class="nx">superclazz</span> <span class="p">{});</span>
+<span class="p">}</span></code></pre></div>
+
+<p>Using <code>subclassFactory</code>, we wrap the class we want to extend, instead of the class we are declaring. Like this:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">subclassFactory</span> <span class="o">=</span> <span class="p">(</span><span class="nx">behaviour</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">mixBehaviourInto</span> <span class="o">=</span> <span class="nx">mixin</span><span class="p">(</span><span class="nx">behaviour</span><span class="p">);</span>
+
+ <span class="k">return</span> <span class="p">(</span><span class="nx">superclazz</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">mixBehaviourInto</span><span class="p">(</span><span class="kr">class</span> <span class="kr">extends</span> <span class="nx">superclazz</span> <span class="p">{});</span>
+<span class="p">}</span>
+
+<span class="kd">let</span> <span class="nx">ColouredAsWellAs</span> <span class="o">=</span> <span class="nx">subclassFactory</span><span class="p">({</span>
+ <span class="nx">setColourRGB</span> <span class="p">({</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">})</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">};</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">},</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span><span class="p">;</span>
+ <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="kr">class</span> <span class="nx">TimeSensitiveTodo</span> <span class="kr">extends</span> <span class="nx">ColouredAsWellAs</span><span class="p">(</span><span class="nx">ToDo</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">,</span> <span class="nx">deadline</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kr">super</span><span class="p">(</span><span class="nx">name</span><span class="p">);</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">=</span> <span class="nx">deadline</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">slack</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">-</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+
+ <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">done</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">grey</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">red</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="nx">oneDayInMilliseconds</span><span class="p">){</span>
+ <span class="k">return</span> <span class="nx">yellow</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">return</span> <span class="nx">green</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">toHTML</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">rgb</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">getColourRGB</span><span class="p">();</span>
+
+ <span class="k">return</span> <span class="err">`</span><span class="o">&lt;</span><span class="nx">span</span> <span class="nx">style</span><span class="o">=</span><span class="s2">"color: #${rgb.r}${rgb.g}${rgb.b};"</span><span class="o">&gt;</span><span class="nx">$</span><span class="p">{</span><span class="kr">super</span><span class="p">.</span><span class="nx">toHTML</span><span class="p">()}</span><span class="o">&lt;</span><span class="err">/span&gt;`;</span>
+ <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
+
+<p>The syntax of <code>class TimeSensitiveTodo extends ColouredAsWellAs(ToDo)</code> says exactly what we mean: We are extending our <code>Coloured</code> behaviour as well as extending <code>ToDo</code>.<sup id="fnref:fagnani"><a href="http://raganwald.com/2015/12/28/mixins-subclass-factories-and-method-advice.html#fn:fagnani" class="footnote">2</a></sup></p>
+
+<h3 id="another-way-forward">another way forward</h3>
+
+<p>The solution subclass factories offer is emulating inheritance from more than one superclass. That, in turn, makes it possible to override methods from our superclass as well as the behaviour we want to mix in. Which is fine, but we don&#x2019;t actually want multiple inheritance!</p>
+
+<p>It&#x2019;s just that we&#x2019;re looking at an overriding/extending methods problem, but we&#x2019;re holding an inheritance-shaped hammer. So it looks like a multiple-inheritance nail. But what if we address the problem of overriding and extending methods directly, rather than indirectly via multiple inheritance?</p>
+
+<p><a href="https://www.flickr.com/photos/25182350@N03/2981062354"><img src="http://raganwald.com/assets/images/nail.jpg" alt="Nail"></a></p>
+
+<h3 id="simple-overwriting-with-simple-mixins">simple overwriting with simple mixins</h3>
+
+<p>We start by noting that in the first pass of our <code>mixin</code> function, we blindly copied properties from the mixin into the class&#x2019;s prototype, whether the class defined those properties or not. So if we write:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">RED</span> <span class="o">=</span> <span class="p">{</span> <span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span> <span class="p">},</span>
+ <span class="nx">WHITE</span> <span class="o">=</span> <span class="p">{</span> <span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'FF'</span> <span class="p">},</span>
+ <span class="nx">ROYAL_BLUE</span> <span class="o">=</span> <span class="p">{</span> <span class="nx">r</span><span class="o">:</span> <span class="s1">'41'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'69'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'E1'</span> <span class="p">},</span>
+ <span class="nx">LIGHT_BLUE</span> <span class="o">=</span> <span class="p">{</span> <span class="nx">r</span><span class="o">:</span> <span class="s1">'AD'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'D8'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'E6'</span> <span class="p">};</span>
+
+<span class="kd">let</span> <span class="nx">BritishRoundel</span> <span class="o">=</span> <span class="nx">mixin</span><span class="p">({</span>
+ <span class="nx">shape</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="s1">'round'</span><span class="p">;</span>
+ <span class="p">},</span>
+
+ <span class="nx">roundels</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="p">[</span><span class="nx">RED</span><span class="p">,</span> <span class="nx">WHITE</span><span class="p">,</span> <span class="nx">ROYAL_BLUE</span><span class="p">];</span>
+ <span class="p">}</span>
+<span class="p">})</span>
+
+<span class="kd">let</span> <span class="nx">CanadianAirForceRoundel</span> <span class="o">=</span> <span class="nx">BritishRoundel</span><span class="p">(</span><span class="kr">class</span> <span class="p">{</span>
+ <span class="nx">roundels</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="p">[</span><span class="nx">RED</span><span class="p">,</span> <span class="nx">WHITE</span><span class="p">,</span> <span class="nx">LIGHT_BLUE</span><span class="p">];</span>
+ <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="k">new</span> <span class="nx">CanadianAirForceRoundel</span><span class="p">().</span><span class="nx">roundels</span><span class="p">()</span>
+ <span class="c1">//=&gt; [</span>
+ <span class="p">{</span><span class="s2">"r"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">,</span><span class="s2">"g"</span><span class="o">:</span><span class="s2">"00"</span><span class="p">,</span><span class="s2">"b"</span><span class="o">:</span><span class="s2">"00"</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">"r"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">,</span><span class="s2">"g"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">,</span><span class="s2">"b"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">"r"</span><span class="o">:</span><span class="s2">"41"</span><span class="p">,</span><span class="s2">"g"</span><span class="o">:</span><span class="s2">"69"</span><span class="p">,</span><span class="s2">"b"</span><span class="o">:</span><span class="s2">"E1"</span><span class="p">}</span>
+ <span class="p">]</span></code></pre></div>
+
+<p>Our <code>CanadianAirForceRoundel</code>&#x2019;s third stripe winds up being regular blue instead of light blue, because the <code>roundels</code> method from the mixin <code>BritishRoundel</code> overwrites its own. (Yes, this is a ridiculous example, but it gets the point across.)</p>
+
+<p>We can fix this by not overwriting a property if the class already defines it. That&#x2019;s not so hard:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">function</span> <span class="nx">mixin</span> <span class="p">(</span><span class="nx">behaviour</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">instanceKeys</span> <span class="o">=</span> <span class="nx">Reflect</span><span class="p">.</span><span class="nx">ownKeys</span><span class="p">(</span><span class="nx">behaviour</span><span class="p">);</span>
+ <span class="kd">let</span> <span class="nx">typeTag</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">'isa'</span><span class="p">);</span>
+
+ <span class="kd">function</span> <span class="nx">_mixin</span> <span class="p">(</span><span class="nx">clazz</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">property</span> <span class="nx">of</span> <span class="nx">instanceKeys</span><span class="p">)</span>
+ <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">hasOwnProperty</span><span class="p">(</span><span class="nx">property</span><span class="p">))</span> <span class="p">{</span>
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">property</span><span class="p">,</span> <span class="p">{</span>
+ <span class="nx">value</span><span class="o">:</span> <span class="nx">behaviour</span><span class="p">[</span><span class="nx">property</span><span class="p">],</span>
+ <span class="nx">writable</span><span class="o">:</span> <span class="kc">true</span>
+ <span class="p">});</span>
+ <span class="p">}</span>
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">typeTag</span><span class="p">,</span> <span class="p">{</span> <span class="nx">value</span><span class="o">:</span> <span class="kc">true</span> <span class="p">});</span>
+ <span class="k">return</span> <span class="nx">clazz</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">_mixin</span><span class="p">,</span> <span class="nx">Symbol</span><span class="p">.</span><span class="nx">hasInstance</span><span class="p">,</span> <span class="p">{</span>
+ <span class="nx">value</span><span class="o">:</span> <span class="p">(</span><span class="nx">i</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="o">!!</span><span class="nx">i</span><span class="p">[</span><span class="nx">typeTag</span><span class="p">]</span>
+ <span class="p">});</span>
+ <span class="k">return</span> <span class="nx">_mixin</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
+
+<p>Now we can override <code>roundels</code> in <code>CanadianAirForceRoundel</code> while mixing <code>shape</code> in just fine:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="k">new</span> <span class="nx">CanadianAirForceRoundel</span><span class="p">().</span><span class="nx">roundels</span><span class="p">()</span>
+ <span class="c1">//=&gt; [</span>
+ <span class="p">{</span><span class="s2">"r"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">,</span><span class="s2">"g"</span><span class="o">:</span><span class="s2">"00"</span><span class="p">,</span><span class="s2">"b"</span><span class="o">:</span><span class="s2">"00"</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">"r"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">,</span><span class="s2">"g"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">,</span><span class="s2">"b"</span><span class="o">:</span><span class="s2">"FF"</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">"r"</span><span class="o">:</span><span class="s2">"AD"</span><span class="p">,</span><span class="s2">"g"</span><span class="o">:</span><span class="s2">"D8"</span><span class="p">,</span><span class="s2">"b"</span><span class="o">:</span><span class="s2">"E6"</span><span class="p">}</span>
+ <span class="p">]</span></code></pre></div>
+
+<p>The method defined in the class is now the &#x201C;definition of record,&#x201D; just as we might expect. But it&#x2019;s not enough in and of itself.</p>
+
+<h3 id="combining-advice-with-simple-mixins">combining advice with simple mixins</h3>
+
+<p>The above adjustment to &#x2018;mixin&#x2019; is fine for simple overwriting, but what about when we wish to modify or extend a method&#x2019;s behaviour while still invoking the original? Recall that our <code>TimeSensitiveTodo</code> example performed a simple override of <code>getColourRGB</code>, but its implementation of <code>toHTML</code> used <code>super</code> to invoke the method it was overriding.</p>
+
+<p>Our adjustment will not allow a method in the class to invoke the body of a method in a mixin. So we can&#x2019;t use it to implement <code>TimeSensitiveTodo</code>. For that, we need a different tool, <a href="http://raganwald.com/2015/08/05/method-advice.html">method advice</a>.</p>
+
+<p>Method advice is a powerful tool in its own right: It allows us to compose method functionality in a declarative way. Here&#x2019;s a simple &#x201C;override&#x201D; function that decorates a class:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">override</span> <span class="o">=</span> <span class="p">(</span><span class="nx">behaviour</span><span class="p">,</span> <span class="p">...</span><span class="nx">overriddenMethodNames</span><span class="p">)</span> <span class="o">=&gt;</span>
+ <span class="p">(</span><span class="nx">clazz</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">behaviour</span> <span class="o">===</span> <span class="s1">'string'</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">behaviour</span> <span class="o">=</span> <span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">behaviour</span><span class="p">];</span>
+ <span class="p">}</span>
+ <span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">overriddenMethodName</span> <span class="nx">of</span> <span class="nx">overriddenMethodNames</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">overriddenMethodFunction</span> <span class="o">=</span> <span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">overriddenMethodName</span><span class="p">];</span>
+
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">overriddenMethodName</span><span class="p">,</span> <span class="p">{</span>
+ <span class="nx">value</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(...</span><span class="nx">args</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">behaviour</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nx">overriddenMethodFunction</span><span class="p">.</span><span class="nx">bind</span><span class="p">(</span><span class="k">this</span><span class="p">),</span> <span class="p">...</span><span class="nx">args</span><span class="p">);</span>
+ <span class="p">},</span>
+ <span class="nx">writable</span><span class="o">:</span> <span class="kc">true</span>
+ <span class="p">});</span>
+ <span class="p">}</span>
+ <span class="k">return</span> <span class="nx">clazz</span><span class="p">;</span>
+ <span class="p">};</span></code></pre></div>
+
+<p>It takes behaviour in the form of a name of a method or a function, and one or more names of methods to override. It overrides each of the methods with the behaviour, which is invoked with the overridden method&#x2019;s function as the first argument.</p>
+
+<p>This allows us to invoke the original without needing to use <code>super</code>. And although we don&#x2019;t show all the other use cases here, it is handy for far more than overriding mixin methods, it can be used to decompose methods into separate responsibilities.</p>
+
+<p>Using <code>override</code>, we can decorate methods with any arbitrary functionality. We&#x2019;d use it like this:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">class</span> <span class="nx">Todo</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="nx">name</span> <span class="o">||</span> <span class="s1">'Untitled'</span><span class="p">;</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="k">do</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">undo</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">done</span> <span class="o">=</span> <span class="kc">false</span><span class="p">;</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">toHTML</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">name</span><span class="p">;</span> <span class="c1">// highly insecure</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">let</span> <span class="nx">Coloured</span> <span class="o">=</span> <span class="nx">mixin</span><span class="p">({</span>
+ <span class="nx">setColourRGB</span> <span class="p">({</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">})</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="p">,</span> <span class="nx">g</span><span class="p">,</span> <span class="nx">b</span><span class="p">};</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">;</span>
+ <span class="p">},</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">colourCode</span><span class="p">;</span>
+ <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="kd">let</span> <span class="nx">yellow</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">red</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">green</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'FF'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'00'</span><span class="p">},</span>
+ <span class="nx">grey</span> <span class="o">=</span> <span class="p">{</span><span class="nx">r</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">,</span> <span class="nx">g</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">,</span> <span class="nx">b</span><span class="o">:</span> <span class="s1">'80'</span><span class="p">};</span>
+
+<span class="kd">let</span> <span class="nx">oneDayInMilliseconds</span> <span class="o">=</span> <span class="mi">1000</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">24</span><span class="p">;</span>
+
+<span class="kd">let</span> <span class="nx">TimeSensitiveTodo</span> <span class="o">=</span> <span class="nx">override</span><span class="p">(</span><span class="s1">'wrapWithColour'</span><span class="p">,</span> <span class="s1">'toHTML'</span><span class="p">)(</span>
+ <span class="nx">Coloured</span><span class="p">(</span>
+ <span class="kr">class</span> <span class="kr">extends</span> <span class="nx">Todo</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">,</span> <span class="nx">deadline</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kr">super</span><span class="p">(</span><span class="nx">name</span><span class="p">);</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">=</span> <span class="nx">deadline</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">slack</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">-</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+
+ <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">done</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">grey</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">red</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="nx">oneDayInMilliseconds</span><span class="p">){</span>
+ <span class="k">return</span> <span class="nx">yellow</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">return</span> <span class="nx">green</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">wrapWithColour</span> <span class="p">(</span><span class="nx">original</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">rgb</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">getColourRGB</span><span class="p">();</span>
+
+ <span class="k">return</span> <span class="err">`</span><span class="o">&lt;</span><span class="nx">span</span> <span class="nx">style</span><span class="o">=</span><span class="s2">"color: #${rgb.r}${rgb.g}${rgb.b};"</span><span class="o">&gt;</span><span class="nx">$</span><span class="p">{</span><span class="nx">original</span><span class="p">()}</span><span class="o">&lt;</span><span class="err">/span&gt;`;</span>
+ <span class="p">}</span>
+ <span class="p">}</span>
+ <span class="p">)</span>
+<span class="p">);</span>
+<span class="kd">let</span> <span class="nx">task</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">TimeSensitiveTodo</span><span class="p">(</span><span class="s1">'Finish blog post'</span><span class="p">,</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">()</span> <span class="o">+</span> <span class="nx">oneDayInMilliseconds</span><span class="p">);</span>
+
+<span class="nx">task</span><span class="p">.</span><span class="nx">toHTML</span><span class="p">()</span>
+ <span class="c1">//=&gt; &lt;span style="color: #FFFF00;"&gt;Finish blog post&lt;/span&gt;</span></code></pre></div>
+
+<p>With this solution, we&#x2019;ve used our revamped mixin function to support <code>getColourRGB</code> overriding the mixin&#x2019;s definition, and we&#x2019;ve used <code>override</code> to support wrapping functionality around the original <code>toHTML</code> method.</p>
+
+<p>As a final bonus, if we are using a transpiler that supports ES.who-knows-when, we can use the proposed class decorator syntax:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="err">@</span><span class="nx">override</span><span class="p">(</span><span class="s1">'wrapWithColour'</span><span class="p">,</span> <span class="s1">'toHTML'</span><span class="p">)</span>
+<span class="err">@</span><span class="nx">Coloured</span>
+<span class="kr">class</span> <span class="nx">TimeSensitiveTodo</span> <span class="kr">extends</span> <span class="nx">Todo</span> <span class="p">{</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="nx">name</span><span class="p">,</span> <span class="nx">deadline</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kr">super</span><span class="p">(</span><span class="nx">name</span><span class="p">);</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">=</span> <span class="nx">deadline</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">getColourRGB</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">slack</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">deadline</span> <span class="o">-</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+
+ <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">done</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">grey</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">red</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">slack</span> <span class="o">&lt;=</span> <span class="nx">oneDayInMilliseconds</span><span class="p">){</span>
+ <span class="k">return</span> <span class="nx">yellow</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="k">else</span> <span class="k">return</span> <span class="nx">green</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">wrapWithColour</span> <span class="p">(</span><span class="nx">original</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">rgb</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">getColourRGB</span><span class="p">();</span>
+
+ <span class="k">return</span> <span class="err">`</span><span class="o">&lt;</span><span class="nx">span</span> <span class="nx">style</span><span class="o">=</span><span class="s2">"color: #${rgb.r}${rgb.g}${rgb.b};"</span><span class="o">&gt;</span><span class="nx">$</span><span class="p">{</span><span class="nx">original</span><span class="p">()}</span><span class="o">&lt;</span><span class="err">/span&gt;`;</span>
+ <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
+
+<p>This is extremely readable.</p>
+
+<p><a href="https://www.flickr.com/photos/kjmniemi/978113662"><img src="http://raganwald.com/assets/images/a-touch-of-light.jpg" alt="A Touch of Light"></a></p>
+
+<h3 id="method-advice-beyond-extending-mixin-methods">method advice beyond extending mixin methods</h3>
+
+<p><code>override</code> in and of itself is not spectacular. But most functionality that extends the behaviour of a method doesn&#x2019;t process the result of the original. Most extensions do some work <em>before</em> the method is invoked, or do some work <em>after</em> the method is invoked.</p>
+
+<p>So in addition to <code>override</code>, or toolbox should include <code>before</code> and <code>after</code> method advice. <code>before</code> invokes the behaviour first, and if its return value is <code>undefined</code> or <code>truthy</code>, it invokes the decorated method:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">before</span> <span class="o">=</span> <span class="p">(</span><span class="nx">behaviour</span><span class="p">,</span> <span class="p">...</span><span class="nx">decoratedMethodNames</span><span class="p">)</span> <span class="o">=&gt;</span>
+ <span class="p">(</span><span class="nx">clazz</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">behaviour</span> <span class="o">===</span> <span class="s1">'string'</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">behaviour</span> <span class="o">=</span> <span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">behaviour</span><span class="p">];</span>
+ <span class="p">}</span>
+ <span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">decoratedMethodName</span> <span class="nx">of</span> <span class="nx">decoratedMethodNames</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">decoratedMethodFunction</span> <span class="o">=</span> <span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">decoratedMethodName</span><span class="p">];</span>
+
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">decoratedMethodName</span><span class="p">,</span> <span class="p">{</span>
+ <span class="nx">value</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(...</span><span class="nx">args</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">behaviourValue</span> <span class="o">=</span> <span class="nx">behaviour</span><span class="p">.</span><span class="nx">apply</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="p">...</span><span class="nx">args</span><span class="p">);</span>
+
+ <span class="k">if</span> <span class="p">(</span><span class="nx">behaviourValue</span> <span class="o">===</span> <span class="kc">undefined</span> <span class="o">||</span> <span class="o">!!</span><span class="nx">behaviourValue</span><span class="p">)</span>
+ <span class="k">return</span> <span class="nx">decoratedMethodFunction</span><span class="p">.</span><span class="nx">apply</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nx">args</span><span class="p">);</span>
+ <span class="p">},</span>
+ <span class="nx">writable</span><span class="o">:</span> <span class="kc">true</span>
+ <span class="p">});</span>
+ <span class="p">}</span>
+ <span class="k">return</span> <span class="nx">clazz</span><span class="p">;</span>
+ <span class="p">};</span></code></pre></div>
+
+<p><code>before</code> should be used to decorate methods with setup or validation behaviour. Its &#x201C;partner&#x201D; is <code>after</code>, a decorator that runs behaviour after the decorated method is invoked:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">after</span> <span class="o">=</span> <span class="p">(</span><span class="nx">behaviour</span><span class="p">,</span> <span class="p">...</span><span class="nx">decoratedMethodNames</span><span class="p">)</span> <span class="o">=&gt;</span>
+ <span class="p">(</span><span class="nx">clazz</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">behaviour</span> <span class="o">===</span> <span class="s1">'string'</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">behaviour</span> <span class="o">=</span> <span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">behaviour</span><span class="p">];</span>
+ <span class="p">}</span>
+ <span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">decoratedMethodName</span> <span class="nx">of</span> <span class="nx">decoratedMethodNames</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">decoratedMethodFunction</span> <span class="o">=</span> <span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">decoratedMethodName</span><span class="p">];</span>
+
+ <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">clazz</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">decoratedMethodName</span><span class="p">,</span> <span class="p">{</span>
+ <span class="nx">value</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(...</span><span class="nx">args</span><span class="p">)</span> <span class="p">{</span>
+ <span class="kd">let</span> <span class="nx">decoratedMethodValue</span> <span class="o">=</span> <span class="nx">ecoratedMethodFunction</span><span class="p">.</span><span class="nx">apply</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nx">args</span><span class="p">);</span>
+
+ <span class="nx">behaviour</span><span class="p">.</span><span class="nx">apply</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="p">...</span><span class="nx">args</span><span class="p">);</span>
+ <span class="k">return</span> <span class="nx">decoratedMethodValue</span><span class="p">;</span>
+ <span class="p">},</span>
+ <span class="nx">writable</span><span class="o">:</span> <span class="kc">true</span>
+ <span class="p">});</span>
+ <span class="p">}</span>
+ <span class="k">return</span> <span class="nx">clazz</span><span class="p">;</span>
+ <span class="p">};</span></code></pre></div>
+
+<p>With <code>before</code>, <code>after</code>, and <code>override</code> in hand, we have several advantages over traditional method overriding. First, <code>before</code> and <code>after</code> do a better job of declaring our intent when decomposing behaviour. And second, method advice allows us to add behaviour to multiple methods at once, focusing responsibility for cross-cutting concerns, like this:</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">const</span> <span class="nx">mustBeLoggedIn</span> <span class="o">=</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="k">if</span> <span class="p">(</span><span class="nx">currentUser</span><span class="p">()</span> <span class="o">==</span> <span class="kc">null</span><span class="p">)</span>
+ <span class="k">throw</span> <span class="k">new</span> <span class="nx">PermissionsException</span><span class="p">(</span><span class="s2">"Must be logged in!"</span><span class="p">);</span>
+ <span class="p">}</span>
+
+<span class="kr">const</span> <span class="nx">mustBeMe</span> <span class="o">=</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="k">if</span> <span class="p">(</span><span class="nx">currentUser</span><span class="p">()</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">||</span> <span class="o">!</span><span class="nx">currentUser</span><span class="p">().</span><span class="nx">person</span><span class="p">().</span><span class="nx">equals</span><span class="p">(</span><span class="k">this</span><span class="p">))</span>
+ <span class="k">throw</span> <span class="k">new</span> <span class="nx">PermissionsException</span><span class="p">(</span><span class="s2">"Must be me!"</span><span class="p">);</span>
+ <span class="p">}</span>
+
+<span class="err">@</span><span class="nx">HasAge</span>
+<span class="err">@</span><span class="nx">before</span><span class="p">(</span><span class="nx">mustBeMe</span><span class="p">,</span> <span class="s1">'setName'</span><span class="p">,</span> <span class="s1">'setAge'</span><span class="p">,</span> <span class="s1">'age'</span><span class="p">)</span>
+<span class="err">@</span><span class="nx">before</span><span class="p">(</span><span class="nx">mustBeLoggedIn</span><span class="p">,</span> <span class="s1">'fullName'</span><span class="p">)</span>
+<span class="kr">class</span> <span class="nx">Person</span> <span class="p">{</span>
+
+ <span class="nx">setName</span> <span class="p">(</span><span class="nx">first</span><span class="p">,</span> <span class="nx">last</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">firstName</span> <span class="o">=</span> <span class="nx">first</span><span class="p">;</span>
+ <span class="k">this</span><span class="p">.</span><span class="nx">lastName</span> <span class="o">=</span> <span class="nx">last</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="nx">fullName</span> <span class="p">()</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">firstName</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="k">this</span><span class="p">.</span><span class="nx">lastName</span><span class="p">;</span>
+ <span class="p">}</span>
+
+<span class="p">};</span></code></pre></div>
+
+<p>After using mixins and method advice on a regular basis, instead of using superclasses for shared behaviour, we use mixins and method advice instead. Superclasses are then relegated to those cases where we need to build behaviour into the constructor.</p>
+
+<h3 id="so-what-is-the-takeaway">so, what is the takeaway?</h3>
+
+<p>A simple mixin can cover many cases, but when we wish to override or extend method behaviour, we need to either use the subclass factory pattern or incorporate method advice. Method advice offers benefits above and beyond overriding mixin methods, especially if we use <code>before</code> and <code>after</code> in addition to <code>override</code>.</p>
+
+<p>That being said, subclass factories are most convenient of we are comfortable with hierarchies of superclasses and with using <code>super</code> to extend method behaviour. Method advice permits us to use a simpler approach to mixins, and is the best choice when we also want to use advice to factor behaviour along responsibility lines elsewhere in our programs.</p>
+
+<p>Either way, we find ourselves needing shallower and shallower class hierarchies when we use mixins to their fullest. Which demonstrates the power of working with simple constructs (like mixins and decorators) in JavaScript: We do not need nearly as much of the heavyweight OOP apparatus borrowed from 30 year-old languages, we just need to use the language we already have, in ways that cut with its grain.</p>
+
+
+
+<p>more reading:</p>
+
+
+
+<p>notes:</p>
+
+
+
+ </section>
+
+ </div>
+</body></html>

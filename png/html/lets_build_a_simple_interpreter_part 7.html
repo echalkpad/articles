@@ -1,0 +1,654 @@
+<!DOCTYPE html><html><head><title>Let’s Build A Simple Interpreter. Part 7.</title></head><body>
+<h1>Let’s Build A Simple Interpreter. Part 7.</h1><p><a href="http://ruslanspivak.com/lsbasi-part7/" target="_new">Original URL</a></p>
+<p><blockquote>Date Tue, December 15, 2015 As I promised you last time, today I will talk about one of the central data structures that we&#x2019;ll use throughout the rest of the series, so buckle up and&hellip;</blockquote></p>
+<div><div class="entry-content">
+ <div class="panel">
+ <p class="panel-body">
+<footer class="post-info">
+ <span class="label label-default">Date</span>
+ <span class="published">
+ <i class="fa fa-calendar"></i><time datetime="2015-12-15T07:00:00-05:00"> Tue, December 15, 2015</time>
+ </span>
+
+
+
+ 
+</footer> </p>
+ </div>
+ <p>As I promised you last time, today I will talk about one of the central
+data structures that we&#x2019;ll use throughout the rest of the series, so buckle
+up and let&#x2019;s&#xA0;go.</p>
+<p>Up until now, we had our interpreter and parser code mixed together and
+the interpreter would evaluate an expression as soon as the parser recognized
+a certain language construct like addition, subtraction, multiplication, or division.
+Such interpreters are called <em>syntax-directed interpreters</em>. They usually make a single
+pass over the input and are suitable for basic language applications.
+In order to analyze more complex Pascal programming language constructs, we need to build
+an <em>intermediate representation</em> (<em><span class="caps">IR</span></em>). Our parser will be responsible for building an
+<em><span class="caps">IR</span></em> and our interpreter will use it to interpret the input represented as the <em><span class="caps">IR</span></em>.</p>
+<p>It turns out that a tree is a very suitable data structure for an <span class="caps">IR</span>.</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_realtree.png"></p>
+<p>Let&#x2019;s quickly talk about tree&#xA0;terminology.</p>
+<ul>
+<li>A <em>tree</em> is a data structure that consists of one or more nodes organized into a&#xA0;hierarchy.</li>
+<li>The tree has one <em>root</em>, which is the top&#xA0;node.</li>
+<li>All nodes except the root have a unique <em>parent</em>.</li>
+<li>The node labeled <strong>*</strong> in the picture below is a <em>parent</em>. Nodes labeled <strong>2</strong> and <strong>7</strong> are its <em>children</em>; children are ordered from left to&#xA0;right.</li>
+<li>A node with no children is called a <em>leaf</em>&#xA0;node.</li>
+<li>A node that has one or more children and that is not the root is called an <em>interior</em>&#xA0;node.</li>
+<li>The children can also be complete <em>subtrees</em>. In the picture below the left child (labeled <strong>*</strong>) of the <strong>+</strong> node is a complete <em>subtree</em> with its own&#xA0;children.</li>
+<li>In computer science we draw trees upside down starting with the root node at the top and branches growing&#xA0;downward.</li>
+</ul>
+<p>Here is a tree for the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 + 3 with&#xA0;explanations:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_tree_terminology.png"></p>
+<p>The <span class="caps">IR</span> we&#x2019;ll use throughout the series is called an <em>abstract-syntax tree</em> (<em><span class="caps">AST</span></em>).
+But before we dig deeper into ASTs let&#x2019;s talk about <em>parse trees</em> briefly.
+Though we&#x2019;re not going to use parse trees for our interpreter and compiler, they can help
+you understand how your parser interpreted the input by visualizing the execution trace
+of the parser. We&#x2019;ll also compare them with ASTs to see why ASTs are better suited for
+intermediate representation than parse&#xA0;trees.</p>
+<p>So, what is a parse tree? A <em>parse-tree</em> (sometimes called a <em>concrete syntax tree</em>) is a tree
+that represents the syntactic structure of a language construct according to our grammar
+definition. It basically shows how your parser recognized the language construct or, in other
+words, it shows how the start symbol of your grammar derives a certain string in the
+programming&#xA0;language.</p>
+<p>The call stack of the parser implicitly represents a parse tree and it&#x2019;s automatically
+built in memory by your parser as it is trying to recognize a certain language&#xA0;construct.</p>
+<p>Let&#x2019;s take a look at a parse tree for the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 +&#xA0;3:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_parsetree_01.png"></p>
+<p>In the picture above you can see&#xA0;that:</p>
+<ul>
+<li>The parse tree records a sequence of rules the parser applies to recognize the&#xA0;input.</li>
+<li>The root of the parse tree is labeled with the grammar start&#xA0;symbol.</li>
+<li>Each interior node represents a non-terminal, that is it represents a grammar rule
+ application, like <em>expr</em>, <em>term</em>, or <em>factor</em> in our&#xA0;case.</li>
+<li>Each leaf node represents a&#xA0;token.</li>
+</ul>
+<p>As I&#x2019;ve already mentioned, we&#x2019;re not going to manually construct parser trees and use them
+for our interpreter but parse trees can help you understand how the parser interpreted
+the input by visualizing the parser call&#xA0;sequence.</p>
+<p>You can see how parse trees look like for different arithmetic expressions by trying out
+a small utility called <a href="https://github.com/rspivak/lsbasi/blob/master/part7/python/genptdot.py">genptdot.py</a> that I quickly wrote to help you visualize them. To use the utility you first need to install <a href="http://graphviz.org">Graphviz</a> package and after you&#x2019;ve run the following command, you can open the generated image file parsetree.png and see a parse tree for the expression you passed as a command line&#xA0;argument:</p>
+<div class="highlight"><pre><span class="nv">$ </span>python genptdot.py <span class="s2">"14 + 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 3 - 6 / 2"</span> &gt; <span class="se">\</span>
+ parsetree.dot <span class="o">&amp;&amp;</span> dot -Tpng -o parsetree.png parsetree.dot
+</pre></div>
+
+
+<p>Here is the generated image parsetree.png for the expression 14 + 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 3 - 6 /&#xA0;2:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_genptdot_01.png"></p>
+<p>Play with the utility a bit by passing it different arithmetic expressions and see what a parse tree looks like for a particular&#xA0;expression.</p>
+<p>Now, let&#x2019;s talk about <em>abstract-syntax trees</em> (<span class="caps">AST</span>). This is the <em>intermediate representation</em> (<span class="caps">IR</span>) that we&#x2019;ll heavily use throughout the rest of the series. It is one of the central data structures for our interpreter and future compiler&#xA0;projects.</p>
+<p>Let&#x2019;s start our discussion by taking a look at both the <span class="caps">AST</span> and the parse tree for the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 +&#xA0;3:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_ast_01.png"></p>
+<p>As you can see from the picture above, the <span class="caps">AST</span> captures the essence of the input while being&#xA0;smaller.</p>
+<p>Here are the main differences between ASTs and Parse&#xA0;trees:</p>
+<ul>
+<li>ASTs uses operators/operations as root and interior nodes and it uses operands as their&#xA0;children.</li>
+<li>ASTs do not use interior nodes to represent a grammar rule, unlike the parse tree&#xA0;does.</li>
+<li>ASTs don&#x2019;t represent every detail from the real syntax (that&#x2019;s why they&#x2019;re called <em>abstract</em>) - no rule nodes and no parentheses, for&#xA0;example.</li>
+<li>ASTs are dense compared to a parse tree for the same language&#xA0;construct.</li>
+</ul>
+<p>So, what is an abstract syntax tree?
+An <em>abstract syntax tree</em> (<em><span class="caps">AST</span></em>) is a tree that represents the abstract syntactic structure of a language construct where each interior node and the root node represents an operator, and the children of the node represent the operands of that&#xA0;operator.</p>
+<p>I&#x2019;ve already mentioned that ASTs are more compact than parse trees. Let&#x2019;s take a look at an <span class="caps">AST</span> and a parse tree for the expression 7 + ((2 + 3)). You can see that the following <span class="caps">AST</span> is much smaller than the parse tree, but still captures the essence of the&#xA0;input:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_ast_02.png"></p>
+<p>So far so good, but how do you encode operator precedence in an <span class="caps">AST</span>? In order to encode the operator precedence in <span class="caps">AST</span>, that is, to represent that &#x201C;X happens before Y&#x201D; you just need to put X lower in the tree than Y. And you&#x2019;ve already seen that in the previous&#xA0;pictures.</p>
+<p>Let&#x2019;s take a look at some more&#xA0;examples.</p>
+<p>In the picture below, on the left, you can see an <span class="caps">AST</span> for the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 + 3. Let&#x2019;s change the precedence by putting 7 + 3 inside the parentheses. You can see, on the right, what an <span class="caps">AST</span> looks like for the modified expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (7 +&#xA0;3):</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_astprecedence_01.png"></p>
+<p>Here is an <span class="caps">AST</span> for the expression 1 + 2 + 3 + 4 +&#xA0;5:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_astprecedence_02.png"></p>
+<p>From the pictures above you can see that operators with higher precedence end up being lower in the&#xA0;tree.</p>
+<p>Okay, let&#x2019;s write some code to implement different <span class="caps">AST</span> node types and modify our parser to generate an <span class="caps">AST</span> tree composed of those&#xA0;nodes.</p>
+<p>First, we&#x2019;ll create a base node class called <span class="caps">AST</span> that other classes will inherit&#xA0;from:</p>
+
+
+
+<p>Not much there, actually. Recall that ASTs represent the operator-operand model. So far, we have four operators and integer operands. The operators are addition, subtraction, multiplication, and division. We could have created a separate class to represent each operator like AddNode, SubNode, MulNode, and DivNode, but instead we&#x2019;re going to have only one <em>BinOp</em> class to represent all four binary operators (a <em>binary operator</em> is an operator that operates on two&#xA0;operands):</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">BinOp</span><span class="p">(</span><span class="n">AST</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">right</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">left</span> <span class="o">=</span> <span class="n">left</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="n">op</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">right</span> <span class="o">=</span> <span class="n">right</span>
+</pre></div>
+
+
+<p>The parameters to the constructor are <em>left</em>, <em>op</em>, and <em>right</em>, where <em>left</em> and <em>right</em> point correspondingly to the node of the left operand and to the node of the right operand. <em>Op</em> holds a token for the operator itself: Token(<span class="caps">PLUS</span>, &#x2018;+&#x2019;) for the plus operator, Token(<span class="caps">MINUS</span>, &#x2018;-&#x2018;) for the minus operator, and so&#xA0;on.</p>
+<p>To represent integers in our <span class="caps">AST</span>, we&#x2019;ll define a class <em>Num</em> that will hold an <span class="caps">INTEGER</span> token and the token&#x2019;s&#xA0;value:</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">Num</span><span class="p">(</span><span class="n">AST</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="n">token</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">value</span>
+</pre></div>
+
+
+<p>As you&#x2019;ve noticed, all nodes store the token used to create the node. This is mostly for convenience and it will come in handy in the&#xA0;future.</p>
+<p>Recall the <span class="caps">AST</span> for the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 + 3. We&#x2019;re going to manually create it in code for that&#xA0;expression:</p>
+<div class="highlight"><pre><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">spi</span> <span class="kn">import</span> <span class="n">Token</span><span class="p">,</span> <span class="n">MUL</span><span class="p">,</span> <span class="n">PLUS</span><span class="p">,</span> <span class="n">INTEGER</span><span class="p">,</span> <span class="n">Num</span><span class="p">,</span> <span class="n">BinOp</span>
+<span class="o">&gt;&gt;&gt;</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">mul_token</span> <span class="o">=</span> <span class="n">Token</span><span class="p">(</span><span class="n">MUL</span><span class="p">,</span> <span class="s">'*'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">plus_token</span> <span class="o">=</span> <span class="n">Token</span><span class="p">(</span><span class="n">PLUS</span><span class="p">,</span> <span class="s">'+'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">mul_node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span>
+<span class="o">...</span> <span class="n">left</span><span class="o">=</span><span class="n">Num</span><span class="p">(</span><span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span>
+<span class="o">...</span> <span class="n">op</span><span class="o">=</span><span class="n">mul_token</span><span class="p">,</span>
+<span class="o">...</span> <span class="n">right</span><span class="o">=</span><span class="n">Num</span><span class="p">(</span><span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="o">...</span> <span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">add_node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span>
+<span class="o">...</span> <span class="n">left</span><span class="o">=</span><span class="n">mul_node</span><span class="p">,</span>
+<span class="o">...</span> <span class="n">op</span><span class="o">=</span><span class="n">plus_token</span><span class="p">,</span>
+<span class="o">...</span> <span class="n">right</span><span class="o">=</span><span class="n">Num</span><span class="p">(</span><span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="o">...</span> <span class="p">)</span>
+</pre></div>
+
+
+<p>Here is how an <span class="caps">AST</span> will look with our new node classes defined. The picture below also follows the manual construction process&#xA0;above:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_astimpl_01.png"></p>
+<p>Here is our modified parser code that builds and returns an <span class="caps">AST</span> as a result of recognizing the input (an arithmetic&#xA0;expression):</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">AST</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">pass</span>
+
+
+<span class="k">class</span> <span class="nc">BinOp</span><span class="p">(</span><span class="n">AST</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">right</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">left</span> <span class="o">=</span> <span class="n">left</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="n">op</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">right</span> <span class="o">=</span> <span class="n">right</span>
+
+
+<span class="k">class</span> <span class="nc">Num</span><span class="p">(</span><span class="n">AST</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="n">token</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">value</span>
+
+
+<span class="k">class</span> <span class="nc">Parser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lexer</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span> <span class="o">=</span> <span class="n">lexer</span>
+ <span class="c"># set current token to the first token taken from the input</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span><span class="o">.</span><span class="n">get_next_token</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">'Invalid syntax'</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">eat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token_type</span><span class="p">):</span>
+ <span class="c"># compare the current token type with the passed token</span>
+ <span class="c"># type and if they match then "eat" the current token</span>
+ <span class="c"># and assign the next token to the self.current_token,</span>
+ <span class="c"># otherwise raise an exception.</span>
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">token_type</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span><span class="o">.</span><span class="n">get_next_token</span><span class="p">()</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">factor</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""factor : INTEGER | LPAREN expr RPAREN"""</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">INTEGER</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">Num</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">LPAREN</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">LPAREN</span><span class="p">)</span>
+ <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">()</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">RPAREN</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">node</span>
+
+ <span class="k">def</span> <span class="nf">term</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""term : factor ((MUL | DIV) factor)*"""</span>
+ <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="p">()</span>
+
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">MUL</span><span class="p">,</span> <span class="n">DIV</span><span class="p">):</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MUL</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">MUL</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DIV</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">DIV</span><span class="p">)</span>
+
+ <span class="n">node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span><span class="n">left</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="p">())</span>
+
+ <span class="k">return</span> <span class="n">node</span>
+
+ <span class="k">def</span> <span class="nf">expr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""</span>
+<span class="sd"> expr : term ((PLUS | MINUS) term)*</span>
+<span class="sd"> term : factor ((MUL | DIV) factor)*</span>
+<span class="sd"> factor : INTEGER | LPAREN expr RPAREN</span>
+<span class="sd"> """</span>
+ <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">term</span><span class="p">()</span>
+
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">PLUS</span><span class="p">,</span> <span class="n">MINUS</span><span class="p">):</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">PLUS</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">PLUS</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MINUS</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">MINUS</span><span class="p">)</span>
+
+ <span class="n">node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span><span class="n">left</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">term</span><span class="p">())</span>
+
+ <span class="k">return</span> <span class="n">node</span>
+
+ <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">()</span>
+</pre></div>
+
+
+<p>Let&#x2019;s go over the process of an <span class="caps">AST</span> construction for some arithmetic&#xA0;expressions.</p>
+<p>If you look at the parser code above you can see that the way it builds nodes of an <span class="caps">AST</span> is that each BinOp node adopts the current value of the <em>node</em> variable as its left child and the result of a call to a <em>term</em> or <em>factor</em> as its right child, so it&#x2019;s effectively pushing down nodes to the left and the tree for the expression 1 +2 + 3 + 4 + 5 below is a good example of that. Here is a visual representation how the parser gradually builds an <span class="caps">AST</span> for the expression 1 + 2 + 3 + 4 +&#xA0;5:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_astimpl_02.png"></p>
+<p>To help you visualize ASTs for different arithmetic expressions, I wrote a small utility that takes an arithmetic expression as its first argument and generates a <span class="caps">DOT</span> file that is then processed by the <em>dot</em> utility to actually draw an <span class="caps">AST</span> for you (<em>dot</em> is part of the <a href="http://graphviz.org">Graphviz</a> package that you need to install to run the <em>dot</em> command). Here is a command and a generated <span class="caps">AST</span> image for the expression 7 + 3 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (10 / (12 / (3 + 1) -&#xA0;1)):</p>
+<div class="highlight"><pre><span class="nv">$ </span>python genastdot.py <span class="s2">"7 + 3 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (10 / (12 / (3 + 1) - 1))"</span> &gt; <span class="se">\</span>
+ ast.dot <span class="o">&amp;&amp;</span> dot -Tpng -o ast.png ast.dot
+</pre></div>
+
+
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_genastdot_01.png"></p>
+<p>It&#x2019;s worth your while to write some arithmetic expressions, manually draw ASTs for the expressions, and then verify them by generating <span class="caps">AST</span> images for the same expressions with the <a href="https://github.com/rspivak/lsbasi/blob/master/part7/python/genastdot.py">genastdot.py</a> tool. That will help you better understand how ASTs are constructed by the parser for different arithmetic&#xA0;expressions.</p>
+<p>Okay, here is an <span class="caps">AST</span> for the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 +&#xA0;3:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_ast_walking_01.png"></p>
+<p>How do you navigate the tree to properly evaluate the expression represented by that tree? You do that by using a <em>postorder traversal</em> - a special case of <em>depth-first traversal</em> - which starts at the root node and recursively visits the children of each node from left to right. The postorder traversal visits nodes as far away from the root as fast as it&#xA0;can.</p>
+<p>Here is a pseudo code for the postorder traversal where <em>&lt;&lt;postorder actions&gt;&gt;</em> is a placeholder for actions like addition, subtraction, multiplication, or division for a <em>BinOp</em> node or a simpler action like returning the integer value of a <em>Num</em>&#xA0;node:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_ast_visit_postorder.png"></p>
+<p>The reason we&#x2019;re going to use a postorder traversal for our interpreter is that first, we need to evaluate interior nodes lower in the tree because they represent operators with higher precedence and second, we need to evaluate operands of an operator before applying the operator to those operands. In the picture below, you can see that with postorder traversal we first evaluate the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 and only after that we evaluate 14 + 3, which gives us the correct result,&#xA0;17:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_ast_walking_02.png"></p>
+<p>For the sake of completeness, I&#x2019;ll mention that there are three types of depth-first traversal: <em>preorder traversal</em>, <em>inorder traversal</em>, and <em>postorder traversal</em>. The name of the traversal method comes from the place where you put actions in the visitation&#xA0;code:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_ast_visit_generic.png"></p>
+<p>Sometimes you might have to execute certain actions at all those points (preorder, inorder, and postorder). You&#x2019;ll see some examples of that in the source code repository for this&#xA0;article.</p>
+<p>Okay, let&#x2019;s write some code to visit and interpret the abstract syntax trees built by our parser, shall&#xA0;we?</p>
+<p>Here is the source code that implements the <a href="https://en.wikipedia.org/wiki/Visitor_pattern">Visitor pattern</a>:</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">NodeVisitor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="n">method_name</span> <span class="o">=</span> <span class="s">'visit_'</span> <span class="o">+</span> <span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">__name__</span>
+ <span class="n">visitor</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">visitor</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">generic_visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">'No visit_{} method'</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+</pre></div>
+
+
+<p>And here is the source code of our <em>Interpreter</em> class that inherits from the <em>NodeVisitor</em> class and implements different methods that have the form <em>visit_NodeType</em>, where <em>NodeType</em> is replaced with the node&#x2019;s class name like <em>BinOp</em>, <em>Num</em> and so&#xA0;on:</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">Interpreter</span><span class="p">(</span><span class="n">NodeVisitor</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parser</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">parser</span>
+
+ <span class="k">def</span> <span class="nf">visit_BinOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">PLUS</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MINUS</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MUL</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DIV</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">visit_Num</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span>
+</pre></div>
+
+
+<p>There are two interesting things about the code that are worth mentioning here:
+First, the visitor code that manipulates <span class="caps">AST</span> nodes is decoupled from the <span class="caps">AST</span> nodes themselves. You can see that none of the <span class="caps">AST</span> node classes (BinOp and Num) provide any code to manipulate the data stored in those nodes. That logic is encapsulated in the <em>Interpreter</em> class that implements the <em>NodeVisitor</em>&#xA0;class.</p>
+<p>Second, instead of a giant <em>if</em> statement in the NodeVisitor&#x2019;s <em>visit</em> method like&#xA0;this:</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">visit</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+ <span class="n">node_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">__name__</span>
+ <span class="k">if</span> <span class="n">node_type</span> <span class="o">==</span> <span class="s">'BinOp'</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit_BinOp</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">node_type</span> <span class="o">==</span> <span class="s">'Num'</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit_Num</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="o">...</span>
+ <span class="c"># ...</span>
+</pre></div>
+
+
+<p>or like&#xA0;this:</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">visit</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+ <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">BinOp</span><span class="p">):</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit_BinOp</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">Num</span><span class="p">):</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit_Num</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="o">...</span>
+</pre></div>
+
+
+<p>the NodeVisitor&#x2019;s <em>visit</em> method is very generic and dispatches calls to the appropriate method based on the node type passed to it. As I&#x2019;ve mentioned before, in order to make use of it, our interpreter inherits from the <em>NodeVisitor</em> class and implements necessary methods. So if the type of a node passed to the <em>visit</em> method is BinOp, then the <em>visit</em> method will dispatch the call to the <em>visit_BinOp</em> method, and if the type of a node is Num, then the <em>visit</em> method will dispatch the call to the <em>visit_Num</em> method, and so&#xA0;on.</p>
+<p>Spend some time studying this approach (standard Python module <a href="https://docs.python.org/2.7/library/ast.html#module-ast">ast</a> uses the same mechanism for node traversal) as we will be extending our interpreter with many new <em>visit_NodeType</em> methods in the&#xA0;future.</p>
+<p>The <em>generic_visit</em> method is a fallback that raises an exception to indicate that it encountered a node that the implementation class has no corresponding <em>visit_NodeType</em> method&#xA0;for.</p>
+<p>Now, let&#x2019;s manually build an <span class="caps">AST</span> for the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 7 + 3 and pass it to our interpreter to see the visit method in action to evaluate the expression. Here is how you can do it from the Python&#xA0;shell:</p>
+<div class="highlight"><pre><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">spi</span> <span class="kn">import</span> <span class="n">Token</span><span class="p">,</span> <span class="n">MUL</span><span class="p">,</span> <span class="n">PLUS</span><span class="p">,</span> <span class="n">INTEGER</span><span class="p">,</span> <span class="n">Num</span><span class="p">,</span> <span class="n">BinOp</span>
+<span class="o">&gt;&gt;&gt;</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">mul_token</span> <span class="o">=</span> <span class="n">Token</span><span class="p">(</span><span class="n">MUL</span><span class="p">,</span> <span class="s">'*'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">plus_token</span> <span class="o">=</span> <span class="n">Token</span><span class="p">(</span><span class="n">PLUS</span><span class="p">,</span> <span class="s">'+'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">mul_node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span>
+<span class="o">...</span> <span class="n">left</span><span class="o">=</span><span class="n">Num</span><span class="p">(</span><span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span>
+<span class="o">...</span> <span class="n">op</span><span class="o">=</span><span class="n">mul_token</span><span class="p">,</span>
+<span class="o">...</span> <span class="n">right</span><span class="o">=</span><span class="n">Num</span><span class="p">(</span><span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="o">...</span> <span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">add_node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span>
+<span class="o">...</span> <span class="n">left</span><span class="o">=</span><span class="n">mul_node</span><span class="p">,</span>
+<span class="o">...</span> <span class="n">op</span><span class="o">=</span><span class="n">plus_token</span><span class="p">,</span>
+<span class="o">...</span> <span class="n">right</span><span class="o">=</span><span class="n">Num</span><span class="p">(</span><span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="o">...</span> <span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">spi</span> <span class="kn">import</span> <span class="n">Interpreter</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">inter</span> <span class="o">=</span> <span class="n">Interpreter</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">inter</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">add_node</span><span class="p">)</span>
+<span class="mi">17</span>
+</pre></div>
+
+
+<p>As you can see, I passed the root of the expression tree to the <em>visit</em> method and that triggered traversal of the tree by dispatching calls to the correct methods of the <em>Interpreter</em> class(<em>visit_BinOp</em> and <em>visit_Num</em>) and generating the&#xA0;result.</p>
+<p>Okay, here is the complete code of our new interpreter for your&#xA0;convenience:</p>
+<div class="highlight"><pre><span class="sd">""" SPI - Simple Pascal Interpreter """</span>
+
+<span class="c">###############################################################################</span>
+<span class="c"># #</span>
+<span class="c"># LEXER #</span>
+<span class="c"># #</span>
+<span class="c">###############################################################################</span>
+
+<span class="c"># Token types</span>
+<span class="c">#</span>
+<span class="c"># EOF (end-of-file) token is used to indicate that</span>
+<span class="c"># there is no more input left for lexical analysis</span>
+<span class="n">INTEGER</span><span class="p">,</span> <span class="n">PLUS</span><span class="p">,</span> <span class="n">MINUS</span><span class="p">,</span> <span class="n">MUL</span><span class="p">,</span> <span class="n">DIV</span><span class="p">,</span> <span class="n">LPAREN</span><span class="p">,</span> <span class="n">RPAREN</span><span class="p">,</span> <span class="n">EOF</span> <span class="o">=</span> <span class="p">(</span>
+ <span class="s">'INTEGER'</span><span class="p">,</span> <span class="s">'PLUS'</span><span class="p">,</span> <span class="s">'MINUS'</span><span class="p">,</span> <span class="s">'MUL'</span><span class="p">,</span> <span class="s">'DIV'</span><span class="p">,</span> <span class="s">'('</span><span class="p">,</span> <span class="s">')'</span><span class="p">,</span> <span class="s">'EOF'</span>
+<span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">Token</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">=</span> <span class="nb">type</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+
+ <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""String representation of the class instance.</span>
+
+<span class="sd"> Examples:</span>
+<span class="sd"> Token(INTEGER, 3)</span>
+<span class="sd"> Token(PLUS, '+')</span>
+<span class="sd"> Token(MUL, '*')</span>
+<span class="sd"> """</span>
+ <span class="k">return</span> <span class="s">'Token({type}, {value})'</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+ <span class="nb">type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
+ <span class="n">value</span><span class="o">=</span><span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+ <span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__str__</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">Lexer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+ <span class="c"># client string input, e.g. "4 + 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 3 - 6 / 2"</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="n">text</span>
+ <span class="c"># self.pos is an index into self.text</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">pos</span><span class="p">]</span>
+
+ <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">'Invalid character'</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">advance</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""Advance the `pos` pointer and set the `current_char` variable."""</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">pos</span> <span class="o">+=</span> <span class="mi">1</span>
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># Indicates end of input</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">pos</span><span class="p">]</span>
+
+ <span class="k">def</span> <span class="nf">skip_whitespace</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isspace</span><span class="p">():</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">integer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""Return a (multidigit) integer consumed from the input."""</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="s">''</span>
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+ <span class="n">result</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">get_next_token</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""Lexical analyzer (also known as scanner or tokenizer)</span>
+
+<span class="sd"> This method is responsible for breaking a sentence</span>
+<span class="sd"> apart into tokens. One token at a time.</span>
+<span class="sd"> """</span>
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isspace</span><span class="p">():</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">skip_whitespace</span><span class="p">()</span>
+ <span class="k">continue</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">integer</span><span class="p">())</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'+'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">PLUS</span><span class="p">,</span> <span class="s">'+'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'-'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">MINUS</span><span class="p">,</span> <span class="s">'-'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'*'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">MUL</span><span class="p">,</span> <span class="s">'*'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'/'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">DIV</span><span class="p">,</span> <span class="s">'/'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'('</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">LPAREN</span><span class="p">,</span> <span class="s">'('</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">')'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">RPAREN</span><span class="p">,</span> <span class="s">')'</span><span class="p">)</span>
+
+ <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">()</span>
+
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">EOF</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+
+<span class="c">###############################################################################</span>
+<span class="c"># #</span>
+<span class="c"># PARSER #</span>
+<span class="c"># #</span>
+<span class="c">###############################################################################</span>
+
+<span class="k">class</span> <span class="nc">AST</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">pass</span>
+
+
+<span class="k">class</span> <span class="nc">BinOp</span><span class="p">(</span><span class="n">AST</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">right</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">left</span> <span class="o">=</span> <span class="n">left</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="n">op</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">right</span> <span class="o">=</span> <span class="n">right</span>
+
+
+<span class="k">class</span> <span class="nc">Num</span><span class="p">(</span><span class="n">AST</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="n">token</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">value</span>
+
+
+<span class="k">class</span> <span class="nc">Parser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lexer</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span> <span class="o">=</span> <span class="n">lexer</span>
+ <span class="c"># set current token to the first token taken from the input</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span><span class="o">.</span><span class="n">get_next_token</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">'Invalid syntax'</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">eat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token_type</span><span class="p">):</span>
+ <span class="c"># compare the current token type with the passed token</span>
+ <span class="c"># type and if they match then "eat" the current token</span>
+ <span class="c"># and assign the next token to the self.current_token,</span>
+ <span class="c"># otherwise raise an exception.</span>
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">token_type</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span><span class="o">.</span><span class="n">get_next_token</span><span class="p">()</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">factor</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""factor : INTEGER | LPAREN expr RPAREN"""</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">INTEGER</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">Num</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">LPAREN</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">LPAREN</span><span class="p">)</span>
+ <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">()</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">RPAREN</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">node</span>
+
+ <span class="k">def</span> <span class="nf">term</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""term : factor ((MUL | DIV) factor)*"""</span>
+ <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="p">()</span>
+
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">MUL</span><span class="p">,</span> <span class="n">DIV</span><span class="p">):</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MUL</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">MUL</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DIV</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">DIV</span><span class="p">)</span>
+
+ <span class="n">node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span><span class="n">left</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="p">())</span>
+
+ <span class="k">return</span> <span class="n">node</span>
+
+ <span class="k">def</span> <span class="nf">expr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""</span>
+<span class="sd"> expr : term ((PLUS | MINUS) term)*</span>
+<span class="sd"> term : factor ((MUL | DIV) factor)*</span>
+<span class="sd"> factor : INTEGER | LPAREN expr RPAREN</span>
+<span class="sd"> """</span>
+ <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">term</span><span class="p">()</span>
+
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">PLUS</span><span class="p">,</span> <span class="n">MINUS</span><span class="p">):</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">PLUS</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">PLUS</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MINUS</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">MINUS</span><span class="p">)</span>
+
+ <span class="n">node</span> <span class="o">=</span> <span class="n">BinOp</span><span class="p">(</span><span class="n">left</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">op</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">term</span><span class="p">())</span>
+
+ <span class="k">return</span> <span class="n">node</span>
+
+ <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">()</span>
+
+
+<span class="c">###############################################################################</span>
+<span class="c"># #</span>
+<span class="c"># INTERPRETER #</span>
+<span class="c"># #</span>
+<span class="c">###############################################################################</span>
+
+<span class="k">class</span> <span class="nc">NodeVisitor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="n">method_name</span> <span class="o">=</span> <span class="s">'visit_'</span> <span class="o">+</span> <span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">__name__</span>
+ <span class="n">visitor</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">visitor</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">generic_visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">'No visit_{} method'</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">__name__</span><span class="p">))</span>
+
+
+<span class="k">class</span> <span class="nc">Interpreter</span><span class="p">(</span><span class="n">NodeVisitor</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parser</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">parser</span>
+
+ <span class="k">def</span> <span class="nf">visit_BinOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">PLUS</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MINUS</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MUL</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+ <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DIV</span><span class="p">:</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">visit_Num</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+ <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span>
+
+ <span class="k">def</span> <span class="nf">interpret</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="n">tree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">()</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">tree</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+ <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+ <span class="k">try</span><span class="p">:</span>
+ <span class="k">try</span><span class="p">:</span>
+ <span class="n">text</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="s">'spi&gt; '</span><span class="p">)</span>
+ <span class="k">except</span> <span class="ne">NameError</span><span class="p">:</span> <span class="c"># Python3</span>
+ <span class="n">text</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s">'spi&gt; '</span><span class="p">)</span>
+ <span class="k">except</span> <span class="ne">EOFError</span><span class="p">:</span>
+ <span class="k">break</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="p">:</span>
+ <span class="k">continue</span>
+
+ <span class="n">lexer</span> <span class="o">=</span> <span class="n">Lexer</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+ <span class="n">parser</span> <span class="o">=</span> <span class="n">Parser</span><span class="p">(</span><span class="n">lexer</span><span class="p">)</span>
+ <span class="n">interpreter</span> <span class="o">=</span> <span class="n">Interpreter</span><span class="p">(</span><span class="n">parser</span><span class="p">)</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="n">interpreter</span><span class="o">.</span><span class="n">interpret</span><span class="p">()</span>
+ <span class="k">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">'__main__'</span><span class="p">:</span>
+ <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+
+<p>Save the above code into the <em>spi.py</em> file or download it directly from <a href="https://github.com/rspivak/lsbasi/blob/master/part7/python/spi.py">GitHub</a>. Try it out and see for yourself that your new tree-based interpreter properly evaluates arithmetic&#xA0;expressions.</p>
+<p>Here is a sample&#xA0;session:</p>
+<div class="highlight"><pre><span class="nv">$ </span>python spi.py
+spi&gt; <span class="m">7</span> + <span class="m">3</span> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii <span class="o">(</span><span class="m">10</span> / <span class="o">(</span><span class="m">12</span> / <span class="o">(</span><span class="m">3</span> + 1<span class="o">)</span> - 1<span class="o">))</span>
+22
+spi&gt; <span class="m">7</span> + <span class="m">3</span> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii <span class="o">(</span><span class="m">10</span> / <span class="o">(</span><span class="m">12</span> / <span class="o">(</span><span class="m">3</span> + 1<span class="o">)</span> - 1<span class="o">))</span> / <span class="o">(</span><span class="m">2</span> + 3<span class="o">)</span> - <span class="m">5</span> - <span class="m">3</span> + <span class="o">(</span>8<span class="o">)</span>
+10
+spi&gt; <span class="m">7</span> + <span class="o">(((</span><span class="m">3</span> + 2<span class="o">)))</span>
+12
+</pre></div>
+
+
+<p><br>
+Today you&#x2019;ve learned about parse trees, ASTs, how to construct ASTs and how to traverse them to interpret the input represented by those ASTs. You&#x2019;ve also modified the parser and the interpreter and split them apart. The current interface between the lexer, parser, and the interpreter now looks like&#xA0;this:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_pipeline.png"></p>
+<p>You can read that as &#x201C;The parser gets tokens from the lexer and then returns the generated <span class="caps">AST</span> for the interpreter to traverse and interpret the&#xA0;input.&#x201D;</p>
+<p>That&#x2019;s it for today, but before wrapping up I&#x2019;d like to talk briefly about recursive-descent parsers, namely just give them a definition because I promised last time to talk about them in more detail. So here you go: a <em>recursive-descent parser</em> is a top-down parser that uses a set of recursive procedures to process the input. Top-down reflects the fact that the parser begins by constructing the top node of the parse tree and then gradually constructs lower&#xA0;nodes.</p>
+<p><br>
+And now it&#x2019;s time for exercises&#xA0;:)</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part7/lsbasi_part7_exercise.png"></p>
+<ul>
+<li>Write a translator (hint: node visitor) that takes as input an arithmetic expression and prints it out in postfix notation, also known as Reverse Polish Notation (<span class="caps">RPN</span>). For example, if the input to the translator is the expression (5 + 3) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 12 / 3 than the output should be 5 3 + 12 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 3 /. See the answer <a href="https://github.com/rspivak/lsbasi/blob/master/part7/python/ex1.py">here</a> but try to solve it first on your&#xA0;own.</li>
+<li>Write a translator (node visitor) that takes as input an arithmetic expression and prints it out in <span class="caps">LISP</span> style notation, that is 2 + 3 would become (+ 2 3) and (2 + 3 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 5) would become (+ 2 (* 3 5)). You can find the answer <a href="https://github.com/rspivak/lsbasi/blob/master/part7/python/ex2.py">here</a> but again try to solve it first before looking at the provided&#xA0;solution.</li>
+</ul>
+<p><br>
+In the next, article we&#x2019;ll add assignment and unary operators to our growing Pascal interpreter. Until then, have fun and see you&#xA0;soon.</p>
+<p><br>
+<span class="caps">P.S.</span> I&#x2019;ve also provided a Rust implementation of the interpreter that you can find on <a href="https://github.com/rspivak/lsbasi/blob/master/part7/rust/spi/src/main.rs">GitHub</a>. This is a way for me to learn <a href="https://www.rust-lang.org/">Rust</a> so keep in mind that the code might not be &#x201C;idiomatic&#x201D; yet. Comments and suggestions as to how to make the code better are always&#xA0;welcome.</p>
+<p><br>
+Here is a list of books I recommend that will help you in your study of interpreters and&#xA0;compilers:</p>
+
+<p><br>
+By the way, I&#x2019;m writing a book <strong>&#x201C;Let&#x2019;s Build A Web Server: First Steps&#x201D;</strong> that explains how to write a basic web server from scratch. You can get a feel for the book <a href="http://ruslanspivak.com/lsbaws-part1/" title="Part 1">here</a>, <a href="http://ruslanspivak.com/lsbaws-part2/" title="Part 2">here</a>, and <a href="http://ruslanspivak.com/lsbaws-part3/" title="Part 3">here</a>. Subscribe to the mailing list to get the latest updates about the book and the release&#xA0;date.</p>
+<div id="mc_embed_signup">
+ 
+ 
+ 
+</div>
+
+
+
+<p><br>
+<strong>All articles in this&#xA0;series:</strong></p>
+
+ </div>
+ 
+ </div>
+</body></html>

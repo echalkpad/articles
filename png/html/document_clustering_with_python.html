@@ -1,0 +1,1451 @@
+<!DOCTYPE html><html><head><title>Document Clustering with Python</title></head><body>
+<h1>Document Clustering with Python</h1><p><a href="http://brandonrose.org/clustering" target="_new">Original URL</a></p>
+<p><blockquote>In this guide, I will explain how to cluster a set of documents using Python. My motivating example is to identify the latent structures within the synopses of the top 100 films of all time (per an&hellip;</blockquote></p>
+<div><div class="container" id="notebook-container">
+
+
+
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p><img src="http://brandonrose.org/header_short.jpg"></p>
+<p>In this guide, I will explain how to cluster a set of documents using Python. My motivating example is to identify the latent structures within the synopses of the top 100 films of all time (per an IMDB list). See <a href="http://www.brandonrose.org/top100">the original post</a> for a more detailed discussion on the example. This guide covers:</p>
+
+<p>Note that my <a href="https://github.com/brandomr/document_cluster">github repo</a> for the whole project is available. The 'cluster_analysis' workbook is fully functional; the 'cluster_analysis_web' workbook has been trimmed down for the purpose of creating this walkthrough. Feel free to download the repo and use 'cluster_analysis' to step through the guide yourself.</p>
+<p>If you have any questions for me, feel free to reach out on Twitter to <a href="https://twitter.com/brandonmrose">@brandonmrose</a></p>
+</div>
+</div>
+</div>
+
+
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>But first, I import everything I am going to need up front</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[4]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">nltk</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">codecs</span>
+<span class="kn">from</span> <span class="nn">sklearn</span> <span class="kn">import</span> <span class="n">feature_extraction</span>
+<span class="kn">import</span> <span class="nn">mpld3</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+For the purposes of this walkthrough, imagine that I have 2 primary lists:
+<ul>
+<li>
+<em>'titles'</em>: the titles of the films in their rank order
+</li><li>
+<em>'synopses'</em>: the synopses of the films matched to the 'titles' order
+</li></ul>
+<p>In the full workbook that I posted to github you can walk through the import of these lists, but for brevity just keep in mind that for the rest of this walk-through I will focus on using these two lists. Of primary importance is the <em><strong>'synopses'</strong></em> list; <em>'titles'</em> is mostly used for labeling purposes.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[17]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="k">print</span> <span class="n">titles</span><span class="p">[:</span><span class="mi">10</span><span class="p">]</span> <span class="c">#first 10 titles</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+['The Godfather', 'The Shawshank Redemption', "Schindler's List", 'Raging Bull', 'Casablanca', "One Flew Over the Cuckoo's Nest", 'Gone with the Wind', 'Citizen Kane', 'The Wizard of Oz', 'Titanic']
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[21]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="k">print</span> <span class="n">synopses</span><span class="p">[</span><span class="mi">0</span><span class="p">][:</span><span class="mi">200</span><span class="p">]</span> <span class="c">#first 200 characters in first synopses (for 'The Godfather')</span>
+<span class="k">print</span>
+<span class="k">print</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+Plot [edit] [ [ edit edit ] ] 
+ On the day of his only daughter's wedding, Vito Corleone hears requests in his role as the Godfather, the Don of a New York crime family. Vito's youngest son, Michael, 
+
+
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Stopwords,-stemming,-and-tokenizing">Stopwords, stemming, and tokenizing<a class="anchor-link" href="http://brandonrose.org/clustering#Stopwords,-stemming,-and-tokenizing">&#xB6;</a></h2>
+</div>
+</div>
+</div>
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>This section is focused on defining some functions to manipulate the synopses. First, I load <a href="http://www.nltk.org/">NLTK's</a> list of English stop words. <a href="http://en.wikipedia.org/wiki/Stop_words">Stop words</a> are words like "a", "the", or "in" which don't convey significant meaning. I'm sure there are much better explanations of this out there.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[23]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c"># load nltk's English stopwords as variable called 'stopwords'</span>
+<span class="n">stopwords</span> <span class="o">=</span> <span class="n">nltk</span><span class="o">.</span><span class="n">corpus</span><span class="o">.</span><span class="n">stopwords</span><span class="o">.</span><span class="n">words</span><span class="p">(</span><span class="s">'english'</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[51]:
+</p>
+
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your']
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Next I import the <a href="http://snowball.tartarus.org/">Snowball Stemmer</a> which is actually part of NLTK. <a href="http://en.wikipedia.org/wiki/Stemming">Stemming</a> is just the process of breaking a word down into its root.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[32]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c"># load nltk's SnowballStemmer as variabled 'stemmer'</span>
+<span class="kn">from</span> <span class="nn">nltk.stem.snowball</span> <span class="kn">import</span> <span class="n">SnowballStemmer</span>
+<span class="n">stemmer</span> <span class="o">=</span> <span class="n">SnowballStemmer</span><span class="p">(</span><span class="s">"english"</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Below I define two functions:</p>
+<ul>
+<li>
+<em>tokenize_and_stem</em>: tokenizes (splits the synopsis into a list of its respective words (or tokens) and also stems each token
+</li><li>
+<em>tokenize_only</em>: tokenizes the synopsis only
+</li></ul>
+<p>I use both these functions to create a dictionary which becomes important in case I want to use stems for an algorithm, but later convert stems back to their full words for presentation purposes. Guess what, I do want to do that!</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[33]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c"># here I define a tokenizer and stemmer which returns the set of stems in the text that it is passed</span>
+
+<span class="k">def</span> <span class="nf">tokenize_and_stem</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+ <span class="c"># first tokenize by sentence, then by word to ensure that punctuation is caught as it's own token</span>
+ <span class="n">tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">word</span> <span class="k">for</span> <span class="n">sent</span> <span class="ow">in</span> <span class="n">nltk</span><span class="o">.</span><span class="n">sent_tokenize</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">nltk</span><span class="o">.</span><span class="n">word_tokenize</span><span class="p">(</span><span class="n">sent</span><span class="p">)]</span>
+ <span class="n">filtered_tokens</span> <span class="o">=</span> <span class="p">[]</span>
+ <span class="c"># filter out any tokens not containing letters (e.g., numeric tokens, raw punctuation)</span>
+ <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">:</span>
+ <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">'[a-zA-Z]'</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+ <span class="n">filtered_tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+ <span class="n">stems</span> <span class="o">=</span> <span class="p">[</span><span class="n">stemmer</span><span class="o">.</span><span class="n">stem</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">filtered_tokens</span><span class="p">]</span>
+ <span class="k">return</span> <span class="n">stems</span>
+
+
+<span class="k">def</span> <span class="nf">tokenize_only</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+ <span class="c"># first tokenize by sentence, then by word to ensure that punctuation is caught as it's own token</span>
+ <span class="n">tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">word</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">sent</span> <span class="ow">in</span> <span class="n">nltk</span><span class="o">.</span><span class="n">sent_tokenize</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">nltk</span><span class="o">.</span><span class="n">word_tokenize</span><span class="p">(</span><span class="n">sent</span><span class="p">)]</span>
+ <span class="n">filtered_tokens</span> <span class="o">=</span> <span class="p">[]</span>
+ <span class="c"># filter out any tokens not containing letters (e.g., numeric tokens, raw punctuation)</span>
+ <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">:</span>
+ <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">'[a-zA-Z]'</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+ <span class="n">filtered_tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">filtered_tokens</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Below I use my stemming/tokenizing and tokenizing functions to iterate over the list of synopses to create two vocabularies: one stemmed and one only tokenized.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[49]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#not super pythonic, no, not at all.</span>
+<span class="c">#use extend so it's a big flat list of vocab</span>
+<span class="n">totalvocab_stemmed</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">totalvocab_tokenized</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">synopses</span><span class="p">:</span>
+ <span class="n">allwords_stemmed</span> <span class="o">=</span> <span class="n">tokenize_and_stem</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="c">#for each item in 'synopses', tokenize/stem</span>
+ <span class="n">totalvocab_stemmed</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">allwords_stemmed</span><span class="p">)</span> <span class="c">#extend the 'totalvocab_stemmed' list</span>
+ 
+ <span class="n">allwords_tokenized</span> <span class="o">=</span> <span class="n">tokenize_only</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+ <span class="n">totalvocab_tokenized</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">allwords_tokenized</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Using these two lists, I create a pandas DataFrame with the stemmed vocabulary as the index and the tokenized words as the column. The benefit of this is it provides an efficient way to look up a stem and return a full token. The downside here is that stems to tokens are one to many: the stem 'run' could be associated with 'ran', 'runs', 'running', etc. For my purposes this is fine--I'm perfectly happy returning the first token associated with the stem I need to look up.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[48]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="n">vocab_frame</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s">'words'</span><span class="p">:</span> <span class="n">totalvocab_tokenized</span><span class="p">},</span> <span class="n">index</span> <span class="o">=</span> <span class="n">totalvocab_stemmed</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">'there are '</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">vocab_frame</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">+</span> <span class="s">' items in vocab_frame'</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+there are 312209 items in vocab_frame
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>You'll notice there is clearly some repetition here. I could clean it up, but there are only 312209 items in the DataFrame which isn't huge overhead in looking up a stemmed word based on the stem-index.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[50]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="k">print</span> <span class="n">vocab_frame</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
+<span class="k">print</span>
+<span class="k">print</span>
+<span class="k">print</span>
+<span class="k">print</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+ words
+plot plot
+edit edit
+edit edit
+edit edit
+on on
+
+
+
+
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Tf-idf-and-document-similarity">Tf-idf and document similarity<a class="anchor-link" href="http://brandonrose.org/clustering#Tf-idf-and-document-similarity">&#xB6;</a></h2>
+</div>
+</div>
+</div>
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p><img src="http://www.jiem.org/index.php/jiem/article/viewFile/293/252/2402"></p>
+<p>Here, I define term frequency-inverse document frequency (tf-idf) vectorizer parameters and then convert the <em>synopses</em> list into a tf-idf matrix.</p>
+<p>To get a Tf-idf matrix, first count word occurrences by document. This is transformed into a document-term matrix (dtm). This is also just called a term frequency matrix. An example of a dtm is here at right.</p>
+<p>Then apply the term frequency-inverse document frequency weighting: words that occur frequently within a document but not frequently within the corpus receive a higher weighting as these words are assumed to contain more meaning in relation to the document.</p>
+<p>A couple things to note about the parameters I define below:</p>
+<ul>
+<li>
+max_df: this is the maximum frequency within the documents a given feature can have to be used in the tfi-idf matrix. If the term is in greater than 80% of the documents it probably cares little meanining (in the context of film synopses)
+</li><li>
+min_idf: this could be an integer (e.g. 5) and the term would have to be in at least 5 of the documents to be considered. Here I pass 0.2; the term must be in at least 20% of the document. I found that if I allowed a lower min_df I ended up basing clustering on names--for example "Michael" or "Tom" are names found in several of the movies and the synopses use these names frequently, but the names carry no real meaning.
+</li><li>
+ngram_range: this just means I'll look at unigrams, bigrams and trigrams. See <a href="http://en.wikipedia.org/wiki/N-gram">n-grams</a>
+</li></ul>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[54]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.feature_extraction.text</span> <span class="kn">import</span> <span class="n">TfidfVectorizer</span>
+
+<span class="c">#define vectorizer parameters</span>
+<span class="n">tfidf_vectorizer</span> <span class="o">=</span> <span class="n">TfidfVectorizer</span><span class="p">(</span><span class="n">max_df</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">max_features</span><span class="o">=</span><span class="mi">200000</span><span class="p">,</span>
+ <span class="n">min_df</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">stop_words</span><span class="o">=</span><span class="s">'english'</span><span class="p">,</span>
+ <span class="n">use_idf</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenize_and_stem</span><span class="p">,</span> <span class="n">ngram_range</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+
+<span class="o">%</span><span class="k">time</span> <span class="n">tfidf_matrix</span> <span class="o">=</span> <span class="n">tfidf_vectorizer</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">synopses</span><span class="p">)</span> <span class="c">#fit the vectorizer to synopses</span>
+
+<span class="k">print</span><span class="p">(</span><span class="n">tfidf_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+CPU times: user 29.1 s, sys: 468 ms, total: 29.6 s
+Wall time: 37.8 s
+(100, 563)
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p><em>terms</em> is just a list of the features used in the tf-idf matrix. This is a vocabulary</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[55]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="n">terms</span> <span class="o">=</span> <span class="n">tfidf_vectorizer</span><span class="o">.</span><span class="n">get_feature_names</span><span class="p">()</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p><em>dist</em> is defined as 1 - the cosine similarity of each document. Cosine similarity is measured against the tf-idf matrix and can be used to generate a measure of similarity between each document and the other documents in the corpus (each synopsis among the synopses). Subtracting it from 1 provides cosine distance which I will use for plotting on a euclidean (2-dimensional) plane.</p>
+<p>Note that with <em>dist</em> it is possible to evaluate the similarity of any two or more synopses.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[57]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.metrics.pairwise</span> <span class="kn">import</span> <span class="n">cosine_similarity</span>
+<span class="n">dist</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">cosine_similarity</span><span class="p">(</span><span class="n">tfidf_matrix</span><span class="p">)</span>
+<span class="k">print</span>
+<span class="k">print</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+
+
+</div>
+
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Now onto the fun part. Using the tf-idf matrix, you can run a slew of clustering algorithms to better understand the hidden structure within the synopses. I first chose <a href="http://en.wikipedia.org/wiki/K-means_clustering">k-means</a>. K-means initializes with a pre-determined number of clusters (I chose 5). Each observation is assigned to a cluster (cluster assignment) so as to minimize the within cluster sum of squares. Next, the mean of the clustered observations is calculated and used as the new cluster centroid. Then, observations are reassigned to clusters and centroids recalculated in an iterative process until the algorithm reaches convergence.</p>
+<p>I found it took several runs for the algorithm to converge a global optimum as k-means is susceptible to reaching local optima.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[66]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.cluster</span> <span class="kn">import</span> <span class="n">KMeans</span>
+
+<span class="n">num_clusters</span> <span class="o">=</span> <span class="mi">5</span>
+
+<span class="n">km</span> <span class="o">=</span> <span class="n">KMeans</span><span class="p">(</span><span class="n">n_clusters</span><span class="o">=</span><span class="n">num_clusters</span><span class="p">)</span>
+
+<span class="o">%</span><span class="k">time</span> <span class="n">km</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">tfidf_matrix</span><span class="p">)</span>
+
+<span class="n">clusters</span> <span class="o">=</span> <span class="n">km</span><span class="o">.</span><span class="n">labels_</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+CPU times: user 232 ms, sys: 6.64 ms, total: 239 ms
+Wall time: 305 ms
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>I use joblib.dump to pickle the model, once it has converged and to reload the model/reassign the labels as the clusters.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[67]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.externals</span> <span class="kn">import</span> <span class="n">joblib</span>
+
+<span class="c">#uncomment the below to save your model </span>
+<span class="c">#since I've already run my model I am loading from the pickle</span>
+
+<span class="c">#joblib.dump(km, 'doc_cluster.pkl')</span>
+
+<span class="n">km</span> <span class="o">=</span> <span class="n">joblib</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s">'doc_cluster.pkl'</span><span class="p">)</span>
+<span class="n">clusters</span> <span class="o">=</span> <span class="n">km</span><span class="o">.</span><span class="n">labels_</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Here, I create a dictionary of titles, ranks, the synopsis, the cluster assignment, and the genre [rank and genre were scraped from IMDB].</p>
+<p>I convert this dictionary to a Pandas DataFrame for easy access. I'm a huge fan of <a href="http://pandas.pydata.org/">Pandas</a> and recommend taking a look at some of its awesome functionality which I'll use below, but not describe in a ton of detail.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[62]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="n">films</span> <span class="o">=</span> <span class="p">{</span> <span class="s">'title'</span><span class="p">:</span> <span class="n">titles</span><span class="p">,</span> <span class="s">'rank'</span><span class="p">:</span> <span class="n">ranks</span><span class="p">,</span> <span class="s">'synopsis'</span><span class="p">:</span> <span class="n">synopses</span><span class="p">,</span> <span class="s">'cluster'</span><span class="p">:</span> <span class="n">clusters</span><span class="p">,</span> <span class="s">'genre'</span><span class="p">:</span> <span class="n">genres</span> <span class="p">}</span>
+
+<span class="n">frame</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">films</span><span class="p">,</span> <span class="n">index</span> <span class="o">=</span> <span class="p">[</span><span class="n">clusters</span><span class="p">]</span> <span class="p">,</span> <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">'rank'</span><span class="p">,</span> <span class="s">'title'</span><span class="p">,</span> <span class="s">'cluster'</span><span class="p">,</span> <span class="s">'genre'</span><span class="p">])</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[63]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="n">frame</span><span class="p">[</span><span class="s">'cluster'</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span> <span class="c">#number of films per cluster (clusters from 0 to 4)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><p class="prompt output_prompt">
+ Out[63]:</p>
+
+
+<div class="output_text output_subarea output_pyout">
+<pre>
+4 26
+0 25
+2 21
+1 16
+3 12
+dtype: int64
+</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[64]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="n">grouped</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="s">'rank'</span><span class="p">]</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s">'cluster'</span><span class="p">])</span> <span class="c">#groupby cluster for aggregation purposes</span>
+
+<span class="n">grouped</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="c">#average rank (1 to 100) per cluster</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><p class="prompt output_prompt">
+ Out[64]:</p>
+
+
+<div class="output_text output_subarea output_pyout">
+<pre>
+cluster
+0 47.200000
+1 58.875000
+2 49.380952
+3 54.500000
+4 43.730769
+dtype: float64
+</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Note that <strong>clusters 4 and 0</strong> have the lowest rank, which indicates that they, on average, contain films that were ranked as "better" on the top 100 list.</p>
+<p>Here is some fancy indexing and sorting on each cluster to identify which are the top <em>n</em> (I chose <em>n</em>=6) words that are nearest to the cluster centroid. This gives a good sense of the main topic of the cluster.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[69]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
+
+<span class="k">print</span><span class="p">(</span><span class="s">"Top terms per cluster:"</span><span class="p">)</span>
+<span class="k">print</span><span class="p">()</span>
+<span class="c">#sort cluster centers by proximity to centroid</span>
+<span class="n">order_centroids</span> <span class="o">=</span> <span class="n">km</span><span class="o">.</span><span class="n">cluster_centers_</span><span class="o">.</span><span class="n">argsort</span><span class="p">()[:,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> 
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_clusters</span><span class="p">):</span>
+ <span class="k">print</span><span class="p">(</span><span class="s">"Cluster </span><span class="si">%d</span><span class="s"> words:"</span> <span class="o">%</span> <span class="n">i</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s">''</span><span class="p">)</span>
+ 
+ <span class="k">for</span> <span class="n">ind</span> <span class="ow">in</span> <span class="n">order_centroids</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:</span><span class="mi">6</span><span class="p">]:</span> <span class="c">#replace 6 with n words per cluster</span>
+ <span class="k">print</span><span class="p">(</span><span class="s">' </span><span class="si">%s</span><span class="s">'</span> <span class="o">%</span> <span class="n">vocab_frame</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">terms</span><span class="p">[</span><span class="n">ind</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">' '</span><span class="p">)]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">()[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">'utf-8'</span><span class="p">,</span> <span class="s">'ignore'</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="s">','</span><span class="p">)</span>
+ <span class="k">print</span><span class="p">()</span> <span class="c">#add whitespace</span>
+ <span class="k">print</span><span class="p">()</span> <span class="c">#add whitespace</span>
+ 
+ <span class="k">print</span><span class="p">(</span><span class="s">"Cluster </span><span class="si">%d</span><span class="s"> titles:"</span> <span class="o">%</span> <span class="n">i</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s">''</span><span class="p">)</span>
+ <span class="k">for</span> <span class="n">title</span> <span class="ow">in</span> <span class="n">frame</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s">'title'</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">():</span>
+ <span class="k">print</span><span class="p">(</span><span class="s">' </span><span class="si">%s</span><span class="s">,'</span> <span class="o">%</span> <span class="n">title</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s">''</span><span class="p">)</span>
+ <span class="k">print</span><span class="p">()</span> <span class="c">#add whitespace</span>
+ <span class="k">print</span><span class="p">()</span> <span class="c">#add whitespace</span>
+ 
+<span class="k">print</span><span class="p">()</span>
+<span class="k">print</span><span class="p">()</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+Top terms per cluster:
+
+Cluster 0 words: family, home, mother, war, house, dies,
+
+Cluster 0 titles: Schindler's List, One Flew Over the Cuckoo's Nest, Gone with the Wind, The Wizard of Oz, Titanic, Forrest Gump, E.T. the Extra-Terrestrial, The Silence of the Lambs, Gandhi, A Streetcar Named Desire, The Best Years of Our Lives, My Fair Lady, Ben-Hur, Doctor Zhivago, The Pianist, The Exorcist, Out of Africa, Good Will Hunting, Terms of Endearment, Giant, The Grapes of Wrath, Close Encounters of the Third Kind, The Graduate, Stagecoach, Wuthering Heights,
+
+Cluster 1 words: police, car, killed, murders, driving, house,
+
+Cluster 1 titles: Casablanca, Psycho, Sunset Blvd., Vertigo, Chinatown, Amadeus, High Noon, The French Connection, Fargo, Pulp Fiction, The Maltese Falcon, A Clockwork Orange, Double Indemnity, Rebel Without a Cause, The Third Man, North by Northwest,
+
+Cluster 2 words: father, new, york, new, brothers, apartments,
+
+Cluster 2 titles: The Godfather, Raging Bull, Citizen Kane, The Godfather: Part II, On the Waterfront, 12 Angry Men, Rocky, To Kill a Mockingbird, Braveheart, The Good, the Bad and the Ugly, The Apartment, Goodfellas, City Lights, It Happened One Night, Midnight Cowboy, Mr. Smith Goes to Washington, Rain Man, Annie Hall, Network, Taxi Driver, Rear Window,
+
+Cluster 3 words: george, dance, singing, john, love, perform,
+
+Cluster 3 titles: West Side Story, Singin' in the Rain, It's a Wonderful Life, Some Like It Hot, The Philadelphia Story, An American in Paris, The King's Speech, A Place in the Sun, Tootsie, Nashville, American Graffiti, Yankee Doodle Dandy,
+
+Cluster 4 words: killed, soldiers, captain, men, army, command,
+
+Cluster 4 titles: The Shawshank Redemption, Lawrence of Arabia, The Sound of Music, Star Wars, 2001: A Space Odyssey, The Bridge on the River Kwai, Dr. Strangelove or: How I Learned to Stop Worrying and Love the Bomb, Apocalypse Now, The Lord of the Rings: The Return of the King, Gladiator, From Here to Eternity, Saving Private Ryan, Unforgiven, Raiders of the Lost Ark, Patton, Jaws, Butch Cassidy and the Sundance Kid, The Treasure of the Sierra Madre, Platoon, Dances with Wolves, The Deer Hunter, All Quiet on the Western Front, Shane, The Green Mile, The African Queen, Mutiny on the Bounty,
+
+
+
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Multidimensional-scaling">Multidimensional scaling<a class="anchor-link" href="http://brandonrose.org/clustering#Multidimensional-scaling">&#xB6;</a></h2>
+</div>
+</div>
+</div>
+
+<div class="cell border-box-sizing text_cell rendered">
+
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[74]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span> <span class="c"># for os.path.basename</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">matplotlib</span> <span class="kn">as</span> <span class="nn">mpl</span>
+
+<span class="kn">from</span> <span class="nn">sklearn.manifold</span> <span class="kn">import</span> <span class="n">MDS</span>
+
+<span class="n">MDS</span><span class="p">()</span>
+
+<span class="c"># convert two components as we're plotting points in a two-dimensional plane</span>
+<span class="c"># "precomputed" because we provide a distance matrix</span>
+<span class="c"># we will also specify `random_state` so the plot is reproducible.</span>
+<span class="n">mds</span> <span class="o">=</span> <span class="n">MDS</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dissimilarity</span><span class="o">=</span><span class="s">"precomputed"</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">pos</span> <span class="o">=</span> <span class="n">mds</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span> <span class="c"># shape (n_components, n_samples)</span>
+
+<span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">=</span> <span class="n">pos</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">pos</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+<span class="k">print</span><span class="p">()</span>
+<span class="k">print</span><span class="p">()</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Visualizing-document-clusters">Visualizing document clusters<a class="anchor-link" href="http://brandonrose.org/clustering#Visualizing-document-clusters">&#xB6;</a></h2>
+</div>
+</div>
+</div>
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>In this section, I demonstrate how you can visualize the document clustering output using matplotlib and mpld3 (a matplotlib wrapper for D3.js).</p>
+<p>First I define some dictionaries for going from cluster number to color and to cluster name. I based the cluster names off the words that were closest to each cluster centroid.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[75]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#set up colors per clusters using a dict</span>
+<span class="n">cluster_colors</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="s">'#1b9e77'</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span> <span class="s">'#d95f02'</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span> <span class="s">'#7570b3'</span><span class="p">,</span> <span class="mi">3</span><span class="p">:</span> <span class="s">'#e7298a'</span><span class="p">,</span> <span class="mi">4</span><span class="p">:</span> <span class="s">'#66a61e'</span><span class="p">}</span>
+
+<span class="c">#set up cluster names using a dict</span>
+<span class="n">cluster_names</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="s">'Family, home, war'</span><span class="p">,</span> 
+ <span class="mi">1</span><span class="p">:</span> <span class="s">'Police, killed, murders'</span><span class="p">,</span> 
+ <span class="mi">2</span><span class="p">:</span> <span class="s">'Father, New York, brothers'</span><span class="p">,</span> 
+ <span class="mi">3</span><span class="p">:</span> <span class="s">'Dance, singing, love'</span><span class="p">,</span> 
+ <span class="mi">4</span><span class="p">:</span> <span class="s">'Killed, soldiers, captain'</span><span class="p">}</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Next, I plot the labeled observations (films, film titles) colored by cluster using matplotlib. I won't get into too much detail about the matplotlib plot, but I tried to provide some helpful commenting.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[51]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#some ipython magic to show the matplotlib plots inline</span>
+<span class="o">%</span><span class="k">matplotlib</span> <span class="n">inline</span> 
+
+<span class="c">#create data frame that has the result of the MDS plus the cluster numbers and titles</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">xs</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">ys</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">clusters</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">titles</span><span class="p">))</span> 
+
+<span class="c">#group by cluster</span>
+<span class="n">groups</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s">'label'</span><span class="p">)</span>
+
+
+<span class="c"># set up plot</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">17</span><span class="p">,</span> <span class="mi">9</span><span class="p">))</span> <span class="c"># set size</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">margins</span><span class="p">(</span><span class="mf">0.05</span><span class="p">)</span> <span class="c"># Optional, just adds 5% padding to the autoscaling</span>
+
+<span class="c">#iterate through groups to layer the plot</span>
+<span class="c">#note that I use the cluster_name and cluster_color dicts with the 'name' lookup to return the appropriate color/label</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">group</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">group</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s">'o'</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s">''</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> 
+ <span class="n">label</span><span class="o">=</span><span class="n">cluster_names</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="n">cluster_colors</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> 
+ <span class="n">mec</span><span class="o">=</span><span class="s">'none'</span><span class="p">)</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">set_aspect</span><span class="p">(</span><span class="s">'auto'</span><span class="p">)</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span>\
+ <span class="n">axis</span><span class="o">=</span> <span class="s">'x'</span><span class="p">,</span> <span class="c"># changes apply to the x-axis</span>
+ <span class="n">which</span><span class="o">=</span><span class="s">'both'</span><span class="p">,</span> <span class="c"># both major and minor ticks are affected</span>
+ <span class="n">bottom</span><span class="o">=</span><span class="s">'off'</span><span class="p">,</span> <span class="c"># ticks along the bottom edge are off</span>
+ <span class="n">top</span><span class="o">=</span><span class="s">'off'</span><span class="p">,</span> <span class="c"># ticks along the top edge are off</span>
+ <span class="n">labelbottom</span><span class="o">=</span><span class="s">'off'</span><span class="p">)</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span>\
+ <span class="n">axis</span><span class="o">=</span> <span class="s">'y'</span><span class="p">,</span> <span class="c"># changes apply to the y-axis</span>
+ <span class="n">which</span><span class="o">=</span><span class="s">'both'</span><span class="p">,</span> <span class="c"># both major and minor ticks are affected</span>
+ <span class="n">left</span><span class="o">=</span><span class="s">'off'</span><span class="p">,</span> <span class="c"># ticks along the bottom edge are off</span>
+ <span class="n">top</span><span class="o">=</span><span class="s">'off'</span><span class="p">,</span> <span class="c"># ticks along the top edge are off</span>
+ <span class="n">labelleft</span><span class="o">=</span><span class="s">'off'</span><span class="p">)</span>
+ 
+<span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">numpoints</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="c">#show legend with only 1 point</span>
+
+<span class="c">#add label in x,y position with the label as the film title</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)):</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s">'x'</span><span class="p">],</span> <span class="n">df</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s">'y'</span><span class="p">],</span> <span class="n">df</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s">'title'</span><span class="p">],</span> <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span> 
+
+ 
+ 
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span> <span class="c">#show the plot</span>
+
+<span class="c">#uncomment the below to save the plot if need be</span>
+<span class="c">#plt.savefig('clusters_small_noaxes.png', dpi=200)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+
+
+
+
+</div>
+
+</div>
+</div>
+
+</div>
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>The clustering plot looks great, but it pains my eyes to see overlapping labels. Having some experience with <a href="http://d3js.org/">D3.js</a> I knew one solution would be to use a browser based/javascript interactive. Fortunately, I recently stumbled upon <a href="https://mpld3.github.io/">mpld3</a> a matplotlib wrapper for D3. Mpld3 basically let's you use matplotlib syntax to create web interactives. It has a really easy, high-level API for adding tooltips on mouse hover, which is what I am interested in.</p>
+<p>It also has some nice functionality for zooming and panning. The below javascript snippet basicaly defines a custom location for where the zoom/pan toggle resides. Don't worry about it too much and you actually don't need to use it, but it helped for formatting purposes when exporting to the web later. The only thing you might want to change is the x and y attr for the position of the toolbar.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[77]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#define custom toolbar location</span>
+<span class="k">class</span> <span class="nc">TopToolbar</span><span class="p">(</span><span class="n">mpld3</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">PluginBase</span><span class="p">):</span>
+ <span class="sd">"""Plugin for moving toolbar to top of figure"""</span>
+
+ <span class="n">JAVASCRIPT</span> <span class="o">=</span> <span class="s">"""</span>
+<span class="s"> mpld3.register_plugin("toptoolbar", TopToolbar);</span>
+<span class="s"> TopToolbar.prototype = Object.create(mpld3.Plugin.prototype);</span>
+<span class="s"> TopToolbar.prototype.constructor = TopToolbar;</span>
+<span class="s"> function TopToolbar(fig, props){</span>
+<span class="s"> mpld3.Plugin.call(this, fig, props);</span>
+<span class="s"> };</span>
+
+<span class="s"> TopToolbar.prototype.draw = function(){</span>
+<span class="s"> // the toolbar svg doesn't exist</span>
+<span class="s"> // yet, so first draw it</span>
+<span class="s"> this.fig.toolbar.draw();</span>
+
+<span class="s"> // then change the y position to be</span>
+<span class="s"> // at the top of the figure</span>
+<span class="s"> this.fig.toolbar.toolbar.attr("x", 150);</span>
+<span class="s"> this.fig.toolbar.toolbar.attr("y", 400);</span>
+
+<span class="s"> // then remove the draw function,</span>
+<span class="s"> // so that it is not called again</span>
+<span class="s"> this.fig.toolbar.draw = function() {}</span>
+<span class="s"> }</span>
+<span class="s"> """</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">dict_</span> <span class="o">=</span> <span class="p">{</span><span class="s">"type"</span><span class="p">:</span> <span class="s">"toptoolbar"</span><span class="p">}</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Here is the actual creation of the interactive scatterplot. I won't go into much more detail about it since it's pretty much a straightforward copy of one of the mpld3 examples, though I use a pandas groupby to group by cluster, then iterate through the groups as I layer the scatterplot. Note that relative to doing this with raw D3, mpld3 is much simpler to integrate into your Python workflow. If you click around the rest of my website you'll see that I do love D3, but for basic interactives I will probably use mpld3 a lot going forward.</p>
+<p>Note that mpld3 lets you define some custom CSS, which I use to style the font, the axes, and the left margin on the figure.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[78]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#create data frame that has the result of the MDS plus the cluster numbers and titles</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">xs</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">ys</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">clusters</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">titles</span><span class="p">))</span> 
+
+<span class="c">#group by cluster</span>
+<span class="n">groups</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s">'label'</span><span class="p">)</span>
+
+<span class="c">#define custom css to format the font and to remove the axis labeling</span>
+<span class="n">css</span> <span class="o">=</span> <span class="s">"""</span>
+<span class="s">text.mpld3-text, div.mpld3-tooltip {</span>
+<span class="s"> font-family:Arial, Helvetica, sans-serif;</span>
+<span class="s">}</span>
+
+<span class="s">g.mpld3-xaxis, g.mpld3-yaxis {</span>
+<span class="s">display: none; }</span>
+
+<span class="s">svg.mpld3-figure {</span>
+<span class="s">margin-left: -200px;}</span>
+<span class="s">"""</span>
+
+<span class="c"># Plot </span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span> <span class="c">#set plot size</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">margins</span><span class="p">(</span><span class="mf">0.03</span><span class="p">)</span> <span class="c"># Optional, just adds 5% padding to the autoscaling</span>
+
+<span class="c">#iterate through groups to layer the plot</span>
+<span class="c">#note that I use the cluster_name and cluster_color dicts with the 'name' lookup to return the appropriate color/label</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
+ <span class="n">points</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">group</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">group</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s">'o'</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s">''</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span> 
+ <span class="n">label</span><span class="o">=</span><span class="n">cluster_names</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">mec</span><span class="o">=</span><span class="s">'none'</span><span class="p">,</span> 
+ <span class="n">color</span><span class="o">=</span><span class="n">cluster_colors</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">set_aspect</span><span class="p">(</span><span class="s">'auto'</span><span class="p">)</span>
+ <span class="n">labels</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">title</span><span class="p">]</span>
+ 
+ <span class="c">#set tooltip using points, labels and the already defined 'css'</span>
+ <span class="n">tooltip</span> <span class="o">=</span> <span class="n">mpld3</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">PointHTMLTooltip</span><span class="p">(</span><span class="n">points</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">labels</span><span class="p">,</span>
+ <span class="n">voffset</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">hoffset</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">css</span><span class="o">=</span><span class="n">css</span><span class="p">)</span>
+ <span class="c">#connect tooltip to fig</span>
+ <span class="n">mpld3</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">tooltip</span><span class="p">,</span> <span class="n">TopToolbar</span><span class="p">())</span> 
+ 
+ <span class="c">#set tick marks as blank</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">get_xaxis</span><span class="p">()</span><span class="o">.</span><span class="n">set_ticks</span><span class="p">([])</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">get_yaxis</span><span class="p">()</span><span class="o">.</span><span class="n">set_ticks</span><span class="p">([])</span>
+ 
+ <span class="c">#set axis as blank</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">get_xaxis</span><span class="p">()</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+ <span class="n">ax</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">get_yaxis</span><span class="p">()</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+
+ 
+<span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">numpoints</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="c">#show legend with only one dot</span>
+
+<span class="n">mpld3</span><span class="o">.</span><span class="n">display</span><span class="p">()</span> <span class="c">#show the plot</span>
+
+<span class="c">#uncomment the below to export to html</span>
+<span class="c">#html = mpld3.fig_to_html(fig)</span>
+<span class="c">#print(html)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Hierarchical-document-clustering">Hierarchical document clustering<a class="anchor-link" href="http://brandonrose.org/clustering#Hierarchical-document-clustering">&#xB6;</a></h2>
+</div>
+</div>
+</div>
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Now that I was successfuly able to cluster and plot the documents using k-means, I wanted to try another clustering algorithm. I chose the <a href="http://en.wikipedia.org/wiki/Ward%27s_method">Ward clustering algorithm</a> because it offers hierarchical clustering. Ward clustering is an agglomerative clustering method, meaning that at each stage, the pair of clusters with minimum between-cluster distance are merged. I used the precomputed cosine distance matrix (<em>dist</em>) to calclate a linkage_matrix, which I then plot as a dendrogram.</p>
+<p>Note that this method returned 3 primary clusters, with the largest cluster being split into about 4 major subclusters. Note that the cluster in red contains many of the "Killed, soldiers, captain" films. <em>Braveheart</em> and <em>Gladiator</em> are within the same low-level cluster which is interesting as these are probably my two favorite movies.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[83]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">scipy.cluster.hierarchy</span> <span class="kn">import</span> <span class="n">ward</span><span class="p">,</span> <span class="n">dendrogram</span>
+
+<span class="n">linkage_matrix</span> <span class="o">=</span> <span class="n">ward</span><span class="p">(</span><span class="n">dist</span><span class="p">)</span> <span class="c">#define the linkage_matrix using ward clustering pre-computed distances</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">20</span><span class="p">))</span> <span class="c"># set size</span>
+<span class="n">ax</span> <span class="o">=</span> <span class="n">dendrogram</span><span class="p">(</span><span class="n">linkage_matrix</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=</span><span class="s">"right"</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">titles</span><span class="p">);</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span>\
+ <span class="n">axis</span><span class="o">=</span> <span class="s">'x'</span><span class="p">,</span> <span class="c"># changes apply to the x-axis</span>
+ <span class="n">which</span><span class="o">=</span><span class="s">'both'</span><span class="p">,</span> <span class="c"># both major and minor ticks are affected</span>
+ <span class="n">bottom</span><span class="o">=</span><span class="s">'off'</span><span class="p">,</span> <span class="c"># ticks along the bottom edge are off</span>
+ <span class="n">top</span><span class="o">=</span><span class="s">'off'</span><span class="p">,</span> <span class="c"># ticks along the top edge are off</span>
+ <span class="n">labelbottom</span><span class="o">=</span><span class="s">'off'</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span> <span class="c">#show plot with tight layout</span>
+
+<span class="c">#uncomment below to save figure</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">'ward_clusters.png'</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span> <span class="c">#save figure as ward_clusters</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+
+
+
+
+</div>
+
+</div>
+</div>
+
+</div>
+
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Latent-Dirichlet-Allocation">Latent Dirichlet Allocation<a class="anchor-link" href="http://brandonrose.org/clustering#Latent-Dirichlet-Allocation">&#xB6;</a></h2>
+</div>
+</div>
+</div>
+
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>This section focuses on using <a href="http://en.wikipedia.org/wiki/Latent_Dirichlet_allocation">Latent Dirichlet Allocation (LDA)</a> to learn yet more about the hidden structure within the top 100 film synopses. LDA is a probabilistic topic model that assumes documents are a mixture of topics and that each word in the document is attributable to the document's topics. There is quite a good high-level overview of probabilistic topic models by one of the big names in the field, David Blei, available in the <a href="http://delivery.acm.org/10.1145/2140000/2133826/p77-blei.pdf?ip=68.48.185.120&amp;id=2133826&amp;acc=OPEN&amp;key=4D4702B0C3E38B35%2E4D4702B0C3E38B35%2E4D4702B0C3E38B35%2E6D218144511F3437&amp;CFID=612398453&amp;CFTOKEN=48760790&amp;__acm__=1419436704_2d47aefe0700e44f81eb822df659a341">Communications of the ACM here</a>. Incidentally, Blei was one of the authors of the seminal paper on LDA.</p>
+<p>For my implementaiton of LDA, I use the <a href="https://radimrehurek.com/gensim/">Gensim pacakage</a>. I'm going to preprocess the synopses a bit differently here, and first I define a function to remove any proper noun.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[82]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#strip any proper names from a text...unfortunately right now this is yanking the first word from a sentence too.</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="k">def</span> <span class="nf">strip_proppers</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+ <span class="c"># first tokenize by sentence, then by word to ensure that punctuation is caught as it's own token</span>
+ <span class="n">tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">word</span> <span class="k">for</span> <span class="n">sent</span> <span class="ow">in</span> <span class="n">nltk</span><span class="o">.</span><span class="n">sent_tokenize</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">nltk</span><span class="o">.</span><span class="n">word_tokenize</span><span class="p">(</span><span class="n">sent</span><span class="p">)</span> <span class="k">if</span> <span class="n">word</span><span class="o">.</span><span class="n">islower</span><span class="p">()]</span>
+ <span class="k">return</span> <span class="s">""</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">" "</span><span class="o">+</span><span class="n">i</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">i</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">"'"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">string</span><span class="o">.</span><span class="n">punctuation</span> <span class="k">else</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Since the above function is just based on capitalization, it is prone to remove words at the beginning of sentences. So, I wrote the below function using NLTK's part of speech tagger. However, it took way too long to run across all synopses, so I stuck with the above.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[80]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#strip any proper nouns (NNP) or plural proper nouns (NNPS) from a text</span>
+<span class="kn">from</span> <span class="nn">nltk.tag</span> <span class="kn">import</span> <span class="n">pos_tag</span>
+
+<span class="k">def</span> <span class="nf">strip_proppers_POS</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+ <span class="n">tagged</span> <span class="o">=</span> <span class="n">pos_tag</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="c">#use NLTK's part of speech tagger</span>
+ <span class="n">non_propernouns</span> <span class="o">=</span> <span class="p">[</span><span class="n">word</span> <span class="k">for</span> <span class="n">word</span><span class="p">,</span><span class="n">pos</span> <span class="ow">in</span> <span class="n">tagged</span> <span class="k">if</span> <span class="n">pos</span> <span class="o">!=</span> <span class="s">'NNP'</span> <span class="ow">and</span> <span class="n">pos</span> <span class="o">!=</span> <span class="s">'NNPS'</span><span class="p">]</span>
+ <span class="k">return</span> <span class="n">non_propernouns</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Here I run the actual text processing (removing of proper nouns, tokenization, removal of stop words)</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[83]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">gensim</span> <span class="kn">import</span> <span class="n">corpora</span><span class="p">,</span> <span class="n">models</span><span class="p">,</span> <span class="n">similarities</span> 
+
+<span class="c">#remove proper names</span>
+<span class="o">%</span><span class="k">time</span> <span class="n">preprocess</span> <span class="o">=</span> <span class="p">[</span><span class="n">strip_proppers</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span> <span class="k">for</span> <span class="n">doc</span> <span class="ow">in</span> <span class="n">synopses</span><span class="p">]</span>
+
+<span class="c">#tokenize</span>
+<span class="o">%</span><span class="k">time</span> <span class="n">tokenized_text</span> <span class="o">=</span> <span class="p">[</span><span class="n">tokenize_and_stem</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">preprocess</span><span class="p">]</span>
+
+<span class="c">#remove stop words</span>
+<span class="o">%</span><span class="k">time</span> <span class="n">texts</span> <span class="o">=</span> <span class="p">[[</span><span class="n">word</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">text</span> <span class="k">if</span> <span class="n">word</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">stopwords</span><span class="p">]</span> <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">tokenized_text</span><span class="p">]</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+CPU times: user 12.9 s, sys: 148 ms, total: 13 s
+Wall time: 15.9 s
+CPU times: user 15.1 s, sys: 172 ms, total: 15.3 s
+Wall time: 19.3 s
+CPU times: user 4.56 s, sys: 39.2 ms, total: 4.6 s
+Wall time: 5.95 s
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Below are some Gensim specific conversions; I also filter out extreme words (see inline comment)</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[84]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="c">#create a Gensim dictionary from the texts</span>
+<span class="n">dictionary</span> <span class="o">=</span> <span class="n">corpora</span><span class="o">.</span><span class="n">Dictionary</span><span class="p">(</span><span class="n">texts</span><span class="p">)</span>
+
+<span class="c">#remove extremes (similar to the min/max df step used when creating the tf-idf matrix)</span>
+<span class="n">dictionary</span><span class="o">.</span><span class="n">filter_extremes</span><span class="p">(</span><span class="n">no_below</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">no_above</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+
+<span class="c">#convert the dictionary to a bag of words corpus for reference</span>
+<span class="n">corpus</span> <span class="o">=</span> <span class="p">[</span><span class="n">dictionary</span><span class="o">.</span><span class="n">doc2bow</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">texts</span><span class="p">]</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>The actual model runs below. I took 100 passes to ensure convergence, but you can see that it took my machine 13 minutes to run. My chunksize is larger than the corpus so basically all synopses are used per pass. I should optimize this, and Gensim has the capacity to run in parallel. I'll likely explore this further as I use the implementation on larger corpora.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[85]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="o">%</span><span class="k">time</span> <span class="n">lda</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">LdaModel</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">num_topics</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> 
+ <span class="n">id2word</span><span class="o">=</span><span class="n">dictionary</span><span class="p">,</span> 
+ <span class="n">update_every</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> 
+ <span class="n">chunksize</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span> 
+ <span class="n">passes</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+CPU times: user 9min 53s, sys: 5.87 s, total: 9min 59s
+Wall time: 13min 1s
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Each topic has a set of words that defines it, along with a certain probability.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[87]:
+</p>
+
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><p class="prompt output_prompt">
+ Out[87]:</p>
+
+
+<div class="output_text output_subarea output_pyout">
+<pre>
+[u'0.006*men + 0.005*kill + 0.004*soldier + 0.004*order + 0.004*patient + 0.004*night + 0.003*priest + 0.003*becom + 0.003*new + 0.003*speech',
+ u"0.006*n't + 0.005*go + 0.005*fight + 0.004*doe + 0.004*home + 0.004*famili + 0.004*car + 0.004*night + 0.004*say + 0.004*next",
+ u"0.005*ask + 0.005*meet + 0.005*kill + 0.004*say + 0.004*friend + 0.004*car + 0.004*love + 0.004*famili + 0.004*arriv + 0.004*n't",
+ u'0.009*kill + 0.006*soldier + 0.005*order + 0.005*men + 0.005*shark + 0.004*attempt + 0.004*offic + 0.004*son + 0.004*command + 0.004*attack',
+ u'0.004*kill + 0.004*water + 0.004*two + 0.003*plan + 0.003*away + 0.003*set + 0.003*boat + 0.003*vote + 0.003*way + 0.003*home']
+</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Here, I convert the topics into just a list of the top 20 words in each topic. You can see a similar breakdown of topics as I identified using k-means including a war/family topic and a more clearly war/epic topic.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<p class="prompt input_prompt">
+In&#xA0;[86]:
+</p>
+<div class="inner_cell">
+ <div class="input_area">
+<div class="highlight"><pre><span class="n">topics_matrix</span> <span class="o">=</span> <span class="n">lda</span><span class="o">.</span><span class="n">show_topics</span><span class="p">(</span><span class="n">formatted</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">num_words</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="n">topics_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">topics_matrix</span><span class="p">)</span>
+
+<span class="n">topic_words</span> <span class="o">=</span> <span class="n">topics_matrix</span><span class="p">[:,:,</span><span class="mi">1</span><span class="p">]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">topic_words</span><span class="p">:</span>
+ <span class="k">print</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">word</span><span class="p">)</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">i</span><span class="p">])</span>
+ <span class="k">print</span><span class="p">()</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+['men', 'kill', 'soldier', 'order', 'patient', 'night', 'priest', 'becom', 'new', 'speech', 'friend', 'decid', 'young', 'ward', 'state', 'front', 'would', 'home', 'two', 'father']
+
+["n't", 'go', 'fight', 'doe', 'home', 'famili', 'car', 'night', 'say', 'next', 'ask', 'day', 'want', 'show', 'goe', 'friend', 'two', 'polic', 'name', 'meet']
+
+['ask', 'meet', 'kill', 'say', 'friend', 'car', 'love', 'famili', 'arriv', "n't", 'home', 'two', 'go', 'father', 'money', 'call', 'polic', 'apart', 'night', 'hous']
+
+['kill', 'soldier', 'order', 'men', 'shark', 'attempt', 'offic', 'son', 'command', 'attack', 'water', 'friend', 'ask', 'fire', 'arriv', 'wound', 'die', 'battl', 'death', 'fight']
+
+['kill', 'water', 'two', 'plan', 'away', 'set', 'boat', 'vote', 'way', 'home', 'run', 'ship', 'would', 'destroy', 'guilti', 'first', 'attack', 'go', 'use', 'forc']
+
+
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+ </div>
+ </div>
+</body></html>

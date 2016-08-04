@@ -1,0 +1,284 @@
+<!DOCTYPE html><html><head><title>Git Source Code Review</title></head><body>
+<h1>Git Source Code Review</h1><p><a href="http://fabiensanglard.net/git_code_review/diff.php" target="_new">Original URL</a></p>
+<p><blockquote>April 1st, 2014 I love you Hoi-En. To find the differences between two "things" is a difficult task that Git has to perform very often: Find the differences between two binaries files in order to&hellip;</blockquote></p>
+<div><section id="content">
+
+
+
+		
+
+
+<p id="date">April 1st, 2014</p>
+
+			
+<p id="paperbox">
+<a href="http://fabiensanglard.net/git_code_review/index.php">
+<img class="shadowed" src="http://fabiensanglard.net/git_code_review/git_blue_print.png"> <p>I love you Hoi-En.</p><img src="http://fabiensanglard.net/git_code_review/diff.php"> 
+</a> 
+ 
+ 
+ 
+
+ 
+To find the differences between two "things" is a difficult task that Git has to perform very often:
+</p><ul>
+ <li>Find the differences between two binaries files in order to generate a delta.</li>
+ <li>Find the differences between two text files in order to merge properly.</li>
+ <li>Find the differences between two text files in order to display it.</li>
+ <li>Find the differences between two commands in order to find typos.</li>
+</ul>
+<p>
+Here is a summary of all the algorithms used with an associated genesis.<br>
+<br>
+<a href="http://fabiensanglard.net/git_code_review/index.php">Part 1: Overview</a><br>
+<a href="http://fabiensanglard.net/git_code_review/history.php">Part 2: Genesis</a>
+<a href="http://fabiensanglard.net/git_code_review/architecture.php">Part 3: Architecture</a>
+<a href="http://fabiensanglard.net/git_code_review/diff.php">Part 4: Algorithms for DIFF</a>
+<br>
+ 
+<br>
+ </p>
+
+
+
+
+
+<h2>Diff on text</h2>
+<p>
+ Find the difference between text files is something Git has to do the most commonly :
+ </p><ul>
+ <li>Look at the difference between index and working directory: <code class="git">git diff file.txt</code>.</li>
+ <li>Compare the change between two commits: <code class="git">git diff commitBefore commitAfter</code></li>
+ <li>Generate a patch : <code class="git">git format-patch master --stdout &gt; mypatch.patch</code>.</li>
+ </ul>
+ <p>
+ The <a href="https://github.com/git/git/blob/e83c5163316f89bfbde7d9ab23ca2e25604af290/show-diff.c#L39">first implementation</a> simply leveraged the system <code>diff</code> executable via a call to <code>popen</code> in <code>show-diff.c</code>.
+ <code>diff</code> is a very
+ famous and ubiquitous tool in the Linux world originally developed in the early 1970 for Unix. Its first version used <a href="http://en.wikipedia.org/wiki/Hunt%E2%80%93McIlroy_algorithm">Hunt&#x2013;McIlroy algorithm</a>. The core algorithm was later notoriously improved thanks to the work of <a href="http://en.wikipedia.org/wiki/Eugene_Myers">Eugene W. Myers</a> and <a href="http://en.wikipedia.org/wiki/Webb_Miller">Webb Miller</a>, work extensively document in the papers:
+ <a href="http://www.xmailserver.org/diff2.pdf">An O(ND) Difference Algorithm and its Variations</a> by Eugene W. Myers and 
+ <a href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.189.70&amp;rep=rep1&amp;type=pdf">A File Comparison Program</a> by Webb Miller and Myers.<br>
+ <br>
+ The two most important metrics for diff operations are:
+ </p>
+ <p>
+ <u>Effort on Speed :</u><br>
+ </p><p>
+ System diff not only consumed a <code>fork</code>/<code>exec</code>, it 
+ also required a lot of useless access disks because of temporary data. A builtin diff module was needed and implemented in <a href="https://github.com/git/git/commit/3443546f6ef57fe28ea5cca232df8e400bfc3883">March 2006 patch</a> which introduced the <code>xdiff</code> folder containing a simplified version of <a href="http://www.xmailserver.org/xdiff-lib.html">libxdiff</a>:
+
+ </p>
+
+
+<p>
+ Since libxdiff used Eugene W. Myers's algorithm, the diff strategy was called <code>myers</code>. To this day it is still the 
+default way git perform all diffs on text. <br>
+ <br>
+ <u>Effort on Quality :</u><br>
+ </p><p>
+ If speed is an easy metric to understand and benchmark, quality is subjective and not intuitive. Take for example two versions of a file where a developer simply added a method <code>functhreehalves</code> in the middle. There are two way to reconstruct the change but one is of much higher quality because it clearly shows what was added where the other seems to indicate something was modified.<br>
+ <br>
+ </p><table border="0">
+ <tr>
+ <td>
+ <pre> 
+
+ 
+ $diff -y file2 file1
+ void func1() { void func1() {
+ x += 1 x += 1
+ } }
+<span>
+ &gt; void functhreehalves() {
+ &gt; x += 1.5
+ &gt; }
+ &gt; </span>
+ void func2() { void func2() {
+ x += 2 x += 2
+ } }
+
+
+ </pre>
+ </td>
+ <td>
+
+
+ <pre> 
+
+ 
+ $diff -y file2 file1
+ void func1() { void func1() {
+ x += 1 x += 1
+ }<span> &gt; }
+ &gt;
+ &gt; void functhreehalves() {
+ &gt; x += 1.5
+ </span> }
+ 
+ void func2() { void func2() {
+ x += 2 x += 2
+ } }
+
+
+ </pre>
+ </td>
+</tr>
+</table>
+ <p>
+ The discussion started in <a href="http://marc.info/?l=git&amp;m=123082787502576&amp;w=2">[PATCH 0/3] Teach Git about
+ the patience diff algorithm</a> where quality between git's myers and bazar's patience were compared. 
+ Since patience algorithm seemed to provide a better quality on specific input it was shortly added in a 
+ <a href="https://github.com/git/git/commit/92b7de93fb7801570ddc3195f03f30b9c201a3bd">patch</a> 
+ that modified further <code>xdiff</code> :
+ </p>
+ <p>
+ You can find more documentation on patience algorithm from the author himself Bram Cohen (yes, the guy who also invented Bittorrent):
+ <a href="http://bramcohen.livejournal.com/73318.html">Patience Diff Advantages</a> and <a href="http://alfedenzo.livejournal.com/170301.html">Patience Diff, a brief summary</a>.<br>
+ <br>
+ Further work was done by people from <a href="http://www.eclipse.org/jgit/">jgit project</a> (which is a Java/Eclipse based). Their histogram based technique was supposed to be faster than <code>myers</code> while still based on based on Cohen's four rules found in <code>patience</code> (best of both world). A <a href="https://github.com/git/git/commit/8c912eea94a2138e8bc608f7c390eb0b313effb0">patch</a> was eventually submitted: 
+
+</p>
+ <br>
+<u>Note :</u> So which diff strategy should be used? I personally have always used the default 
+(<code>myers</code>). <code>histogram</code> and <code>patience</code> seem to provide better 
+output on specific case but they are so marginal and poorly documented that it is impossible to 
+know when they will be good withiout trial/errors. If non-obsolete test cases could be provided 
+users could probably make educated decisions.
+ <br>
+ <br>
+<u>Note :</u> There is a fourth diff strategy called <code>minimal</code> which is actually an extended version of myers: 
+If no minimal diff is requested the myers algo <a href="https://github.com/git/git/blob/master/xdiff/xdiffi.c#L153">simply returns</a>. 
+But if minimal is requested, the algorithm will iterate until a certain amount of CPU time has been consumed and keep 
+the "best" diff. Best being the smallest diff. <code>Minimal</code>was always part of xlibdiff and came with the first "speed" patch mentioned earlier.<br>
+ <br>
+
+<u>Trivia :</u> This need for speed also triggered the creation of a <a href="http://marc.info/?l=git&amp;m=133103975225142">performance testing framework</a> for diff strategies.<br>
+ <br>
+
+<u>Trivia :</u> diff is such an important feature that git developer even allow user to use their own external custom engine via the 
+<code>GIT_EXTERNAL_DIFF</code> variable (<a href="http://stackoverflow.com/questions/12590947/using-git-diff-to-detect-code-movement-how-to-use-diff-options">Using Git diff to detect code movement</a>).
+ <br>
+ <br>
+ To finish on text diff, and example of trace trace execution that I found useful:<br>
+ <br>
+ <pre>
+
+ main (git.c)
+ cmd_diff (builtin/diff.c)
+ builtin_diff_files (builtin/pack-objects.c) 
+ run_diff_files (diff-lib.c)
+ xdi_diff_outf (xdiff-interface.c)
+ xdi_diff (xdiff-interface.c)
+ xdl_diff (xdiff/xdiffi.c)
+ xdl_do_diff (xdiff/xdiffi.c)
+ xdl_do_patience_diff
+ xdl_do_histogram_diff
+ meyes
+ meyes mininmal
+ </pre>
+
+
+
+<h2>Diff on binaries (deltas)</h2>
+<p>
+ The initial architecture of Git was: one text file =&gt; one sha1 =&gt; one deflated blob. 
+ The only drawback was HD storage consumption but "disk is cheap" was a fair approach 
+ and things worked well this way for a while. But big repositories suffered when being 
+ cloned across a network and all those blobs required a lot of disk access.<br> 
+ <br> 
+ 
+ The topic <a href="http://www.gelato.unsw.edu.au/archives/git/0505/2821.html">
+ RFC: adding xdelta compression to git</a> raised those issues and in the end it was decided
+ that storage was cheap but bandwidth and I/O were not. The <a href="http://xdelta.org/">xdelta lib</a> was briefly
+ considered but a customized version of xlibdiff was favored and 
+ <a href="https://github.com/git/git/commit/a310d4349467d78266f38d29e500c77b96ee5bef">added to xdiff</a>.
+
+</p>
+
+<p>
+ Since binary files miss the CR character used to build atomic units in text algorithm (lines), different heuristic can be used in
+ order to cut the stream. Set length of 48 bytes is an approach but git used <a href="http://en.wikipedia.org/wiki/Adler-32">adler32</a> 
+ before being replaced later with Rabin's <a href="http://www.xmailserver.org/rabin.pdf">Fingerprinting by random polynomials</a>
+ in an other <a href="https://github.com/git/git/commit/3dc5a9e4cdcc7124c665a050547d1285d86a421f">patch</a>:<br>
+
+</p>
+ 
+ <br>
+ <p>
+ Rabin's finger print technique was a big improvement since the sliding window allowed to detect short addition at the beginning of a zip
+ and keep deltas tiny.<br>
+ <br>
+ To finish with binary diff, here is the execution path of pack creation :
+ </p><pre>
+
+ main (git.c)
+ cmd_pack_objects (builtin/pack-objects.c)
+ prepare_pack (builtin/pack-objects.c)
+ ll_find_deltas (builtin/pack-objects.c)
+ threaded_find_deltas (builtin/pack-objects.c)
+ find_deltas (builtin/pack-objects.c)
+ try_delta (builtin/pack-objects.c)
+ create_delta (diff-delta.c) 
+ </pre>
+ 
+
+
+
+<h2>Diff on command-line</h2>
+<p>
+ git sometimes is not interested by the exact difference but rather by the distance between two strings. 
+ In 2008 was <a href="https://github.com/git/git/commit/8af84dadb142f7321ff0ce8690385e99da8ede2f">introduced</a> a "suggestion" feature : 
+
+</p>
+<p>
+ That is how the dispatcher seen in the <a href="http://fabiensanglard.net/git_code_review/architecture.php">architecture</a> part is able to provide suggestions when a typo is suspected :
+ </p><pre>
+
+
+ $git adt test.txt
+ git: 'adt' is not a git command. See 'git --help'.
+
+ Did you mean this?
+ add
+
+ </pre> 
+ <p>
+ Word suggestion are generated by calculating an edit distance for each 
+ <a href="https://github.com/git/git/blob/afc711b8e1ee89626f0dddf0ef01fb73168d47ca/git.c#L335">known builtin 
+ command</a> using <a href="https://github.com/fabiensanglard/git/blob/master/levenshtein.c">levenshtein distance</a>
+ . Found in <a href="https://github.com/git/git/blob/afc711b8e1ee89626f0dddf0ef01fb73168d47ca/levenshtein.c">levenshtein.c</a> 
+ , it is a nice example of dynamic programming.
+</p>
+
+
+
+
+<h2>diffcore, xdiff, xdelta ... what ?</h2>
+<p>
+ Just to summarize (because I was confused when I started) :
+ </p>
+
+
+
+<h2>Next</h2>
+<p>
+ To be published: Git internal algorithms for graphs and merge operation.
+ </p>
+
+
+ <h2>Comments</h2>
+
+ 
+ 
+ 
+ 
+
+
+
+
+
+
+ <h2>&#xA0;</h2>
+<p>Fabien Sanglard @2014</p>
+
+		</section></div>
+</body></html>

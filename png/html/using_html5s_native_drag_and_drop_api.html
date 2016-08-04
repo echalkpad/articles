@@ -1,0 +1,277 @@
+<!DOCTYPE html><html><head><title>Using HTML5's Native Drag and Drop API</title></head><body>
+<h1>Using HTML5's Native Drag and Drop API</h1><p><a href="http://www.sitepoint.com/html5-native-drag-and-drop-api/" target="_new">Original URL</a></p>
+<p><blockquote>Everyone loves an easy-to-use and interactive user interface and ever since the introduction of smartphones there has been a jump in expectations from users; The expectation is that your website will&hellip;</blockquote></p>
+<div><div class="ArticleCopy language-">
+ <p>Everyone loves an easy-to-use and interactive user interface and ever since the introduction of smartphones there has been a jump in expectations from users; The expectation is that your website will be intuitive, will use universally understood actions, and overall proving an easy way to engage with your site.</p>
+<p>Giving your users the ability to drag, drop, and sort makes your site more intuitive as people understand how to move element X to position Y and that moving object A in front of object B makes object A come first.</p>
+<p>Handling dragging, dropping, and sorting has always been a task for JavaScript and developers have previously had the option of building their own interactions or to <a href="https://jqueryui.com/draggable/">use a prebuilt solution</a>. With the advent of the <strong>HTML5 Drag and Drop API</strong>, developers will be able to hook into native events and attributes to handle these interactions.</p>
+<h2 id="a-brief-introduction">A Brief Introduction</h2>
+<p>Lets go through the API so we can get an overview of how it all works.</p>
+<p>The native API lets us define elements that are draggable by using the <code>draggable="true"</code> attribute on your desired elements. Some elements are by default draggable even without any modifications (such as images or text).</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2015/11/1447250479dragdrop-01.jpg" alt="Native drag and drop text and image" width="800" class="aligncenter size-full wp-image-118876"></p>
+<p>By default when draggable elements are dragged, only <code>form</code> elements such as <code>input</code> will be able to accept them as a drop. You would have seen this before; if you select some text and drag it into a <code>textarea</code> the text is copied into the <code>textarea</code> element.</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2015/11/1447250475dragdrop-02.png" alt="Dragging text directly into a textarea element" width="800" class="aligncenter size-full wp-image-118875"></p>
+<p>The native API also handles drags from external areas on your OS onto your drop zones. Almost all good Content Management Systems provide drag and drop uploading of content. Since these elements are external, all you need to configure is the drop zone (and also have a compatible browser).</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2015/11/1447250484dragdrop-03.jpg" alt="Using the native drag and drop on Gmail" width="774" class="aligncenter size-full wp-image-118877"></p>
+<h3>A quick note about mobile devices</h3>
+<p>Currently the native API doesn&#x2019;t support mobile devices. While this may change in the future, it&#x2019;s best to view the examples from a desktop browser so you can see how it all works</p>
+<h2 id="drag-and-drop-api-events">Drag and Drop API Events</h2>
+<p>The native API provides the following <strong>events</strong> that you can listen for. These events will apply to either the <strong>draggable item</strong> or the <strong>drop zone</strong> and will be triggered at set times.</p>
+<p>When these events are fired, we have access to a local object (which we will call <code>event</code>). This object holds more information about the event itself and will give you access to the <code>dataTransfer</code> object where you will set most of your methods and properties.</p>
+<p>We will need to hook a callback function onto each of the events so we can interact with the API:</p>
+<pre><code class="language-javascript">// add a handler to trigger on dragstart
+document.addEventListener('dragstart', function(event) {
+ // add your dragstart code here
+}, false);</code></pre>
+
+<p>These events are triggered only on draggable items.</p>
+<p><strong><a href="https://developer.mozilla.org/en-US/docs/Web/Events/dragstart">dragstart</a></strong> <br>
+Triggered as soon as we start dragging. It&#x2019;s here we will need to tell the API about what we will be dragging and set up other values. Use the <code>setData()</code> method to set the data you want to save, set the <code>effectAllowed</code> property for the draggable element, and define the draggable helper with <code>setDragImage()</code>.</p>
+<p><strong><a href="https://developer.mozilla.org/en-US/docs/Web/Reference/Events/drag">drag</a></strong> <br>
+This event is triggered continually during dragging. The number of times it occurs depends on the browser. This is useful for determining exactly where the draggable item is.</p>
+<p><strong><a href="https://developer.mozilla.org/en-US/docs/Web/Events/dragend">dragend</a></strong> <br>
+This is event fires as soon as the draggable is dropped (regardless of where it is dropped) and generally triggered directly after the drop zone&#x2019;s <code>drop</code> event. You can use this event to reset styles applied when dragging or to perform other cleanup actions. The <code>dragend</code> event has access to the draggable so you can do calculations after dragging has ended (for example seeing if the <code>drop</code> event was successful by looking for newly added elements and then removing the original draggable).</p>
+
+<p>These events are triggered only on elements that you specify as drop targets (or are already naturally drop targets, like form elements):</p>
+<p><strong><a href="https://developer.mozilla.org/en-US/docs/Web/Events/dragenter">dragenter</a></strong> <br>
+Triggered just once as soon as a draggable enters a droppable area. This will trigger when more than 50% of the draggable is inside the drop zone.</p>
+<p>This event sets the <code>dropEffect</code>of the drop zone. By default drops on non-form elements won&#x2019;t do anything. You will need to manually call <code>event.preventDefault()</code> and <code>event.stopPropagation()</code> to tell the API that this drop should take place.</p>
+<p>You can check the <code>dataTransfer</code> object for the <code>effectAllowed</code> value that has been set by the draggable and then compare it to the value your drop zone has for its <code>dropEffect</code>. If these values won&#x2019;t work together (i.e one is <code>copy</code> and the other is <code>link</code>) then the browser won&#x2019;t drop the item successfully (even if you prevented defaults and stopped propagation).</p>
+<p>You can use the <code>types</code> property to get a list of all data types that have been set in the <code>dragstart</code> event. You can&#x2019;t see the data but you can see its type. It&#x2019;s here you can use another method called <code>contains</code> to see if a certain type of data has been set up. This is done via the <code>event.dataTransfer.types.contains(type)</code> method. You could use this to ensure that something has been set to the <code>text/html</code> type for example.</p>
+<p>You can set classes or trigger actions now that you know your draggable has entered into the drop zone (a common theme is to style the drop zone differently to show it is being activated).</p>
+<p><strong><a href="https://developer.mozilla.org/en-US/docs/Web/Events/dragover">dragover</a></strong> <br>
+This event is essentially the same as <code>dragenter</code> but it is called continually while the draggable item is inside the drop zone. This event is perfect if you want to determine the exact position of the draggable (because it is updated continually).</p>
+<p>This event sets the <code>dropEffect</code> of the drop zone and, like <code>dragenter</code>, you will need to prevent default and propagation.</p>
+<p><strong><a href="https://developer.mozilla.org/en-US/docs/Web/Events/dragleave">dragleave</a></strong> <br>
+This is triggered once a draggable has moved away from a drop zone. It&#x2019;s generally used to remove styles added in either the <code>dragenter</code> or <code>dragover</code> events and fires once the draggable is not overlapping with the drop zone.</p>
+<p><strong><a href="https://developer.mozilla.org/en-US/docs/Web/Events/drop">drop</a></strong> <br>
+This event is triggered once the draggable has been released and the drop area agrees to accept the drop. This will only fire if the draggable element and the drop area have correct <code>dropEffect</code> and<code>effectAllowed</code> values. On drop you will need to collect the information using the <code>getData()</code> method.</p>
+<h2 id="drag-and-drop-api-methods">Drag and Drop API Methods</h2>
+<p>The <a href="http://help.dottoro.com/ljmpcqdb.php">dataTransfer</a> object is the main item we will interact with when dealing with the native drag and drop API. It is exposed to us as part of the callback function for the events and gives us several functions to play with.</p>
+<p><strong><a href="http://help.dottoro.com/ljvspfdo.php">setData</a></strong> <br>
+This method sets the data that will be collected from the draggable by calling the <a href="https://developer.mozilla.org/en-US/docs/Web/API/DataTransfer">event.datatransfer.setData(type, data)</a> method. You will need to pass in the type of data being saved and the data itself. This must be set in the <code>dragstart</code> event or it will fail. Its values can only be collected later during the <code>drop</code> event.</p>
+<p>The <code>type</code> argument should be an <a href="http://www.iana.org/assignments/media-types/media-types.xhtml">applicable data type</a>. You can use many different types such as <code>text/html</code> or <code>text/uri-list</code> if you are using Chrome, Safari, or Firefox. If you are using Internet Explorer you must set it as <code>Text</code> or <code>URL</code> (in exactly that way or it will cause an error).</p>
+<p>The <code>data</code> argument is the data you want to save. You can save a URL, a chunk of HTML, or any other piece of data. You can set only one piece of data per <code>type</code>. For example if you set <code>text/html</code> to be some HTML, you can&#x2019;t then call the <code>setData()</code> method again with new information as it will replace the old content.</p>
+<p><strong><a href="http://help.dottoro.com/ljolwfvj.php">getData</a></strong> <br>
+This is the counterpart to the <code>setData()</code> method and it&#x2019;s used to collect data set by the dragged element during the <code>startdrag</code> event. You collect your data by calling <code>event.dataTransfer.getData(type)</code>, specifying the type of data to be collected.</p>
+<p>You will most likely have to check what types are set using <code>event.dataTransfer.types</code> to see what formats have been passed. If you try and access data types that have not been set, Internet Explorer will throw an error.</p>
+<p>This method can be used only inside the <code>drop</code> event as only at that point does the API expose the values so you can collect them (this is to protect the data during transmission).</p>
+<p><strong><a href="http://help.dottoro.com/ljdbqmud.php">clearData</a></strong> <br>
+This does exactly what its name implies, it clears any data set using <code>setData</code> and it&#x2019;s written in the format: <code>event.dataTransfer.clearData(type)</code>. You will need to specify the type of data that is being cleared (e.g. <code>text/html</code> or <code>URL</code>). This method can only be used inside the <code>dragstart</code> event.</p>
+<p><strong><a href="http://help.dottoro.com/ljdpgfkx.php">setDragImage</a></strong> <br>
+This method sets the drag image to be displayed when dragging starts using the format: <a href="https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Drag_operations#dragfeedback">event.dataTransfer.setDragImage()</a>. By default, when dragging, the user will see a semi-transparent image of what they are dragging. Using this method you can define your own image or element to appear during the drag. This works in all browsers except Internet Explorer and <a href="https://wpdev.uservoice.com/forums/257854-microsoft-edge-developer/suggestions/6542268-setdragimage-on-datatransfer-of-dragevent">there is currently no planned work for it&#x2019;s inclusion either</a>.</p>
+<h2 id="properties">Drag and Drop API Properties</h2>
+<p><a href="http://help.dottoro.com/ljmpcqdb.php">There are several properties that we can set for the <code>dataTransfer</code> object</a>. We use our <strong>event</strong> variable that&#x2019;s passed to us from the event callback to set these properties.</p>
+<p><strong><a href="http://help.dottoro.com/ljevcwjm.php">effectAllowed</a></strong> <br>
+This is specified on the draggable item. This tells the API about the drag event and what icons will be used for the cursor (this is OS and browser dependent). It&#x2019;s called by assigning a value to <a href="https://developer.mozilla.org/en-US/docs/Web/API/DataTransfer#effectAllowed.28.29">event.dataTransfer.effectAllowed</a> inside the <code>dragstart</code> event and takes the possible values of <code>copy</code>, <code>move</code> ,<code>link</code> ,<code>copyLink</code>, <code>copyMove</code>, <code>linkMove</code>, <code>all</code>, <code>none</code>, or <code>uninitialized</code>.</p>
+<p>If this value doesn&#x2019;t match <code>dropEffect</code> it will prevent the <code>drop</code> event being called (ensures only appropriate drops happen).</p>
+<p><strong><a href="http://help.dottoro.com/ljffjemc.php">dropEffect</a></strong> <br>
+This property is specified on the drop zone and determines what drag items are allowed to drop on this zone. It should be assigned a value via <code>event.dataTransfer.dropEffect</code> during the <code>dragenter</code> or <code>dragover</code> events. <code>dropEffect</code> Takes the possible values of <code>copy</code>, <code>link</code>, <code>move</code>, or <code>none</code>.</p>
+<p>Just like <code>effectAllowed</code>, if this value doesn&#x2019;t match <code>effectAllowed</code> it will prevent the <code>drop</code> event being called (ensures only appropriate drops happen).</p>
+<p><strong><a href="http://help.dottoro.com/ljslrhdh.php">files</a></strong> <br>
+This property contains a list of all local files that have been set. It&#x2019;s called using <code>event.dataTransfer.files</code>. Only called files have been dragged from the OS onto the website (e.g. images from your desktop to your website&#x2019;s upload container). This property will always be empty if a regular on-site item has been dragged (e.g. if you drag an image, there will be no data set for <code>files</code>).</p>
+<p>It&#x2019;s here that you can check to see if we have files. If we do have them we can read in and process the contents of the files using the <a href="https://developer.mozilla.org/en/docs/Web/API/FileReader">fileReader object</a>.</p>
+<p><strong><a href="http://help.dottoro.com/ljchqudq.php">types</a></strong> <br>
+This property provides a list of all data types that have been set in the current drag. Called by using the <code>event.dataTransfer.types</code> method. This is useful during the <code>dragenter</code> and <code>dragover</code> events so that you can see what data types have been set.</p>
+<h3 id="effectallowed-and-dropeffect-in-action"><code>effectAllowed</code> and <code>dropEffect</code> in action</h3>
+<p>If you&#x2019;re keen on seeing how you can use these properties in a practical way, have a look at the following CodePen demo:</p>
+<p class="codepen">See the Pen <a href="http://codepen.io/SitePoint/pen/epQPNP/">Native Drag and Drop &#x2014; the effectAllowed and the DropEffect properties</a> by SitePoint (<a href="http://codepen.io/SitePoint">@SitePoint</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+<p>Here we define different draggable items and set where they can be dropped. We also create several droppable zones and set which draggable types they will accept. Setting these properties correctly will ensure that your browser knows which draggable items are allowed to be dropped.</p>
+<p>Even though Internet Explorer supports both the <code>effectAllowed</code> and <code>dropEffect</code> properties, it doesn&#x2019;t implement any native ability to allow only applicable drags into drop zones. Chrome, Safari, and Firefox will restrict your drag item and prevent incorrect drops, refusing to fire the <code>drop</code> event. On IE you will need to manually reject these drops yourself by comparing values as the <code>drop</code> event will still fire.</p>
+<h2 id="building-something-with-the-native-api">Building Something with the Native API</h2>
+<p>There&#x2019;s quite a lot of information to deal with for the API so let&#x2019;s put everything together into a practical example.</p>
+<p>The native API is concerned primarily with the interactions between the <strong>draggable</strong> and <strong>droppable</strong> elements and their transmission of data. The native API doesn&#x2019;t care that you are moving two elements around trying to switch their positions, the API is more concerned with its data and it&#x2019;s this focus that makes it unique.</p>
+<p>One of the best things about the native API is that it can handle different <strong>types of data</strong> and also <strong>data from multiple locations</strong>.</p>
+<p>Data types include:</p>
+<ul>
+<li>Plain text strings</li>
+<li>Text / HTML content</li>
+<li>URL lists </li>
+<li>Single or multiple files </li>
+<li>Multiple other types / custom types</li>
+</ul>
+<p>Data locations include:</p>
+<ul>
+<li>Data from internal elements being dragged and dropped</li>
+<li>Data from draggable elements from a different tab, window, or from a different browser</li>
+<li>Data from a local source like your desktop</li>
+</ul>
+<h2 id="processing-data-between-elements-on-drag-and-drop">Processing Data Between Elements on Drag and Drop</h2>
+<p>The native API provides the basics to support dropping and dragging of elements. While the API provides you with events to hook onto to know when a successful drag has taken place, unlike jQuery UI, you will need to manually move/copy elements to adjust the API.</p>
+<p>This is because as you start dragging an element, you trigger its <code>dragStart</code> event during which you set the data you want to transfer (along with the appropriate effects you want your draggable to have, such as copy, move, link etc). When you finally drop your dragged element, ig it&#x2019;s in the right place it will trigger the drop area&#x2019;s <code>drop</code> event. It handles the data that you want to move, not the UI elements (which you will need to manually adjust with JavaScript).</p>
+<p>Let&#x2019;s look at a practical example so you can see how this works.</p>
+<h2 id="example-a-drag-and-drop-puzzle-game">Example: A Drag-and-Drop Puzzle Game</h2>
+<p>Take a look at the following example to see how we can use the API to transfer data between elements on the same page.</p>
+<p class="codepen">See the Pen <a href="http://codepen.io/SitePoint/pen/yYQRvG/">Native Drag &amp; Drop &#x2013; Data transfer on a single page</a> by SitePoint (<a href="http://codepen.io/SitePoint">@SitePoint</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+<p>What we are doing in this example is defining a series of zones. The left side will hold our main puzzle pieces while the right side has a series of empty drop zones. The &#x2018;game&#x2019; is to drag the pieces from the left to the right, completing the puzzle.</p>
+<h3 id="setting-data-on-dragstart">Setting Data on <code>dragStart</code></h3>
+<p>On the <code>dragStart</code> event for our puzzle piece we first set the <code>effectAllowed</code> to tell the item that it accepts a <code>copy</code> based drag.</p>
+<p>We then collect the <code>src</code>(image source) and the <code>outerHTML</code> (HTML Node) and put them inside of our data transfer object as <code>text/uri-list</code> and <code>text/html</code>. If we are on Internet Explorer we just save the <code>src</code> of the element being dragged and save it into its <code>text</code> format.</p>
+<pre><code class="language-javascript">var dragItem;
+// triggered draggable as we start dragging
+function dragStart(event) {
+ drag = event.target;
+ dragItem = event.target;
+
+ // set the effectAllowed for the drag item
+ event.dataTransfer.effectAllowed = 'copy';
+
+ var imageSrc = $(dragItem).prop('src');
+ var imageHTML = $(dragItem).prop('outerHTML');
+
+ // check for IE (it supports only 'text' or 'URL')
+ try {
+ event.dataTransfer.setData('text/uri-list', imageSrc);
+ event.dataTransfer.setData('text/html', imageHTML);
+ } catch (e) {
+ event.dataTransfer.setData('text', imageSrc);
+ }
+
+ $(drag).addClass('drag-active');
+}</code></pre>
+<h3 id="correct-effectallowed-dropeffect">Correct <code>effectAllowed</code> / <code>dropEffect</code></h3>
+<p>Before we even drop the puzzle piece, both the <code>dragEnter</code> and <code>dragOver</code> events will fire. Remember that for us to be able to drop we need to return false / prevent default to tell the browser it&#x2019;s OK to drop. Both of these functions will set the drop zone&#x2019;s <code>dropEffect</code> to <code>copy</code> which means it will accept all drag items with <code>copy</code> as their <code>effectAllowed</code> (which our items happen to have so it&#x2019;s all good). I mention this here since if they didn&#x2019;t match, the drop event wouldn&#x2019;t fire, and the drag would be canceled.</p>
+<h3 id="collecting-data-on-our-drop">Collecting data on our drop</h3>
+<p>When we drop over our zones to the right, we use the <code>getData</code> method to extract our <code>text/uri-list</code> and <code>text/html</code> data sets. If we don&#x2019;t have them (if we are accessing this on Internet Explorer) we simply extract the <code>text</code> data.</p>
+<p>Here is where we differ based on what data we have. If we have access to the <code>dataHTML</code> it means we are on a fully supported browser and we have access to the entire dragged node. If we do we add the whole item to the drop zone and the drop is done.</p>
+<p>If we don&#x2019;t have support we need to clone the <code>dragItem</code> we set back in the <code>dragStart</code> event to get the node. We then add it to the drop zone and finish everything up.</p>
+<pre><code class="language-javascript">// called when draggable is dropped on droppable 
+function drop(event) {
+
+ drop = this;
+ $(drop).removeClass('drop-active');
+
+ var dataList, dataHTML, dataText;
+
+ // collect our data (based on what browser support we have)
+ try {
+ dataList = event.dataTransfer.getData('text/uri-list');
+ dataHTML = event.dataTransfer.getData('text/html');
+ } catch (e) {
+ dataText = event.dataTransfer.getData('text');
+ }
+
+ // we have access to the HTML
+ if (dataHTML) {
+ $(drop).empty();
+ $(drop).prepend(dataHTML);
+
+ // check if this element is in the right spot
+ checkCorrectDrop(drop, dragItem);
+
+ // see if the final image is complete
+ checkCorrectFinalImage();
+ }
+
+ // only have access to text (old browsers + IE)
+
+ else {
+ $(drop).empty();
+ $(drop).prepend($(dragItem).clone());
+
+ // check if this element is in the right spot
+ checkCorrectDrop(drop, dragItem);
+
+ // see if the final image is complete
+ checkCorrectFinalImage();
+ }
+
+ event.preventDefault();
+ event.stopPropagation();
+}</code></pre>
+<h3 id="completing-the-game">Completing the game</h3>
+<p>Both drop events call the <code>checkCorrectDrop(drop, dragItem)</code> and <code>checkCorrectFinalImage()</code> functions. These are used for our game.</p>
+<p>The <code>checkCorrectDrop()</code> function checks to see if the custom attribute called <code>data-value</code> is the same for both the drag item and the drop zone. If both of these are the same then this piece belongs here and is highlighted with a green border (and the <code>active</code> class).</p>
+<p>The <code>checkCorrectFinalImage()</code> function checks to see if all of the puzzle pieces have been dropped in the correct spot. If we have as many correct items as there are items to drag, it means we&#x2019;ve completed the puzzle &#x2013; hooray!</p>
+<h2 id="moving-data-from-other-tabs-and-locally-from-the-desktop">Moving Data from Other Tabs and Locally from the Desktop</h2>
+<p>With the native API, you can define drop zones that will accept dragged elements. While this might sound like something jQuery UI can also do, what jQuery UI can&#x2019;t do is allow us the ability to drag content from any external tab, window, or external browser directly into our drop area.</p>
+<p>There are plenty of places in which you&#x2019;ve seen this already. There are several websites in which you can drag an image from one tab directly into a drop area and the receiving website will take care of the interaction.</p>
+<p>To get the most out of the dragging and dropping, the drop zone has to be configured so that it knows how to handle the data it&#x2019;s receiving (as basically any draggable element such as images, text, links, and content would be dropped into the drop zone).</p>
+<p>Dragging content from your <strong>desktop or local device onto a web page</strong> and automating the upload process is one of those revolutionary features that makes you wonder how we ever got anything done without it.</p>
+<p>Most CMS&#x2019;s (e.g. WordPress) have native support of content uploads via a drag-and-drop interface. Other web apps like Gmail also provide this functionality, letting you drop your content directly into a zone and automatically attach it or store it for use.</p>
+<h2 id="example-dragging-images-from-external-sources">Example: Dragging Images from External Sources</h2>
+<p>The next example will handle interactive drops from other tabs / windows, letting the drop zone collect images for display.</p>
+<p>In addition, the example also will handle locally dropped images. You will be able to drop photos from your desktop directly onto the dropzone and the native API will process the images and display them.</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2015/11/1447250507dragdrop-05.jpg" alt="Dragging external elements to our drop zone" width="629" class="aligncenter size-full wp-image-118878"></p>
+<p>If you&#x2019;re keen on seeing how this all works, here&#x2019;s another CodePen demo:</p>
+<p class="codepen">See the Pen <a href="http://codepen.io/SitePoint/pen/zvMMvr/">Native Drag and Drop &#x2013; Dragging files directly onto the website</a> by SitePoint (<a href="http://codepen.io/SitePoint">@SitePoint</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+<p>What this example focuses on is processing dropped items. Unlike our other examples where we had to set data on our drag, for this one we need to only collect the data and determine how we will process it.</p>
+<p>Inside our main <code>drop</code> function, we start by collecting information from our <code>dataTransfer</code> object using the <code>getData(format)</code> method.</p>
+<pre><code class="language-javascript">// get the URL of elements being dragged here
+try {
+ dataValue = event.dataTransfer.getData('text/uri-list');
+ dataType = 'text/uri-list';
+} catch (e) {
+ dataValue = event.dataTransfer.getData('URL');
+ dataType = 'URL';
+}</code></pre>
+<p>We wrap this inside of a try-catch block mainly for Internet Explorer, which will throw an error and stop execution if we try and access a format inside of <code>getData()</code> that it doesn&#x2019;t understand.</p>
+<p>If we are able to get our data in the <code>text/uri-list</code> format, we collect it; if we can&#x2019;t, we fall back to using the basic <code>URL</code> property.</p>
+<p>Most dragged items such as images, links, or data will come across with several data types. Since we are only interested in the URL of these items, this works well.</p>
+<p>If we have our <code>dataValue</code> set, it means the user dropped something into our zone. We now need to figure out what it is. We only want to handle images, but since the API can&#x2019;t differentiate between an image URL and a standard link, we need to do some checks to ensure we are dropping an image.</p>
+<pre><code class="language-javascript">// determine if our URL is an image
+imageDropped = false;
+var imageExtensions = ['.jpg','.jpeg','.png','.bmp','.gif'];
+for (i = 0; i&lt; imageExtensions.length; i++) { 
+ if (dataValue.indexOf(imageExtensions[i]) !== -1) {
+ // create our image to add
+ var image = '&lt;img src="' + dataValue + '"&gt;';
+ drop.append(image);
+ imageDropped = true;
+ break;
+ }
+}</code></pre>
+<p>We create a list of image extensions with known image types such as <code>.jpg</code> and <code>.png</code> and check to see if one of these appears in our URL. If it does, then we can assume we have an image. We create a new image and use our collected value as its source.</p>
+<h3 id="processing-locally-dropped-items">Processing locally dropped items</h3>
+<p>Locally dropped elements are a little different. We don&#x2019;t use the <code>getData(format)</code> method to get these, we use the <code>files()</code> method. This will get us a list of all elements that have been dropped so we can iterate through them.</p>
+<pre><code class="language-javascript">var dataFiles = event.dataTransfer.files;
+var dataOutput = []; 
+if (dataFiles) {
+ for (i =0; i &lt; dataFiles.length; i++) {
+ // do processing here
+ } 
+}</code></pre>
+<p>For our example we want to go through all dropped files and check to see if there is an image. When we are iterating through each file we can access a range of properties, including the <code>type</code> property, which lists the mime type of the item.</p>
+<pre><code class="language-javascript">// check if this is an image
+if (dataType.match('image.*')) {
+ // it's an image, process further
+}</code></pre>
+<p>If we match an image type, we create a new <a href="https://developer.mozilla.org/en/docs/Web/API/FileReader">fileReader</a> object that we will use to read the file into memory. We use the <a href="https://developer.mozilla.org/en-US/docs/Web/API/FileReader/readAsDataURL"><code>readAsDataURL(item)</code></a> method to read in our file and when it&#x2019;s ready it will trigger its <code>onload</code> event where we will process further.</p>
+<pre><code class="language-javascript">// read into memory
+var reader = new FileReader();
+
+// load element
+reader.readAsDataURL(dataItem);</code></pre>
+<p>All we do now is collect the result of the file reader and add it the DOM. We have successfully dragged an image from our desktop to our site!</p>
+<pre><code class="language-javascript">// when our image is loaded
+reader.onload = (function(theFile) {
+ return function(e) {
+ var url = e.target.result;
+
+ drop.append('&lt;img src="' + url + '" title="' + dataName + '"/&gt;');
+ messageContainer.append('
+ &lt;p&gt;&lt;strong&gt;Successfully dropped an image from your desktop&lt;/strong&gt;&lt;/p&gt;
+ ');
+ };
+})(dataItem);</code></pre>
+<h2 id="browser-support">Overview of Browser Support</h2>
+<p>Exactly as its name suggests, this API provides developers with a set of events and methods they can use to provide UI interactions without the need for a third party JavaScript library.</p>
+<p>Overall browsers have strong desktop support and almost non existent mobile support, so it will work well in most modern desktop browsers following the specification. Internet Explorer though has its own set of unique issues.</p>
+<p>Desktop support is surprisingly good with Chrome, Firefox, Safari and Opera all having comprehensive support. Internet Explorer on the other hand handles the API differently, supporting different aspects depending on what version you are on. For example:</p>
+<ul>
+<li><strong>No support in IE7, IE8, and IE9 for the <code>dataTransfer.files</code> or <code>.types</code> objects.</strong> This means up to IE9 you won&#x2019;t be able to use native drag and drop to allow users to drag files from the desktop to a web page.</li>
+<li><strong>Limited supported formats for <code>dataTransfer.setData/getData</code></strong> In practice when we drag items, we need to store data in our drag that can be accessed in our drop. In other browsers you can store this in a variety of types (e.g. <code>text/html</code> or <code>text/uri-list</code>) along with your own custom types. IE will only support the <code>Text</code> or <code>URL</code> type, which means you&#x2019;re limited to how you will handle your data.</li>
+<li><strong>No support in any version of IE or Edge for the dataTransfer.setDragImage() method.</strong> Basically there is no ability to set a custom drag image or element. You will always get the browser default (which most of the time will be a copy of the element that is semi-transparent).</li>
+</ul>
+<p>For mobile, there is basically no practical support for the API (as of October 2015). This probably has to do with how mobile browsers will handle the interactions themselves as normally you need to drag and scroll to move around. IE11 is the only mobile browser that will support it.</p>
+<h2 id="additional-resources">Additional Resources</h2>
+<p>There are plenty of great resources to get more details on the Drag and Drop API. Some of them discuss the methods available and events you can hook into while others detail browser inconsistencies or outline great examples.</p>
+<p>Start with these links, which helped me when I was first looking into native drag and drop:</p>
+
+<h2 id="wrapping-up">Wrapping Up</h2>
+<p>At this point, you should now have a good fundamental understanding of the native Drag and Drop API and how you can leverage it to provide an interactive interface. You&#x2019;ll likely have to do a lot of experimenting to really start to understand much of what I&#x2019;ve discussed here.</p>
+<p>Even with the lack of mobile support, browser support is pretty strong so there&#x2019;s good reason to consider using the native API in new projects.</p>
+ </div>
+
+ </div>
+</body></html>

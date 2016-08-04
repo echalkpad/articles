@@ -1,0 +1,256 @@
+<!DOCTYPE html><html><head><title>Ramping up with Rigger: Deploying Deis on DigitalOcean</title></head><body>
+<h1>Ramping up with Rigger: Deploying Deis on DigitalOcean</h1><p><a href="https://deis.com/blog/2016/ramping-up-rigger-deploying-deis-digitalocean" target="_new">Original URL</a></p>
+<p><blockquote>Deis is an open source private Platform as a Service (PaaS) that simplifies deploying and managing your applications on your own servers. By leveraging technologies such as Docker and CoreOS, Deis&hellip;</blockquote></p>
+<div><article>
+ <p>Deis is an open source private Platform as a Service (PaaS) that simplifies deploying and managing your applications on your own servers. By leveraging technologies such as Docker and CoreOS, Deis provides a workflow and scaling features that are similar to that of Heroku, on the hosting provider of your choice. Deis supports applications that can run in a Docker container, and can run on any platform that supports CoreOS.</p>
+
+<h3>Introduction</h3>
+
+<p>Have you ever wanted to experiment with a new project but were stymied by the "Getting Started" guide (with its tens or maybe even hundreds of manual steps)? Ever had a goal to spend part of your weekend crafting up a fantastic pull request for an open source project only to find that it took hours instead of minutes just to get to a productive development state? You're definitely not alone. I've found that most open source projects have a significant barrier to entry. That's not how it should be.</p>
+
+<p>We at <a href="http://deis.io">Deis</a> realized we had a few rough spots that were plaguing potential users and preventing high-quality community contribution back into the project. So we've been working to alleviate some of the pains you might have experienced trying to stand up a Deis cluster for development and trial use cases.</p>
+
+<p>In this guide, you'll get to experience a taste of the new and improved Deis provisioning process using the Deis project's new tool called <a href="https://github.com/deis/rigger">Rigger</a>.</p>
+
+<a name="read-more" class="read-more-anchor"></a>
+
+<h2>Preview</h2>
+
+<p>If you don't have much time, this accelerated <a href="https://asciinema.org/">terminal recording</a> (only around a minute long!) shows what we'll be up to in the rest of this article:</p>
+
+<p><a href="https://asciinema.org/a/29033"><img src="https://asciinema.org/a/29033.png" alt="asciicast"></a></p>
+
+<h2>Prerequisites</h2>
+
+<p>Rigger is designed to handle its own dependency management, but you will need to setup a few things before provisioning a Deis cluster with it. To follow along with this guide at home you'll need:</p>
+
+
+
+<p>All the command in this tutorial can be run on a local Mac or Linux workstation (OS X &gt;= 10.10 and Debian/Ubuntu were tested). They can also be run on a Droplet, but that is not necessary.</p>
+
+<p>The <code>zip</code>, <code>make</code>, and <code>git</code> utilities need to be installed on whatever workstation you use to provision a Deis cluster with Rigger.</p>
+
+<p>For example, if you are using an Ubuntu system, install them with the following command:</p>
+<figure class="highlight"><pre><code class="language-text">sudo apt-get update
+sudo apt-get install zip make git
+</code></pre></figure>
+<p>The <code>git</code> utility is used through the article to download Rigger and an example application. The <code>zip</code> and <code>make</code> utilities are used by the Rigger provisioning script.</p>
+
+<p>If you are running Mac OS X, you also need to agree to the Xcode license agreement to use git:</p>
+<figure class="highlight"><pre><code class="language-text">sudo xcodebuild -license
+</code></pre></figure>
+<p>
+<strong>Note:</strong> This article was written for Deis version 1.12.0. 
+</p>
+
+<h2>Step 1 &#x2014; Installing Rigger</h2>
+
+<p>To install Rigger, first use <code>git</code> to download it:</p>
+<figure class="highlight"><pre><code class="language-text">git clone https://github.com/deis/rigger.git
+</code></pre></figure>
+<p>Change to the directory created:</p>
+<figure class="highlight"><pre><code class="language-text">cd rigger
+</code></pre></figure>
+<p>Then, execute the following command:</p>
+<figure class="highlight"><pre><code class="language-text">./rigger
+</code></pre></figure>
+<p>When it first runs, you will see the following:</p>
+<figure class="highlight"><pre><code class="language-text">Downloading rerun from GitHub...
+</code></pre></figure>
+<p>At the end of the output, you will see a list of available commands:</p>
+<figure class="highlight"><pre><code class="language-text">Available commands in module, "rigger":
+checkout: "checkout the Deis repo with version: $VERSION into directory: $DEIS_ROOT"
+configure: "initialize a rigger varsfile to use with future commands"
+ [ --advanced]: "configure all the nitty gritty details of the infrastructure and Deis deployment"
+ [ --provider &lt;&gt;]: "which cloud provider to use to provision a Deis cluster"
+ [ --version &lt;&gt;]: "choose what version of Deis to deploy"
+create-registry: "Create a local dev registry"
+deploy: "Install and Deploy Deis"
+destroy: "destroy all infrastructure created by the provision step"
+provision: "provision new infrastructure and deploy Deis to it"
+ [ --cleanup]: "destroy cluster after action"
+setup-clients: "download and stage deisctl and deis clients for your own use"
+shellinit: "show the current sourceable environment variables (useful for eval-ing)"
+ [ --file &lt;&gt;]: "use a specific file"
+shell-reset: "an eval-able output that unsets variables that have been injected by rigger"
+ [ --file &lt;&gt;]: "use a specific file"
+test: "run a test suite on the provisioned Deis cluster"
+ [ --type &lt;smoke&gt;]: "provide a type of test to run"
+upgrade: "Tests upgrade path for Deis"
+ [ --to &lt;master&gt;]: "Define version of Deis to upgrade to"
+ [ --cleanup]: "destroy cluster after action"
+ --upgrade-style &lt;graceful&gt;: "choose the style of upgrade you'd like to perform"
+</code></pre></figure>
+<h2>Step 2 &#x2014; Configuring the Deis Deployment</h2>
+
+<p>To configure the Deis deployment to use DigitalOcean as the provider and a specific version of Deis, all we need to do is call:</p>
+<figure class="highlight"><pre><code class="language-text">./rigger configure --provider "digitalocean" --version "1.12.0"
+</code></pre></figure>
+<p>Rigger will then ask you a few questions. It will all look like this:</p>
+
+<pre>
+-&gt; What DigitalOcean token should I use? DO_TOKEN (no default)
+<strong>[enter or paste your DigitalOcean token here]</strong>
+You chose: ******
+
+-&gt; Which private SSH key should be used? SSH_PRIVATE_KEY_FILE [ /Users/sgoings/.ssh/id_dsa ]
+1) /Users/sgoings/.ssh/id_dsa
+2) ...
+#? <strong>[enter a number]</strong>
+You chose: 1) /Users/sgoings/.ssh/id_dsa
+
+... output snipped ...
+
+Enter passphrase for /Users/sgoings/.ssh/id_dsa: <strong>[enter your ssh passphrase]</strong>
+
+Rigger has been configured on this system using ${HOME}/.rigger/<strong>&lt;id&gt;</strong>/vars
+To use the configuration outside of rigger, you can run:
+
+ source "${HOME}/.rigger/<strong>&lt;id&gt;</strong>/vars"
+</pre>
+
+<p>You're all done with the hard part!</p>
+
+<h2>Step 3 &#x2014; Profit!</h2>
+
+<p>Or more accurately: run <code>rigger</code> to provision infrastructure on DigitalOcean and then deploy Deis!</p>
+
+<p>All we need to do is execute:</p>
+<figure class="highlight"><pre><code class="language-text">./rigger provision
+</code></pre></figure>
+<div>
+
+<p><strong>Warning:</strong> If you are running Rigger on Mac OS X, you might see the following error message:
+
+</p><pre>
+Agreeing to the Xcode/iOS license requires admin privileges, please re-run as root via sudo.
+</pre>
+
+If so, you need to agree to the Xcode license with the `sudo xcodebuild -license` command as mentioned in the Prerequisite section. 
+
+</div>
+
+<p>The Deis provisioning process with Rigger on DigitalOcean takes about 15 minutes and goes like this:</p>
+
+<ol>
+<li> <a href="https://terraform.io">Terraform</a> is automatically downloaded and installed into <code>${HOME}/.rigger</code> for use by Rigger</li>
+<li> Deis clients (<code>deis</code> and <code>deisctl</code>) are downloaded into <code>${HOME}/.rigger/<strong>&lt;id&gt;</strong>/bins</code></li>
+<li> <a href="https://terraform.io">Terraform</a> is used to provision 3 CoreOS Droplets in DigitalOcean</li>
+<li> <code>DEISCTL_TUNNEL</code> is determined by investigating one of the newly provisioned DigitalOcean Droplets</li>
+<li> <a href="http://xip.io">xip.io</a> is used to set up a simple DNS entry point to the cluster</li>
+<li> <code>deisctl install platform</code> is executed</li>
+<li> <code>deisctl start platform</code> is executed</li>
+</ol>
+
+<div>
+
+<p><strong>Warning:</strong> If you see the following errors when provisioning the infrastructure on DigitalOcean, make sure your DO Access Token is read-write:
+
+</p><pre>
+3 error(s) occurred:
+
+* digitalocean_droplet.deis.1: Error creating droplet: Error creating droplet: API Error: 403 Forbidden
+* digitalocean_droplet.deis.0: Error creating droplet: Error creating droplet: API Error: 403 Forbidden
+* digitalocean_droplet.deis.2: Error creating droplet: Error creating droplet: API Error: 403 Forbidden
+</pre>
+
+You can then run the <code>./rigger provision</code> again. 
+
+</div>
+
+<h2>Step 4 &#x2014; Playtime!</h2>
+
+<p>After you've created your Deis cluster using Rigger, you should deploy an app to it!</p>
+
+<p>First, get back to some free directory space:</p>
+<figure class="highlight"><pre><code class="language-text">cd ../
+</code></pre></figure>
+<p>Next, grab an example app from the Deis project:</p>
+<figure class="highlight"><pre><code class="language-text">git clone https://github.com/deis/example-nodejs-express.git
+</code></pre></figure>
+<p>Change into the newly created directory:</p>
+<figure class="highlight"><pre><code class="language-text">cd example-nodejs-express
+</code></pre></figure>
+<p>Load all the <code>rigger</code> environment variables into this shell:</p>
+
+<pre>
+source "${HOME}/.rigger/<strong>&lt;id&gt;</strong>/vars"
+</pre>
+
+<p>Then register an administrative account to this Deis cluster:</p>
+<figure class="highlight"><pre><code class="language-text">deis auth:register http://deis.${DEIS_TEST_DOMAIN}
+</code></pre></figure>
+<p>You will be prompted for some information to create the account:</p>
+
+<pre>
+username: <strong>[ enter a username ]</strong>
+password: <strong>[ enter a password ]</strong>
+password (confirm): <strong>[ enter the same password ]</strong>
+email: <strong>[ enter an email for this user ]</strong>
+Registered <strong>&lt;username&gt;</strong>
+Logged in as <strong>&lt;username&gt;</strong>
+</pre>
+
+<p>Add your public key to the Deis cluster:</p>
+<figure class="highlight"><pre><code class="language-text">deis keys:add
+</code></pre></figure>
+<p>You will see the following:</p>
+
+<pre>
+Found the following SSH public keys:
+1) deiskey.pub deiskey
+2) id_dsa.pub sgoings
+0) Enter path to pubfile (or use keys:add <key_path>)
+Which would you like to use with Deis? <strong>[ enter number ]</strong>
+</key_path></pre>
+
+<p>You should pick the public key that goes along with the private key you chose during the <code>rigger configure</code> step.</p>
+
+<p>Add a git remote to point at the Deis cluster:</p>
+<figure class="highlight"><pre><code class="language-text">deis apps:create
+</code></pre></figure>
+<p>You will see the following:</p>
+
+<pre>
+Creating Application... done, created <strong>hearty-kingfish</strong>
+Git remote deis added
+remote available at ssh://git@deis.<strong>${DEIS_TEST_DOMAIN}</strong>:2222/<strong>hearty-kingfish</strong>.git
+</pre>
+
+<p>Now, push it!</p>
+<figure class="highlight"><pre><code class="language-text">git push deis master
+</code></pre></figure>
+<p>This might take a while. You should eventually see the following at the end of the output:</p>
+
+<pre>
+-----&gt; Launching...
+ done, <strong>hearty-kingfish</strong>:v2 deployed to Deis
+
+ http://<strong>hearty-kingfish.${DEIS_TEST_DOMAIN}</strong>
+
+ To learn more, use `deis help` or visit http://deis.io
+</pre>
+
+<p>Go ahead and load that URL in your browser! (the app is pretty simple, it just prints out: "Powered by Deis")</p>
+
+<h2>Step 5 &#x2014; Knocking it all down!</h2>
+
+<p>Once you've played around with your fancy new Deis cluster a bit... it'd probably be a good idea to tear it all down, eh? That's simple.</p>
+
+<p>Go back to the <code>rigger</code> directory:</p>
+<figure class="highlight"><pre><code class="language-text">cd ../rigger
+</code></pre></figure>
+<p>Then, destroy it:</p>
+<figure class="highlight"><pre><code class="language-text">./rigger destroy
+</code></pre></figure>
+<h2>Conclusion</h2>
+
+<p>In this guide, you were able to see where the Deis team is headed to make the lives of developers, operators, and open source contributors easier. Provisioning a <a href="http://deis.io">Deis</a> cluster is now a breeze with Rigger, thanks to the winning combination of <a href="https://terraform.io">Terraform</a> under the hood and lightning fast DigitalOcean as the infrastructure provider.</p>
+
+<p><em>This post originally appeared on the <a href="https://www.digitalocean.com/community/tutorials/ramping-up-with-rigger-deploying-deis-on-digitalocean">DigitalOcean</a> website and was edited by <a href="https://www.digitalocean.com/community/users/tfox">Tammy Fox</a>.</em></p>
+
+<p><em>This work is licensed under a <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons BY-NC-SA license</a>.</em></p>
+
+ </article>
+ </div>
+</body></html>

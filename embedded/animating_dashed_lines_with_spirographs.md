@@ -1,0 +1,137 @@
+# Animating (dashed) lines with Spirographs
+
+[Original URL](http://www.visualcinnamon.com/2016/01/animating-dashed-line-d3.html)
+
+> In this blog I'll explain how to animate both solid and dashed lines. To make things slightly less boring, I've created a Spirograph drawing app/script to use for the examples! It...
+
+In this blog I'll explain how to animate both solid and dashed lines. To make things slightly less boring, I've created a Spirograph drawing app/script to use for the examples! It came about because last week I wanted to animate a dashed line in a chart. Trying to use the technique I always apply for solid animated lines I suddenly found out that animating a dashed line isn't trivial. It's because of the fact that an animated solid line is, secretly, a dashed line, but I'll go into that later.
+
+For the fun part. Below you can create a whole collection of solid or dashed spirographs, because who doesn't like spirographs, right? The shape of the spirograph is random and the optional dash pattern is random as well. You can use the slider to make the animation go faster (which in counter-intuitive form happens when you slide to the left) or slower (when you slide right. See it as number of seconds of the animation, left is low, right is high). Remove all the spirographs to start anew by pressing "reset".<br>
+(Note: The code for the spirograph calculation itself I adjusted from [this HTML5 demo by alpha2k](https://github.com/alpha2k/HTML5Demos/blob/master/Canvas/spiroGraph.html) and the color palette I blatantly copied from a vector collection I had on my laptop from [Dukepope / Freepik](http://www.freepik.com) because it looked amazing :) )
+
+To understand why drawing a dashed line isn't as easy as you might think, I first need to explain how to create a solid line. It actually feels like a hack than anything proper. Below you can see an image in which I try to explain it with small (though static) examples.
+
+What you actually do is turn the solid line into a dashed line... First, make both the visible dash and the invisible part as large as the total path length. This dash pattern can be set with the _stroke-dasharray_ attribute. In general you give it two numbers, say "6, 6", the first gives the length of the visible dash portion and the second number is the length of the invisible portion (I'll stick to simple dashes, but you can create very complex dash patterns as well, see [some examples here](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-dasharray)). But in this case, for a path that is 60px wide, the _stroke-dasharray_ attribute would have to become "60, 60".<br>
+Next you move the whole dash pattern to the left by a total path length. This will make it appear as if the entire path is filled by the invisible section of the dash pattern. Such an offset of the dash pattern is set by the _stroke-dashoffset_ attribute. In our simple example from above, it would be set to "60".<br>
+All that needs to happen now is decreasing this offset back to zero through a transition. While the entire patterns is moved to the right, it will appear as if a solid line is growing from the starting portion of the path. Once the offset is back to zero, all that remains is the visible part of the dashed pattern, making it appear as a normal solid line.
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path-300x186.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path-768x475.png%20768w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path-1024x633.png%201024w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path-1170x724.png%201170w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path-571x353.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path-371x229.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path-271x168.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path.png%201400w" class="attachment-theme-large size-theme-large" width="1170">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-an-animated-path.png)
+
+Doing the above in D3 code looks as follows:
+
+```
+//Set up your path as normal
+var path = svg.append("path")
+    .attr("class", "spirograph")
+    .attr("d", line(plotSpiroGraph()) );    
+
+//Get the total length of the path
+var totalLength = path.node().getTotalLength(); 
+
+//Animate the path by offsetting the path so all you see is the white last bit of the dash pattern 
+//(which has a length that is the same as the length of the entire path), and then slowly move the offset
+//to zero (i.e. out of the way) so the rest of the path becomes visible
+//(the visible stuff at the start of the dash pattern)
+path
+    .attr("stroke-dasharray", totalLength + " " + totalLength)
+    .attr("stroke-dashoffset", totalLength)
+    .transition().duration(3000).ease("linear")
+    .attr("stroke-dashoffset", 0);
+```
+
+While using a very long duration, this could look like this
+
+![An animated solid line](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Solid-Line.gif)
+
+Perhaps you might have already noticed, but the attribute of _stroke-dasharray_ is being used to animate a path in general. So whatever you might have set for your dashed line in the CSS, it will be overwritten once the animation starts and you will be left with a solid line.
+
+The solution is to create a new complex dash pattern from the original pattern that spans the length of the entire path (and some more), imitating the simpler dash pattern. I again tried to create a visual (though static) companion to the explanation in the image below. Say you have a path that is 60 pixels long and you want it to fill with a dash pattern of "6, 6", thus 6 pixels of color and then 6 pixels of transparency. To animate this, we extend this simple dash pattern to fill up the entire path. One step of the simple pattern has a length of 12 (6 + 6), so we need 60 / 12 = 5 of these simple patterns to fill up the path. The first part of our new more complex pattern becomes "6, 6, 6, 6, 6, 6, 6, 6, 6, 6". Each odd number gives the length of the visible part of the dash pattern and each even number the invisible part.<br>
+Now we can almost continue as if it was a solid line, where we ended the pattern with an invisible part that spans the length of the entire path. In this case this means adding one more dash combination (two numbers), where the first is 0px, since we don't want a visible part, and the last is 60px for the invisible part, the length of the path. The eventual new pattern for animation has thus become: "6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 0, 60".<br>
+Remember, one complete instance of this new pattern is twice as long as the path itself (just like in the solid line case). With this "formula" for the new pattern, we can continue as before by offsetting the pattern to the left so only the invisible part can be seen and then decreasing this offset to 0 in a transition so that it seems as if the line (now dashed) is growing from the left.
+
+Note: I figured this out through [this stackoverflow question](http://stackoverflow.com/questions/24021971/animate-the-drawing-of-a-dashed-svg-line) and most of the code for creating the new more complex dash pattern is based on one of the answers found in the link
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path-300x251.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path-768x641.png%20768w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path-1024x855.png%201024w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path-1170x977.png%201170w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path-571x477.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path-371x310.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path-271x226.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path.png%201400w" class="attachment-theme-large size-theme-large" width="1170">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Explaining-a-dashed-animated-path.png)
+
+To do this in D3 involves a creating few extra variables compared to the solid line version. As explained above, we first set the dash-array that we want (in this case "6, 6"). Then we need to see how long this is (_dashLength_, in this case quite easy, namely 12, but the code is ready for more complex patterns). With this length we can figure out how often it fits into the entire path (_dashCount_). Next create a new string (_newDashes_) that duplicates the original pattern by _dashCount_ (i.e. how often it fits into the path). Finally the last dash section is added with a visible length of 0 and an invisible length that is the same as the entire path length (_dashArray_). Afterwards, we can use this new dash pattern in the same way as if we were animating a solid line.
+
+In the code below, the lines in between the /bin/ /boot/ /dev/ /etc/ /git/ /home/ /lib/ /lib64/ /lost+found/ /media/ /mnt/ /opt/ /proc/ /root/ /run/ /sbin/ /snap/ /srv/ /sys/ /tmp/ /usr/ /var/ are new and the rest is practically the same as the solid line case. And all that the code in between the /bin/ /boot/ /dev/ /etc/ /git/ /home/ /lib/ /lib64/ /lost+found/ /media/ /mnt/ /opt/ /proc/ /root/ /run/ /sbin/ /snap/ /srv/ /sys/ /tmp/ /usr/ /var/ does, is calculate the variable _dashArray_
+
+```
+//Set up your path as normal
+var path = svg.append("path")
+    .attr("class", "spirograph")
+    .attr("d", line(plotSpiroGraph()) );    
+
+//Get the total length of the path
+var totalLength = path.node().getTotalLength(); 
+
+/***************** Create the required stroke-dasharray to animate a dashed pattern ****************/
+//Adjusted from http://stackoverflow.com/questions/24021971/animate-the-drawing-of-a-dashed-svg-line
+
+//Create a (random) dash pattern
+//The first number specifies the length of the visible part, the dash
+//The second number specifies the length of the invisible part
+var dashing = "6, 6"
+
+//This returns the length of adding all of the numbers in dashing (the length of one pattern in essense)
+//So for "6,6", for example, that would return 6+6 = 12
+var dashLength = 
+    dashing
+        .split(/[\s,]/)
+        .map(function (a) { return parseFloat(a) || 0 })
+        .reduce(function (a, b) { return a + b });
+
+//How many of these dash patterns will fit inside the entire path?
+var dashCount = Math.ceil( totalLength / dashLength );
+
+//Create an array that holds the pattern as often so it will fill the entire path
+var newDashes = new Array(dashCount).join( dashing + " " );
+//Then add one more dash pattern, namely with a visible part of length 0 (so nothing) and a white part
+//that is the same length as the entire path
+var dashArray = newDashes + " 0, " + totalLength;
+
+/************************************* END ******************************************/
+
+//Now offset the entire dash pattern, so only the last white section is 
+//visible and then decrease this offset in a transition to show the dashes
+path
+    .attr("stroke-dashoffset", totalLength)
+    .attr("stroke-dasharray", dashArray)    //This is where it differs with the solid line example
+    .transition().duration(3000).ease("linear")
+    .attr("stroke-dashoffset", 0);
+```
+
+While using a very long duration, this could look like this
+
+![An Animated Dashed Line](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Dashed-Line.gif)
+
+Have fun with the spirograph drawer and animating your own solid and dashed lines. I'd love to see screenshots of whatever fate throws on your screen if you think it looks wonderful ^^
+
+You can find the code for the Spirograph drawer here: <http://bl.ocks.org/nbremer/d7071c6a5a7206701015>
+
+And here are some fun results that I've gotten :)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-1-300x289.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-1-571x550.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-1-371x357.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-1-271x261.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-1.png%20676w" class="attachment-theme-large size-theme-large" width="676">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-1.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-17-300x231.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-17-371x285.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-17-271x208.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-17.png%20559w" class="attachment-theme-large size-theme-large" width="559">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-17.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-3-289x300.png%20289w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-3-271x281.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-3.png%20326w" class="attachment-theme-large size-theme-large" width="326">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-3.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-9-300x280.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-9-571x532.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-9-371x346.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-9-271x253.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-9.png%20577w" class="attachment-theme-large size-theme-large" width="577">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-9.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-10-70x70.png%2070w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-10-300x300.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-10-371x370.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-10-271x270.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-10-200x200.png%20200w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-10.png%20513w" class="attachment-theme-large size-theme-large" width="513">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-10.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-11-300x254.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-11-768x650.png%20768w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-11-571x483.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-11-371x314.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-11-271x229.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-11.png%20945w" class="attachment-theme-large size-theme-large" width="945">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-11.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-12-300x275.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-12-768x704.png%20768w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-12-571x523.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-12-371x340.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-12-271x248.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-12.png%20889w" class="attachment-theme-large size-theme-large" width="889">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-12.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-14-300x279.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-14-571x531.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-14-371x345.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-14-271x252.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-14.png%20611w" class="attachment-theme-large size-theme-large" width="611">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-14.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-13-300x263.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-13-768x674.png%20768w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-13-571x501.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-13-371x325.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-13-271x238.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-13.png%20782w" class="attachment-theme-large size-theme-large" width="782">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-13.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-18-300x277.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-18-768x709.png%20768w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-18-571x527.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-18-371x343.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-18-271x250.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-18.png%20837w" class="attachment-theme-large size-theme-large" width="837">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-18.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-5-300x211.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-5-768x540.png%20768w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-5-571x402.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-5-371x261.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-5-271x191.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-5.png%20823w" class="attachment-theme-large size-theme-large" width="823">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-5.png)
+
+[<embed src="http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-8-300x261.png%20300w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-8-571x497.png%20571w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-8-371x323.png%20371w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-8-271x236.png%20271w,%20http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-8.png%20707w" class="attachment-theme-large size-theme-large" width="707">](http://www.visualcinnamon.com/wp-content/uploads/2016/01/Spirograph-8.png)

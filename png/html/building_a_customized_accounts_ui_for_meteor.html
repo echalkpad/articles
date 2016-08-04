@@ -1,0 +1,263 @@
+<!DOCTYPE html><html><head><title>Building a customized accounts ui for Meteor</title></head><body>
+<h1>Building a customized accounts ui for Meteor</h1><p><a href="http://blog.benmcmahen.com/post/41741539120/building-a-customized-accounts-ui-for-meteor" target="_new">Original URL</a></p>
+<p><blockquote>This is the third article in a series aimed at explaining how I built fiddleware Subtitles. You can also learn how to build the timeline using d3 and SVG, and how to embed local videos into your web&hellip;</blockquote></p>
+<div><li class="post text">
+ 
+ 
+ 
+
+ <p>This is the third article in a series aimed at explaining how I built fiddleware Subtitles. You can also learn how to <a href="http://blog.benmcmahen.com/post/41124327100/using-d3-and-meteor-to-generate-scalable-vector">build the timeline</a> using d3 and SVG, and how to <a href="http://blog.benmcmahen.com/post/41058353353/strategies-for-using-local-files-in-your-web">embed local videos</a> into your web application.</p>
+
+<p>The Meteor framework comes with a handy accounts system, including the Accounts-UI package, which makes it incredibly easy to add an accounts system (including login, registration, and password recovery) to your preexisting web app. It&#x2019;s especially useful for prototyping, when you don&#x2019;t particularly care about how it works, or integrates into your website. But you&#x2019;ll probably find that, eventually, you&#x2019;ll want a bit more flexibility with your login system. Some of this can be achieved by using the <code>Accounts-UI-Unstyled</code> package, which allows you to fully stylize the accounts ui to match your other styles. But anything beyond that &#x2014; say, building a more traditional login system, like that found on Twitter or Facebook &#x2014; requires building your own accounts ui. Thankfully, Meteor&#x2019;s accounts api makes it suprisingly easy to hook your custom templates into the provided <a href="http://docs.meteor.com/#accounts_api">accounts functions</a>. This article will provide a basic introduction to building a traditional login/password based accounts ui for Meteor, like that found on <a href="http://subtitles.fiddleware.com">fiddleware Subtitles</a>.</p>
+
+<h2>Installing the necessary packages</h2>
+
+<p>To start with, you need to add the appropriate accounts packages to your meteor project. For this example, I&#x2019;ll be using the standard password login system.</p>
+
+<pre><code> meteor add accounts-base
+ meteor add accounts-password
+</code></pre>
+
+<h2>Registration and login forms</h2>
+
+<p>Next, we will want to build our login and registration form templates. These are just standard forms with the appropriate fields, which will be cached, trimmed, validated, and passed to the appropriate <code>Accounts</code> function.</p>
+
+<pre><code> &lt;form id="login-form" action="action"&gt;
+ &lt;div&gt;
+ &lt;input type="email" id="login-email" /&gt;
+ &lt;input type="password" id="login-password" /&gt;
+ &lt;input type="submit" id="login-button" value="Sign in" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt; 
+</code></pre>
+
+<p>Then we will setup an event listener for the form submission. You should listen to the form&#x2019;s <code>submit</code> event, rather than the submit button&#x2019;s <code>click</code> event to ensure proper form behaviour (For example, allowing the submission of the form using the <code>enter</code> key).</p>
+
+<pre><code> Template.login.events({
+
+ 'submit #login-form' : function(e, t){
+ e.preventDefault();
+ // retrieve the input field values
+ var email = t.find('#login-email').value
+ , password = t.find('#login-password').value;
+
+ // Trim and validate your fields here.... 
+
+ // If validation passes, supply the appropriate fields to the
+ // Meteor.loginWithPassword() function.
+ Meteor.loginWithPassword(email, password, function(err){
+ if (err)
+ // The user might not have been found, or their passwword
+ // could be incorrect. Inform the user that their
+ // login attempt has failed. 
+ else
+ // The user has been logged in.
+ });
+ return false; 
+ }
+ });
+</code></pre>
+
+<p>These are the absolute basics of building your own login form. As you can see, it&#x2019;s incredibly easy. You listen for the form submission, retrieve the input values, trim and validate the fields, and supply these values to the <code>Meteor.loginWithPassword()</code> function. The function does it&#x2019;s thing, and either performs the login request or calls back with an error. If there is an error, you should inform the user. Finally, you need to <code>return false</code> to prevent the form submission from reloading the page.</p>
+
+<p>Our registration acts like you might expect. We create our template.</p>
+
+<pre><code> &lt;form id="register-form" action="action"&gt;
+ &lt;div&gt;
+ &lt;input type="email" id="account-email" /&gt;
+ &lt;input type="password" id="account-password" /&gt;
+ &lt;input type="submit" id="create-account" value="Create an Account" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+</code></pre>
+
+<p>Again, we listen for the form submission, retrieve the input values, and then pass them to <code>Accounts.createUser()</code> function.</p>
+
+<pre><code> Template.register.events({
+ 'submit #register-form' : function(e, t) {
+ e.preventDefault();
+ var email = t.find('#account-email').value
+ , password = t.find('#account-password').value;
+
+ // Trim and validate the input
+
+ Accounts.createUser({email: email, password : password}, function(err){
+ if (err) {
+ // Inform the user that account creation failed
+ } else {
+ // Success. Account has been created and the user
+ // has logged in successfully. 
+ }
+
+ });
+
+ return false;
+ }
+ });
+</code></pre>
+
+<p>This provides the user with the basic means of creating an account and logging in.</p>
+
+<h2>Validations</h2>
+
+<p>When accepting user input, it&#x2019;s important to do client-side validation to immediately inform the user if the values they have entered are invalid in some way. You&#x2019;ll most likely want to trim whitespace, too, from the email field (but not the password field). To trim whitespace from the email field, you can setup a simple helper function:</p>
+
+<pre><code> // trim helper
+ var trimInput = function(val) {
+ return val.replace(/^\s*|\s*$/g, "");
+ }
+</code></pre>
+
+<p>And then invoke it using the <code>email field</code> value.</p>
+
+<pre><code> var email = trimInput(email);
+</code></pre>
+
+<p>For validation, you can create functions that determine if the value is a proper email, isn&#x2019;t empty, or is long enough. For example, here&#x2019;s a very basic function that checks to see if the password is 6 characters or longer. If the password is at least 6 characters long, return true. Otherwise, return false.</p>
+
+<pre><code> var isValidPassword = function(val) {
+ return val.length &amp;gt;= 6 ? true : false; 
+ }
+</code></pre>
+
+<p>Then, before using the <code>Meteor.createUser()</code> function, you&#x2019;ll want to validate the field first. Let&#x2019;s ensure that the user has entered a 6 character or longer password.</p>
+
+<pre><code> if (isValidPassword(userPassword) // &amp;amp;&amp;amp; other validations) {
+ // Then use the Meteor.createUser() function
+ }
+</code></pre>
+
+<h2>Error Handling</h2>
+
+<p>Of course, it&#x2019;s not enough to simply prevent <code>Meteor.createUser()</code> from being called if validation fails. You need a way to <strong>inform</strong> the user when and why form submission fails. For this, I use <a href="http://visionmedia.github.com/uikit/">ui kit&#x2019;s notification module</a> combined with a <code>Session</code> variable within a reactive context to alert the user when one of the validations fail. This approach is limited, but good enough for my purposes. You may want to implement something a bit more advanced that displays multiple error messages next to the fields instead.</p>
+
+<pre><code> Meteor.autorun(function() {
+ // Whenever this session variable changes, run this function.
+ var message = Session.get('displayMessage');
+ if (message) {
+ var stringArray = message.split('&amp;amp;');
+ ui.notify(stringArray[0], stringArray[1])
+ .effect('slide')
+ .closable();
+
+ Session.set('displayMessage', null);
+ }
+ });
+</code></pre>
+
+<p>Then, if validation fails, within each validation function I set the <code>displayMessage</code> session variable.</p>
+
+<pre><code> var isValidPassword = function(val, field) {
+ if (val.length &amp;gt;= 6) {
+ return true;
+ } else {
+ Session.set('displayMessage', 'Error &amp;amp; Too short.')
+ return false; 
+ }
+ }
+</code></pre>
+
+<p>Since <code>Session.get('displayMessage')</code> is set within a reactive context, the notification is displayed any time the session variable changes. This displays the error message in a notification that appears in the top right of browser window.</p>
+
+<h2>Password Recovery</h2>
+
+<p>Lastly, we need to implement the password recovery system. To do this, we need to create a template that has two primary functions: (1) If the user is requesting a reset password email, then we need a form for them to enter their email address. Upon submission (with a validated email address) the user will receive an email with a password reset URL which contains a password reset token. (2) If the user is entering our page after clicking this link, we need to supply them with a means of entering a new password. This requires a different form.</p>
+
+<pre><code> {{#if resetPassword}}
+ &lt;form id="new-password" action="action"&gt;
+ &lt;div&gt;
+ &lt;input type="text" id="new-password-password" /&gt;
+ &lt;input type="submit" value="Change Password" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+ {{else}}
+ &lt;form id="recovery-form" action="action"&gt;
+ &lt;div&gt;
+ &lt;input type="text" id="recovery-email" /&gt; 
+ &lt;input type="submit" value="Send Reset Instructions" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+ {{/if}}
+</code></pre>
+
+<p>If a <code>resetPassword</code> token is present in the URL, then we will display the <code>new-password</code> form. Otherwise, we will display the <code>recovery-email</code> form.</p>
+
+<pre><code> Template.passwordRecovery.helpers({
+ resetPassword : function(t) {
+ return Session.get('resetPassword');
+ }
+ });
+</code></pre>
+
+<p>We need to determine if the <code>resetPassword</code> token is present in the URL, and if it is, we need to set the Session variable with that token. This will render the appropriate form, and allow us to pass this token to the <code>Accounts.resetPassword</code> function. The Accounts package stores the reset token in <code>Accounts._resetPasswordToken</code>.</p>
+
+<pre><code> if (Accounts._resetPasswordToken) {
+ Session.set('resetPassword', Accounts._resetPasswordToken);
+ } 
+</code></pre>
+
+<p>And finally, we need to setup our event listeners to process both forms. The pattern is similar to our login and registration forms.</p>
+
+<pre><code> Template.passwordRecovery.events({
+
+ 'submit #recovery-form' : function(e, t) {
+ e.preventDefault()
+ var email = trimInput(t.find('#recovery-email').value)
+
+ if (isNotEmpty(email) &amp;amp;&amp;amp; isEmail(email)) {
+ Session.set('loading', true);
+ Accounts.forgotPassword({email: email}, function(err){
+ if (err)
+ Session.set('displayMessage', 'Password Reset Error &amp;amp; Doh')
+ else {
+ Session.set('displayMessage', 'Email Sent &amp;amp; Please check your email.')
+ }
+ Session.set('loading', false);
+ });
+ }
+ return false; 
+ },
+
+ 'submit #new-password' : function(e, t) {
+ e.preventDefault();
+ var pw = t.find('#new-password-password').value;
+ if (isNotEmpty(pw) &amp;amp;&amp;amp; isValidPassword(pw)) {
+ Session.set('loading', true);
+ Accounts.resetPassword(Session.get('resetPassword'), pw, function(err){
+ if (err)
+ Session.set('displayMessage', 'Password Reset Error &amp;amp; Sorry');
+ else {
+ Session.set('resetPassword', null);
+ }
+ Session.set('loading', false);
+ });
+ }
+ return false; 
+ }
+ });
+</code></pre>
+
+<p>And there you have your basic password recovery functionality. You&#x2019;ll notice that I have a <code>Session.set('loading', true)</code> variable. This renders a canvas loading animation to indicate that the we are communicating with the server. When the server responds, we set the loading variable to <code>false</code>. You can use this pattern in your other accounts forms, or any time you make a call using a <code>Meteor.method()</code>.</p>
+
+<h2>Conclusion &amp; Resources</h2>
+
+<p>These are the absolute basics of creating a customized accounts ui for your Meteor application. You can see the source for fiddlware Subtitles <a href="https://github.com/bmcmahen/Subtitles/blob/master/client/scripts/login.js">here</a>. It&#x2019;s also worth checking out the <a href="https://github.com/meteor/meteor/tree/master/packages/accounts-ui-unstyled">Accounts-UI</a> code to see how the Accounts-UI package is built. And, of course, you should read the excellent <a href="http://docs.meteor.com/#accounts_api">Meteor docs</a> for a detailed description of the functions at your disposal.</p>
+
+ <a href="https://twitter.com/share" class="twitter-share-button">Tweet</a>
+ 
+
+ </li>
+ 
+
+ 
+
+
+
+ 
+
+ 
+
+ 
+ 
+ </div>
+</body></html>

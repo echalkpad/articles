@@ -1,0 +1,131 @@
+<!DOCTYPE html><html><head><title>How to Use Incron to Monitor Important Files and Folders</title></head><body>
+<h1>How to Use Incron to Monitor Important Files and Folders</h1><p><a href="https://www.linux.com/learn/how-use-incron-monitor-important-files-and-folders" target="_new">Original URL</a></p>
+<p><blockquote>I&#x2019;ve seen it happen: a Linux server is taken over by a rootkit and no one was the wiser...at least not until some errant behavior occurred or something outside of the company reported an&hellip;</blockquote></p>
+<div><div class="field-item even"><p>I&#x2019;ve seen it happen: a Linux server is taken over by a rootkit and no one was the wiser...at least not until some errant behavior occurred or something outside of the company reported an oddity. After some serious digging, you find out the rootkit has modified a few files or directories and the damage has been done.</p>
+<p>What if you knew of a tool that could monitor files for change and then report the changes within /var/log/syslog or take some action when a file was modified? There is such a tool.</p>
+<p>Incron is similar to cron, but instead of running a command based on time, it can trigger commands when a file/directory event occurs (e.g., a modification to a file or to a file&#x2019;s permissions). This makes it an outstanding tool to use for monitoring folders like /etc/apache2 or /usr/bin. </p>
+<p>I&#x2019;ll walk you through the process of installing and using Incron to monitor such a directory, so that you can always keep tabs on those crucial files and folders.</p>
+<h3>Installation</h3>
+<p>I&#x2019;ll be installing Incron on the Ubuntu 16.04 platform. With one quick command, you can have the tool ready to go. Here&#x2019;s how:</p>
+<ol>
+<li>
+<p>Open up a terminal window</p>
+</li>
+<li>
+<p>Issue the command <em>sudo apt-get install incron</em></p>
+</li>
+<li>
+<p>Type your sudo password and hit Enter</p>
+</li>
+<li>
+<p>Type<em> </em><em>y </em>when/if prompted</p>
+</li>
+<li>
+<p>Allow the installation to complete</p>
+</li>
+</ol>
+<h3>Initial Setup</h3>
+<p>Incron is similar to cron, in that you&#x2019;ll use the <em>incrontab </em>command to create jobs for watching files/folders. Unlike cron, however, you must first specify who can actually use the tool (smart thinking by the developers). To set this up, you must add users to the <em>/etc/incron.allow</em> file. Say you want to enable the root user to use Incron. For this, you would open up <em>/etc/incron.allow</em> and add the following line:</p>
+<pre>
+root</pre><p>List all of the users you want to give access to Incron, one user per line, in this file. Close the file and those users can now execute the <em>incrontab</em> command without error.</p>
+<h3>Incrontab Configuration</h3>
+<p>As you may have surmised, using <em>incrontab</em> is similar to using <em>crontab</em>. You would edit your incrontab file with the command <em>incrontab -e</em>. This command will open up the <em>incrontab</em> file for editing. How you use Incron now starts to veer away slightly from Cron. let&#x2019;s see how.</p>
+<p>The format of the <em>incrontab</em> looks like:</p>
+<pre>
+&lt;path&gt; &lt;mask&gt; &lt;command&gt;</pre><p>Let&#x2019;s break that down.</p>
+<ul>
+<li>
+<p>&lt;path&gt; &#x2014; This is the path to the directory you want to watch. Do note the Incron is not capable of watching subdirectories. Only files within the path will be monitored. If you need subdirectories monitored, you must give them their own entry.</p>
+</li>
+<li>
+<p>&lt;mask&gt; &#x2014; This is one of several options:</p>
+<ul>
+<li>
+<p><em>IN_ACCESS</em> File was accessed (read)</p>
+</li>
+<li>
+<p><em>IN_ATTRIB</em><em> </em>Metadata changed (permissions, timestamps, extended attributes, etc.)</p>
+</li>
+<li>
+<p><em>IN_CLOSE_WRITE</em><em> </em>File opened for writing was closed</p>
+</li>
+<li>
+<p><em>IN_CLOSE_NOWRITE</em> File not opened for writing was closed</p>
+</li>
+<li>
+<p><em>IN_CREATE</em> File/directory created in watched directory</p>
+</li>
+<li>
+<p><em>IN_DELETE</em> File/directory deleted from watched directory</p>
+</li>
+<li>
+<p><em>IN_DELETE_SELF</em> Watched file/directory was itself deleted</p>
+</li>
+<li>
+<p><em>IN_MODIFY</em><em> </em>File was modified</p>
+</li>
+<li>
+<p><em>IN_MOVE_SELF</em> Watched file/directory was itself moved</p>
+</li>
+<li>
+<p><em>IN_MOVED_FROM</em><em> </em>File moved out of watched directory</p>
+</li>
+<li>
+<p><em>IN_MOVED_TO</em><em> </em>File moved into watched directory</p>
+</li>
+<li>
+<p><em>IN_OPEN</em><em> </em>File was opened</p>
+</li>
+</ul>
+</li>
+<li>
+<p>&lt;command&gt; &#x2014; This is the command that will run should an event be triggered. In place of a command, you can always use wildcards. The wildcards will report basic information in syslog. The available wildcards are:</p>
+<ul>
+<li>
+<p>$$ Prints a dollar sign</p>
+</li>
+<li>
+<p>$@ &#xA0;Add the watched filesystem path</p>
+</li>
+<li>
+<p>$# &#xA0;&#xA0;Add the event-related file name</p>
+</li>
+<li>
+<p>$% &#xA0;Add the event flags (textually)</p>
+</li>
+<li>
+<p>$&amp; &#xA0;Add the &#xA0;event flags (numerically)</p>
+</li>
+</ul>
+</li>
+</ul>
+<h3>Usage</h3>
+<p>Let&#x2019;s set up a simple incrontab, using wildcards, and see how this works. First, let&#x2019;s assume we&#x2019;ve added the user olivia into the incron.allow file. We&#x2019;ll create the folder /home/olivia/TEST and then run the command <em>incrontab -e as user </em><em>olivia</em>. With the editor open, add the following line:</p>
+<pre>
+/home/olivia/TEST IN_MODIFY echo "$$ $@ $# $% $&amp;"</pre><p>Save the file and do the following:</p>
+<ol>
+<li>
+<p>Open up a second terminal window and issue the command <em>tail -f /var/log/syslog</em></p>
+</li>
+<li>
+<p>In the first terminal window, create the file /home/olivia/TEST/test</p>
+</li>
+<li>
+<p>Add some text to the file and save it</p>
+</li>
+</ol>
+<p>If you check the tail running on /var/log/syslog, you should see entries as shown in Figure 1.</p>
+
+
+<p>Although that clearly indicates to you that the contents of the TEST folder were modified, we can make this a bit more useful. Say, for example, you want to have your web server automatically shut down if the contents of /etc/apache2/apache2.conf are modified (it&#x2019;s drastic, but illustrates the tool perfectly). For this, you would need to edit the root user&#x2019;s Incrontab file.</p>
+<p>Here&#x2019;s what you would want to do. Open up a terminal window and issue the command sudo su. Enter your sudo password and then issue the command <em>incrontab -e</em>. With the Incrontab editor open, add the following:</p>
+<pre>
+/etc/apache2/apache2.conf IN_MODIFY /usr/sbin/service apache2 stop</pre><p>Save and close the file. You can test this by opening the <em>/etc/apache2/apache2.conf</em> file and making some minor change. Save the edited file and your web server should immediately stop.</p>
+<p>You could also have Incron watch multiple folders/files and employ the same action. Suppose you want to watch both the <em>/etc/apache2/apache2.conf </em>file and the <em>/var/www/html/index.html </em>file for changes. You could create two incrontab entries like so:</p>
+<pre>
+/etc/apache2/apache2.conf IN_MODIFY /usr/sbin/service apache2 stop
+
+/var/www/html/index.html IN_MODIFY /usr/sbin/service apache2 stop</pre><p>Should either file be modified, the web server will stop.</p>
+<p>This, of course, is only a simple example of how you can make use of Incron. Get creative and see just how far you can bend the will of Incron to meet your needs. This is Linux, after all...it is ready be used in ways other platforms only dream of.</p>
+</div></div>
+</body></html>

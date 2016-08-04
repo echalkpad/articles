@@ -1,0 +1,871 @@
+<!DOCTYPE html><html><head><title>Build A Real-Time Twitter Stream with Node and React.js</title></head><body>
+<h1>Build A Real-Time Twitter Stream with Node and React.js</h1><p><a href="https://scotch.io/tutorials/build-a-real-time-twitter-stream-with-node-and-react-js" target="_new">Original URL</a></p>
+<p><blockquote>Introduction Welcome to the second installation of Learning React, a series of articles focused on becoming proficient and effective with Facebook&#x2019;s React library. If you haven&#x2019;t read&hellip;</blockquote></p>
+<div><div class="content">
+<h2>Introduction</h2>
+<p>Welcome to the second installation of <strong>Learning React</strong>, a series of articles focused on becoming proficient and effective with Facebook&#x2019;s React library. If you haven&#x2019;t read the first installation, <a href="https://scotch.io/tutorials/javascript/learning-react-getting-started-and-concepts">Getting Started and Concepts</a>, it is highly recommended that you do so before proceeding.</p>
+<p>Today we are going to build an application in React using <strong>Isomorphic Javascript</strong>.</p>
+<p><em>Iso-what?</em></p>
+<p>Isomorphic. Javascript. It means writing one codebase that can run on <em>both the server side and the client side.</em></p>
+<p>This is the concept behind frameworks like <a href="https://github.com/rendrjs/rendr">Rendr</a>, <a href="https://www.meteor.com/">Meteor</a> &amp; <a href="http://derbyjs.com/">Derby</a>. You can also accomplish this using <a href="http://facebook.github.io/react/">React</a>, and today we are going to learn how.</p>
+<h3>Why is this awesome?</h3>
+<p>I&#x2019;m an Angular fan just like everybody else, but one pain point is the potential SEO impact.</p>
+<p><em>But I thought Google executes and indexes javascript?</em></p>
+<p>Yeah, not really. They just give you an opportunity to serve up static HTML. You still have to generate that HTML with PhantomJS or a third party service.</p>
+<p>Enter React.</p>
+<div class="text-center">
+<a href="https://cask.scotch.io/2014/10/react-site.png"><img src="https://cask.scotch.io/2014/10/react-site.png" alt="react-site" width="1138" class="aligncenter size-full wp-image-4727 img-responsive img-thumbnail"></a>
+</div>
+<p>React is amazing on the client side, but it&#x2019;s ability to be rendered on the server side makes it truly special. This is because React uses a virtual DOM instead of the real one, and allows us to render our components to markup.</p>
+<h3>Getting Started</h3>
+<p>Alright gang, lets get down to brass tacks. We are going to build an app that shows tweets about this article, and loads new ones in real time. Here are the requirements:</p>
+<ul>
+<li>It should listen to the Twitter streaming API and save new tweets as they come in.</li>
+<li>On save, an event should be emitted to the client side that will update the views.</li>
+<li>The page should render server side initially, and the client side should take it from there.</li>
+<li>We should use infinity scroll pagination to load blocks of 10 tweets at a time.</li>
+<li>New unread tweets should have a notification bar that will prompt the user to view them.</li>
+</ul>
+<p>Here is a quick look at what we&#x2019;ll be building. Make sure you check out the <a href="http://react-tweets.herokuapp.com/">demo</a> and to see everything happen in real time.</p>
+<div class="text-center">
+<a href="https://cask.scotch.io/2014/10/react-tweets-demo.png"><img src="https://cask.scotch.io/2014/10/react-tweets-demo.png" alt="react-tweets-demo" width="718" class="aligncenter size-full wp-image-4725 img-responsive img-thumbnail"></a>
+</div>
+<p>Let&#x2019;s take a look at some of the tools we are going to use besides React:</p>
+<ul>
+<li><strong>Express</strong> &#x2013; A node.js web application framework</li>
+<li><strong>Handlebars</strong> &#x2013; A templating language we are going to write our layout templates in</li>
+<li><strong>Browserify</strong> &#x2013; A dependency bundler that will allow us to use CommonJS syntax</li>
+<li><strong>Mongoose</strong> &#x2013; A mongoDB object modeling library</li>
+<li><strong>Socket.io</strong> &#x2013; Real time bidirectional event based communication</li>
+<li><strong>nTwitter</strong> &#x2013; Node.js Twitter API library</li>
+</ul>
+<h2>Server Side</h2>
+<p>Lets start by building out the server side of our app. Download the project files <a href="https://github.com/scotch-io/react-tweets">here</a>, and follow along below:</p>
+<h4>Directory Structure</h4>
+<pre><code class="language-javascript">
+components/ // React Components Directory
+---- Loader.react.js // Loader Component
+---- NotificationBar.react.js // Notification Bar Component
+---- Tweet.react.js // Single Tweet Component
+---- Tweets.react.js // Tweets Component
+---- TweetsApp.react.js // Main App Component 
+models/ // Mongoose Models Directory
+---- Tweet.js // Our Mongoose Tweet Model
+public/ // Static Files Directory
+---- css
+---- js
+---- svg
+utils/
+----streamHandler.js // Utility method for handling Twitter stream callbacks
+views/ // Server Side Handlebars Views
+----layouts
+-------- main.handlebars
+---- home.handlebars
+app.js // Client side main
+config.js // App configuration
+package.json 
+routes.js // Route definitions
+server.js // Server side main
+</code></pre>
+<h4>package.json</h4>
+<pre><code class="language-javascript">
+{
+ "name": "react-isomorph",
+ "version": "0.0.0",
+ "description": "Isomorphic React Example",
+ "main": "app.js",
+ "scripts": {
+ "watch": "watchify app.js -o public/js/bundle.js -v",
+ "browserify": "browserify app.js | uglifyjs &gt; public/js/bundle.js",
+ "build": "npm run browserify ",
+ "start": "npm run watch &amp; nodemon server.js"
+ },
+ "author": "Ken Wheeler",
+ "license": "MIT",
+ "dependencies": {
+ "express": "~4.9.7",
+ "express-handlebars": "~1.1.0",
+ "mongoose": "^3.8.17",
+ "node-jsx": "~0.11.0",
+ "ntwitter": "^0.5.0",
+ "react": "~0.11.2",
+ "socket.io": "^1.1.0"
+ },
+ "devDependencies": {
+ "browserify": "~6.0.3",
+ "nodemon": "^1.2.1",
+ "reactify": "~0.14.0",
+ "uglify-js": "~2.4.15",
+ "watchify": "~2.0.0"
+ },
+ "browserify": {
+ "transform": [
+ "reactify"
+ ]
+ }
+}
+
+</code></pre>
+<p>If you&#x2019;re following along, simply run <code>npm install</code> and go get a glass of water. When you get back, we should have all of our dependencies in place, and its time to get our build on.</p>
+<p>We now have a couple of commands we can use:</p>
+<ul>
+<li><code>npm run watch</code> &#x2013; Running this command starts a watchify watch, so when we edit our js files, they get browserified on save.</li>
+<li><code>npm run build</code> &#x2013; Running this command builds our bundle.js and minifies it for production</li>
+<li><code>npm start</code> &#x2013; Running this command sets up a watch and runs our app via nodemon</li>
+<li><code>node server</code> &#x2013; This command is what we use to run our app. In a production environment, I would recommend using something like forever or pm2.</li>
+</ul>
+<h2>Setting Up Our Server</h2>
+<p>For the purposes of keeping our focus on React, I am going to assume we are working with a working knowledge of Express based server configurations. If you aren&#x2019;t familiar with what is going on below, you can read up on any of the helpful articles on this site about the subject, most notably <a href="https://scotch.io/bar-talk/expressjs-4-0-new-features-and-upgrading-from-3-0">ExpressJS 4.0 &#x2013; New Features &amp; Upgrading from 3.0</a></p>
+<p>In the file below, we are doing 4 specific things:</p>
+<ul>
+<li>Setting up a server via Express</li>
+<li>Connecting to our MongoDB database</li>
+<li>Initializing our socket.io connection</li>
+<li>Creating our Twitter stream connection</li>
+</ul>
+<h4>server.js</h4>
+<pre><code class="language-javascript">
+// Require our dependencies
+var express = require('express'),
+ exphbs = require('express-handlebars'),
+ http = require('http'),
+ mongoose = require('mongoose'),
+ twitter = require('ntwitter'),
+ routes = require('./routes'),
+ config = require('./config'),
+ streamHandler = require('./utils/streamHandler');
+
+// Create an express instance and set a port variable
+var app = express();
+var port = process.env.PORT || 8080;
+
+// Set handlebars as the templating engine
+app.engine('handlebars', exphbs({ defaultLayout: 'main'}));
+app.set('view engine', 'handlebars');
+
+// Disable etag headers on responses
+app.disable('etag');
+
+// Connect to our mongo database
+mongoose.connect('mongodb://localhost/react-tweets');
+
+// Create a new ntwitter instance
+var twit = new twitter(config.twitter);
+
+// Index Route
+app.get('/', routes.index);
+
+// Page Route
+app.get('/page/:page/:skip', routes.page);
+
+// Set /public as our static content dir
+app.use("/", express.static(__dirname + "/public/"));
+
+// Fire it up (start our server)
+var server = http.createServer(app).listen(port, function() {
+ console.log('Express server listening on port ' + port);
+});
+
+// Initialize socket.io
+var io = require('socket.io').listen(server);
+
+// Set a stream listener for tweets matching tracking keywords
+twit.stream('statuses/filter',{ track: 'scotch_io, #scotchio'}, function(stream){
+ streamHandler(stream,io);
+});
+</code></pre>
+<p>nTwitter allows us to access the Twitter streaming API, so we use the <code>statuses/filter</code> endpoint, along with the <code>track</code> property, to return tweets that use a #scotchio hash tag or mention scotch_io. You can modify this query to your liking by using the settings outlined within the <a href="https://dev.twitter.com/streaming/overview">Twitter Streaming API</a>.</p>
+<h2>Models</h2>
+<p>In our app we use Mongoose to define our Tweet model. When receiving our data from our Twitter stream, we need somewhere to store it, and a static query method to return subsets of data based upon app parameters:</p>
+<h4>Tweet.js</h4>
+<pre><code class="language-javascript">
+var mongoose = require('mongoose');
+
+// Create a new schema for our tweet data
+var schema = new mongoose.Schema({
+ twid : String
+ , active : Boolean
+ , author : String
+ , avatar : String
+ , body : String
+ , date : Date
+ , screenname : String
+});
+
+// Create a static getTweets method to return tweet data from the db
+schema.statics.getTweets = function(page, skip, callback) {
+
+ var tweets = [],
+ start = (page articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 10) + (skip articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1);
+
+ // Query the db, using skip and limit to achieve page chunks
+ Tweet.find({},'twid active author avatar body date screenname',{skip: start, limit: 10}).sort({date: 'desc'}).exec(function(err,docs){
+
+ // If everything is cool...
+ if(!err) {
+ tweets = docs; // We got tweets
+ tweets.forEach(function(tweet){
+ tweet.active = true; // Set them to active
+ });
+ }
+
+ // Pass them back to the specified callback
+ callback(tweets);
+
+ });
+
+};
+
+// Return a Tweet model based upon the defined schema
+module.exports = Tweet = mongoose.model('Tweet', schema);
+</code></pre>
+<p>After defining our schema, we create a static method called <code>getTweets</code>. It takes 3 arguments, <code>page</code>, <code>skip</code> &amp; <code>callback</code>.</p>
+<p>When we have an application that not only renders server side, but has an active stream saving to the database behind the scenes, we need to create a way to make sure that when we request our next page of tweets, it takes into account that Tweets may have been added since the app has been running on the client.</p>
+<p>This is where the <code>skip</code> argument comes into play. If we have 2 new tweets come in, and then request the next page, we need to skip 2 indexes forward so that our application&#x2019;s pages are relative to it&#x2019;s original count, and we don&#x2019;t end up with duplicate tweets.</p>
+<h2>Stream Handling</h2>
+<p>When our Twitter stream connection sends a new Tweet event, we need a method to take that data, save it to our database, and emit an event to the client side with the tweet data:</p>
+<h4>streamHandler.js</h4>
+<pre><code class="language-javascript">
+var Tweet = require('../models/Tweet');
+
+module.exports = function(stream, io){
+
+ // When tweets get sent our way ...
+ stream.on('data', function(data) {
+
+ // Construct a new tweet object
+ var tweet = {
+ twid: data['id'],
+ active: false,
+ author: data['user']['name'],
+ avatar: data['user']['profile_image_url'],
+ body: data['text'],
+ date: data['created_at'],
+ screenname: data['user']['screen_name']
+ };
+
+ // Create a new model instance with our object
+ var tweetEntry = new Tweet(tweet);
+
+ // Save 'er to the database
+ tweetEntry.save(function(err) {
+ if (!err) {
+ // If everything is cool, socket.io emits the tweet.
+ io.emit('tweet', tweet);
+ }
+ });
+
+ });
+
+};
+</code></pre>
+<p>We start by requiring our Model, and when our stream emits an event, we grab the data we want to save, save it, and emit our socket event to the client with the Tweet we just saved.</p>
+<h2>Routes</h2>
+<p>Our routes are where the majority of the magic is going to happen today. Lets take a look at <code>routes.js</code>:</p>
+<h4>routes.js</h4>
+<pre><code class="language-javascript">
+var JSX = require('node-jsx').install(),
+ React = require('react'),
+ TweetsApp = require('./components/TweetsApp.react'),
+ Tweet = require('./models/Tweet');
+
+module.exports = {
+
+ index: function(req, res) {
+ // Call static model method to get tweets in the db
+ Tweet.getTweets(0,0, function(tweets, pages) {
+
+ // Render React to a string, passing in our fetched tweets
+ var markup = React.renderComponentToString(
+ TweetsApp({
+ tweets: tweets
+ })
+ );
+
+ // Render our 'home' template
+ res.render('home', {
+ markup: markup, // Pass rendered react markup
+ state: JSON.stringify(tweets) // Pass current state to client side
+ });
+
+ });
+ },
+
+ page: function(req, res) {
+ // Fetch tweets by page via param
+ Tweet.getTweets(req.params.page, req.params.skip, function(tweets) {
+
+ // Render as JSON
+ res.send(tweets);
+
+ });
+ }
+
+}
+</code></pre>
+<p>In the code above, we have two specific requirements:</p>
+<ul>
+<li>For our index route, we want to return a full page rendered from our React source</li>
+<li>For our page route, we want to return a JSON string containing additional tweets based upon our params.</li>
+</ul>
+<p>By requiring our React components, and calling the <code>renderComponentToString</code> method, we are converting them to a string, which is then passed into our <code>home.handlebars</code> template.</p>
+<p>We leverage our <code>Tweets</code> model to find tweets that have been stored in the database after coming in from our stream connection. Upon receiving the results of our query, we render our component to a <code>String</code>.</p>
+<p>Notice that we are using non-JSX syntax when defining the component we want to render. This is because we are in our routes file and it is not being transformed.</p>
+<p>Lets take a look at our <code>render</code> method:</p>
+<pre><code class="language-javascript">
+// Render our 'home' template
+res.render('home', {
+ markup: markup, // Pass rendered react markup
+ state: JSON.stringify(tweets) // Pass current state to client side
+});
+</code></pre>
+<p>Not only are we passing our stringified markup, but we also pass a state property. In order for our server rendered application to pick up where it left off on the client, we need to pass the last state to the client so we can keep them in sync.</p>
+<h2>Templates</h2>
+<p>Our app has two main templates, both of which are ridiculously simple. We start with a layout view, which wraps our target template.</p>
+<h4>main.handlebars</h4>
+<pre><code class="language-markup">
+&lt;!doctype html&gt;
+&lt;html lang="en"&gt;
+ &lt;head&gt;
+ &lt;meta charset="utf-8"&gt;
+ &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
+ &lt;title&gt;React Tweets&lt;/title&gt;
+ &lt;link rel="stylesheet" type="text/css" href="css/style.css"&gt;
+ &lt;/head&gt;
+ &lt;body&gt;
+ {{{ body }}}
+ &lt;script src="https://cdn.socket.io/socket.io-1.1.0.js"&gt;&lt;/script&gt;
+ &lt;script src="js/bundle.js"&gt;&lt;/script&gt;
+ &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p><code>{{{body}}}</code> is where our template <code>home.handlebars</code> is loaded into. On this page we also add script tags for socket.io and our bundle.js that Browserify outputs.</p>
+<h4>home.handlebars</h4>
+<pre><code class="language-markup">
+&lt;section id="react-app"&gt;{{{ markup }}}&lt;/div&gt;
+&lt;script id="initial-state" type="application/json"&gt;{{{state}}}&lt;/script&gt;
+</code></pre>
+<p>In our <code>home.handlebars</code> template, we take the component markup that we generated in our routes, and insert at <code>{{{markup}}}</code>.</p>
+<p>Directly below we transfer our state. We use a script tag to hold a JSON string of our server&#x2019;s state. When initializing our React components on the client side, we pull our state from here and then remove it.</p>
+
+<h2>Client Side Rendering</h2>
+<p>On the server we use <code>renderComponentToString</code> to generate markup for our components, but when using Browserify, we need a client side entry point to pick up the state we just saved, and mount our application component.</p>
+<h4>app.js</h4>
+<pre><code class="language-javascript">
+/** @jsx React.DOM */
+
+var React = require('react');
+var TweetsApp = require('./components/TweetsApp.react');
+
+// Snag the initial state that was passed from the server side
+var initialState = JSON.parse(document.getElementById('initial-state').innerHTML)
+
+// Render the components, picking up where react left off on the server
+React.renderComponent(
+ &lt;TweetsApp tweets={initialState}/&gt;,
+ document.getElementById('react-app')
+);
+</code></pre>
+<p>We start by getting our intitial state from the script element that we added in <code>home.handlebars</code>. We parse the JSON data and then call <code>React.renderComponent</code>.</p>
+<p>Because we are working with a file that will be bundled with Browserify and will have access to JSX transforms, we can use JSX syntax when passing our component as an argument.</p>
+<p>We initialize our component by adding the state we just grabbed to an attribute on our component. This makes it available via <code>this.props</code> within our component&#x2019;s methods.</p>
+<p>Finally, our second argument mounts our rendered component to our <code>#react-app</code> div element from <code>home.handlebars</code>.</p>
+<h2>Isomorphic Components</h2>
+<p>Now that we have all of our setup out of the way, it is time to get down to business. In our previous files, we rendered a custom component named TweetsApp.</p>
+<p>Let&#x2019;s create our TweetsApp class.</p>
+<pre><code class="language-javascript">
+module.exports = TweetsApp = React.createClass({
+ // Render the component
+ render: function(){
+
+ return (
+ &lt;div className="tweets-app"&gt;
+ &lt;Tweets tweets={this.state.tweets} /&gt;
+ &lt;Loader paging={this.state.paging}/&gt;
+ &lt;NotificationBar count={this.state.count} onShowNewTweets={this.showNewTweets}/&gt;
+ &lt;/div&gt;
+ )
+
+ }
+});
+
+</code></pre>
+<p>Our app is going to have 4 child components. We need a Tweets display, A singular Tweet, a loading spinner for loading paged results, and a notification bar. We wrap them in a div element with the <code>tweets-app</code> class.</p>
+<div class="text-center">
+<a href="https://cask.scotch.io/2014/10/react-tweets-demo.png"><img src="https://cask.scotch.io/2014/10/react-tweets-demo.png" alt="react-tweets-demo" width="718" class="aligncenter size-full wp-image-4725 img-responsive img-thumbnail"></a>
+</div>
+<p>Very similarly to the way we passed our state via component props when transferring our server&#x2019;s state, we pass our current state down to the child components via props.</p>
+<p><strong>But where does the state come from?</strong></p>
+<p>In React, setting state via props is generally considered an anti-pattern. However when setting an initial state, and transferring a state from the server, this is not the case. Because the <code>getInitialState</code> method is only called before the first mount of our component, we need to use the <code>componentWillReceiveProps</code> method to make sure that if we mount our component again, that it will receive the state:</p>
+<pre><code class="language-javascript">
+// Set the initial component state
+ getInitialState: function(props){
+
+ props = props || this.props;
+
+ // Set initial application state using props
+ return {
+ tweets: props.tweets,
+ count: 0,
+ page: 0,
+ paging: false,
+ skip: 0,
+ done: false
+ };
+
+ },
+
+ componentWillReceiveProps: function(newProps, oldProps){
+ this.setState(this.getInitialState(newProps));
+ },
+</code></pre>
+<p>Aside from our tweets, which we pass down from the server, our state on the client contains some new properties. We use the <code>count</code> property to track how many tweets are currently unread. Unread tweets are ones that have been loaded via socket.io, that came in after the page loaded, but are not active yet. This resets every time we call <code>showNewTweets</code>.</p>
+<p>The <code>page</code> property keeps track of how many pages we have currently loaded from the server. When starting a page load, in between the event kicking off, and when the results are rendered to the page, our <code>paging</code> property is set to true, preventing the event from starting again until the current request has completed. The <code>done</code> property is set to true when we have run out of pages.</p>
+<p>Our <code>skip</code> property is like <code>count</code>, but never gets reset. This gives us a value for how many tweets are now in the database that we need to skip because our initial load doesn&#x2019;t account for them. This prevent us from rendering duplicate tweets to the page.</p>
+<p>As it stands, we are good to go on the server side rendering of our component. However, our client side is where our state changes from UI interaction and socket events, so we need to set up some methods to handle that.</p>
+<p>We can use the <code>componentDidMount</code> method to accomplish this safely, because it only runs when a component is mounted on the client:</p>
+<pre><code class="language-javascript">
+// Called directly after component rendering, only on client
+componentDidMount: function(){
+
+ // Preserve self reference
+ var self = this;
+
+ // Initialize socket.io
+ var socket = io.connect();
+
+ // On tweet event emission...
+ socket.on('tweet', function (data) {
+
+ // Add a tweet to our queue
+ self.addTweet(data);
+
+ });
+
+ // Attach scroll event to the window for infinity paging
+ window.addEventListener('scroll', this.checkWindowScroll);
+
+},
+</code></pre>
+<p>In the code above, we set up two event listeners to modify the state and subsequent rendering of our components. The first is our socket listener. When a new tweet is emitted, we call our <code>addTweet</code> method to add it to an unread queue.</p>
+<pre><code class="language-javascript">
+// Method to add a tweet to our timeline
+ addTweet: function(tweet){
+
+ // Get current application state
+ var updated = this.state.tweets;
+
+ // Increment the unread count
+ var count = this.state.count + 1;
+
+ // Increment the skip count
+ var skip = this.state.skip + 1;
+
+ // Add tweet to the beginning of the tweets array
+ updated.unshift(tweet);
+
+ // Set application state
+ this.setState({tweets: updated, count: count, skip: skip});
+
+ },
+</code></pre>
+<p>Tweets in the unread queue are on the page, but not shown until the user acknowledges them in the NotificationBar component. When they do, an event is passed back via <code>onShowNewTweets</code> which calls our <code>showNewTweets</code> method:</p>
+<pre><code class="language-javascript">
+// Method to show the unread tweets
+ showNewTweets: function(){
+
+ // Get current application state
+ var updated = this.state.tweets;
+
+ // Mark our tweets active
+ updated.forEach(function(tweet){
+ tweet.active = true;
+ });
+
+ // Set application state (active tweets + reset unread count)
+ this.setState({tweets: updated, count: 0});
+
+ },
+</code></pre>
+<p>This method loops through our tweets and sets their active property to true, and then sets our state. This makes any unshown tweets now show (via CSS).</p>
+<p>Our second event listens to the <code>window</code> scroll event, and fires our <code>checkWindowScroll</code> event to check whether we should load a new page.</p>
+<pre><code class="language-javascript">
+// Method to check if more tweets should be loaded, by scroll position
+ checkWindowScroll: function(){
+
+ // Get scroll pos &amp; window data
+ var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+ var s = document.body.scrollTop;
+ var scrolled = (h + s) &gt; document.body.offsetHeight;
+
+ // If scrolled enough, not currently paging and not complete...
+ if(scrolled &amp;&amp; !this.state.paging &amp;&amp; !this.state.done) {
+
+ // Set application state (Paging, Increment page)
+ this.setState({paging: true, page: this.state.page + 1});
+
+ // Get the next page of tweets from the server
+ this.getPage(this.state.page);
+
+ }
+ },
+</code></pre>
+<p>In our <code>checkWindowScroll</code> method, if we have reached the bottom of the page, aren&#x2019;t currently in the paging process, and haven&#x2019;t reached the last page, we call our <code>getPage</code> method:</p>
+<pre><code class="language-javascript">
+// Method to get JSON from server by page
+ getPage: function(page){
+
+ // Setup our ajax request
+ var request = new XMLHttpRequest(), self = this;
+ request.open('GET', 'page/' + page + "/" + this.state.skip, true);
+ request.onload = function() {
+
+ // If everything is cool...
+ if (request.status &gt;= 200 &amp;&amp; request.status &lt; 400){
+
+ // Load our next page
+ self.loadPagedTweets(JSON.parse(request.responseText));
+
+ } else {
+
+ // Set application state (Not paging, paging complete)
+ self.setState({paging: false, done: true});
+
+ }
+ };
+
+ // Fire!
+ request.send();
+
+ },
+</code></pre>
+<p>In this method we pass our incremented page index, along with our skip property of our state object to our <code>/page</code> route. If there are no more tweets, we set <code>paging</code> to false and <code>done</code> to true, ending our ability to page.</p>
+<p>If tweets are returned, we will return JSON data based upon the given arguments, which we then load with the <code>loadPagedTweets</code> method:</p>
+<pre><code class="language-javascript">
+// Method to load tweets fetched from the server
+ loadPagedTweets: function(tweets){
+
+ // So meta lol
+ var self = this;
+
+ // If we still have tweets...
+ if(tweets.length &gt; 0) {
+
+ // Get current application state
+ var updated = this.state.tweets;
+
+ // Push them onto the end of the current tweets array
+ tweets.forEach(function(tweet){
+ updated.push(tweet);
+ });
+
+ // This app is so fast, I actually use a timeout for dramatic effect
+ // Otherwise you'd never see our super sexy loader svg
+ setTimeout(function(){
+
+ // Set application state (Not paging, add tweets)
+ self.setState({tweets: updated, paging: false});
+
+ }, 1000);
+
+ } else {
+
+ // Set application state (Not paging, paging complete)
+ this.setState({done: true, paging: false});
+
+ }
+ },
+</code></pre>
+<p>This method takes our current set of tweets in our state object, and pushes our new tweets onto the end. I use a setTimeout before calling setState, so that we can actually see the loader component for at least a little while.</p>
+<p>Check out our finished component below:</p>
+<h4>TweetsApp</h4>
+<pre><code class="language-javascript">
+/** @jsx React.DOM */
+
+var React = require('react');
+var Tweets = require('./Tweets.react.js');
+var Loader = require('./Loader.react.js');
+var NotificationBar = require('./NotificationBar.react.js');
+
+// Export the TweetsApp component
+module.exports = TweetsApp = React.createClass({
+
+ // Method to add a tweet to our timeline
+ addTweet: function(tweet){
+
+ // Get current application state
+ var updated = this.state.tweets;
+
+ // Increment the unread count
+ var count = this.state.count + 1;
+
+ // Increment the skip count
+ var skip = this.state.skip + 1;
+
+ // Add tweet to the beginning of the tweets array
+ updated.unshift(tweet);
+
+ // Set application state
+ this.setState({tweets: updated, count: count, skip: skip});
+
+ },
+
+ // Method to get JSON from server by page
+ getPage: function(page){
+
+ // Setup our ajax request
+ var request = new XMLHttpRequest(), self = this;
+ request.open('GET', 'page/' + page + "/" + this.state.skip, true);
+ request.onload = function() {
+
+ // If everything is cool...
+ if (request.status &gt;= 200 &amp;&amp; request.status &lt; 400){
+
+ // Load our next page
+ self.loadPagedTweets(JSON.parse(request.responseText));
+
+ } else {
+
+ // Set application state (Not paging, paging complete)
+ self.setState({paging: false, done: true});
+
+ }
+ };
+
+ // Fire!
+ request.send();
+
+ },
+
+ // Method to show the unread tweets
+ showNewTweets: function(){
+
+ // Get current application state
+ var updated = this.state.tweets;
+
+ // Mark our tweets active
+ updated.forEach(function(tweet){
+ tweet.active = true;
+ });
+
+ // Set application state (active tweets + reset unread count)
+ this.setState({tweets: updated, count: 0});
+
+ },
+
+ // Method to load tweets fetched from the server
+ loadPagedTweets: function(tweets){
+
+ // So meta lol
+ var self = this;
+
+ // If we still have tweets...
+ if(tweets.length &gt; 0) {
+
+ // Get current application state
+ var updated = this.state.tweets;
+
+ // Push them onto the end of the current tweets array
+ tweets.forEach(function(tweet){
+ updated.push(tweet);
+ });
+
+ // This app is so fast, I actually use a timeout for dramatic effect
+ // Otherwise you'd never see our super sexy loader svg
+ setTimeout(function(){
+
+ // Set application state (Not paging, add tweets)
+ self.setState({tweets: updated, paging: false});
+
+ }, 1000);
+
+ } else {
+
+ // Set application state (Not paging, paging complete)
+ this.setState({done: true, paging: false});
+
+ }
+ },
+
+ // Method to check if more tweets should be loaded, by scroll position
+ checkWindowScroll: function(){
+
+ // Get scroll pos &amp; window data
+ var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+ var s = document.body.scrollTop;
+ var scrolled = (h + s) &gt; document.body.offsetHeight;
+
+ // If scrolled enough, not currently paging and not complete...
+ if(scrolled &amp;&amp; !this.state.paging &amp;&amp; !this.state.done) {
+
+ // Set application state (Paging, Increment page)
+ this.setState({paging: true, page: this.state.page + 1});
+
+ // Get the next page of tweets from the server
+ this.getPage(this.state.page);
+
+ }
+ },
+
+ // Set the initial component state
+ getInitialState: function(props){
+
+ props = props || this.props;
+
+ // Set initial application state using props
+ return {
+ tweets: props.tweets,
+ count: 0,
+ page: 0,
+ paging: false,
+ skip: 0,
+ done: false
+ };
+
+ },
+
+ componentWillReceiveProps: function(newProps, oldProps){
+ this.setState(this.getInitialState(newProps));
+ },
+
+ // Called directly after component rendering, only on client
+ componentDidMount: function(){
+
+ // Preserve self reference
+ var self = this;
+
+ // Initialize socket.io
+ var socket = io.connect();
+
+ // On tweet event emission...
+ socket.on('tweet', function (data) {
+
+ // Add a tweet to our queue
+ self.addTweet(data);
+
+ });
+
+ // Attach scroll event to the window for infinity paging
+ window.addEventListener('scroll', this.checkWindowScroll);
+
+ },
+
+ // Render the component
+ render: function(){
+
+ return (
+ &lt;div className="tweets-app"&gt;
+ &lt;Tweets tweets={this.state.tweets} /&gt;
+ &lt;Loader paging={this.state.paging}/&gt;
+ &lt;NotificationBar count={this.state.count} onShowNewTweets={this.showNewTweets}/&gt;
+ &lt;/div&gt;
+ )
+
+ }
+
+});
+</code></pre>
+<h2>Child Components</h2>
+<p>Our main component uses 4 child components to compose an interface based upon our current state values. Lets review them and how they work with their parent component:</p>
+<h4>Tweets</h4>
+<pre><code class="language-javascript">
+/** @jsx React.DOM */
+
+var React = require('react');
+var Tweet = require('./Tweet.react.js');
+
+module.exports = Tweets = React.createClass({
+
+ // Render our tweets
+ render: function(){
+
+ // Build list items of single tweet components using map
+ var content = this.props.tweets.map(function(tweet){
+ return (
+ &lt;Tweet key={tweet.twid} tweet={tweet} /&gt;
+ )
+ });
+
+ // Return ul filled with our mapped tweets
+ return (
+ &lt;ul className="tweets"&gt;{content}&lt;/ul&gt;
+ )
+
+ }
+
+});
+</code></pre>
+<p>Our Tweets component is passed our current state&#x2019;s tweets via its <code>tweets</code> prop and is used to render our tweets. In our <code>render</code> method, we build a list of tweets by executing the map method on our array of tweets. Each iteration creates a new rendering of a child <code>Tweet</code> component, and the results are inserted into an unordered list.</p>
+<h4>Tweet</h4>
+<pre><code class="language-javascript">
+/** @jsx React.DOM */
+
+var React = require('react');
+
+module.exports = Tweet = React.createClass({
+ render: function(){
+ var tweet = this.props.tweet;
+ return (
+ &lt;li className={"tweet" + (tweet.active ? ' active' : '')}&gt;
+ &lt;img src={tweet.avatar} className="avatar"/&gt;
+ &lt;blockquote&gt;
+ &lt;cite&gt;
+ &lt;a href={"http://www.twitter.com/" + tweet.screenname}&gt;{tweet.author}&lt;/a&gt; 
+ &lt;span className="screen-name"&gt;@{tweet.screenname}&lt;/span&gt; 
+ &lt;/cite&gt;
+ &lt;span className="content"&gt;{tweet.body}&lt;/span&gt;
+ &lt;/blockquote&gt;
+ &lt;/li&gt;
+ )
+ }
+});
+</code></pre>
+<p>Our singular Tweet component renders each individual tweet as a list item. We conditionally render an <code>active</code> class based upon the tweet&#x2019;s active status, that helps us hide it while it is still in the queue.</p>
+<p>Each tweet&#x2019;s data is then used to fill in the predefined tweet template, so that our tweet display looks legit.</p>
+<h4>NotificationBar</h4>
+<pre><code class="language-javascript">
+/** @jsx React.DOM */
+
+var React = require('react');
+
+module.exports = NotificationBar = React.createClass({
+ render: function(){
+ var count = this.props.count;
+ return (
+ &lt;div className={"notification-bar" + (count &gt; 0 ? ' active' : '')}&gt;
+ &lt;p&gt;There are {count} new tweets! &lt;a href="#top" onClick={this.props.onShowNewTweets}&gt;Click here to see them.&lt;/a&gt;&lt;/p&gt;
+ &lt;/div&gt;
+ )
+ }
+});
+</code></pre>
+<p>Our Notification Bar is fixed to the top of the page, and displays the current count of unread tweets, and when clicked, shows all the tweets currently in the queue.</p>
+<p>We conditionally display an active class based upon whether we actually have any unread tweets, using the <code>count</code> prop.</p>
+<p>On our anchor tag, an onClick handler calls our components own prop <code>onShowNewTweets</code> which is bound to <code>showNewTweets</code> in it&#x2019;s parent. This allows us to pass the event back upwards so it can be handled in our parent component, where we keep our state management.</p>
+<h4>Loader</h4>
+<pre><code class="language-javascript">
+/** @jsx React.DOM */
+
+var React = require('react');
+
+module.exports = Loader = React.createClass({
+ render: function(){
+ return (
+ &lt;div className={"loader " + (this.props.paging ? "active" : "")}&gt;
+ &lt;img src="svg/loader.svg" /&gt;
+ &lt;/div&gt;
+ )
+ }
+});
+</code></pre>
+<p>Our loader component is a fancy svg loading animation. It is used during paging to indicate that we are loading a new page. An <code>active</code> class is set using our <code>paging</code> prop, that controls whether our component is shown or not (via CSS). </p>
+<h2>Wrap Up</h2>
+<p>All that&#x2019;s left to do now is to run <code>node server</code> on your command line! You can run this locally or just check out the live demo below. If you want to see a tweet come in live, the easiest way is to just share this article with the demo open and you can see it in real time!</p>
+<div class="text-center">
+<a href="https://cask.scotch.io/2014/10/react-tweets-demo-2.png"><img src="https://cask.scotch.io/2014/10/react-tweets-demo-2.png" alt="react-tweets-demo-2" width="748" class="aligncenter size-full wp-image-4730 img-responsive img-thumbnail"></a>
+</div>
+<p>In the next installment of <strong>Learning React</strong>, we will be learning how to leverage Facebook&#x2019;s <strong>Flux Architecture</strong> to enforce unidirectional data flow. Flux is Facebook&#x2019;s recommended complementary architecture for React applications. We will also be reviewing some open source Flux libraries that make implementing the Flux architecture a breeze.</p>
+<p>Look for it soon!</p>
+</div>
+</div>
+</body></html>

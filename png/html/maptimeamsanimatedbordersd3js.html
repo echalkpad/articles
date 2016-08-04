@@ -1,0 +1,639 @@
+<!DOCTYPE html><html><head><title>maptime-ams/animated-borders-d3js</title></head><body>
+<h1>maptime-ams/animated-borders-d3js</h1><p><a href="https://github.com/maptime-ams/animated-borders-d3js" target="_new">Original URL</a></p>
+<p><blockquote>This is a step-by-step tutorial on making an animated map of the changing borders of U.S. states through history, using D3.js. This tutorial was made for Maptime Amsterdam's fourth Meetup, on&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content">
+
+<p>This is a step-by-step tutorial on making an animated map of the changing borders of U.S. states through history, using <a href="http://d3js.org/">D3.js</a>. This tutorial was made for <a href="http://maptime-ams.github.io/">Maptime Amsterdam</a>'s <a href="http://www.meetup.com/Maptime-AMS/events/220184135/">fourth Meetup</a>, on February 18th, 2015.</p>
+
+<p>To complete this tutorial, you need two things:</p>
+
+<ul>
+<li><strong>A modern browser</strong>, like Firefox, Safari, Chrome, or a recent version of Internet Explorer. I like Chrome, because it's a faster when it comes to SVG rendering and animation.</li>
+<li><strong>A good text editor</strong>, for example <a href="http://www.sublimetext.com/">Sublime Text</a>, <a href="http://macromates.com/">Textmate</a> or <a href="http://notepad-plus-plus.org/">Notepad++</a>.</li>
+</ul>
+
+<h3><a id="user-content-d3js" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#d3js"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>D3.js</h3>
+
+<p>In this tutorial, we'll use <a href="http://d3js.org/">D3.js</a> to convert <a href="http://geojson.org/">GeoJSON files</a> to SVG, and draw and animate them in the browser. D3.js is an extremely powerful data manipulation and visualization library, written in JavaScript. From d3js.org:</p>
+
+<blockquote>
+<p>D3.js is a JavaScript library for manipulating documents based on data. D3 helps you bring data to life using HTML, SVG, and CSS. D3&#x2019;s emphasis on web standards gives you the full capabilities of modern browsers without tying yourself to a proprietary framework, combining powerful visualization components and a data-driven approach to DOM manipulation.</p>
+</blockquote>
+
+<p>D3 is <em>hard</em> for beginners. This tutorial will guide you through the process of making a map using D3, it will point you to useful tools and techniques and it will give you an overview of D3's mapping possibilities, but there is no way you can learn D3 in one night. Luckily, D3's documentation is very good, there are many online tutorials and examples available to help you. It's recommended that you'll have a look at some of the links below before you start with the tutorial.</p>
+
+
+
+<p>There's also a lot of information available about making maps with D3:</p>
+
+
+
+<h2><a id="user-content-lets-get-started" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#lets-get-started"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Let's get started!</h2>
+
+<p>We'll start by cloning or downloading the <a href="https://github.com/maptime-ams/animated-borders-d3js"><code>animated-borders-d3js</code> repository</a> from GitHub. If you have Git installed, simply go to your terminal and type:</p>
+
+<pre><code>git clone https://github.com/maptime-ams/animated-borders-d3js.git
+</code></pre>
+
+<p>(If you have GitHub's <a href="https://mac.github.com/">Mac</a> or <a href="https://windows.github.com">Windows</a> client installed, you can also easily click the <em>Clone in Desktop</em> button!)</p>
+
+<p>If you don't have Git installed, you should install Git. It's easy. On your Mac, just install <a href="http://brew.sh/">Homebrew</a> and then type <code>brew install git</code>. For installation on Windows, see <a href="http://git-scm.com/book/en/v2/Getting-Started-Installing-Git#Installing-on-Windows">git-scm.com</a> for more information. And if you're using Linux, you'll probably already have Git installed (and don't need any explaining anyway).</p>
+
+<ul>
+<li><strong>I don't want to install Git!</strong></li>
+<li>You don't have to! You can also just download this tutorial as a <a href="https://github.com/maptime-ams/animated-borders-d3js/archive/gh-pages.zip">ZIP file</a>!</li>
+</ul>
+
+<p>If you've cloned the repository, browse to the tutorial's directory to get started. If you've downloaded the ZIP file, unzip it, and do the same.</p>
+
+<h2><a id="user-content-step-0-data" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-0-data"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 0: Data</h2>
+
+<p>D3.js is all about data. In this tutorial, we'll use geo-spatial files containing U.S. state boundaries from the <a href="https://www.nhgis.org/">National Historical Geographic Information System</a>:</p>
+
+<blockquote>
+<p>The National Historical Geographic Information System (NHGIS) provides, free of charge, aggregate census data and GIS-compatible boundary files for the United States between 1790 and 2013.</p>
+</blockquote>
+
+<p>After 1910, the borders of the states did not change much anymore, so we'll use data from 1790 to 1910.</p>
+
+<h3><a id="user-content-download-and-convert-nhgis-data-yourself" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#download-and-convert-nhgis-data-yourself"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Download and convert NHGIS data yourself</h3>
+
+<p><em>You don't have to download and convert NHGIS data, this tutorial comes with all the data you need. You can just skip this section!</em></p>
+
+<p>To download and convert the data needed for this tutorial yourself, follow these steps:</p>
+
+<ol>
+<li>Get Shapefiles with state data, per year
+
+</li>
+<li>Move/copy the zipped Shapefiles to the data directory (the files should be named <code>nhgis0001_shapefile_tl2000_us_state_XXXX.zip</code>)</li>
+<li>Convert the Shapefiles to <a href="https://github.com/mbostock/topojson/wiki">TopoJSON</a>!</li>
+</ol>
+
+<p>To do this, you need to install <a href="https://github.com/substack/shp2json">shp2json</a> and TopoJSON, and you need <a href="http://nodejs.org/">Node.js</a>.</p>
+
+<pre><code>brew install node
+npm install -g shp2json
+npm install -g topojson
+</code></pre>
+
+<p>Afterwards, you can convert a Shapefile to TopoJSON by running shp2json and piping its output to TopoJSON:</p>
+
+<pre><code>shp2json &lt;shapefile&gt; | topojson -p STATENAM -s 1e-6
+</code></pre>
+
+<p>Or, run <code>shp2topojson.sh</code>, a convenient script that comes with this tutorial:</p>
+
+<pre><code>cd scripts
+./shp2topojson.sh
+</code></pre>
+
+<h3><a id="user-content-use-data-in-tutorials-data-directory" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#use-data-in-tutorials-data-directory"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Use data in tutorial's data directory</h3>
+
+<p>Done! But you should have a look at the <a href="https://github.com/mbostock/topojson/wiki">TopoJSON</a> files in the <code>data</code> directory, either with your text editor, or <a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/data/1840.json">on GitHub</a> (GitHub lets you even view GeoJSON files!).</p>
+
+<h2><a id="user-content-step-1-empty-website" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-1-empty-website"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 1: Empty website</h2>
+
+<p>Browse to the tutorial's directory. This directory should contain four subdirectories (<code>data</code>, <code>scripts</code>, <code>static</code>, <code>tutorial</code>), and one file (<code>README.md</code>). In this directory, next to <code>README.md</code>, create a new, empty file named <code>index.html</code>. This HTML file will contain the website with animated map. Let's start with some very simple HTML, pasting this in <code>index.html</code>, and saving the file:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;!DOCTYPE html&gt;
+&lt;<span class="pl-ent">html</span> <span class="pl-e">lang</span>=<span class="pl-s"><span class="pl-pds">"</span>en<span class="pl-pds">"</span></span>&gt;
+&lt;<span class="pl-ent">head</span>&gt;
+ &lt;<span class="pl-ent">meta</span> <span class="pl-e">charset</span>=<span class="pl-s"><span class="pl-pds">"</span>utf-8<span class="pl-pds">"</span></span>&gt;
+ &lt;<span class="pl-ent">meta</span> <span class="pl-e">name</span>=<span class="pl-s"><span class="pl-pds">"</span>viewport<span class="pl-pds">"</span></span> <span class="pl-e">content</span>=<span class="pl-s"><span class="pl-pds">"</span>width=device-width, initial-scale=1<span class="pl-pds">"</span></span>&gt;
+ &lt;<span class="pl-ent">meta</span> <span class="pl-e">http-equiv</span>=<span class="pl-s"><span class="pl-pds">"</span>Content-Type<span class="pl-pds">"</span></span> <span class="pl-e">content</span>=<span class="pl-s"><span class="pl-pds">"</span>text/html; charset=utf-8<span class="pl-pds">"</span></span>&gt;
+&lt;/<span class="pl-ent">head</span>&gt;
+&lt;<span class="pl-ent">body</span>&gt;
+&lt;/<span class="pl-ent">body</span>&gt;
+&lt;/<span class="pl-ent">html</span>&gt;</pre></div>
+
+<p>Great! You've made a website! Now, we can view this website in the browser, by double clicking on the HTML file. <em>But this is not enough!</em> Our HTML file will load external JSON (the state boundaries), and most browsers will not allow doing this using the <code>file://</code> protocol (which is what your browser will use then viewing local files).</p>
+
+<p><strong>We need a web server!</strong> On Mac or Linux, use the terminal to go to the tutorial's directory, and type:</p>
+
+<pre><code>python -m SimpleHTTPServer
+</code></pre>
+
+<p>Done! Your newly created HTML page should now be available on <a href="http://localhost:8000/">http://localhost:8000/</a>!</p>
+
+<p>On Windows, you could try to install <a href="http://fenixwebserver.com/">Fenix</a>.</p>
+
+<p><strong>After this step, your map should look like this (very white and empty):</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/1/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/1">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/1"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/1/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-2-title-and-header" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-2-title-and-header"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 2: Title and header</h2>
+
+<p>Now, let's add a page title and a simple header. In side your page's <code>&lt;head&gt;</code> tag, add a <code>&lt;title&gt;</code> element:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;<span class="pl-ent">title</span>&gt;Maptime AMS #4: Geopolitics, Borders <span class="pl-c1">&amp;amp;</span> D3.js!&lt;/<span class="pl-ent">title</span>&gt;</pre></div>
+
+<p>The above will give the page a title, which is displayed in your browser's tabs. We want more! Right after the <code>&lt;body&gt;</code> tag, add the following HTML:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;<span class="pl-ent">h1</span>&gt;United States in &lt;<span class="pl-ent">span</span> <span class="pl-e">id</span>=<span class="pl-s"><span class="pl-pds">"</span>year<span class="pl-pds">"</span></span>&gt;1790&lt;/<span class="pl-ent">span</span>&gt;&lt;/<span class="pl-ent">h1</span>&gt;</pre></div>
+
+<p>We'll put the year in a separate span element, so we can change the contents of this element dynamically later.</p>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/2/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/2">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/2"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/2/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-3-a-map-with-d3js" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-3-a-map-with-d3js"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 3: A map! With D3.js!</h2>
+
+<p>This is the most important step of all! In this step, we'll add the D3 and TopoJSON JavaScript libraries, an SVG element, and code to load and display a TopoJSON file.</p>
+
+<p>First, inside the <code>&lt;head&gt;</code> element, include two JavaScript libraries:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;<span class="pl-ent">script</span> <span class="pl-e">src</span>=<span class="pl-s"><span class="pl-pds">"</span>http://d3js.org/d3.v3.min.js<span class="pl-pds">"</span></span> <span class="pl-e">charset</span>=<span class="pl-s"><span class="pl-pds">"</span>utf-8<span class="pl-pds">"</span></span>&gt;&lt;/<span class="pl-ent">script</span>&gt;
+&lt;<span class="pl-ent">script</span> <span class="pl-e">src</span>=<span class="pl-s"><span class="pl-pds">"</span>http://d3js.org/topojson.v1.min.js<span class="pl-pds">"</span></span>&gt;&lt;/<span class="pl-ent">script</span>&gt;</pre></div>
+
+<p>Also inside the <code>&lt;head&gt;</code> element, add some CSS:</p>
+
+<div class="highlight highlight-text-html-basic"><pre><span class="pl-s1">&lt;<span class="pl-ent">style</span>&gt;</span>
+<span class="pl-s1"> <span class="pl-ent">*</span> {</span>
+<span class="pl-s1"> <span class="pl-c1"><span class="pl-c1">margin</span></span>: <span class="pl-c1">0</span>;</span>
+<span class="pl-s1"> <span class="pl-c1"><span class="pl-c1">padding</span></span>: <span class="pl-c1">0</span>;</span>
+<span class="pl-s1"> }</span>
+
+<span class="pl-s1"> svg {</span>
+<span class="pl-s1"> <span class="pl-c1"><span class="pl-c1">position</span></span>: <span class="pl-c1">absolute</span>;</span>
+<span class="pl-s1"> <span class="pl-c1"><span class="pl-c1">width</span></span>: <span class="pl-c1">100<span class="pl-k">%</span></span>;</span>
+<span class="pl-s1"> <span class="pl-c1"><span class="pl-c1">height</span></span>: <span class="pl-c1">100<span class="pl-k">%</span></span>;</span>
+<span class="pl-s1"> }</span>
+<span class="pl-s1">&lt;/<span class="pl-ent">style</span>&gt;</span></pre></div>
+
+<p>This CSS defines the web page's <em>style</em>, and without it, our map will never be properly displayed.</p>
+
+<p>Then, right <em>before</em> the <code>&lt;h1&gt;</code> tag we've added in the previous step, add an SVG element:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;<span class="pl-ent">svg</span>&gt;
+ &lt;<span class="pl-ent">g</span> <span class="pl-e">id</span>=<span class="pl-s"><span class="pl-pds">"</span>states<span class="pl-pds">"</span></span>&gt;&lt;/<span class="pl-ent">g</span>&gt;
+&lt;/<span class="pl-ent">svg</span>&gt;</pre></div>
+
+<p>Now, for some proper JavaScript! Past the following code inside your HTML file, just before <code>&lt;/body&gt;</code>:</p>
+
+<div class="highlight highlight-text-html-basic"><pre><span class="pl-s1">&lt;<span class="pl-ent">script</span>&gt;</span>
+<span class="pl-s1"> <span class="pl-k">var</span> svgStates <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-c1">select</span>(<span class="pl-s"><span class="pl-pds">"</span>svg #states<span class="pl-pds">"</span></span>); <span class="pl-c">// (1)</span></span>
+
+<span class="pl-s1"> <span class="pl-k">var</span> projection <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-smi">geo</span>.<span class="pl-en">albersUsa</span>(); <span class="pl-c">// (2)</span></span>
+
+<span class="pl-s1"> <span class="pl-k">var</span> path <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-smi">geo</span>.<span class="pl-en">path</span>()</span>
+<span class="pl-s1"> .<span class="pl-en">projection</span>(projection); <span class="pl-c">// (3)</span></span>
+
+<span class="pl-s1"> <span class="pl-smi">d3</span>.<span class="pl-en">json</span>(<span class="pl-s"><span class="pl-pds">"</span>data/states.json<span class="pl-pds">"</span></span>, <span class="pl-k">function</span>(<span class="pl-smi">error</span>, <span class="pl-smi">topologies</span>) { <span class="pl-c">// (4)</span></span>
+
+<span class="pl-s1"> <span class="pl-k">var</span> state <span class="pl-k">=</span> <span class="pl-smi">topojson</span>.<span class="pl-en">feature</span>(topologies[<span class="pl-c1">0</span>], topologies[<span class="pl-c1">0</span>].<span class="pl-smi">objects</span>.<span class="pl-smi">stdin</span>); <span class="pl-c">// (5)</span></span>
+
+<span class="pl-s1"> <span class="pl-smi">svgStates</span>.<span class="pl-en">selectAll</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>) <span class="pl-c">// (6)</span></span>
+<span class="pl-s1"> .<span class="pl-c1">data</span>(<span class="pl-smi">state</span>.<span class="pl-smi">features</span>)</span>
+<span class="pl-s1"> .<span class="pl-en">enter</span>()</span>
+<span class="pl-s1"> .<span class="pl-en">append</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)</span>
+<span class="pl-s1"> .<span class="pl-en">attr</span>(<span class="pl-s"><span class="pl-pds">"</span>d<span class="pl-pds">"</span></span>, path);</span>
+<span class="pl-s1"> });</span>
+<span class="pl-s1">&lt;/<span class="pl-ent">script</span>&gt;</span></pre></div>
+
+<p>Explanation of individual JavaScript lines:</p>
+
+<ol>
+<li>Use D3 to select the SVG <a href="https://developer.mozilla.org/en-US/docs/Web/SVG/Element/g">group</a> with id <code>#states</code>.</li>
+<li>D3 has some map projections built-in. We'll use <a href="https://github.com/mbostock/d3/wiki/Geo-Projections#albersUsa">Albers USA projection</a>, but feel free to experiment with <a href="https://github.com/mbostock/d3/wiki/Geo-Projections">some of the others</a>!</li>
+<li>See <a href="http://bost.ocks.org/mike/map/">http://bost.ocks.org/mike/map/</a> for more information!</li>
+<li>Load <code>states.json</code> (JSON array containing 13 decades of U.S. states)</li>
+<li><code>topojson.feature</code> will convert a TopoJSON object to a GeoJSON object. We'll start with just the first element in the TopoJSON array (<code>topologies[0]</code> = year 1790). I've used the TopoJSON command line utility to convert NHGIS's Shapefiles to TopoJSON, this is why the objects in the JSON file are inside an object called <code>stdin</code>...</li>
+<li>See <a href="http://bost.ocks.org/mike/map/">http://bost.ocks.org/mike/map/</a> for more information!</li>
+</ol>
+
+<p>OK. Maybe you should just open the results in your browser!</p>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/3/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/3">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/3"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/3/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-4-scale--position-map-in-browsers-center" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-4-scale--position-map-in-browsers-center"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 4: Scale &amp; position map in browser's center</h2>
+
+<p>Replace the following line:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">var</span> projection <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-smi">geo</span>.<span class="pl-en">albersUsa</span>();</pre></div>
+
+<p>With:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">var</span> width <span class="pl-k">=</span> <span class="pl-c1">window</span>.<span class="pl-c1">innerWidth</span>, <span class="pl-c">// (1)</span>
+ height <span class="pl-k">=</span> <span class="pl-c1">window</span>.<span class="pl-c1">innerHeight</span>;
+<span class="pl-k">var</span> projection <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-smi">geo</span>.<span class="pl-en">albersUsa</span>()
+ .<span class="pl-en">translate</span>([width <span class="pl-k">/</span> <span class="pl-c1">2</span>, height <span class="pl-k">/</span> <span class="pl-c1">2</span>]); <span class="pl-c">// (2)</span></pre></div>
+
+<ol>
+<li>Gets the width and height of the browser window</li>
+<li>Translates the projection, and sets the center halfway the browser's width and height</li>
+</ol>
+
+<p>The map should now be centered nicely in your browser's window!</p>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/4/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/4">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/4"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/4/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-5-load-all-states-for-all-years-1790---1910" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-5-load-all-states-for-all-years-1790---1910"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 5: Load all states for all years (1790 - 1910)</h2>
+
+<p>Instead of just displaying the first decade of U.S. state shapes (as we did in step 3), we want to later animate through all available data, from 1790 to 1910. To do this, we have to convert all 13 TopoJSON objects in the <code>topologies</code> array to GeoJSON.</p>
+
+<p>Replace:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">var</span> svgStates <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-c1">select</span>(<span class="pl-s"><span class="pl-pds">"</span>svg #states<span class="pl-pds">"</span></span>);</pre></div>
+
+<p>With:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">var</span> svgStates <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-c1">select</span>(<span class="pl-s"><span class="pl-pds">"</span>svg #states<span class="pl-pds">"</span></span>),
+ states <span class="pl-k">=</span> {},
+ startYear <span class="pl-k">=</span> <span class="pl-c1">1790</span>,
+ currentYear <span class="pl-k">=</span> startYear;</pre></div>
+
+<p>The code above defines some variables which will help us keep track of the current state of the animation.</p>
+
+<p>Afterwards, replace:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">var</span> state <span class="pl-k">=</span> <span class="pl-smi">topojson</span>.<span class="pl-en">feature</span>(topologies[<span class="pl-c1">0</span>], topologies[<span class="pl-c1">0</span>].<span class="pl-smi">objects</span>.<span class="pl-smi">stdin</span>);</pre></div>
+
+<p>With:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">for</span> (<span class="pl-k">var</span> i <span class="pl-k">=</span> <span class="pl-c1">0</span>; i <span class="pl-k">&lt;</span> <span class="pl-smi">topologies</span>.<span class="pl-c1">length</span>; i<span class="pl-k">++</span>) {
+ states[startYear <span class="pl-k">+</span> i <span class="pl-k">*</span> <span class="pl-c1">10</span>] <span class="pl-k">=</span> <span class="pl-smi">topojson</span>.<span class="pl-en">feature</span>(topologies[i], topologies[i].<span class="pl-smi">objects</span>.<span class="pl-smi">stdin</span>);
+}</pre></div>
+
+<p>And replace:</p>
+
+
+
+<p>With</p>
+
+<div class="highlight highlight-source-js"><pre>.<span class="pl-c1">data</span>(states[currentYear].<span class="pl-smi">features</span>)</pre></div>
+
+<p>Now, we'll have an object <code>states</code> which contains 13 GeoJSON objects (a list of states per decade), which we can access in the following way:</p>
+
+<ul>
+<li><code>states[1850]</code>: GeoJSON objects for all states in 1850,</li>
+<li><code>states[1910]</code>: GeoJSON objects for all states in 1910</li>
+</ul>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/5/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/5">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/5"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/5/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-6-update-function" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-6-update-function"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 6: <code>update()</code> function</h2>
+
+<p>This is a boring step, but we need this later. In this step, we'll encapsulate the code that gets the GeoJSON objects for the current year (<code>states[currentYear].features</code>) and appends them as SVG paths to the HTML document in a new function, called <code>update()</code>. We'll add animation
+code later, and we need the animation to redraw and update the map every ten years.</p>
+
+<p>After defining the function, we'll run it directly, to make sure the map gets drawn for the first time (for the year <code>currentYear</code>).</p>
+
+<p>Remove the following lines from your HTML file:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-smi">svgStates</span>.<span class="pl-en">selectAll</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-c1">data</span>(states[currentYear].<span class="pl-smi">features</span>)
+ .<span class="pl-en">enter</span>()
+ .<span class="pl-en">append</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-en">attr</span>(<span class="pl-s"><span class="pl-pds">"</span>d<span class="pl-pds">"</span></span>, path);</pre></div>
+
+<p>And replace them with the following:</p>
+
+<pre><code>function update() {
+ svgStates.selectAll("path")
+ .data(states[currentYear].features)
+ .enter()
+ .append("path")
+ .attr("d", path);
+}
+
+update();
+</code></pre>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/6/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/6">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/6"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/6/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-7-svg-style-for-us-states" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-7-svg-style-for-us-states"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 7: SVG style for US states</h2>
+
+<p>All the previous maps were black. We want a nicer map! Add the following lines of CSS to your webpage's stylesheet (inside the <code>&lt;style&gt;</code> tag):</p>
+
+<div class="highlight highlight-source-css"><pre>path {
+ <span class="pl-c1">stroke</span>: <span class="pl-c1">#666</span>;
+ <span class="pl-c1"><span class="pl-c1">fill</span></span>: <span class="pl-c1">none</span>;
+ <span class="pl-c1"><span class="pl-c1">fill</span>-<span class="pl-c1">opacity</span></span>: <span class="pl-c1">0.6</span>;
+ <span class="pl-c1">stroke-<span class="pl-c1">width</span></span>: <span class="pl-c1">1<span class="pl-k">px</span></span>;
+ <span class="pl-c1">stroke-linecap</span>: round;
+ <span class="pl-c1">stroke-linejoin</span>: round;
+}</pre></div>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/7/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/7">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/7"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/7/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-8-dashed-usa-coastline" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-8-dashed-usa-coastline"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 8: Dashed USA coastline</h2>
+
+<p>The map will be much easier to read if we would add the U.S. coastline. <a href="http://www.naturalearthdata.com/">Natural Earth</a> provides a great selection of public domain geo-spatial files, including just the <a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/data/usa.json">file we need</a>.</p>
+
+<p>We don't want the coastline to be too visible, we'll use SVG's <a href="https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-dasharray"><code>stroke-dasharray</code></a> attribute do draw a dashed line. Add the following lines to the page's CSS section:</p>
+
+<div class="highlight highlight-source-css"><pre><span class="pl-e">#boundary</span> path {
+ <span class="pl-c1">stroke-dasharray</span>: <span class="pl-c1">3</span>, <span class="pl-c1">5</span>;
+}</pre></div>
+
+<p>And inside the SVG tag, just before <code>&lt;g id="states"&gt;&lt;/g&gt;</code>, add:</p>
+
+
+
+<p>To draw the coastline shape in the SVG group we just created, we need D3 to select it. Replace the variable initialization code (the code just after the <code>&lt;script&gt;</code> tag) with the following lines:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">var</span> svgStates <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-c1">select</span>(<span class="pl-s"><span class="pl-pds">"</span>svg #states<span class="pl-pds">"</span></span>),
+ svgBoundary <span class="pl-k">=</span> <span class="pl-smi">d3</span>.<span class="pl-c1">select</span>(<span class="pl-s"><span class="pl-pds">"</span>svg #boundary<span class="pl-pds">"</span></span>),
+ states <span class="pl-k">=</span> {},
+ startYear <span class="pl-k">=</span> <span class="pl-c1">1790</span>,
+ currentYear <span class="pl-k">=</span> startYear;</pre></div>
+
+<p>Then, just before we load <code>states.json</code>, add the following JavaScript:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-smi">d3</span>.<span class="pl-en">json</span>(<span class="pl-s"><span class="pl-pds">"</span>data/usa.json<span class="pl-pds">"</span></span>, <span class="pl-k">function</span>(<span class="pl-smi">error</span>, <span class="pl-smi">boundary</span>) {
+ <span class="pl-smi">svgBoundary</span>.<span class="pl-en">selectAll</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-c1">data</span>(<span class="pl-smi">boundary</span>.<span class="pl-smi">features</span>)
+ .<span class="pl-en">enter</span>()
+ .<span class="pl-en">append</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-en">attr</span>(<span class="pl-s"><span class="pl-pds">"</span>d<span class="pl-pds">"</span></span>, path)
+});</pre></div>
+
+<p>I'm sure that part does not need explaining anymore! Let's have a look at the map!</p>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/8/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/8">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/8"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/8/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-9-nice-font-and-a-maptime-logo" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-9-nice-font-and-a-maptime-logo"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 9: Nice font, and a Maptime logo</h2>
+
+<p>This is Maptime, and we need a Maptime logo! <a href="http://maptime.io/"><em>Maps for all forever</em></a>! And a better looking font</p>
+
+<p>Add CSS to load a webfont from the tutorial's <code>static</code> directory (you should try to never use <a href="http://fontfeed.com/archives/google-webfonts-the-spy-inside/">Google Fonts</a>!), and position the logo properly. Put this somewhere between the <code>&lt;style&gt; ... &lt;/style&gt;</code> tags:</p>
+
+<div class="highlight highlight-source-css"><pre><span class="pl-k">@font-face</span> {
+ <span class="pl-c1"><span class="pl-c1">font-family</span></span>: <span class="pl-s"><span class="pl-pds">'</span>Bree Serif<span class="pl-pds">'</span></span>;
+ <span class="pl-c1"><span class="pl-c1">src</span></span>: <span class="pl-c1">url</span>(<span class="pl-s"><span class="pl-pds">"</span>static/BreeSerif-Regular.otf<span class="pl-pds">"</span></span>);
+}
+
+<span class="pl-ent">h1</span> {
+ <span class="pl-c1"><span class="pl-c1">position</span></span>: <span class="pl-c1">absolute</span>;
+ <span class="pl-c1"><span class="pl-c1">left</span></span>: <span class="pl-c1">20<span class="pl-k">px</span></span>;
+ <span class="pl-c1"><span class="pl-c1">top</span></span>: <span class="pl-c1">20<span class="pl-k">px</span></span>;
+ <span class="pl-c1"><span class="pl-c1">font-family</span></span>: <span class="pl-s"><span class="pl-pds">'</span>Bree Serif<span class="pl-pds">'</span></span>;
+ <span class="pl-c1"><span class="pl-c1">font-size</span></span>: <span class="pl-c1">35<span class="pl-k">px</span></span>;
+}
+
+<span class="pl-e">#maptime</span> {
+ <span class="pl-c1"><span class="pl-c1">position</span></span>: <span class="pl-c1">absolute</span>;
+ <span class="pl-c1"><span class="pl-c1">right</span></span>: <span class="pl-c1">20<span class="pl-k">px</span></span>;
+ <span class="pl-c1"><span class="pl-c1">top</span></span>: <span class="pl-c1">20<span class="pl-k">px</span></span>;
+}</pre></div>
+
+<p>After <code>&lt;/h1&gt;</code>, add an HTML image tag:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;<span class="pl-ent">img</span> <span class="pl-e">id</span>=<span class="pl-s"><span class="pl-pds">"</span>maptime<span class="pl-pds">"</span></span> <span class="pl-e">src</span>=<span class="pl-s"><span class="pl-pds">"</span>static/maptime.png<span class="pl-pds">"</span></span> /&gt;</pre></div>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/9/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/9">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/9"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/9/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-10-colors-colors-colors" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-10-colors-colors-colors"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 10: Colors, colors, colors!</h2>
+
+<p>First our map was black, and later it turned white with a gray outline. Now, it's time for some colors. D3 has <a href="https://github.com/mbostock/d3/wiki/Ordinal-Scales">great color scales built in</a>, but it's not too easy to make sure two neighbouring states do not get the same colors. <a href="http://en.wikipedia.org/wiki/Graph_coloring">Algorithms</a> which makes sure this won't happen do exist, but it's much easier to manually assign each state with its own color (Mike Bostock does this as well in his <a href="http://bost.ocks.org/mike/map/">Let&#x2019;s Make a Map</a> tutorial).</p>
+
+<p>I've created a separate file, <a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/static/colors.js"><code>colors.js</code></a>, which contains a color for each state. I've used colors from the D3 scales, but you should also have a look at <a href="http://colorbrewer2.org/">ColorBrewer</a>.</p>
+
+<p>Include the colors file:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;<span class="pl-ent">script</span> <span class="pl-e">src</span>=<span class="pl-s"><span class="pl-pds">"</span>static/colors.js<span class="pl-pds">"</span></span>&gt;&lt;/<span class="pl-ent">script</span>&gt;</pre></div>
+
+<p>Finally, add four lines of JavaScript after <code>.attr("d", path)</code> in the <code>update()</code> function (and make sure to remove the semicolon on the previous line). The function should look like this:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">function</span> <span class="pl-en">update</span>() {
+ <span class="pl-smi">svgStates</span>.<span class="pl-en">selectAll</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-c1">data</span>(states[currentYear].<span class="pl-smi">features</span>)
+ .<span class="pl-en">enter</span>()
+ .<span class="pl-en">append</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-en">attr</span>(<span class="pl-s"><span class="pl-pds">"</span>d<span class="pl-pds">"</span></span>, path)
+ .<span class="pl-c1">style</span>(<span class="pl-s"><span class="pl-pds">"</span>fill<span class="pl-pds">"</span></span>, <span class="pl-k">function</span>(<span class="pl-smi">d</span>, <span class="pl-smi">i</span>) { <span class="pl-c">// (1)</span>
+ <span class="pl-k">var</span> name <span class="pl-k">=</span> <span class="pl-smi">d</span>.<span class="pl-smi">properties</span>.<span class="pl-c1">STATENAM</span>.<span class="pl-c1">replace</span>(<span class="pl-s"><span class="pl-pds">"</span> Territory<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>); <span class="pl-c">// (2)</span>
+ <span class="pl-k">return</span> colors[name]; <span class="pl-c">// (3)</span>
+ });
+}</pre></div>
+
+<ol>
+<li>Sets the <code>fill</code> SVG style attribute of each separate state</li>
+<li>Gets the <code>STATENAM</code> property from the GeoJSON object, and removes the string <code>" Territory"</code> from the name (that way, we don't have to worry about state names like <em>Iowa Territory</em> but we can use <em>Iowa</em> instead!)</li>
+<li>Looks up the state name in the colors list</li>
+</ol>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/10/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/10">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/10"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/10/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-11-state-name-tooltips" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-11-state-name-tooltips"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 11: State name tooltips</h2>
+
+<p>It would be great if we could see the names of the states! Luckily, this is easy with the <a href="https://developer.mozilla.org/en-US/docs/Web/SVG/Element/title">SVG title element</a>!</p>
+
+<p>Add the following code in the <code>update()</code> function after the <code>style()</code> function:</p>
+
+<div class="highlight highlight-source-js"><pre>.<span class="pl-en">append</span>(<span class="pl-s"><span class="pl-pds">"</span>svg:title<span class="pl-pds">"</span></span>)
+ .<span class="pl-c1">text</span>(<span class="pl-k">function</span>(<span class="pl-smi">d</span>) { <span class="pl-k">return</span> <span class="pl-smi">d</span>.<span class="pl-smi">properties</span>.<span class="pl-c1">STATENAM</span>; });</pre></div>
+
+<p>Afterwards, the <code>update()</code> function should look like this, with the <code>svg:title</code> part in the end:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">function</span> <span class="pl-en">update</span>() {
+ <span class="pl-smi">svgStates</span>.<span class="pl-en">selectAll</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-c1">data</span>(states[currentYear].<span class="pl-smi">features</span>)
+ .<span class="pl-en">enter</span>()
+ .<span class="pl-en">append</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>)
+ .<span class="pl-en">attr</span>(<span class="pl-s"><span class="pl-pds">"</span>d<span class="pl-pds">"</span></span>, path)
+ .<span class="pl-c1">style</span>(<span class="pl-s"><span class="pl-pds">"</span>fill<span class="pl-pds">"</span></span>, <span class="pl-k">function</span>(<span class="pl-smi">d</span>, <span class="pl-smi">i</span>) {
+ <span class="pl-k">var</span> name <span class="pl-k">=</span> <span class="pl-smi">d</span>.<span class="pl-smi">properties</span>.<span class="pl-c1">STATENAM</span>.<span class="pl-c1">replace</span>(<span class="pl-s"><span class="pl-pds">"</span> Territory<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>);
+ <span class="pl-k">return</span> colors[name];
+ })
+ .<span class="pl-en">append</span>(<span class="pl-s"><span class="pl-pds">"</span>svg:title<span class="pl-pds">"</span></span>)
+ .<span class="pl-c1">text</span>(<span class="pl-k">function</span>(<span class="pl-smi">d</span>) { <span class="pl-k">return</span> <span class="pl-smi">d</span>.<span class="pl-smi">properties</span>.<span class="pl-c1">STATENAM</span>; });
+}</pre></div>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/11/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/11">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/11"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/11/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-12-time-slider" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-12-time-slider"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 12: Time slider</h2>
+
+<p><a href="https://www.mapbox.com/">Mapbox</a>'s <a href="https://github.com/tmcw/">Tom MacWright</a> has created a very handy time slider plugin for D3, called <a href="https://github.com/tmcw/chroniton">Chroniton</a>. This plugin has <a href="http://www.macwright.org/chroniton/example/">all the functionality we need</a> for our animated map.</p>
+
+<p>Let's use it! Add the two lines below inside the HTML <code>&lt;head&gt;</code> element:</p>
+
+<div class="highlight highlight-text-html-basic"><pre>&lt;<span class="pl-ent">script</span> <span class="pl-e">src</span>=<span class="pl-s"><span class="pl-pds">"</span>static/chroniton.js<span class="pl-pds">"</span></span>&gt;&lt;/<span class="pl-ent">script</span>&gt;
+&lt;<span class="pl-ent">link</span> <span class="pl-e">href</span>=<span class="pl-s"><span class="pl-pds">"</span>static/chroniton.css<span class="pl-pds">"</span></span> <span class="pl-e">rel</span>=<span class="pl-s"><span class="pl-pds">"</span>stylesheet<span class="pl-pds">"</span></span>&gt;</pre></div>
+
+<p>We need some CSS, too:</p>
+
+<div class="highlight highlight-source-css"><pre><span class="pl-e">#slider</span> {
+ <span class="pl-c1"><span class="pl-c1">position</span></span>: <span class="pl-c1">absolute</span>;
+ <span class="pl-c1"><span class="pl-c1">left</span></span>: <span class="pl-c1">50<span class="pl-k">%</span></span>;
+ <span class="pl-c1"><span class="pl-c1">margin-left</span></span>: <span class="pl-c1">-300<span class="pl-k">px</span></span>;
+ <span class="pl-c1"><span class="pl-c1">bottom</span></span>: <span class="pl-c1">20<span class="pl-k">px</span></span>;
+ <span class="pl-c1"><span class="pl-c1">width</span></span>: <span class="pl-c1">600<span class="pl-k">px</span></span>;
+ <span class="pl-c1"><span class="pl-c1">height</span></span>: <span class="pl-c1">50<span class="pl-k">px</span></span>;
+}</pre></div>
+
+<p>And the slider needs a DIV element to live in. Add this element after our header (<code>&lt;/h1&gt;</code>):</p>
+
+
+
+<p>To initialize our little Chroniton, add some more JavaScript after, <code>update();</code>:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-smi">d3</span>.<span class="pl-c1">select</span>(<span class="pl-s"><span class="pl-pds">"</span>#slider<span class="pl-pds">"</span></span>) <span class="pl-c">// (1)</span>
+ .<span class="pl-c1">call</span>(
+ <span class="pl-en">chroniton</span>() <span class="pl-c">// (2)</span>
+ .<span class="pl-en">domain</span>([<span class="pl-k">new</span> <span class="pl-en">Date</span>(startYear, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>), <span class="pl-k">new</span> <span class="pl-en">Date</span>(startYear <span class="pl-k">+</span> (<span class="pl-smi">topologies</span>.<span class="pl-c1">length</span> <span class="pl-k">-</span> <span class="pl-c1">1</span>) <span class="pl-k">*</span> <span class="pl-c1">10</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>)]) <span class="pl-c">// (3)</span>
+ .<span class="pl-en">labelFormat</span>(<span class="pl-k">function</span>(<span class="pl-smi">date</span>) {
+ <span class="pl-k">return</span> <span class="pl-c1">Math</span>.<span class="pl-c1">ceil</span>((<span class="pl-smi">date</span>.<span class="pl-c1">getFullYear</span>()) <span class="pl-k">/</span> <span class="pl-c1">10</span>) <span class="pl-k">*</span> <span class="pl-c1">10</span>; <span class="pl-c">// (4)</span>
+ })
+ .<span class="pl-c1">width</span>(<span class="pl-c1">600</span>) <span class="pl-c">// (5)</span>
+ );</pre></div>
+
+<ol>
+<li>Use D3 to select the DIV element <code>#slider</code> we've just created</li>
+<li>Call Chroniton!</li>
+<li>Set Chroniton's domain, from <code>startYear</code> (1790) to <code>startYear + 13 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 10 = 1910</code></li>
+<li>Just use the year in the slider's label, not the full date</li>
+<li>Set Chroniton to be 600 pixels wide</li>
+</ol>
+
+<p><strong>After this step, your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/12/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/12">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/12"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/12/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-13-animation" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-13-animation"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 13: Animation!</h2>
+
+<p>Chroniton has <a href="https://github.com/tmcw/chroniton#playback">playback functionality</a> which we'll use to update the map when the slider "enters" a new decade. Add the following lines somewhere in the function chain after <code>chroniton()</code>, for example after <code>.width(600)</code>:</p>
+
+<div class="highlight highlight-source-js"><pre>.<span class="pl-en">on</span>(<span class="pl-s"><span class="pl-pds">'</span>change<span class="pl-pds">'</span></span>, <span class="pl-k">function</span>(<span class="pl-smi">date</span>) { <span class="pl-c">// (1)</span>
+ <span class="pl-k">var</span> newYear <span class="pl-k">=</span> <span class="pl-c1">Math</span>.<span class="pl-c1">ceil</span>((<span class="pl-smi">date</span>.<span class="pl-c1">getFullYear</span>()) <span class="pl-k">/</span> <span class="pl-c1">10</span>) <span class="pl-k">*</span> <span class="pl-c1">10</span>; <span class="pl-c">// (2)</span>
+ <span class="pl-k">if</span> (newYear <span class="pl-k">!=</span> currentYear) { <span class="pl-c">// (3)</span>
+ currentYear <span class="pl-k">=</span> newYear;
+ <span class="pl-smi">svgStates</span>.<span class="pl-en">selectAll</span>(<span class="pl-s"><span class="pl-pds">"</span>path<span class="pl-pds">"</span></span>).<span class="pl-en">remove</span>(); <span class="pl-c">// (4)</span>
+ <span class="pl-en">update</span>(); <span class="pl-c">// (5)</span>
+ }
+})
+.<span class="pl-en">playButton</span>(<span class="pl-c1">true</span>) <span class="pl-c">// (6)</span>
+.<span class="pl-en">playbackRate</span>(<span class="pl-c1">0.2</span>)
+.<span class="pl-en">loop</span>(<span class="pl-c1">true</span>)</pre></div>
+
+<ol>
+<li>Chroniton will emit a <code>change</code> event each time the slider's position changes (either triggered by the animation, or by the user). Each time this happens, a function is called with the slider's current date as a parameter:</li>
+<li>Use JavaScript's <code>date.getFullYear()</code> to get the year at the slider's position, and compute the decade for that year</li>
+<li>Check whether the slider's date is in a different decade than <code>currentYear</code></li>
+<li>If this is the case, we'll remove all SVG paths from <code>svgStates</code> (and thereby clearing the map)</li>
+<li>And update and redraw the map afterwards!</li>
+<li>Add a playback button to Chroniton</li>
+</ol>
+
+<p>Finally, add the following line somewhere In the <code>update()</code> function. Now, the span element in the heading (<code>&lt;span id="year"&gt;1790&lt;/span&gt;</code>) will get updated when the map changes:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-smi">d3</span>.<span class="pl-c1">select</span>(<span class="pl-s"><span class="pl-pds">"</span>#year<span class="pl-pds">"</span></span>).<span class="pl-en">html</span>(currentYear);</pre></div>
+
+<p><strong>After this step, you're done! And your map should look like this:</strong></p>
+
+<ul>
+<li><a href="https://github.com/maptime-ams/animated-borders-d3js/blob/gh-pages/tutorial/13/index.html">Source code</a></li>
+<li><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/13">View in browser</a></li>
+<li>Screenshot:</li>
+</ul>
+
+<p><a href="http://maptime-ams.github.io/animated-borders-d3js/tutorial/13"><img src="https://github.com/maptime-ams/animated-borders-d3js/raw/gh-pages/tutorial/13/screenshot.png" alt=""></a></p>
+
+<h2><a id="user-content-step-14-done" class="anchor" href="https://github.com/maptime-ams/animated-borders-d3js#step-14-done"><svg class="octicon octicon-link" height="16" width="16"><path></path></svg></a>Step 14: Done!</h2>
+
+<p>Congratulations, you've made a map with D3.js! Now, go and make another one! Or, make this one a bit better. Some ideas:</p>
+
+<ul>
+<li>Nicer colors. You could make older or more Eastern states darker, for example.</li>
+<li>Or use TopoJSON to pick the right colors, as described by <a href="http://bl.ocks.org/jasondavies/4188334">Jason Davies</a>.</li>
+<li>Make the slider change it's label at a better moment...</li>
+<li>Resize the map when the <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window.onresize">browser resizes</a>.</li>
+<li>Use JavaScript to make better functioning state name tooltips.</li>
+<li>Add cities and places. <a href="http://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/">Natural Earth</a> has some great open data sets available, and you could try to use <a href="http://turfjs.org/static/docs/">Turf</a>'s <a href="http://turfjs.org/static/docs/module-turf_inside.html"><code>turf.inside</code></a> function to only display cities in visible states.</li>
+<li>Tell stories! Highlight certain periods and locations, and tell viewers what happened on those moments in time.</li>
+</ul>
+</article>
+ </div>
+</body></html>

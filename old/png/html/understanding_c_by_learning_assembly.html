@@ -1,0 +1,305 @@
+<!DOCTYPE html><html><head><title>Understanding C by learning assembly</title></head><body>
+<h1>Understanding C by learning assembly</h1><p><a href="https://www.recurse.com/blog/7-understanding-c-by-learning-assembly" target="_new">Original URL</a></p>
+<p><blockquote>Last time, Alan showed how to use GDB as a tool to learn C. Today I want to go one step further and use GDB to help us understand assembly as well. Abstraction layers are great tools for building&hellip;</blockquote></p>
+<div><div class="blog-post">
+
+<p>Last time, <a href="https://github.com/happy4crazy">Alan</a> showed how to use <a href="https://www.hackerschool.com/blog/5-learning-c-with-gdb">GDB as a tool to learn C</a>. Today I want to go one step further and use GDB to help us understand assembly as well.</p>
+
+<p>Abstraction layers are great tools for building things, but they can sometimes get in the way of learning. My goal in this post is to convince you that in order to rigorously understand C, we must also understand the assembly that our C compiler generates. I&#x2019;ll do this by showing you how to disassemble and read a simple program with GDB, and then we&#x2019;ll use GDB and our knowledge of assembly to understand how static local variables work in C.</p>
+
+<p><em>Note: All the code in this post was compiled on an x86_64 CPU running Mac OS X 10.8.1 using Clang 4.0 with optimizations disabled (</em><code>-O0</code><em>).</em></p>
+
+<h2>Learning assembly with GDB</h2>
+
+<p>Let&#x2019;s start by disassembling a program with GDB and learning how to read the output. Type the following program into a text file and save it as <code>simple.c</code>:</p>
+
+<pre><code class="c">int main()
+{
+ int a = 5;
+ int b = a + 6;
+ return 0;
+}
+</code></pre>
+
+<p>Now compile it with debugging symbols and no optimizations and then run GDB:</p>
+
+<pre><code class="sh">$ CFLAGS="-g -O0" make simple
+cc -g -O0 simple.c -o simple
+$ gdb simple
+</code></pre>
+
+<p>Inside GDB, we&#x2019;ll break on <code>main</code> and run until we get to the return statement. We put the number 2 after <code>next</code> to specify that we want to run <code>next</code> twice:</p>
+
+<pre><code class="gdb">(gdb) break main
+(gdb) run
+(gdb) next 2
+</code></pre>
+
+<p>Now let&#x2019;s use the <code>disassemble</code> command to show the assembly instructions for the current function. You can also pass a function name to <code>disassemble</code> to specify a different function to examine.</p>
+
+<pre><code class="gdb">(gdb) disassemble
+Dump of assembler code for function main:
+0x0000000100000f50 &lt;main+0&gt;: push %rbp
+0x0000000100000f51 &lt;main+1&gt;: mov %rsp,%rbp
+0x0000000100000f54 &lt;main+4&gt;: mov $0x0,%eax
+0x0000000100000f59 &lt;main+9&gt;: movl $0x0,-0x4(%rbp)
+0x0000000100000f60 &lt;main+16&gt;: movl $0x5,-0x8(%rbp)
+0x0000000100000f67 &lt;main+23&gt;: mov -0x8(%rbp),%ecx
+0x0000000100000f6a &lt;main+26&gt;: add $0x6,%ecx
+0x0000000100000f70 &lt;main+32&gt;: mov %ecx,-0xc(%rbp)
+0x0000000100000f73 &lt;main+35&gt;: pop %rbp
+0x0000000100000f74 &lt;main+36&gt;: retq 
+End of assembler dump.
+</code></pre>
+
+<p>The <code>disassemble</code> command defaults to outputting instructions in AT&amp;T syntax, which is the same syntax used by the GNU assembler. Instructions in AT&amp;T syntax are of the format <code>mnemonic source, destination</code>. The mnemonic is a human readable name for the instruction. Source and destination are operands and can be immediate values, registers, memory addresses, or labels. Immediate values are constants, and are prefixed by a <code>$</code>. For instance, <code>$0x5</code> represents the number 5 in hexadecimal. Register names are prefixed by a <code>%</code>.</p>
+
+<h3>Registers</h3>
+
+<p>It&#x2019;s worth taking a quick detour to understand registers. Registers are data storage locations directly on the CPU. With some exceptions, the size, or <em>width</em>, of a CPU&#x2019;s registers define its architecture. So if you have a 64-bit CPU, your registers will be 64 bits wide. The same is true of 32-bit CPUs (32-bit registers), 16-bit CPUs, and so on. Registers are very fast to access and are often the operands for arithmetic and logic operations.</p>
+
+<p>The x86 family has a number of general and special purpose registers. General purpose registers can be used for any operation and their value has no particular meaning to the CPU. On the other hand, the CPU relies on special purpose registers for its own operation and the values stored in them have a specific meaning depending on the register. In our example above, <code>%eax</code> and <code>%ecx</code> are general purpose registers, while <code>%rbp</code> and <code>%rsp</code> are special purpose registers. <code>%rbp</code> is the base pointer, which points to the base of the current stack frame, and <code>%rsp</code> is the stack pointer, which points to the top of the current stack frame. <code>%rbp</code> always has a higher value than <code>%rsp</code> because the stack starts at a high memory address and grows downwards. If you are unfamiliar with the call stack, you can find a <a href="http://en.wikipedia.org/wiki/Call_stack">good introduction on Wikipedia</a>.</p>
+
+<p>One quirk of the x86 family is that it has maintained backwards compatibility all the way back to the 16-bit 8086 processor. As x86 moved from 16-bit to 32-bit to 64-bit, the registers were expanded and given new names so as to not break backwards compatibility with code that was written for older, narrower CPUs.</p>
+
+<p>Take the general purpose register AX, which is 16 bits wide. The high byte can be accessed with the name AH, and the low byte with the name AL. When the 32-bit 80386 came out, the Extended AX register, or EAX, referred to the 32-bit register, while AX continued to refer to a 16-bit register that made up the lower half of EAX. Similarly, when the x86_64 architecture came out, the &#x201C;R&#x201D; prefix was used and EAX made up the lower half of the 64-bit RAX register. I&#x2019;ve included a diagram below based on a <a href="http://en.wikipedia.org/wiki/X86#x86_registers">Wikipedia article</a> to help visualize the relationships I described:</p>
+
+<pre><code>|__64__|__56__|__48__|__40__|__32__|__24__|__16__|__8___|
+|__________________________RAX__________________________|
+|xxxxxxxxxxxxxxxxxxxxxxxxxxx|____________EAX____________|
+|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|_____AX______|
+|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|__AH__|__AL__|
+</code></pre>
+
+<h3>Back to the code</h3>
+
+<p>This should be enough information to start reading our disassembled program.</p>
+
+<pre><code class="gdb">0x0000000100000f50 &lt;main+0&gt;: push %rbp
+0x0000000100000f51 &lt;main+1&gt;: mov %rsp,%rbp
+</code></pre>
+
+<p>The first two instructions are called the function prologue or preamble. First we push the old base pointer onto the stack to save it for later. Then we copy the value of the stack pointer to the base pointer. After this, <code>%rbp</code> points to the base of <code>main</code>&#x2019;s stack frame.</p>
+
+<pre><code class="gdb">0x0000000100000f54 &lt;main+4&gt;: mov $0x0,%eax
+</code></pre>
+
+<p>This instruction copies 0 into <code>%eax</code>. The x86 calling convention dictates that a function&#x2019;s return value is stored in <code>%eax</code>, so the above instruction sets us up to return 0 at the end of our function.</p>
+
+<pre><code class="gdb">0x0000000100000f59 &lt;main+9&gt;: movl $0x0,-0x4(%rbp)
+</code></pre>
+
+<p>Here we have something we haven&#x2019;t encountered before: <code>-0x4(%rbp)</code>. The parentheses let us know that this is a memory address. Here, <code>%rbp</code> is called the base register, and <code>-0x4</code> is the displacement. This is equivalent to <code>%rbp + -0x4</code>. Because the stack grows downwards, subtracting 4 from the base of the current stack frame moves us into the current frame itself, where local variables are stored. This means that this instruction stores 0 at <code>%rbp - 4</code>. It took me a while to figure out what this line was for, but it seems that clang <a href="http://lists.cs.uiuc.edu/pipermail/cfe-dev/2012-February/019767.html">allocates a hidden local variable</a> for an implicit return value from <code>main</code>.</p>
+
+<p>You&#x2019;ll also notice that the mnemonic has the suffix <code>l</code>. This signifies that the operands will be <code>l</code>ong (32 bits for integers). Other valid suffixes are <code>b</code>yte, <code>s</code>hort, <code>w</code>ord, <code>q</code>uad, and <code>t</code>en. If you see an instruction that does not have a suffix, the size of the operands are inferred from the size of the source or destination register. For instance, in the previous line, <code>%eax</code> is 32 bits wide, so the <code>mov</code> instruction is inferred to be <code>movl</code>.</p>
+
+<pre><code class="gdb">0x0000000100000f60 &lt;main+16&gt;: movl $0x5,-0x8(%rbp)
+</code></pre>
+
+<p>Now we&#x2019;re getting into the meat of our sample program! The first line of assembly is the first line of C in <code>main</code> and stores the number 5 in the next available local variable slot (<code>%rbp - 0x8</code>), 4 bytes down from our last local variable. That&#x2019;s the location of <code>a</code>. We can use GDB to verify this:</p>
+
+<pre><code class="gdb">(gdb) x &amp;a
+0x7fff5fbff768: 0x00000005
+(gdb) x $rbp - 8
+0x7fff5fbff768: 0x00000005
+</code></pre>
+
+<p>Note that the memory addresses are the same. You&#x2019;ll notice that GDB sets up variables for our registers, but like all variables in GDB, we prefix it with a <code>$</code> rather than the <code>%</code> used in AT&amp;T assembly.</p>
+
+<pre><code class="gdb">0x0000000100000f67 &lt;main+23&gt;: mov -0x8(%rbp),%ecx
+0x0000000100000f6a &lt;main+26&gt;: add $0x6,%ecx
+0x0000000100000f70 &lt;main+32&gt;: mov %ecx,-0xc(%rbp)
+</code></pre>
+
+<p>We then move <code>a</code> into <code>%ecx</code>, one of our general purpose registers, add 6 to it and store the result in <code>%rbp - 0xc</code>. This is the second line of C in <code>main</code>. You&#x2019;ve maybe figured out that <code>%rbp - 0xc</code> is <code>b</code>, which we can verify in GDB:</p>
+
+<pre><code class="gdb">(gdb) x &amp;b
+0x7fff5fbff764: 0x0000000b
+(gdb) x $rbp - 0xc
+0x7fff5fbff764: 0x0000000b
+</code></pre>
+
+<p>The rest of <code>main</code> is just cleanup, called the function epilogue:</p>
+
+<pre><code class="gdb">0x0000000100000f73 &lt;main+35&gt;: pop %rbp
+0x0000000100000f74 &lt;main+36&gt;: retq 
+</code></pre>
+
+<p>We <code>pop</code> the old base pointer off the stack and store it back in <code>%rbp</code> and then <code>retq</code> jumps back to our return address, which is also stored in the stack frame.</p>
+
+<p>So far we&#x2019;ve used GDB to disassemble a short C program, gone over how to read AT&amp;T assembly syntax, and covered registers and memory address operands. We&#x2019;ve also used GDB to verify where our local variables are stored in relation to <code>%rbp</code>. Now we&#x2019;re going to use our newly acquired skills to explain how static local variables work.</p>
+
+<h2>Understanding static local variables</h2>
+
+<p>Static local variables are a very cool feature of C. In a nutshell, they are local variables that only get initialized once and persist their values across multiple calls to the function where they are defined. A simple use case for static local variables is a Python-style generator. Here&#x2019;s one that generates all of the natural numbers up to <code>INT_MAX</code>:</p>
+
+<pre><code class="c">/* static.c */
+#include &lt;stdio.h&gt;
+int natural_generator()
+{
+ int a = 1;
+ static int b = -1;
+ b += 1;
+ return a + b;
+}
+
+int main()
+{
+ printf("%d\n", natural_generator());
+ printf("%d\n", natural_generator());
+ printf("%d\n", natural_generator());
+
+ return 0;
+}
+</code></pre>
+
+<p>When compiled and run, this program prints the first three natural numbers:</p>
+
+<pre><code>$ CFLAGS="-g -O0" make static
+cc -g -O0 static.c -o static
+$ ./static
+1
+2
+3
+</code></pre>
+
+<p>But how does this work? To understand static locals, we&#x2019;re going to jump into GDB and look at the assembly. I&#x2019;ve removed the address information that GDB adds to the disassembly so that everything fits on screen:</p>
+
+<pre><code>$ gdb static
+(gdb) break natural_generator
+(gdb) run
+(gdb) disassemble
+Dump of assembler code for function natural_generator:
+push %rbp
+mov %rsp,%rbp
+movl $0x1,-0x4(%rbp)
+mov 0x177(%rip),%eax # 0x100001018 &lt;natural_generator.b&gt;
+add $0x1,%eax
+mov %eax,0x16c(%rip) # 0x100001018 &lt;natural_generator.b&gt;
+mov -0x4(%rbp),%eax
+add 0x163(%rip),%eax # 0x100001018 &lt;natural_generator.b&gt;
+pop %rbp
+retq 
+End of assembler dump.
+</code></pre>
+
+<p>The first thing we need to do is figure out what instruction we&#x2019;re on. We can do that by examining the instruction pointer or program counter. The instruction pointer is a register that stores the memory address of the next instruction. On x86_64, that register is <code>%rip</code>. We can access the instruction pointer using the <code>$rip</code> variable, or alternatively we can use the architecture independent <code>$pc</code>:</p>
+
+<pre><code class="gdb">(gdb) x/i $pc
+0x100000e94 &lt;natural_generator+4&gt;: movl $0x1,-0x4(%rbp)
+</code></pre>
+
+<p>The instruction pointer always contains the address of the <em>next</em> instruction to be run, which means the third instruction hasn&#x2019;t been run yet, but is about to be.</p>
+
+<p>Because knowing the next instruction is useful, we&#x2019;re going to make GDB show us the next instruction every time the program stops. In GDB 7.0 or later, you can just run <code>set disassemble-next-line on</code>, which shows all the instructions that make up the next line of source, but we&#x2019;re using Mac OS X, which only ships with GDB 6.3, so we&#x2019;ll have to resort to the <code>display</code> command. <code>display</code> is like <code>x</code>, except it evaluates its expression every time our program stops:</p>
+
+<pre><code class="gdb">(gdb) display/i $pc
+1: x/i $pc 0x100000e94 &lt;natural_generator+4&gt;: movl $0x1,-0x4(%rbp)
+</code></pre>
+
+<p>Now GDB is set up to always show us the next instruction before showing its prompt.</p>
+
+<p>We&#x2019;re already past the function prologue, which we covered earlier, so we&#x2019;ll start right at the third instruction. This corresponds to the first source line that assigns 1 to <code>a</code>. Instead of <code>next</code>, which moves to the next source line, we&#x2019;ll use <code>nexti</code>, which moves to the next assembly instruction. Afterwards we&#x2019;ll examine <code>%rbp - 0x4</code> to verify our hypothesis that <code>a</code> is stored at <code>%rbp - 0x4</code>. </p>
+
+<pre><code class="gdb">(gdb) nexti
+7 b += 1;
+1: x/i $pc mov 0x177(%rip),%eax # 0x100001018 &lt;natural_generator.b&gt;
+(gdb) x $rbp - 0x4
+0x7fff5fbff78c: 0x00000001
+(gdb) x &amp;a
+0x7fff5fbff78c: 0x00000001
+</code></pre>
+
+<p>They are the same, just as we expected. The next instruction is more interesting:</p>
+
+<pre><code class="gdb">mov 0x177(%rip),%eax # 0x100001018 &lt;natural_generator.b&gt;
+</code></pre>
+
+<p>This is where we&#x2019;d expect to find the line <code>static int b = -1;</code>, but it looks substantially different than anything we&#x2019;ve seen before. For one thing, there&#x2019;s no reference to the stack frame where we&#x2019;d normally expect to find local variables. There&#x2019;s not even a <code>-0x1</code>! Instead, we have an instruction that loads <code>0x100001018</code>, located somewhere after the instruction pointer, into <code>%eax</code>. GDB gives us a helpful comment with the result of the memory operand calculation and a hint telling us that <code>natural_generator.b</code> is stored at this address. Let&#x2019;s run this instruction and figure out what&#x2019;s going on:</p>
+
+<pre><code class="gdb">(gdb) nexti
+(gdb) p $rax
+$3 = 4294967295
+(gdb) p/x $rax
+$5 = 0xffffffff
+</code></pre>
+
+<p>Even though the disassembly shows <code>%eax</code> as the destination, we print <code>$rax</code>, because GDB only sets up variables for full width registers. </p>
+
+<p>In this situation, we need to remember that while variables have types that specify if they are signed or unsigned, registers don&#x2019;t, so GDB is printing the value of <code>%rax</code> unsigned. Let&#x2019;s try again, by casting <code>%rax</code> to a signed <code>int</code>:</p>
+
+<pre><code class="gdb">(gdb) p (int)$rax
+$11 = -1
+</code></pre>
+
+<p>It looks like we&#x2019;ve found <code>b</code>. We can double check this by using the <code>x</code> command:</p>
+
+<pre><code class="gdb">(gdb) x/d 0x100001018
+0x100001018 &lt;natural_generator.b&gt;: -1
+(gdb) x/d &amp;b
+0x100001018 &lt;natural_generator.b&gt;: -1
+</code></pre>
+
+<p>So not only is <code>b</code> stored at a low memory address outside of the stack, it&#x2019;s also initialized to -1 before <code>natural_generator</code> is even called. In fact, even if you disassembled the entire program, you wouldn&#x2019;t find any code that sets <code>b</code> to -1. This is because the value for <code>b</code> is hardcoded in a different section of the <code>sample</code> executable, and it&#x2019;s loaded into memory along with all the machine code by the operating system&#x2019;s loader when the process is launched.</p>
+
+<p>With this out of the way, things start to make more sense. After storing <code>b</code> in <code>%eax</code>, we move to the next line of source where we increment <code>b</code>. This corresponds to the next two instructions:</p>
+
+<pre><code class="gdb">add $0x1,%eax
+mov %eax,0x16c(%rip) # 0x100001018 &lt;natural_generator.b&gt;
+</code></pre>
+
+<p>Here we add 1 to <code>%eax</code> and store the result back into memory. Let&#x2019;s run these instructions and verify the result:</p>
+
+<pre><code class="gdb">(gdb) nexti 2
+(gdb) x/d &amp;b
+0x100001018 &lt;natural_generator.b&gt;: 0
+(gdb) p (int)$rax
+$15 = 0
+</code></pre>
+
+<p>The next two instructions set us up to return <code>a + b</code>:</p>
+
+<pre><code class="gdb">mov -0x4(%rbp),%eax
+add 0x163(%rip),%eax # 0x100001018 &lt;natural_generator.b&gt;
+</code></pre>
+
+<p>Here we load <code>a</code> into <code>%eax</code> and then add <code>b</code>. At this point, we&#x2019;d expect <code>%eax</code> to be 1. Let&#x2019;s verify:</p>
+
+<pre><code class="gdb">(gdb) nexti 2
+(gdb) p $rax
+$16 = 1
+</code></pre>
+
+<p><code>%eax</code> is used to store the return value from <code>natural_generator</code>, so we&#x2019;re all set up for the epilogue which cleans up the stack and returns:</p>
+
+<pre><code class="gdb">pop %rbp
+retq 
+</code></pre>
+
+<p>Now we understand how <code>b</code> is initialized, let&#x2019;s see what happens when we run <code>natural_generator</code> again:</p>
+
+<pre><code class="gdb">(gdb) continue
+Continuing.
+1
+
+Breakpoint 1, natural_generator () at static.c:5
+5 int a = 1;
+1: x/i $pc 0x100000e94 &lt;natural_generator+4&gt;: movl $0x1,-0x4(%rbp)
+(gdb) x &amp;b
+0x100001018 &lt;natural_generator.b&gt;: 0
+</code></pre>
+
+<p>Because <code>b</code> is not stored on the stack with other local variables, it&#x2019;s still zero when <code>natural_generator</code> is called again. No matter how many times our generator is called, <code>b</code> will always retain its previous value. This is because it&#x2019;s stored outside the stack and initialized when the loader moves the program into memory, rather than by any of our machine code.</p>
+
+<h2>Conclusion</h2>
+
+<p>We began by going over how to read assembly and how to disassemble a program with GDB. Afterwards, we covered how static local variables work, which we could not have done without disassembling our executable.</p>
+
+<p>We spent a lot of time alternating between reading the assembly instructions and verifying our hypotheses in GDB. It may seem repetitive, but there&#x2019;s a very important reason for doing things this way: the best way to learn something abstract is to make it more concrete, and one of the best way to make something more concrete is to use tools that let you peel back layers of abstraction. The best way to to learn these tools is to force yourself to use them until they&#x2019;re second nature.</p>
+
+
+
+
+</div>
+</div>
+</body></html>

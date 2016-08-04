@@ -1,0 +1,880 @@
+<!DOCTYPE html><html><head><title>Getting Started with React</title></head><body>
+<h1>Getting Started with React</h1><p><a href="https://themeteorchef.com/recipes/getting-started-with-react/" target="_new">Original URL</a></p>
+<p><blockquote>What we're going to learn In this recipe, we'll learn how to get started with the React user interface library. We'll refactor Base, the starter kit used here at The Meteor Chef, replacing Blaze with&hellip;</blockquote></p>
+<div><div id="recipe" class="tab-content active">
+ <h3>What we're going to learn</h3>
+ <p>In this recipe, we'll learn how to get started with the React user interface library. We'll refactor Base, the starter kit used here at The Meteor Chef, replacing Blaze with React. We'll learn how to define components, handle routing with Flow Router, and get a feel for React's basic API and how to get data into our applications.</p>
+
+ 
+ 
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/slack-logo.svg" alt="Slack">
+ <header>
+ <h4>Join The Meteor Chef on Slack</h4>
+ <p>If you get confused or stuck while reading&#x2014;or just want to talk about Meteor&#x2014;join us on Slack! <a href="http://slack.themeteorchef.com" target="_blank">Get an invite now</a>.</p>
+ </header>
+ </div>
+ 
+
+ <h3>Getting Started</h3>
+
+<p>For this recipe, we&#x2019;ll need to install a couple packages to help us out with getting React up and running.</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add react
+</code></pre>
+
+<p>This is the special sauce. When we install this, we&#x2019;ll get access to React, along with everything we need to make React work with our Meteor application. If you&#x2019;re curious, you can <a href="https://react-in-meteor.readthedocs.org/en/latest/#whats-in-the-box">see what this includes here</a>.</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add kadira:react-layout
+</code></pre>
+
+<p>We&#x2019;ll use this package to make it easy to render React components in our application. This will be used in conjunction with <a href="https://github.com/kadirahq/flow-router">Flow Router</a> (the router included with <a href="https://themeteorchef.com/base">Base</a>, the starter kit used for this recipe).</p>
+
+<div class="note">
+ <h3>Additional Packages <i class="fa fa-warning"></i></h3>
+ <p>This recipe relies on several other packages that come as part of <a href="https://themeteorchef.com/base">Base</a>, the boilerplate kit used here on The Meteor Chef. The packages listed above are merely recipe-specific additions to the packages that are included by default in the kit. Make sure to reference the <a href="https://themeteorchef.com/base/packages-included">Packages Included list</a> for Base to ensure you have fulfilled all of the dependencies.</p>
+</div>
+
+<h3>The goal</h3>
+
+<p>Our goal with this recipe is to get a basic understanding of React, how it works, and some of the considerations we need to make when moving an application from Blaze (Meteor&#x2019;s default user interface library). To do this, we&#x2019;ll focus on a refactor of <a href="https://themeteorchef.com/base">Base</a>, the starter kit used for recipes here at The Meteor Chef. This will give us a small scope to work within, enough to aid in our comprehension of React but not so much that it&#x2019;s overwhelming. How considerate!</p>
+
+<p>The number one thing to keep in mind about React is that it is <em>only responsible for the view layer</em>. This means that anything not related to our templates or template logic does not need to be refactored. Our focus is on taking all of the Blaze-specific code in Base and converting it to React. That&#x2019;s it. Take a deep breath. React has been getting a lot of hype which inevitably leads to fear of being left out. Don&#x2019;t worry, as <a href="https://themeteorchef.com/blog/react-vs-blaze">it was suggested here</a>, React is simply another way to build our interfaces, not law (despite what Mark Zuckerberg and Co. may desire).</p>
+
+<h4>JSX</h4>
+
+<p>To get the job done, we&#x2019;ll be relying on a new syntax (and file format) introduced by React called <code>JSX</code>. Using this format, we can embed the HTML in our templates directly in our JavaScript. Wait..why?! This is a convention of React. It sounds scary at first, but the purpose is to keep all of the markup and JavaScript related to our components in one place. If you&#x2019;d like to learn more about JSX before diving in, it&#x2019;s recommended that you <a href="https://themeteorchef.com/blog/react-vs-blaze/">check out the React vs. Blaze guide here</a> where we take a closer look at the syntactic differences between the two libraries.</p>
+
+<p>Ready to de-Blaze Base and board Spaceship React? Suit up!</p>
+
+<h3>Converting existing templates to React components</h3>
+
+<p>Our first task is to simply refactor each of the major (we&#x2019;re going to leave out the <code>notFound</code> template in the article) Blaze-based templates in Base into React components. We&#x2019;ll go file-by-file, combining the existing HTML and JavaScript for each template into singular components. As we&#x2019;ll see, by the time we finish we&#x2019;ll end up repeating a lot so if you feel confident you understand the higher-level points, don&#x2019;t be afraid to skip ahead. Ready to rock? Let&#x2019;s start with the <code>login</code> template.</p>
+
+<h4>Login</h4>
+
+<p>What better place to start than the entry point to our application? To get started, we actually need to start by renaming our <code>/client/templates</code> directory to <code>/client/components</code>. Why? Well, we want to ensure that we&#x2019;re not confusing ourselves later. When we&#x2019;re working with React, the code we&#x2019;ll write will be referred to as a &#x201C;component,&#x201D; so it makes sense to rename now.</p>
+
+<p>Next, inside of the <code>/client/components/public</code> folder, we&#x2019;ll want to create a new file called <code>login.jsx</code> and add the skeleton for our new component.</p>
+
+<p class="block-header">/client/components/public/login.jsx</p>
+
+<pre><code class="language-javascript">Login = React.createClass({
+ render() {
+ return (
+ // Our template markup will be moved here.
+ );
+ }
+});
+</code></pre>
+
+<p>A few things to point out. First, notice that when we create a React component in our application, we want to assign it to a <em>global</em> variable. Why? This is so that we can see the component throughout our application. Because we&#x2019;re working with a limited number of components in this app, using a global isn&#x2019;t the <em>worst</em> thing we can do. If you&#x2019;re working on a bigger app, though, it may be worth namespacing your components (e.g. <code>Components.Login</code>). Up to you.</p>
+
+<p>Next, notice that all component definitions start with a call to <code>React.createClass()</code> accepting an object with methods (and properties) defined on it. By default, the <code>render()</code> method we&#x2019;ve defined here is the only method that our component <em>must</em> have. Everything else is optional depending on the functionality of our component.</p>
+
+<p>Once we have this in place, we can open up <code>/client/components/login.html</code> (remember, we renamed this directory from <code>/templates</code> so try not to get confused) and copy the contents&#x2014;excluding the <code>&lt;template&gt;</code> tags and paste them <em>within</em> the <code>return()</code> statement of our component&#x2019;s <code>render()</code> method. Once we&#x2019;ve pasted, we&#x2019;ll need to make a few changes to the markup to make sure it&#x2019;s React-friendly. We&#x2019;re going to output the refactored version of this below and step through it. If you get stuck, make sure to <a href="https://github.com/themeteorchef/base/blob/master/client/templates/public/login.html">reference the source for the template</a>.</p>
+
+<p class="block-header">/client/components/public/login.jsx</p>
+
+<pre><code class="language-javascript">Login = React.createClass({
+ render() {
+ return (
+ &lt;div className="row"&gt;
+ &lt;div className="col-xs-12 col-sm-6 col-md-4"&gt;
+ &lt;h4 className="page-header"&gt;Login&lt;/h4&gt;
+ &lt;form id="login" className="login" onSubmit={this.handleSubmit}&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="emailAddress"&gt;Email Address&lt;/label&gt;
+ &lt;input type="email" name="emailAddress" className="form-control" placeholder="Email Address" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="password"&gt;&lt;span className="pull-left"&gt;Password&lt;/span&gt; &lt;a className="pull-right" href="/recover-password"&gt;Forgot Password?&lt;/a&gt;&lt;/label&gt;
+ &lt;input type="password" name="password" className="form-control" placeholder="Password" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;input type="submit" className="btn btn-success" value="Login" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+ &lt;p&gt;Don't have an account? &lt;a href="/signup"&gt;Sign Up&lt;/a&gt;.&lt;/p&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Okay? It looks the same? Almost! This is one of the first &#x201C;gotchas&#x201D; of React. Notice that some of our element&#x2019;s attributes have funky names and that some of our tags are ending with a <code>/</code> that we didn&#x2019;t need before. What?! Let&#x2019;s step through it.</p>
+
+<p>First, the easiest thing to point out is that instead of <code>class</code>, we&#x2019;re using <code>className</code>. Why? This is a React thing. As one of the React core-team members <a href="https://www.quora.com/Why-do-I-have-to-use-className-instead-of-class-in-ReactJs-components-done-in-JSX/answer/Ben-Alpert">pointed out here</a> it&#x2019;s done as an aid to how they process code behind the scenes as well as padding for the future. The thing to keep in mind is that if we <em>do not</em> change this, React will throw an error in our console and our classes will not be applied correctly. Okay. Not too big a deal.</p>
+
+<p>Next, look at our <code>&lt;label&gt;</code> tags and their <code>for</code> attribute. This needs to be changed to <code>htmlFor</code>. Again, the same logic applies here. While we&#x2019;ll only see a few during our refactor, you can find <a href="https://facebook.github.io/react/docs/tags-and-attributes.html">a full list of the attributes that React supports here</a>. Okay we have those in place&#x2026;anything else?</p>
+
+<p>On our <code>&lt;input&gt;</code> tags, notice that we&#x2019;ve added the trailing <code>/</code>. In our templates this wasn&#x2019;t required (we don&#x2019;t need these in HTML5), but in React <em>they are</em> required. The purpose here is error avoidance. Without these, React still considers the <code>&lt;input&gt;</code> tag open and fails to parse our code correctly. <a href="https://youtu.be/xtdY6oH4rSU?t=8s">Zuckerberg</a>!</p>
+
+<p>Okay okay. Two more things. First, notice that all of our <code>{{pathFor}}</code> helpers have been replaced by regular routes. What gives? Well, obviously we don&#x2019;t have access to our template helpers so we need to come up with a solution. Here, we know that the paths we&#x2019;re calling to&#x2014;<code>/recover-password</code> and <code>/signup</code>&#x2014;don&#x2019;t have any dynamic data like parameters, so we can just past the regular path.</p>
+
+<p>Don&#x2019;t worry, later on we&#x2019;ll refactor our template helpers used for things like <code>pathFor</code> to be React-friendly. For now, though, we can leave these as plain relative URLs and they&#x2019;ll work fine. After we cover the helper refactor, you&#x2019;re welcome to come back and replace them. Whatever floats your boat!</p>
+
+<p>Okay, we&#x2019;ve saved the biggest heart attack for last: events. Notice that on our <code>&lt;form&gt;</code> element, we&#x2019;ve added a new attribute <code>onSubmit</code> and have pointed it to <code>{this.handleSubmit}</code>. What is that? This is how React handles events. Instead of defining an event handler using <code>Template.login.events()</code> like we do with Blaze, here, we specify a function to call when our form&#x2019;s <code>onSubmit</code> event happens. Here, we&#x2019;re trying to call to <code>this.handleSubmit</code>. Where is that? Let&#x2019;s update our component code quick.</p>
+
+<p class="block-header">/client/components/public/login.jsx</p>
+
+<pre><code class="language-javascript">Login = React.createClass({
+ handleSubmit( event ) {
+ event.preventDefault();
+ },
+ render() {
+ return (
+ &lt;div className="row"&gt;
+ &lt;div className="col-xs-12 col-sm-6 col-md-4"&gt;
+ &lt;h4 className="page-header"&gt;Login&lt;/h4&gt;
+ &lt;form id="login" className="login" onSubmit={this.handleSubmit}&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="emailAddress"&gt;Email Address&lt;/label&gt;
+ &lt;input type="email" name="emailAddress" className="form-control" placeholder="Email Address" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="password"&gt;&lt;span className="pull-left"&gt;Password&lt;/span&gt; &lt;a className="pull-right" href="/recover-password"&gt;Forgot Password?&lt;/a&gt;&lt;/label&gt;
+ &lt;input type="password" name="password" className="form-control" placeholder="Password" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;input type="submit" className="btn btn-success" value="Login" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+ &lt;p&gt;Don't have an account? &lt;a href="/signup"&gt;Sign Up&lt;/a&gt;.&lt;/p&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Up there at the top, notice we&#x2019;ve added an additional method before <code>render()</code> called <code>handleSubmit()</code>. If you&#x2019;re following along, then, you may have guessed that <code>this</code> is equal to the entirety of our React component. This means that we can call any method&#x2014;yep, any&#x2014;defined on our component using <code>this.&lt;methodName&gt;</code>.</p>
+
+<p>Pretty neat, right? Notice that here, our <code>handleSubmit</code> method is taking an <code>event</code> argument and we&#x2019;re setting <code>event.preventDefault()</code> <a href="https://github.com/themeteorchef/base/blob/master/client/templates/public/login.js#L6">just like we did in the JavaScript for our Blaze template</a>. Easy peasy! Now, when our user submits the form by clicking on the &#x201C;Login&#x201D; button, the default form behavior will be disabled. Remember, in our Blaze template, we want to defer the actual submission to our <code>login</code> module <code>Modules.client.login</code>. How do we do that with React? One more update:</p>
+
+<p class="block-header">/client/components/public/login.js</p>
+
+<pre><code class="language-javascript">Login = React.createClass({
+ componentDidMount() {
+ Modules.client.login( { form: "#login" } );
+ },
+ handleSubmit( event ) {
+ event.preventDefault();
+ },
+ render() {
+ return (
+ [...]
+ );
+ }
+});
+</code></pre>
+
+<p>Introducing <code>componentDidMount()</code>, <a href="https://themeteorchef.com/blog/react-vs-blaze/#tmc-react-methods-vs-blaze-methods">one of many oddly named methods</a> in React. Notice that inside, we&#x2019;ve placed the contents of the JavaScript from <a href="https://github.com/themeteorchef/base/blob/master/client/templates/public/login.js#L1">our template&#x2019;s <code>onRendered</code> callback</a>. Neat! As the name implies, this is the method that&#x2019;s called as soon as our React component is &#x201C;mounted&#x201D; or rendered on screen.</p>
+
+<p>This is more-or-less identical to how Blaze&#x2019;s <code>Template.&lt;name&gt;.onRendered()</code> method works. Easy enough for us, we can just drop our module in and we&#x2019;re done! Well, almost. As we&#x2019;ll see, we&#x2019;ll need to make some microscopic changes to our modules to ensure they work well with our components.</p>
+
+<p>For now, let&#x2019;s continue on to our <code>signup</code> template. Heads up, you can delete the existing <code>login.html</code> and <code>login.js</code> (careful not to delete the <code>.jsx</code> file) files in our <code>/client/components/public</code> directory. You will want to do this after each of the following refactors (unless you want to keep them around for reference).</p>
+
+<h4>Signup</h4>
+
+<p>Here comes the wave of repetition. Are you ready? There&#x2019;s not much different from our <code>login</code> template in terms of changes, so let&#x2019;s dump out our refactor and step through it.</p>
+
+<p class="block-header">/client/components/public/signup.jsx</p>
+
+<pre><code class="language-javascript">Signup = React.createClass({
+ componentDidMount() {
+ Modules.client.signup({
+ form: "#signup"
+ });
+ },
+ handleSubmit( event ) {
+ event.preventDefault();
+ },
+ render() {
+ return (
+ &lt;div className="row"&gt;
+ &lt;div className="col-xs-12 col-sm-6 col-md-4"&gt;
+ &lt;h4 className="page-header"&gt;Sign Up&lt;/h4&gt;
+ &lt;form id="signup" className="signup" onSubmit={this.handleSubmit}&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="emailAddress"&gt;Email Address&lt;/label&gt;
+ &lt;input type="email" name="emailAddress" className="form-control" placeholder="Email Address" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="password"&gt;Password&lt;/label&gt;
+ &lt;input type="password" name="password" className="form-control" placeholder="Password" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;input type="submit" className="btn btn-success" value="Sign Up" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+ &lt;p&gt;Already have an account? &lt;a href="/login"&gt;Log In&lt;/a&gt;.&lt;/p&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Underwhelming! Hey, practice makes perfect. Again, we want to watch out for the following items:</p>
+
+<ol>
+<li>Attribute names, specifically: <code>class</code> to <code>className</code> and <code>for</code> to <code>htmlFor</code>.</li>
+<li>Closing tags on inputs.</li>
+<li>Updating our <code>pathFor</code> helpers to relative paths.</li>
+<li>Adding an <code>onSubmit</code> event passing a call to <code>{this.handleSubmit}</code>.</li>
+<li>Adding a <code>handleSubmit</code> method to our component with an <code>event</code> argument and call to <code>event.preventDefault()</code> inside.</li>
+<li>Adding a <code>componentDidMount()</code> method, passing a call to our <code>Modules.client.signup</code> method.</li>
+</ol>
+
+<p>While these aren&#x2019;t the <em>only</em> considerations you&#x2019;ll have to make with React, these are the basics (our focus for this recipe). In respect to Base, because we&#x2019;re relying on <a href="https://themeteorchef.com/snippets/using-the-module-pattern-with-meteor/">the module pattern</a> for the bulk of our logic, we don&#x2019;t need to do too much. In your own code, beware that if you store a lot of logic in your templates, there&#x2019;s a good chance you&#x2019;ll have to do a good amount of refactoring. Fair warning!</p>
+
+<p>Okay. Hanging in there? Let&#x2019;s keep chugging on these refactors. Next up is our <code>recoverPassword</code> template.</p>
+
+<h4>Recover password</h4>
+
+<p>More of the same stuff. Just a code dump here. We need to update the attributes and other changes to our markup and then add some additional methods for handling interaction.</p>
+
+<p class="block-header">/client/components/public/recover-password.jsx</p>
+
+<pre><code class="language-javascript">RecoverPassword = React.createClass({
+ componentDidMount() {
+ Modules.client.recoverPassword({
+ form: "#recover-password"
+ });
+ },
+ handleSubmit( event ) {
+ event.preventDefault();
+ },
+ render() {
+ return (
+ &lt;div className="row"&gt;
+ &lt;div className="col-xs-12 col-sm-6 col-md-4"&gt;
+ &lt;h4 className="page-header"&gt;Recover Password&lt;/h4&gt;
+ &lt;form id="recover-password" className="recover-password" onSubmit={this.handleSubmit}&gt;
+ &lt;p className="alert alert-info"&gt;Enter your email address below to receive a link to reset your password.&lt;/p&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="emailAddress"&gt;Email Address&lt;/label&gt;
+ &lt;input type="email" name="emailAddress" className="form-control" placeholder="Email Address" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;input type="submit" className="btn btn-success" value="Recover Password" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Yawn. Yeah, I know. But again: practice makes perfect with this stuff. The point of this refactor is to start identifying patterns in moving from Blaze to React so that&#x2014;if we decide to refactor some of our own projects&#x2014;we have a decent starting point to wrap our heads around. Onward! Now for the <code>resetPassword</code> template.</p>
+
+<h4>Reset password</h4>
+
+<p>Same thing. Have at it:</p>
+
+<p class="block-header">/client/components/public/reset-password.jsx</p>
+
+<pre><code class="language-javascript">ResetPassword = React.createClass({
+ componentDidMount() {
+ Modules.client.resetPassword( { form: "#reset-password" } );
+ },
+ handleSubmit( event ) {
+ event.submitHandler();
+ },
+ render() {
+ return (
+ &lt;div className="row"&gt;
+ &lt;div className="col-xs-12 col-sm-6 col-md-4"&gt;
+ &lt;h4 className="page-header"&gt;Reset Password&lt;/h4&gt;
+ &lt;form id="reset-password" className="reset-password" onSubmit={this.handleSubmit}&gt;
+ &lt;p className="alert alert-info"&gt;To reset your password, enter a new one below. You will be logged in with your new password.&lt;/p&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="newPassword"&gt;New Password&lt;/label&gt;
+ &lt;input type="password" name="newPassword" className="form-control" placeholder="New Password" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;label htmlFor="password"&gt;Repeat New Password&lt;/label&gt;
+ &lt;input type="password" name="repeatNewPassword" className="form-control" placeholder="Password" /&gt;
+ &lt;/div&gt;
+ &lt;div className="form-group"&gt;
+ &lt;input type="submit" className="btn btn-success" value="Reset Password &amp;amp; Login" /&gt;
+ &lt;/div&gt;
+ &lt;/form&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Still with me? Good. Next, we&#x2019;re going to get into some more interesting stuff. First up is a quick refactor of our <code>index</code> template. Let&#x2019;s take a look.</p>
+
+<h4>Index</h4>
+
+<p>This one is pretty easy but includes a little twist&#x2026;</p>
+
+<p class="block-header">/client/components/authenticated/index.jsx</p>
+
+<pre><code class="language-javascript">Index = React.createClass({
+ render() {
+ return (
+ &lt;div className="jumbotron text-center" style={{padding: '20px'}}&gt;
+ &lt;h2&gt;Base&lt;/h2&gt;
+ &lt;p&gt;A starting point for Meteor applications.&lt;/p&gt;
+ &lt;p&gt;&lt;a className="btn btn-success" href="http://themeteorchef.com/base" role="button"&gt;Read the Documentation&lt;/a&gt;&lt;/p&gt;
+ &lt;p style={{fontSize: '16px', color: '#aaa'}}&gt;Currently at v3.1.1&lt;/p&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Wait a minute! Spot it? Aside from our usual updates, you&#x2019;ll also notice that we&#x2019;ve had to make a little change to our inline styles. Instead of simply passing our styles in <code>""</code>, now, we have to pass an object with the names of our styles in <code>camelCase</code> and our values in quotes. One thing to point out here is the syntax. Before, you&#x2019;ll notice that we can reference JavaScript inline in our component using <code>{}</code> brackets. Here, we have double brackets <code>{{}}</code>. Why is that?</p>
+
+<p>This is because the first set of brackets is meant to identify JavaScript code, while the second is the actual object that we need to return. With this object, React takes the properties and converts them to inline styles accordingly. Make sense?</p>
+
+<div class="note success">
+ <h3>This could be a method <i class="fa fa-thumbs-up"></i></h3>
+ <p>If our elements had a lot of inline styles for some reason, we could convert this instead to be returned from another method on our component. Both versions work, so pick the one that looks like the right fit for you.</p>
+</div>
+
+<p>Okay. We&#x2019;re just getting started with the wild stuff. Next up, we&#x2019;re going to refactor our <code>header</code> template. This one will be a little more exciting.</p>
+
+<h4>Header</h4>
+
+<p>In Base, our application header is technically split up into three parts: the actual <code>header</code> template along with two sub-templates displayed conditionally: <code>authenticatedNavigation</code> and <code>publicNavigation</code>. As the names suggest, we show either navigation depending on wheter or not there&#x2019;s a current user logged in. First, let&#x2019;s refactor the <code>header</code> and show how we handle the logic.</p>
+
+<p class="block-header">/client/components/globals/header.jsx</p>
+
+<pre><code class="language-javascript">AppHeader = React.createClass({
+ brandLink() {
+ if ( !Meteor.loggingIn() &amp;&amp; !Meteor.userId() ) {
+ return FlowRouter.path( 'login' );
+ }
+
+ return FlowRouter.path( 'index' );
+ },
+ navigationItems() {
+ if ( !Meteor.loggingIn() &amp;&amp; Meteor.user() ) {
+ return &lt;AuthenticatedNavigation /&gt;;
+ } else {
+ return &lt;PublicNavigation /&gt;;
+ }
+ },
+ render() {
+ return (
+ &lt;nav className="navbar navbar-default" role="navigation"&gt;
+ &lt;div className="container"&gt;
+ &lt;div className="navbar-header"&gt;
+ &lt;button type="button" className="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse"&gt;
+ &lt;span className="sr-only"&gt;Toggle navigation&lt;/span&gt;
+ &lt;span className="icon-bar"&gt;&lt;/span&gt;
+ &lt;span className="icon-bar"&gt;&lt;/span&gt;
+ &lt;span className="icon-bar"&gt;&lt;/span&gt;
+ &lt;/button&gt;
+ &lt;a className="navbar-brand" href={this.brandLink()}&gt;Base in React&lt;/a&gt;
+ &lt;/div&gt;
+ {this.navigationItems()}
+ &lt;/div&gt;
+ &lt;/nav&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Told you this was going to get more exciting! A few things going on here. Let&#x2019;s take it one step at a time.</p>
+
+<p>First, let&#x2019;s look at the first method we&#x2019;ve defined on our component <code>brandLink()</code>. See what this is doing? The goal here is to give us a link that we can pass to the <code>href</code> value of our <code>.navbar-brand</code> element (the name of our application). If the user is logged in, we want the link to be <code>/</code> for the index route and if the user is logged out, we want the link to be <code>/login</code> for the login route. Where we might use a helper in Blaze, here, we&#x2019;re defining this logic directly on our component.</p>
+
+<p>Notice that inside of our <code>brandLink()</code> method, all we&#x2019;re doing is calling on Flow Router&#x2019;s <code>path</code> method, passing the name of the path we want returned depending on the login condition. Simple. The big part to pay attention to is where we actually <em>assign</em> this method to the <code>.navbar-brand</code> element. On the element, we pass a call to <code>{this.brandLink()}</code>. Why the invocation <code>()</code>, though? Without this, the function will never return a result. Because we need the return value back, we invoke it inline so the result is assigned to the <code>href</code> value of our <code>.navbar-brand</code> element.</p>
+
+<p>A little further down in our component, you&#x2019;ll notice another call to <code>this.navigationItems()</code> which points to the <code>navigationItems()</code> method also defined on our component. The principle here is similar to our <code>brandLink()</code> method. Depending on the logged in/logged out state of the user, we want to return one of two components: <code>&lt;AuthenticatedNavigation /&gt;</code> or <code>&lt;PublicNavigation /&gt;</code>. Both of these are equivalent to calling <code>{{&gt; authenticatedNavigation}}</code> and <code>{{&gt; publicNavigation}}</code> in Blaze.</p>
+
+<p>Pay attention, though. Notice that we&#x2019;re <em>not</em> handling our logic inside of our markup like we would with Blaze. Instead, here, we&#x2019;re pulling our logic into a method and simply returning the result of that logic to our <code>navigationItems()</code> method. Weird. It is. But, alas, this is the React way. Technically speaking, we <em>could</em> get this to work inline, but the syntax is a bit squirrely.</p>
+
+<p>At this point, we&#x2019;ve hit our first usage of nested components. First, let&#x2019;s look at the component we render when our user is logged in <code>&lt;AuthenticatedNavigation /&gt;</code>.</p>
+
+<h4>Authenticated navigation</h4>
+
+<p>Let&#x2019;s output the code and then step through it like the others.</p>
+
+<p class="block-header">/client/components/globals/authenticated-navigation.jsx</p>
+
+<pre><code class="language-javascript">AuthenticatedNavigation = React.createClass({
+ currentUserEmail() {
+ return Meteor.user().emails[0].address;
+ },
+ render() {
+ return (
+ &lt;div id="navbar-collapse" className="collapse navbar-collapse"&gt;
+ &lt;ul className="nav navbar-nav"&gt;
+ &lt;li className={FlowHelpers.currentRoute( 'index' )}&gt;&lt;a href="/"&gt;Index&lt;/a&gt;&lt;/li&gt;
+ &lt;li className={FlowHelpers.currentRoute( 'dashboard' )}&gt;&lt;a href="/dashboard"&gt;Dashboard&lt;/a&gt;&lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;ul className="nav navbar-nav navbar-right"&gt;
+ &lt;li className="dropdown"&gt;
+ &lt;a href="#" className="dropdown-toggle" data-toggle="dropdown"&gt;{this.currentUserEmail()} &lt;span className="caret"&gt;&lt;/span&gt;&lt;/a&gt;
+ &lt;ul className="dropdown-menu" role="menu"&gt;
+ &lt;li onClick={Meteor.logout}&gt;&lt;a href="#"&gt;Logout&lt;/a&gt;&lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>A little more action! First, notice that the contents of this file are nearly identical to our existing <code>authenticatedNavigation</code> template in Blaze. The difference is that instead of just including our two <code>&lt;ul&gt;&lt;/ul&gt;</code> elements, we&#x2019;re wrapping them in the <code>#navbar-collapse</code> element. As you&#x2019;ll see next, we&#x2019;ll do the same thing with our <code>publicNavigation</code> template&#x2019;s refactor, introducing a bit of repetition. This is a pretty big gotcha with React.</p>
+
+<p>When we&#x2019;re returning the markup/<code>JSX</code> for our component, React will throw a temper tantrum if we include more than one root element. The root element is the top-most level element in our <code>return()</code> statement. Without the <code>#navbar-collapse</code> wrapper, we&#x2019;d technically have <em>two</em> elements, sending React into a rendition of <a href="https://youtu.be/KhAg5po8InY?t=6s">It&#x2019;s My Party and I&#x2019;ll Cry If I Want To</a>. Alas, this is The React Way&#x2122;.</p>
+
+<p>With that out of the way, notice we&#x2019;re starting to mimic our Blaze template helpers a little bit with our call to <code>this.currentUserEmail()</code>, a method that returns the logged in user&#x2019;s email address. This is equivalent to our call to <code>{{currentUser.emails.[0].address}}</code> in our Blaze template. Again, we invoke the method here to get the return value (without this, it would just be empty).</p>
+
+<p>Lastly, notice that in order to handle the logout option for our users, we&#x2019;ve added an <code>onClick</code> event to the &#x201C;Logout&#x201D; element in our dropdown menu. This simply calls to <code>Meteor.logout</code> <em>without</em> the invocation <code>()</code>. Wait&#x2026;how does that work? Well, when our event is called, the function specified here will be invoked for us so we can skip it.</p>
+
+<div class="note">
+ <h3>Why wrap the email part? <i class="fa fa-warning"></i></h3>
+ <p>You may be wondering, &#x201C;couldn&#x2019;t we just pass the result of our <code>currentUserEmail</code> method directly?&#x201D; Yep! The point here is to showcase two different means for calling and using functions in our JSX. You could just as easily replace <code>{this.currentUserEmail()}</code> with <code>{Meteor.user().emails[0].address}</code>.</p>
+</div>
+
+<p>The difference between this and the email is that we want to call <code>currentUserEmail()</code> immediately when the component renders and <code>Meteor.logout</code> only when the <code>onClick</code> event fires. If you invoked this automatically, as soon as this component renders the user would be logged out! Unless you&#x2019;re a trickster, you probably don&#x2019;t want that.</p>
+
+<p>Okay, that&#x2019;s it! Oh&#x2026;wait. That <code>FlowHelpers</code> part. Ignore that until we get to the section where we refactor our helpers. <a href="https://www.youtube.com/watch?v=KqOsrniBooQ">M'kay</a>?</p>
+
+<h4>Public navigation</h4>
+
+<p>Our <code>publicNavigation</code> component is pretty simple. Again, play along and ignore those <code>FlowHelpers</code> calls for now. Seriously. They don&#x2019;t exist!</p>
+
+<p class="block-header">/client/components/globals/public-navigation.jsx</p>
+
+<pre><code class="language-javascript">PublicNavigation = React.createClass({
+ render() {
+ return (
+ &lt;div id="navbar-collapse" className="collapse navbar-collapse"&gt;
+ &lt;ul className="nav navbar-nav navbar-right"&gt;
+ &lt;li className={FlowHelpers.currentRoute( 'login' )}&gt;
+ &lt;a href={FlowHelpers.pathFor( 'login' )}&gt;Login&lt;/a&gt;
+ &lt;/li&gt;
+ &lt;li className={FlowHelpers.currentRoute( 'signup' )}&gt;
+ &lt;a href={FlowHelpers.pathFor( 'signup' )}&gt;Sign Up&lt;/a&gt; 
+ &lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Easy peasy? Just ignore those helpers and make sure to update your attributes and we&#x2019;re good to go! Also, notice that again, we&#x2019;re including that <code>#navbar-collapse</code> element to suffice the one root element in the return statement rule.</p>
+
+<figure>
+ <img src="https://tmc-post-content.s3.amazonaws.com/Screen-Shot-2015-10-20-17-53-03.png" alt="Be the first to identify what this is from in the comments and I'll send you a free sticker!">
+ <figcaption>Only one root element! Be the first to identify what this is from in the comments and I&#x2019;ll send you a free sticker!</figcaption>
+</figure>
+
+<p>Okay! Now we&#x2019;re going to tackle something a little bit bigger: data. While technically the <code>dashboard</code> template in Base doesn&#x2019;t display anything other than an <code>&lt;h3&gt;&lt;/h3&gt;</code> tag, it seemed worthwhile to spice things up a bit and show an example of loading data into a component. Let&#x2019;s take a peek now and see how that works.</p>
+
+<h4>Dashboard</h4>
+
+<p>We&#x2019;re going to introduce a handful of concepts for this one, so make sure to pay attention!</p>
+
+<p class="block-header">/client/components/authenticated/dashboard.jsx</p>
+
+<pre><code class="language-javascript">Dashboard = React.createClass({
+ mixins: [ ReactMeteorData ],
+ getMeteorData() {
+ let subscription = Meteor.subscribe( 'dashboard' );
+
+ return {
+ isLoading: !subscription.ready(),
+ people: People.find().fetch()
+ };
+ },
+ render() {
+ if ( this.data.isLoading ) {
+ return &lt;Loading /&gt;;
+ } else {
+ return (
+ &lt;PeopleTable people={this.data.people} /&gt;
+ );
+ }
+ }
+});
+</code></pre>
+
+<p>So. Let&#x2019;s rap. First, notice that we&#x2019;re introducing a new parameter on our component called <code>mixins</code> which is assigned an array with a single argument <code>ReactMeteorData</code>. This is the magic behind the <code>react</code> package developed by the Meteor Development Group that we installed earlier. With this single line, we get support for the <code>getMeteorData()</code> method along with a lot of behind the scenes goodies that make it really easy to work with reactive data in our application using React. The part to pay attention to here is the <code>getMeteorData()</code> method.</p>
+
+<p>Here, when we&#x2019;re working with any reactive data in our component, we want to make sure that it&#x2019;s referenced inside of <code>getMeteorData()</code>. Notice that we start by calling to a subscription for our dashboard template <code>dashboard</code>, followed by the return of an object with two properties: a check to see if our subscription is ready (so we can display a loader if not) and a call to <code>People.find().fetch()</code>. Hold up! What is that? To help speed us up, we&#x2019;ve set up a collection called <code>People</code> in the application along with a publication for <code>dashboard</code>. Behind the scenes, on startup, we&#x2019;re automatically inserting five fake people into the <code>People</code> collection if they don&#x2019;t already exist. Here&#x2019;s what we&#x2019;re after:</p>
+
+<figure>
+ <img src="https://tmc-post-content.s3.amazonaws.com/Screen-Shot-2015-10-20-18-06-12.png" alt="A list of people with a photo, name, and email address.">
+ <figcaption>A list of people with a photo, name, and email address.</figcaption>
+</figure>
+
+<p>Nothing too wild. The point here is to showcase how to get data into our component and then <em>share</em> that data with other components. We can see that happening down in our <code>render()</code> method. First, pay attention to that call to <code>this.data.isLoading</code>. Notice that <code>this.data</code> is mapping to the object we&#x2019;ve returned from our <code>getMeteorData()</code> method. <code>this.data</code> is a feature added as part of the <code>ReactMeteorData</code> mixin we include up above. This is the lynchpin for getting data into our components.</p>
+
+<p>Here, we first check to see if our subscription is loaded. If it isn&#x2019;t, we display a loading component. Real quick, let&#x2019;s take a peek at that.</p>
+
+<p class="block-header">/client/components/globals/loading.jsx</p>
+
+<pre><code class="language-javascript">Loading = React.createClass({
+ render() {
+ return (
+ &lt;i style={{fontSize: '32px'}} className="fa fa-refresh fa-spin"&gt;&lt;/i&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Pretty simple. A single icon. Notice that here we&#x2019;re making use of React&#x2019;s inline styles technique again. Look at us! Nothing much here, so let&#x2019;s move back up to our <code>Dashboard</code> component and look at the next component inclusion.</p>
+
+<p class="block-header">/client/components/globals/loading.jsx</p>
+
+<pre><code class="language-javascript">Dashboard = React.createClass({
+ [..]
+ getMeteorData() {
+ [...]
+ return {
+ isLoading: !subscription.ready(),
+ people: People.find().fetch()
+ };
+ },
+ render() {
+ if ( this.data.isLoading ) {
+ return &lt;Loading /&gt;;
+ } else {
+ return (
+ &lt;PeopleTable people={this.data.people} /&gt;
+ );
+ }
+ }
+});
+</code></pre>
+
+<p>The part we&#x2019;re focusing on is the <code>&lt;PeopleTable people={this.data.people} /&gt;</code> tag. Here, we&#x2019;re telling react to simply include the <code>&lt;PeopleTable /&gt;</code> component, passing the result of our <code>People.find().fetch()</code> to its <code>people</code> attribute. What&#x2019;s that? Here, <code>people=</code> signifies the definition of a <code>prop</code>. Props (short for properties) represent the data that we&#x2019;ll be able to access <em>inside of</em> the component we&#x2019;re adding them to. In this case, <code>people</code> will be accessible in our <code>&lt;PeopleTable /&gt;</code> component, returning an array of objects returned from our <code>People</code> collection.</p>
+
+<p class="block-header">/client/components/authenticated/people-table.jsx</p>
+
+<pre><code class="language-javascript">PeopleTable = React.createClass({
+ render() {
+ return (
+ &lt;div className="table-responsive"&gt;
+ &lt;table className="table table-bordered"&gt;
+ &lt;thead&gt;
+ &lt;tr&gt;
+ &lt;th&gt;&lt;/th&gt;
+ &lt;th&gt;Name&lt;/th&gt;
+ &lt;th&gt;Email Address&lt;/th&gt;
+ &lt;/tr&gt;
+ &lt;/thead&gt;
+ &lt;tbody&gt;
+ {this.props.people.map( ( person, index ) =&gt; {
+ return &lt;Person key={index} person={person} /&gt;;
+ })}
+ &lt;/tbody&gt;
+ &lt;/table&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Nothing we haven&#x2019;t seen yet, except for the contents of <code>&lt;tbody&gt;</code>. Here, we&#x2019;re encountering our first usage of a loop in a React component. Like we described, notice that we can access the <code>people</code> prop we defined in our <code>Dashboard</code> component by calling <code>this.props.people</code>. This is a bit funky. Notice that we&#x2019;re also appending a call to <code>.map()</code> on the end of this. All of this is happening within React&#x2019;s <code>{}</code> bracket syntax for running JavaScript code inside of our component. Here, we&#x2019;re saying to map over the array of people we found in the database, and for each one, include the <code>&lt;Person /&gt;</code> component, passing the current index of the loop as the <code>key</code> prop (<code>key</code> is required by React in a loop) and the current <em>person</em> being iterated in the map as the <code>person</code> prop. A quick look at <code>&lt;Person /&gt;</code>:</p>
+
+<p class="block-header">/client/components/authenticated/person.jsx</p>
+
+<pre><code class="language-javascript">Person = React.createClass({
+ render() {
+ return (
+ &lt;tr&gt;
+ &lt;td className="text-center"&gt;
+ &lt;img style={{width: '50px'}} className="img-circle" src={this.props.person.avatar} alt={this.props.person.name} /&gt;
+ &lt;/td&gt;
+ &lt;td&gt;{this.props.person.name}&lt;/td&gt;
+ &lt;td&gt;{this.props.person.email}&lt;/td&gt;
+ &lt;/tr&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Okay! This isn&#x2019;t so bad, right? Here, we&#x2019;re returning a <code>&lt;tr&gt;</code> element (this will correspond to a row in our table), piping in all of the data from our <code>person</code> prop using <code>this.props.person</code>. This should look somewhat familiar. Here, when we call something like <code>{this.props.person.name}</code>, this is identical to us calling <code>{{name}}</code> inside of an <code>{{#each people}}{{/each}}</code> loop in Blaze. The syntax is a bit different, but the result is the same.</p>
+
+<p>Why the <code>key</code>, though? We&#x2019;re not using it in here. From <a href="https://facebook.github.io/react/docs/multiple-components.html">the React docs</a>:</p>
+
+<blockquote>
+<p>In these cases where the identity and state of each child must be maintained across render passes, you can uniquely identify each child by assigning it a key [&#x2026;]</p>
+<p>When React reconciles the keyed children, it will ensure that any child with key will be reordered (instead of clobbered) or destroyed (instead of reused).</p>
+<p>The key should always be supplied directly to the components in the array, not to the container HTML child of each component in the array [&#x2026;]</p>
+</blockquote>
+
+<p>Translation? This ensures that any children of a component (in this case, our <code>&lt;Person /&gt;</code> components) are not messed up by re-rendering or changes to the parent component. The <code>key</code> property allows React to keep track of the state of each child without losing its marbles. A bit quirky, but easy enough to commit to memory.</p>
+
+<p>&#x2026;and that&#x2019;s it! We&#x2019;re done with refactoring our templates. Pretty easy, yeah? As we can see, the big jump from React to Blaze is nothing more than syntax and some new naming conventions. It should be clear at this point that usage of React vs. Blaze is a matter of taste and organization. Everything we&#x2019;ve showecased here can be accomplished with Blaze, just in a different way.</p>
+
+<p>The point? To further line Mark Zuckerberg&#x2019;s pockets. Kidding, kidding. It&#x2019;s nuanced here, but in a much bigger application, we&#x2019;d likely split up our templates even further into components, tightly coupling our logic <em>to</em> those components. Here, we can see everything at once and have a solid handle on what functionality is affecting our component without having to dig through a bunch of code. Is that a good thing? I think so.</p>
+
+<p>With our templates out of the way, we have just a few more things to clean up in order to call our refactor &#x201C;complete.&#x201D; First up, let&#x2019;s clean up the modules we used in our <code>&lt;Login /&gt;</code> and <code>&lt;Signup /&gt;</code> components to be a little more React-friendly.</p>
+
+<h3>Updating modules used in our components</h3>
+
+<p>This one is pretty quick. We just need to make sure that any references to the template instance in our modules are scrubbed as React cannot make use of them. To keep things simple, we&#x2019;re going to rely on jQuery to replace all of the DOM selection we were doing with a call to the Blaze template instance.</p>
+
+<h4>Modules.client.login</h4>
+
+<p>First, we need to remove any reference to <code>template</code> in the module. Next, let&#x2019;s update our DOM selection inside of our <code>_handleLogin()</code> method.</p>
+
+<p class="block-header">/client/modules/login.js</p>
+
+<pre><code class="language-javascript">[...]
+let _handleLogin = () =&gt; {
+ let email = $( '[name="emailAddress"]' ).val(),
+ password = $( '[name="password"]' ).val();
+
+ Meteor.loginWithPassword( email, password, ( error ) =&gt; {
+ if ( error ) {
+ Bert.alert( error.reason, 'warning' );
+ } else {
+ Bert.alert( 'Logged in!', 'success' );
+ }
+ });
+};
+[...]
+</code></pre>
+
+<p>Just two lines to update: our <code>email</code> variable assignment and our <code>password</code> variable assignment. Notice that here, we simply replace <code>template.find()</code> with <code>$()</code> and instead of <code>value</code> we use <code>.val()</code>. Super easy! It&#x2019;s also important to note: this is just a regular <code>.js</code> JavaScript file and <em>not</em> <code>.jsx</code>. We only need to use <code>.jsx</code> if the code we&#x2019;re writing has <code>JSX</code> in it. For example, if we had some logic in here to render another component, we&#x2019;d want to rename the file <code>.jsx</code>. For our purposes here, vanilla <code>.js</code> is the way to go.</p>
+
+<h4>Modules.client.signup</h4>
+
+<p>Our <code>signup</code> module gets the same refactor. Strip all of the references to <code>template</code> and update our DOM selection to use jQuery. So it&#x2019;s clear:</p>
+
+<p class="block-header">/path</p>
+
+<pre><code class="language-javascript">[...]
+let _handleSignup = () =&gt; {
+ let user = {
+ email: $( '[name="emailAddress"]' ).val(),
+ password: $( '[name="password"]' ).val()
+ };
+
+ Accounts.createUser( user, ( error ) =&gt; {
+ if ( error ) {
+ Bert.alert( error.reason, 'danger' );
+ } else {
+ Bert.alert( 'Welcome!', 'success' );
+ }
+ });
+};
+[...]
+</code></pre>
+
+<p>Not too shabby! That&#x2019;s all we need for now. Next up: routes.</p>
+
+<div class="note">
+ <h3>What about recover and reset password? <i class="fa fa-warning"></i></h3>
+ <p>The changes are the same in our <code>recoverPassword</code> and <code>resetPassword</code> modules: just strip out any reference to <code>template</code> and swap in DOM selection using jQuery (or native JavaScript, if you please).</p>
+</div>
+
+<h3>Updating our routes</h3>
+
+<p>Now we&#x2019;re in the home stretch! Aside from updating our templates, we also need to update our routes. Wait, why? Recall that because we&#x2019;re using Flow Router, we&#x2019;re also using the <a href="https://github.com/kadirahq/blaze-layout">BlazeLayout</a> package to help us render our Blaze templates. Now, we need to do the exact same thing, just with that package&#x2019;s companion <a href="https://github.com/kadirahq/meteor-react-layout">ReactLayout</a>. This will be easy, we&#x2019;re just swapping a few things in. <strong>Heads up</strong>: Because we&#x2019;ll be using some <code>JSX</code> code in our routes, we&#x2019;ll want to make sure we update each of our routes files to use the <code>.jsx</code> file type.</p>
+
+<h4>Our default layout</h4>
+
+<p>Ok, I lied. We do need to fix one thing real quick: our default layout template. Recall that in Base, we rely on a template called <code>default</code> to wrap all of our othe templates when rendering routes. This is the last template-to-component refactor, I swear. 99% of it is stuff we already know. Let&#x2019;s look at it:</p>
+
+<p class="block-header">/client/componetns/layouts/default.jsx</p>
+
+<pre><code class="language-javascript">Default = React.createClass({
+ render() {
+ return (
+ &lt;div className="app-root"&gt;
+ &lt;AppHeader /&gt;
+ &lt;div className="container"&gt;
+ {this.props.yield}
+ &lt;/div&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Simple. Notice, here, we&#x2019;re including the <code>&lt;AppHeader /&gt;</code> component we defined earlier (with our nested <code>&lt;AuthenticatedNavigation /&gt;</code> and <code>&lt;PublicNavigation /&gt;</code> components). Inside of our <code>.container</code> element, we&#x2019;re making a call to <code>this.props.yield</code>. What&#x2019;s that? Remember, <code>props</code> are how we pass data in from a parent component. In this case, when we set up ReactLayout, we&#x2019;ll see that it allows us to specify the name of the prop where we want a component to render. In our case, we&#x2019;ll pass our component to a prop called <code>yield</code> which will display the component we pass where we&#x2019;re calling <code>{this.props.yield}</code>.</p>
+
+<p>Also, we should point out the usage of the <code>.app-root</code> element. Yep, you guessed it: the one root element rule. Because we&#x2019;re including our <code>&lt;AppHeader /&gt;</code> component as well as our <code>.container</code> element, we have to wrap them in order to avoid a meltdown. C'est la vie.</p>
+
+<p>Okay. Routes! For real!</p>
+
+<h4>Public routes</h4>
+
+<p>This will go quick. All we need to do is update our calls to <code>BlazeLayout.render()</code> to instead use <code>ReactLayout.render()</code>, passing our layout component&#x2019;s variable and passing the component we want to render in place of <code>{this.props.yield}</code>.</p>
+
+<p class="block-header">/both/routes/public.jsx</p>
+
+<pre><code class="language-javascript">[...]
+
+publicRoutes.route( '/signup', {
+ name: 'signup',
+ action() {
+ ReactLayout.render( Default, { yield: &lt;Signup /&gt; } );
+ }
+});
+
+publicRoutes.route( '/login', {
+ name: 'login',
+ action() {
+ ReactLayout.render( Default, { yield: &lt;Login /&gt; } );
+ }
+});
+
+publicRoutes.route( '/recover-password', {
+ name: 'recover-password',
+ action() {
+ ReactLayout.render( Default, { yield: &lt;RecoverPassword /&gt; } );
+ }
+});
+
+publicRoutes.route( '/reset-password/:token', {
+ name: 'reset-password',
+ action() {
+ ReactLayout.render( Default, { yield: &lt;ResetPassword /&gt; } );
+ }
+});
+</code></pre>
+
+<p>A little <em>too</em> easy. Thanks, <a href="https://twitter.com/arunoda">Arunoda</a>! Two updates. First, notice that we pass <code>Default</code> (the global variable for our layout component) as the first parameter, and <code>&lt;ComponentName /&gt;</code> as the value of our <code>yield</code> parameter. Why the difference? This is so that the value we pass plays nicely with React&#x2019;s <code>React.renderComponent()</code> method which <a href="https://github.com/kadirahq/meteor-react-layout/blob/master/lib/react_layout.js#L58">ReactLayout is calling behind the scenes</a>.</p>
+
+<p>Notice that all we&#x2019;re doing is passing our components. That&#x2019;s it. ReactLayout takes care of the rest for us. Awesome! I bet you can guess what our authenticated rotues will look like. For good measure, let&#x2019;s take a peek.</p>
+
+<h4>Authenticated routes</h4>
+
+<p>Just a quick dump of our refactor here:</p>
+
+<p class="block-header">/both/routes/authenticated.jsx</p>
+
+<pre><code class="language-javascript">[...]
+
+authenticatedRoutes.route( '/', {
+ name: 'index',
+ action() {
+ ReactLayout.render( Default, { yield: &lt;Index /&gt; } );
+ }
+});
+
+authenticatedRoutes.route( '/dashboard', {
+ name: 'dashboard',
+ action() {
+ ReactLayout.render( Default, { yield: &lt;Dashboard /&gt; } );
+ }
+});
+</code></pre>
+
+<p>Yup, pretty vanilla. That&#x2019;s a good thing, though, right? We pass our layout template&#x2019;s variable and then for each of our routes, assign the component we want to render in place of <code>{this.props.yield}</code>.</p>
+
+<h4>Configure</h4>
+
+<p>We musn&#x2019;t forget, in our <code>/both/routes/configure.jsx</code> file, we need to update our include for our <code>notFound</code> route:</p>
+
+<p class="block-header">/both/routes/configure.jsx</p>
+
+<pre><code class="language-javascript">FlowRouter.notFound = {
+ action() {
+ ReactLayout.render( Default, { yield: &lt;NotFound /&gt; } );
+ }
+};
+
+[...]
+</code></pre>
+
+<p>Yup, easy! Keep in mind, we didn&#x2019;t refactor our <code>notFound</code> template into the <code>&lt;NotFound /&gt;</code> component in this article, but <a href="https://github.com/themeteorchef/getting-started-with-react/blob/master/code/client/components/globals/not-found.jsx">it is visible in the source for the recipe</a>.</p>
+
+<h3>Updating our Flow Router helpers</h3>
+
+<p>Last step! It&#x2019;s time to get those helpers we&#x2019;re using for our routes up to date. Two of them are used in Base and one is included as a backup. Let&#x2019;s take a look at how they&#x2019;ve been refactored, discuss the changes, and then showcase an example of their usage. Real quick, promise.</p>
+
+<p class="block-header">/client/helpers/flow-router.js</p>
+
+<pre><code class="language-javascript">let pathFor = ( path, params ) =&gt; {
+ let query = params &amp;&amp; params.query ? FlowRouter._qs.parse( params.query ) : {};
+ return FlowRouter.path( path, params, query );
+};
+
+let urlFor = ( path, params ) =&gt; {
+ return Meteor.absoluteUrl( pathFor( path, params ) );
+};
+
+let currentRoute = ( route ) =&gt; {
+ FlowRouter.watchPathChange();
+ return FlowRouter.current().route.name === route ? 'active' : '';
+};
+
+FlowHelpers = {
+ pathFor: pathFor,
+ urlFor: urlFor,
+ currentRoute: currentRoute
+};
+</code></pre>
+
+<p>We&#x2019;ve technically lost some weight here. Remember, before, we were making use of <a href="https://themeteorchef.com/snippets/using-global-template-helpers">global template helpers</a> to get back the values above. Now, because we&#x2019;re removing Blaze, all we need are good ol' fashioned functions. For convenience, we&#x2019;ve created a global variable at the bottom of our helpers file called <code>FlowHelpers</code>, assigning each of the methods to a parameter name so we can call them easily later.</p>
+
+<p>The big change here is in the <code>pathFor</code> helper. Here, we&#x2019;ve removed all references to the <code>hash</code> and <code>view</code> properties that we got from our Spacebars helpers (the hash is what contained the values assigned like <code>{{pathFor hashProp="something" anotherHashProp="this thing"}}</code>). Here, we don&#x2019;t have that so we&#x2019;ve ripped it all out. Instead, we accept the <code>path</code> value like we did before and update the <code>hash</code> value to simply be <code>params</code>. When this is called then, our code will look like <code>FlowHelpers.pathFor( 'routeName', { paramName: 'blah', query: { queryParam: 'blah' } } );</code>. Despite the usage of objects, it&#x2019;s more-or-less what we had with the original helper.</p>
+
+<p>The same applies here for <code>urlFor</code> (after all, it&#x2019;s just a wrapper around <code>pathFor</code> using <code>Meteor.absoluteUrl</code>). <code>currentRoute</code> is identical to its predecessor, the only difference being that it&#x2019;s a vanilla JavaScript function now instead of a call to <code>Template.registerHelper</code>. If you&#x2019;ve been following along, usage of these is what you&#x2019;d expect. Reprising our <code>&lt;PublicNavigation /&gt;</code> component:</p>
+
+<p class="block-header">/client/components/globals/public-navigation.jsx</p>
+
+<pre><code class="language-javascript">PublicNavigation = React.createClass({
+ render() {
+ return (
+ &lt;div id="navbar-collapse" className="collapse navbar-collapse"&gt;
+ &lt;ul className="nav navbar-nav navbar-right"&gt;
+ &lt;li className={FlowHelpers.currentRoute( 'login' )}&gt;
+ &lt;a href={FlowHelpers.pathFor( 'login' )}&gt;Login&lt;/a&gt;
+ &lt;/li&gt;
+ &lt;li className={FlowHelpers.currentRoute( 'signup' )}&gt;
+ &lt;a href={FlowHelpers.pathFor( 'signup' )}&gt;Sign Up&lt;/a&gt; 
+ &lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/div&gt;
+ );
+ }
+});
+</code></pre>
+
+<p>Pretty much what you&#x2019;d expect. We make use of the inline <code>{}</code> bracket syntax, calling our functions directly. Notice, too, we can pass arguments so this will evaluate just fine if we called something like <code>{FlowHelpers.pathFor( 'login', { query: { taco: "okay" } } )}</code>. Super. Awesome.</p>
+
+<p>Alright, buckaroo! We did it! We&#x2019;ve successfully refactored Base to use React instead of Blaze. How does it feel? Was it as scary as all the &#xFC;bernerds made it out to be? Nah.</p>
+
+<p><iframe width="560" height="315" src="https://www.youtube.com/embed/Klf5qLV9Ljs"></iframe></p>
+
+<h3>Wrap up &amp; summary</h3>
+
+<p>In this recipe, we got a cursory introduction to the React user interface library. We learned how to refactor Blaze templates and logic into React components, how to work with nested components and logic, and even learned how to compensate for the loss of features like Blaze&#x2019;s template helpers. In addition, we learned how to update our routes to use the ReactLayout package to help us render our components.</p>
+
+
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/watsi-logo.svg" alt="Watsi">
+ <header>
+ <h4>Enjoy this post?</h4>
+ <p>I'd really appreciate it if you showed your thanks by <a href="https://watsi.org/team/the-meteor-chef" target="_blank">joining Team Meteor Chef on Watsi</a> and donating healthcare to someone who needs it in exchange!</p>
+ </header>
+ </div>
+ 
+ <h3>Questions &amp; Comments</h3>
+ 
+
+
+
+ </div> 
+ </div>
+</body></html>

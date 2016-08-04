@@ -1,0 +1,80 @@
+<!DOCTYPE html><html><head><title>How to configure NFS Server and Client Configuration on Ubuntu 15.10</title></head><body>
+<h1>How to configure NFS Server and Client Configuration on Ubuntu 15.10</h1><p><a href="http://www.ubuntugeek.com/16480.html" target="_new">Original URL</a></p>
+<p><blockquote>NFS was developed at a time when we weren't able to share our drives like we are able to today -- in the Windows environment. It offers the ability to share the hard disk space of a big server with&hellip;</blockquote></p>
+<div><div class="entry-content">
+
+NFS was developed at a time when we weren't able to share our drives like we are able to today -- in the Windows environment. It offers the ability to share the hard disk space of a big server with many smaller clients. Again, this is a client/server environment. While this seems like a standard service to offer, it was not always like this. In the past, clients and servers were unable to share their disk space.
+<p>Thin clients have no hard drives and thus need a "virtual" hard-disk. The NFS mount their hard disk from the server and, while the user thinks they are saving their documents to their local (thin client) disk, they are in fact saving them to the server. In a thin client environment, the root, usr and home partitions are all offered to the client from the server via NFS.</p>
+<p><strong>NFS Advantages</strong></p>
+<p>&#x2022; Local workstations use less disk space because commonly used data can be stored on a single machine and still remain accessible to others over the network.</p>
+<p>&#x2022; There is no need for users to have separate home directories on every network machine. Home directories could be set up on the NFS server and made available throughout the network.</p>
+<p>&#x2022; Storage devices such as floppy disks, CDROM drives, and Zip&#xAE; drives can be used by other machines on the network. This may reduce the number of removable media drives throughout the network.</p>
+<p><strong>Install NFS Server on Ubuntu 15.10</strong></p>
+<p>Open the terminal and run the following command</p>
+<blockquote><p>sudo apt-get install nfs-kernel-server nfs-common portmap</p></blockquote>
+<p>When configuring portmap do <strong>not</strong> bind loopback. If you do you can either edit /etc/default/portmap using the following</p>
+<blockquote><p>sudo vi /etc/default/portmap</p></blockquote>
+<p>or use the following command</p>
+<blockquote><p>sudo dpkg-reconfigure portmap</p></blockquote>
+<p>Restart Portmap using the following command</p>
+<blockquote><p>sudo /etc/init.d/portmap restart</p></blockquote>
+<p><strong>NFS Server Configuration </strong></p>
+<p>NFS exports from a server are controlled by the file /etc/exports. Each line begins with the absolute path of a directory to be exported, followed by a space-seperated list of allowed clients.</p>
+<p>You need to edit the exports file using the following command</p>
+<blockquote><p>sudo vi /etc/exports</p></blockquote>
+<p>Here are some quick examples of what you could add to your /etc/exports</p>
+<p>For Full Read Write Permissions allowing any computer from 192.168.1.1 through 192.168.1.255</p>
+<blockquote><p>/files 192.168.1.1/24(rw,no_root_squash,async)</p></blockquote>
+<p>Or for Read Only from a single machine</p>
+<blockquote><p>/files 192.168.1.2 (ro,async)</p></blockquote>
+<p>save this file and exit</p>
+<p>A client can be specified either by name or IP address. Wildcards (*) are allowed in names, as are netmasks (e.g. /24) following IP addresses, but should usually be avoided for security reasons.</p>
+<p>A client specification may be followed by a set of options, in parenthesis. It is important not to leave any space between the last client specification character and the opening parenthesis, since spaces are intrepreted as client seperators.</p>
+<p>Now you need to restart NFS server using the following command</p>
+<blockquote><p>sudo /etc/init.d/nfs-kernel-server restart</p></blockquote>
+<p>If you make changes to /etc/exports on a running NFS server, you can make these changes effective by issuing the command</p>
+<blockquote><p>sudo exportfs -a</p></blockquote>
+<p><strong>Install NFS client support on Ubuntu</strong></p>
+<p>Open the terminal and run the following command</p>
+<blockquote><p>sudo apt-get install portmap nfs-common</p></blockquote>
+<p>This will install all the required packages for nfs client</p>
+<p><strong>Mounting manually</strong></p>
+<p>Example to mount server.mydomain.com:/files to /files. In this example server.mydomain.com is the name of the server containing the nfs share, and files is the name of the share on the nfs server</p>
+<p>The mount point /files must first exist on the client machine.</p>
+<p>Create files directory using the following command</p>
+<blockquote><p>sudo mkdir files</p></blockquote>
+<p>You need to mount the share using the following command</p>
+<blockquote><p>sudo mount server.mydomain.com:/files /files</p></blockquote>
+<p>Now you may need to restart services using the following command</p>
+<blockquote><p>sudo /etc/init.d/portmap restart</p>
+<p>sudo /etc/init.d/nfs-common restart</p></blockquote>
+<p>Mounting at boot using /etc/fstab</p>
+<p>If you want to mount using fstab file</p>
+<blockquote><p>sudo vi /etc/fstab</p></blockquote>
+<p>In this example my /etc/fstab was like this</p>
+<blockquote><p>server.mydomain.com:/files /files nfs rsize=8192,wsize=8192,timeo=14,intr</p></blockquote>
+<p>Change &#x201C;servername.mydomain.com:/files&#x201D;, and &#x201C;/files&#x201D; to match your server name,share name, and the name of the mount point you created.</p>
+<p><strong>Firewall Ports for NFS </strong></p>
+<p>If you have a firewall you need to make sure ports 32771, 111 and 2049 are open</p>
+<p><strong>Testing Your Configuration</strong></p>
+<p>Use the following command in terminal to test</p>
+<blockquote><p>mount /files</p></blockquote>
+<p>the mount point /files will be mounted from the server.</p>
+<p><strong>Possible error and Solution</strong></p>
+<p>If you are getting the following error</p>
+<p>rpcinfo: can&#x2019;t contact portmapper: RPC: Remote system error &#x2013; No such file or directory</p>
+<p><strong>Solution</strong></p>
+<p>From the terminal run the following command</p>
+<p>sudo update-rc.d rpcbind enable &amp;&amp; sudo update-rc.d nfs-common enable</p>
+<h6><b>Sponsored Link</b></h6>
+
+
+
+
+
+
+	<h4>Related posts</h4>
+	
+
+</div> 			</div>
+</body></html>

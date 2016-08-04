@@ -1,0 +1,727 @@
+<!DOCTYPE html><html><head><title>Create a REST API with Node.js</title></head><body>
+<h1>Create a REST API with Node.js</h1><p><a href="http://bigspaceship.github.io/blog/2014/05/14/how-to-create-a-rest-api-with-node-dot-js/" target="_new">Original URL</a></p>
+<p><blockquote>For a pitch, we prototyped one of our concepts with a Natural Language search feature. I quickly implemented a REST style GET call on search submit with Node.js via major article skimming. I still&hellip;</blockquote></p>
+<div><div class="m-content">
+ <p>For a pitch, we prototyped one of our concepts with a <a href="https://github.com/NaturalNode/natural" target="_tab">Natural Language</a> search feature. I quickly implemented a REST style GET call on search submit with Node.js via major <a href="http://coenraets.org/blog/2012/10/creating-a-rest-api-using-node-js-express-and-mongodb/" target="_tab">article</a> skimming. I still didn't have a clear mental map of how Node.js worked with a REST API, so I broke it down into a <a href="http://brittneykernan.github.io/noderest-presentation/" target="_tab">presentation</a> for the BSS Tech team. You can follow along, or skim.</p>
+
+
+
+<h2 id="toc_0">PHP vs Node.js REST Components</h2>
+
+<p>If you've come from PHP, your brain may already hold a diagram of what a REST API looks like in that language. Let's make one for Node.js:</p>
+
+<h5 id="toc_1">PHP</h5>
+
+<ul>
+<li>Apache - HTTP server</li>
+<li>.php controllers - Controls what your app does with data</li>
+<li>Content-Type JSON Headers - Sends your data back readable</li>
+<li>.htaccess - Map URLs to controller action methods for pretty URLs</li>
+<li>MySQLi - Interfaces with Data</li>
+<li>MySQL - Stores data</li>
+</ul>
+
+<h5 id="toc_2">Node.js</h5>
+
+<ul>
+<li>Node.js - HTTP Server</li>
+<li>JavaScript modules - Controllers for what your app does with data</li>
+<li>Express - Framework to easily build for web with Node.js</li>
+<li>Routes - Map URLs to actions for pretty URLs</li>
+<li>Mongoose.js - Interfaces with data</li>
+<li>Mongo - Stores data</li>
+</ul>
+
+<h2 id="toc_3">Start a Node Server</h2>
+
+<p><a href="http://nodejs.org/" target="_tab">Install Node</a> first. Make a directory to play in, ex: <em>noderest</em>, and put <em>server.js</em> in the root.</p>
+
+<h5 id="toc_4">server.js</h5>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">var</span> <span class="nx">http</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'http'</span><span class="p">);</span>
+</span><span class="line"><span class="nx">http</span><span class="p">.</span><span class="nx">createServer</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">writeHead</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="p">{</span><span class="s1">'Content-Type'</span><span class="o">:</span> <span class="s1">'text/plain'</span><span class="p">});</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">end</span><span class="p">(</span><span class="s1">'Hello New York\n'</span><span class="p">);</span>
+</span><span class="line"><span class="p">}).</span><span class="nx">listen</span><span class="p">(</span><span class="mi">3001</span><span class="p">);</span>
+</span><span class="line"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Server running at http://localhost:3001/'</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<h5 id="toc_5">What's going on here</h5>
+
+<p>HTTP is the module we'll use to read the incoming Requests' HTTP action - GET, POST, PUT or DELETE - and Headers. It will also create a server for us, listening for Requests at the available port of your choice (here 3001). Pass <code>createServer()</code> a callback function that takes two arguments <code>req</code> and <code>res</code>. <code>req</code> for Request and <code>res</code> for Response. Add a <code>console.dir()</code> or two to print to Terminal what these two variables hold. Response is an object you can use to reply back to the Request. Forget to return something with Response and your Request will simply time out. Here any URL path we type at
+<a href="http://localhost:3001/" target="_tab">http://localhost:3001/</a> will print back <em>Hello New York</em> with a <em>OK</em> header as plain text content.</p>
+
+<h5 id="toc_6">Try it</h5>
+
+<p>In Terminal:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td><td class="code"><pre><code class="sh"><span class="line"><span class="nv">$ </span><span class="nb">cd </span>noderest/
+</span><span class="line"><span class="nv">$ </span>node server.js
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Terminal should print <code>Server running at http://127.0.0.1:3001/</code> back at you. So easy (as long as you didn't have anything else running in that port). Open that URL. You should see <code>Hello New York</code>.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-node.gif" alt="picture alt" title="Node Server "></p>
+
+<h5 id="toc_7">Add Express</h5>
+
+<p>Why add Express? Same reason you use jQuery, makes things faster and easier. What the hell is it? I read the <a href="http://expressjs.com/" target="_tab">home page</a> maybe 5 times and used it in 3 prototypes before my brain mapped it.</p>
+
+<p>To add Express as a dependency to your project, we'll need to first <a href="http://blog.npmjs.org/post/85484771375/how-to-install-npm" target="_tab">install NPM</a> (it should have installed with Node actually, <a href="http://blog.npmjs.org/post/85484771375/how-to-install-npm" target="_tab">if not</a>). NPM will read our <em><a href="https://www.npmjs.org/doc/json.html">package.json</a></em> file saved to the root of our project directory, and then download and install Express for us.</p>
+
+<h5 id="toc_8">package.json</h5>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="p">{</span>
+</span><span class="line"> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"noderest"</span><span class="p">,</span>
+</span><span class="line"> <span class="s2">"description"</span><span class="o">:</span> <span class="s2">"Demo REST API with Node"</span><span class="p">,</span>
+</span><span class="line"> <span class="s2">"version"</span><span class="o">:</span> <span class="s2">"0.0.1"</span><span class="p">,</span>
+</span><span class="line"> <span class="s2">"private"</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span>
+</span><span class="line"> <span class="s2">"dependencies"</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="s2">"express"</span><span class="o">:</span> <span class="s2">"3.x"</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<h5 id="toc_9">Install Express in Terminal</h5>
+
+<figure class="code"><figcaption></figcaption></figure>
+
+<p>Watch NPM in Terminal fetch the files. Your directory now holds a new folder called <em>node_modules</em>, with the <em>express</em> folder inside. Let's use Express.</p>
+
+<h5 id="toc_10">Use Express</h5>
+
+<p>Like the HTTP module you required in your first version of <em>server.js</em>, you'll require Express. Open <em>server.js</em>, clear it out. Add:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">var</span> <span class="nx">express</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'express'</span><span class="p">);</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">app</span> <span class="o">=</span> <span class="nx">express</span><span class="p">();</span>
+</span><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">'/'</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s1">'Hello Seattle\n'</span><span class="p">);</span>
+</span><span class="line"><span class="p">});</span>
+</span><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">listen</span><span class="p">(</span><span class="mi">3001</span><span class="p">);</span>
+</span><span class="line"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Listening on port 3001...'</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<h5 id="toc_11">What's changed</h5>
+
+<p>Nothing! Not really. Our server is actually doing the same thing, though. Listening to HTTP requests sent to locally to port 3001 and returning updated text <em>Hello Seattle</em>. Only difference is we now have Express' framework to work with - a slightly cleaner and faster way to handle requests and set up our server. The <code>app</code> variable holds an instance of the Express application object, which has many useful methods.</p>
+
+<h5 id="toc_12">Run Express</h5>
+
+<p>Changes to Node.js server files require a full server restart in order to be run the updated version.</p>
+
+<p>In Terminal, use <code>CTRL-C</code> to stop your running Node server. Restart with <code>node server.js</code>.</p>
+
+<p>You'll see Terminal respond with <em>Listening on port 3001</em>. And <em>Hello Seattle</em> at your localhost in the browser. You may notice the font family is different than before. Express is sending a text/html Content-Type Header instead of text/plain (Express is for web after all).</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-express.gif" alt="picture alt" title="Express Server"></p>
+
+<h2 id="toc_13">REST</h2>
+
+<p>We're ready to build our REST API. We'll need:</p>
+
+<ul>
+<li>A URL route schema to map requests to app actions</li>
+<li>A Controller to handle each action</li>
+<li>Data to respond with</li>
+<li>Place to store the data</li>
+<li>Interface to access and change data</li>
+</ul>
+
+<h2 id="toc_14">Routes</h2>
+
+<p>Routes are the predefined URL paths your API responds to. Think of each Route as listening to three parts:</p>
+
+<ul>
+<li>A specific HTTP Action</li>
+<li>A specific URL path</li>
+<li>A handler method</li>
+</ul>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">'/'</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s1">'Return JSON or HTML View'</span><span class="p">);</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>This example of routing handles all GET Requests. The URL path is the root of the site, the homepage. The handling method is an anonymous function, and responds with plain text in this case.</p>
+
+<h2 id="toc_15">Request</h2>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">'/musician/:name'</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="c1">// Get /musician/Matt</span>
+</span><span class="line"> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span>
+</span><span class="line"> <span class="c1">// =&gt; Matt</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s1">'{"id": 1,"name":"Matt",</span>
+</span><span class="line"><span class="s1"> "band":"BBQ Brawlers"}'</span><span class="p">);</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Paths are string patterns broken up by <code>/</code> and <code>:</code>, and translated into RegEx by Express. In this example, <code>:name</code> is anything that comes after <code>/musician/</code> in the url. This parameter will be available in our Request object <code>req</code> under the params property. It will be keyed the same name as our param in the route path.</p>
+
+<p>FYI <code>req.body</code> can also be used to refer to the HTTP Request Body. You'll need to tell Express to look out for Requests Body's in your <em>server.js</em> file via <code>configure()</code>. We'll do this later.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">configure</span><span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
+</span><span class="line"> <span class="nx">app</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">express</span><span class="p">.</span><span class="nx">bodyParser</span><span class="p">());</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<h2 id="toc_16">Response</h2>
+
+<p><code>res.send()</code> is awesome. You can pass this method JSON, Strings and HTML, and it will interoperate and send back the appropriate Content-Type and other Headers for you. If you want control, that's cool too. To send a custom HTTP Status pass that number in before the response content. Add other headers, use <code>res.set()</code> to add in your headers before calling <code>res.send()</code>.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">({</span> <span class="s2">"some"</span><span class="o">:</span> <span class="s2">"json"</span> <span class="p">});</span>
+</span><span class="line"><span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">"html for Maximum Pain's web page"</span><span class="p">);</span>
+</span><span class="line"><span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="mi">404</span><span class="p">,</span> <span class="s1">'No musicians here'</span><span class="p">);</span>
+</span><span class="line"><span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="p">{</span> <span class="nx">error</span><span class="o">:</span> <span class="s1">'you blew it'</span> <span class="p">});</span>
+</span><span class="line"><span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="mi">200</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>There's much more to Express than detailed here. For more read the well designed and written <a href="http://expressjs.com/4x/api.html">docs</a>.</p>
+
+<h2 id="toc_17">Routes.js</h2>
+
+<p>Add a new file at the root called <em>routes.js</em>. Drop in this routing module:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">module</span><span class="p">.</span><span class="nx">exports</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">app</span><span class="p">){</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">musicians</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'./controllers/musicians'</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">app</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">'/musicians'</span><span class="p">,</span> <span class="nx">musicians</span><span class="p">.</span><span class="nx">findAll</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">app</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">'/musicians/:id'</span><span class="p">,</span> <span class="nx">musicians</span><span class="p">.</span><span class="nx">findById</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">app</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">'/musicians'</span><span class="p">,</span> <span class="nx">musicians</span><span class="p">.</span><span class="nx">add</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">app</span><span class="p">.</span><span class="nx">put</span><span class="p">(</span><span class="s1">'/musicians/:id'</span><span class="p">,</span> <span class="nx">musicians</span><span class="p">.</span><span class="nx">update</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">app</span><span class="p">.</span><span class="k">delete</span><span class="p">(</span><span class="s1">'/musicians/:id'</span><span class="p">,</span> <span class="nx">musicians</span><span class="p">.</span><span class="k">delete</span><span class="p">);</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Here we are working with a Musician data model. We've created a Musicians Controller and placed all our Request event handling methods inside the controller. The main REST HTTP actions are handled. We've modeled our URL routes off of REST API conventions, and named our handling methods clearly.</p>
+
+<h2 id="toc_18">Controllers</h2>
+
+<p>To keep code organized, create a folder called <em>controllers</em> inside your project directory. Create a new file inside of that called <em>musicians.js</em>. We'll add each request handling method for Musicians data to this file one by one. For now add these placeholders to <em>musicians.js</em> so we can restart the server without errors:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findAll</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findById</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">add</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">update</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="k">delete</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Our Controller exports all of these methosd so the router can refer to them.</p>
+
+<h5 id="toc_19">Find All</h5>
+
+<p>Update <code>findAll</code>'s definition' to the function below:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findAll</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">([{</span>
+</span><span class="line"> <span class="s2">"id"</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class="line"> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Max"</span><span class="p">,</span>
+</span><span class="line"> <span class="s2">"band"</span><span class="o">:</span> <span class="s2">"Maximum Pain"</span><span class="p">,</span>
+</span><span class="line"> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"guitar"</span>
+</span><span class="line"> <span class="p">}]);</span>
+</span><span class="line"><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Like the anonymous functions we declared in our <em>server.js</em>, request handler methods accept <code>req</code> and <code>res</code> arguments and return JSON with <code>res.send()</code>. Our JSON is hard coded, which will do for now. Let's test this route in our app.</p>
+
+<h5 id="toc_20">Import Routes and JS Modules</h5>
+
+<p>Update <em>server.js</em> to require our routes file. The <code>.js</code> file extension can be omitted.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">var</span> <span class="nx">express</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'express'</span><span class="p">);</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">app</span> <span class="o">=</span> <span class="nx">express</span><span class="p">();</span>
+</span><span class="line"><span class="nx">require</span><span class="p">(</span><span class="s1">'./routes'</span><span class="p">)(</span><span class="nx">app</span><span class="p">);</span>
+</span><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">listen</span><span class="p">(</span><span class="mi">3001</span><span class="p">);</span>
+</span><span class="line"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">"Jammin\' on port 3001..."</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p><code>CTRL+C</code> to stop the Node server and <code>node server.js</code> to restart. You should now see JSON at <a href="http://localhost:3001/musicians">localhost:3001/musicians</a>.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-musicians.gif" alt="picture alt" title="Musicians JSON"></p>
+
+<h2 id="toc_21">Mongo</h2>
+
+<p>Data would be more fun to play with. I made fake bands for all the techers on the team for my musicians data. Put thought into it.</p>
+
+<h5 id="toc_22">Start Mongo</h5>
+
+<p>Mongo Database felt right for my light data and it is super fast to set up (if you already have Mongo installed, <a href="http://docs.mongodb.org/manual/installation/">install</a> it if not, yuck). Run <code>mongod</code> in another Terminal tab if it's not running already.</p>
+
+<h2 id="toc_23">Mongoose.js</h2>
+
+<p>Mongo is easy enough to communicate with, but if you like a little bit more structure to your data and data interface, try a Mongo Driver. I used Mongoose.js because I liked the Schema style of defining document structure.</p>
+
+<p>Ask NPM to install this dependency for you, and update your package.json file with this dependency for you with the <code>--save-dev</code> option.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td><td class="code"><pre><code class="sh"><span class="line">npm install mongoose --save-dev
+</span></code></pre></td></tr></table></div></figure>
+
+<h5 id="toc_24">Use Mongoose.js</h5>
+
+<p>Update <em>server.js</em>:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+<span class="line-number">21</span>
+<span class="line-number">22</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">var</span> <span class="nx">express</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'express'</span><span class="p">),</span>
+</span><span class="line"><span class="nx">mongoose</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'mongoose'</span><span class="p">),</span>
+</span><span class="line"><span class="nx">fs</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'fs'</span><span class="p">);</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">mongoUri</span> <span class="o">=</span> <span class="s1">'mongodb://localhost/noderest'</span><span class="p">;</span>
+</span><span class="line"><span class="nx">mongoose</span><span class="p">.</span><span class="nx">connect</span><span class="p">(</span><span class="nx">mongoUri</span><span class="p">);</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">db</span> <span class="o">=</span> <span class="nx">mongoose</span><span class="p">.</span><span class="nx">connection</span><span class="p">;</span>
+</span><span class="line"><span class="nx">db</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">'error'</span><span class="p">,</span> <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="s1">'unable to connect to database at '</span> <span class="o">+</span> <span class="nx">mongoUri</span><span class="p">);</span>
+</span><span class="line"><span class="p">});</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">app</span> <span class="o">=</span> <span class="nx">express</span><span class="p">();</span>
+</span><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">configure</span><span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
+</span><span class="line"> <span class="nx">app</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">express</span><span class="p">.</span><span class="nx">bodyParser</span><span class="p">());</span>
+</span><span class="line"><span class="p">});</span>
+</span><span class="line"><span class="nx">require</span><span class="p">(</span><span class="s1">'./models/musician'</span><span class="p">);</span>
+</span><span class="line"><span class="nx">require</span><span class="p">(</span><span class="s1">'./routes'</span><span class="p">)(</span><span class="nx">app</span><span class="p">);</span>
+</span><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">listen</span><span class="p">(</span><span class="mi">3001</span><span class="p">);</span>
+</span><span class="line"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Listening on port 3001...'</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>We're requiring the Mongoose module which will communicate with Mongo for us. The <code>mongoUri</code> is a location to the Mongo DB that Mongoose will create if there is not one there already. We added an error handler there to help debug issues connecting to Mongo collections. We also configured Express to parse requests' bodies (we'll use that for POST requests). Lastly, we require the Musician model which we'll make next.</p>
+
+<h2 id="toc_25">Define Data Models</h2>
+
+<p>Create a new folder called <em>models</em> and add a new file <em>musician.js</em> for our Musician Model.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">var</span> <span class="nx">mongoose</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'mongoose'</span><span class="p">),</span>
+</span><span class="line"><span class="nx">Schema</span> <span class="o">=</span> <span class="nx">mongoose</span><span class="p">.</span><span class="nx">Schema</span><span class="p">;</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">MusicianSchema</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Schema</span><span class="p">({</span>
+</span><span class="line"> <span class="nx">name</span><span class="o">:</span> <span class="nb">String</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">band</span><span class="o">:</span> <span class="nb">String</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">instrument</span><span class="o">:</span> <span class="nb">String</span>
+</span><span class="line"><span class="p">});</span>
+</span><span class="line"><span class="nx">mongoose</span><span class="p">.</span><span class="nx">model</span><span class="p">(</span><span class="s1">'Musician'</span><span class="p">,</span> <span class="nx">MusicianSchema</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Require Mongoose into this file, and create a new Schema object. This schema helps Mongoose make sure it's getting and setting the right and well-formed data from and to the Mongo collection. Our schema has three String properties which define a Musician object. The last line creates the Musician model object, with built in Mongo interfacing methods. We'll refer to this Musician object in other files.</p>
+
+<h5 id="toc_26">Find All</h5>
+
+<p>Update <em>controllers/musicians.js</em> to require Mongoose, so we can create an instance of our Musician model to work with. Update <code>findAll()</code> to query Mongo with the <code>find()</code> data model method.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">var</span> <span class="nx">mongoose</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'mongoose'</span><span class="p">),</span>
+</span><span class="line"><span class="nx">Musician</span> <span class="o">=</span> <span class="nx">mongoose</span><span class="p">.</span><span class="nx">model</span><span class="p">(</span><span class="s1">'Musician'</span><span class="p">);</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findAll</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">find</span><span class="p">({},</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">results</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">results</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findById</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">add</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">update</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="k">delete</span> <span class="o">=</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Passing <code>find()</code> <code>{}</code> means we are not filtering data by any of its properties, so please return all of it. Once Mongoose looks up the data it returns an error message and a result set. Use <code>res.send()</code> to return the raw results.</p>
+
+<h4 id="toc_27">Start Mongoose</h4>
+
+<p>Restart the server with <code>CTRL+C</code> and <code>node server.js</code>. Visit the API endpoint for all musicians <a href="http://localhost:3001/musicians">localhost:3001/musicians</a>. You'll get JSON data back, in the form of an empty array.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-no-musicians.gif" alt="picture alt" title="Empty Musicians JSON"></p>
+
+<h2 id="toc_28">Data</h2>
+
+<p>Since I didn't feel like messing with Mongo command-line, I decided to import musician data with our REST API. Add a new route endpoint to <em>routes.js</em>.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td><td class="code"><pre><code class="sh"><span class="line">app.get<span class="o">(</span><span class="s1">'/import'</span>, musicians.import<span class="o">)</span>;
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Now to define the import method in our Musicians Controller <em>controllers/musicians.js</em>:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="kr">import</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Ben"</span><span class="p">,</span> <span class="s2">"band"</span><span class="o">:</span> <span class="s2">"DJ Code Red"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"Reason"</span> <span class="p">},</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Mike D."</span><span class="p">,</span><span class="s2">"band"</span><span class="o">:</span> <span class="s2">"Kingston Kats"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"drums"</span> <span class="p">},</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Eric"</span><span class="p">,</span> <span class="s2">"band"</span><span class="o">:</span> <span class="s2">"Eric"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"piano"</span> <span class="p">},</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Paul"</span><span class="p">,</span> <span class="s2">"band"</span><span class="o">:</span> <span class="s2">"The Eyeliner"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"guitar"</span> <span class="p">}</span>
+</span><span class="line"> <span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="mi">202</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>This import method adds four documents out of the hard-coded JSON to a <em>musicians</em> collection. The Musician model is referenced here to call its create method. <code>create()</code> takes one or more documents in JSON form, and a callback to run on completion. If an error occurs, Terminal will spit the error out, and the request will timeout in the browser. On success, 202 Accepted HTTP status code is returned to the browser. Restart your node server and visit this new endpoint to import data.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-import.gif" alt="picture alt" title="Empty Musicians JSON"></p>
+
+<h2 id="toc_29">Returning Data</h2>
+
+<p>Now visit your <code>musicians/</code> endpoint to view all new musicians data. You'll see an array of JSON objects, each in the defined schema, with an additional generated unique private <code>_id</code> and internal <code>__v</code> version key. Don't edit those.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-data.gif" alt="picture alt" title="Musicians JSON"></p>
+
+<h5 id="toc_30">Find By Id</h5>
+
+<p>Recall our route for getting a musician by its id <code>app.get('/musicians/:id', musicians.findById)</code>. Here is the handler method:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findById</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">id</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">findOne</span><span class="p">({</span><span class="s1">'_id'</span><span class="o">:</span><span class="nx">id</span><span class="p">},</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>This route's path uses a parameter pattern for <em>id</em> <code>/musicians/:id</code> which we can refer to in <code>req</code>. Pass this id to Mongoose to look up and return just one document. Restart the server. At your find all endpoint, copy one of the super long ids and paste it in at the end of the current url in the browser. Refresh your browser. You'll get a single JSON object for that one musician's document. Nice.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-by-id.gif" alt="picture alt" title="Musician Found"></p>
+
+<h5 id="toc_31">Update</h5>
+
+<p>PUT HTTP actions in a REST API correlate to an Update method. The route for Update also uses an <code>:id</code> parameter.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">update</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">id</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">updates</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">;</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">update</span><span class="p">({</span><span class="s2">"_id"</span><span class="o">:</span><span class="nx">id</span><span class="p">},</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">,</span>
+</span><span class="line"> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">numberAffected</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Updated %d musicians'</span><span class="p">,</span> <span class="nx">numberAffected</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="mi">202</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Notice the <code>updates</code> variable storing the <code>req.body</code>. <code>req.body</code> is useful when you want to pass in larger chunks of data such as a single JSON object. Here we will pass in a JSON object following the schema of only the model's properties you want to change.</p>
+
+<p>The model's <code>update()</code> takes three parameters:</p>
+
+<ul>
+<li>JSON object of matching properties to look up the doc with to update</li>
+<li>JSON object of just the properties to update</li>
+<li>callback function that returns the number of documents updated</li>
+</ul>
+
+<h5 id="toc_32">Test with cURL</h5>
+
+<p>PUT actions are not easy to test in the browser, so I used cURL in Terminal after restarting the server.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td><td class="code"><pre><code class="sh"><span class="line"><span class="nv">$ </span>curl -i -X PUT -H <span class="s1">'Content-Type: application/json'</span> -d <span class="s1">'{"band": "BBQ Brawlers"}'</span> http://localhost:3001/musicians/535fe13ac688500000c2b28b
+</span></code></pre></td></tr></table></div></figure>
+
+<p>This sends a JSON Content-Type PUT request to our update endpoint. That JSON object is the request body, and the long hash at the end of the URL is the id of the musician we want to update. Terminal will output a JSON object of the response to the cURL request and <em>Updated 1 musicians</em> from our callback function.</p>
+
+<p>Visit this same URL from the cURL request in the browser to see the changes.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-put.gif" alt="picture alt" title="Musician Updated"></p>
+
+<h5 id="toc_33">Add</h5>
+
+<p>We used <code>create()</code> earlier to add multiple documents to our Musicians Mongo collection. Our POST handler uses the same method to add one new Musician to the collection. Once added, the response is the full new Musician's JSON object.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">add</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">musician</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">musician</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Restart the server. Use cURL to POST to the add endpoint with the full Musician JSON as the request body.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td><td class="code"><pre><code class="sh"><span class="line"><span class="nv">$ </span>curl -i -X POST -H <span class="s1">'Content-Type: application/json'</span> -d <span class="s1">'{"name": "Joe", "band": "Abita Boys", "instrument":"voice"}'</span> http://localhost:3001/musicians
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Visit <a href="http://localhost:3001/musicians">localhost:3001/musicians</a> to see the new Musician at the end of the array.</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-post.gif" alt="picture alt" title="Musician Updated"></p>
+
+<h5 id="toc_34">Delete</h5>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="k">delete</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">id</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">remove</span><span class="p">({</span><span class="s1">'_id'</span><span class="o">:</span><span class="nx">id</span><span class="p">},</span><span class="kd">function</span><span class="p">(</span><span class="nx">result</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Our final REST endpoint, delete reuses what we've learned above. Add this to <em>controllers/musicians.js</em>, restart, and check it out with:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td><td class="code"><pre><code class="sh"><span class="line"><span class="nv">$ </span>curl -i -X DELETE http://localhost:3001/musicians/535feac1cc539500000a209f
+</span></code></pre></td></tr></table></div></figure>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/browser-delete.gif" alt="picture alt" title="Musician Gone"></p>
+
+<h2 id="toc_35">Summary</h2>
+
+<p>Your final <em>controllers/musicians.js</em> should look like this:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+<span class="line-number">21</span>
+<span class="line-number">22</span>
+<span class="line-number">23</span>
+<span class="line-number">24</span>
+<span class="line-number">25</span>
+<span class="line-number">26</span>
+<span class="line-number">27</span>
+<span class="line-number">28</span>
+<span class="line-number">29</span>
+<span class="line-number">30</span>
+<span class="line-number">31</span>
+<span class="line-number">32</span>
+<span class="line-number">33</span>
+<span class="line-number">34</span>
+<span class="line-number">35</span>
+<span class="line-number">36</span>
+<span class="line-number">37</span>
+<span class="line-number">38</span>
+<span class="line-number">39</span>
+<span class="line-number">40</span>
+<span class="line-number">41</span>
+<span class="line-number">42</span>
+<span class="line-number">43</span>
+<span class="line-number">44</span>
+<span class="line-number">45</span>
+<span class="line-number">46</span>
+<span class="line-number">47</span>
+<span class="line-number">48</span>
+<span class="line-number">49</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">var</span> <span class="nx">mongoose</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'mongoose'</span><span class="p">),</span>
+</span><span class="line"><span class="nx">Musician</span> <span class="o">=</span> <span class="nx">mongoose</span><span class="p">.</span><span class="nx">model</span><span class="p">(</span><span class="s1">'Musician'</span><span class="p">);</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findAll</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">find</span><span class="p">({},</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">results</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">results</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">findById</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">id</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">findOne</span><span class="p">({</span><span class="s1">'_id'</span><span class="o">:</span><span class="nx">id</span><span class="p">},</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">add</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">musician</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">musician</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="nx">update</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">id</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">updates</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">;</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">update</span><span class="p">({</span><span class="s2">"_id"</span><span class="o">:</span><span class="nx">id</span><span class="p">},</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">,</span>
+</span><span class="line"> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">numberAffected</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Updated %d musicians'</span><span class="p">,</span> <span class="nx">numberAffected</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="mi">202</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="k">delete</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">id</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">remove</span><span class="p">({</span><span class="s1">'_id'</span><span class="o">:</span><span class="nx">id</span><span class="p">},</span><span class="kd">function</span><span class="p">(</span><span class="nx">result</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span><span class="line"><span class="nx">exports</span><span class="p">.</span><span class="kr">import</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+</span><span class="line"> <span class="nx">Musician</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Ben"</span><span class="p">,</span> <span class="s2">"band"</span><span class="o">:</span> <span class="s2">"DJ Code Red"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"Reason"</span> <span class="p">},</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Mike D."</span><span class="p">,</span><span class="s2">"band"</span><span class="o">:</span> <span class="s2">"Kingston Kats"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"drums"</span> <span class="p">},</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Eric"</span><span class="p">,</span> <span class="s2">"band"</span><span class="o">:</span> <span class="s2">"Eric"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"piano"</span> <span class="p">},</span>
+</span><span class="line"> <span class="p">{</span> <span class="s2">"name"</span><span class="o">:</span> <span class="s2">"Paul"</span><span class="p">,</span> <span class="s2">"band"</span><span class="o">:</span> <span class="s2">"The Eyeliner"</span><span class="p">,</span> <span class="s2">"instrument"</span><span class="o">:</span> <span class="s2">"guitar"</span> <span class="p">}</span>
+</span><span class="line"> <span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="k">return</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="mi">202</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>And your project directory should look like this:</p>
+
+<p><img src="http://brittneykernan.github.io/noderest-presentation/img/directory.gif" alt="picture alt" title="Directory Structure"></p>
+
+<p>Final project files can be found in the <a href="https://github.com/brittneykernan/noderest-presentation/tree/master/src">presentation repo</a>.</p>
+
+<p>In my opinion, setting up a REST API with Node.js and Mongo is super fast compared to with PHP and MySQL. The <a href="http://expressjs.com/">Express.js</a>, <a href="http://nodejs.org/api/http.html">Node.js</a> and <a href="http://mongoosejs.com/docs/api.html">Mongoose.js API</a> documentation is all easy to reference. There's much more powerful things you can do than I have outlined, so don't stop here.</p>
+
+<p>Shout out to <a href="http://markdalgleish.com/projects/bespoke.js/">Bespoke.js</a> for the beautiful presentation micro-framework. I'm thinking about adding my fake CLI and fake Directory JS into a Bespoke plugins (arrow through <a href="http://brittneykernan.github.io/noderest-presentation/">the presentation</a> to see those).</p>
+
+ </div>
+ 
+ 
+ 
+
+ </div>
+</body></html>

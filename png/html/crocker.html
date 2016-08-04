@@ -1,0 +1,357 @@
+<!DOCTYPE html><html><head><title>crocker</title></head><body>
+<h1>crocker</h1><p><a href="https://www.npmjs.com/package/crocker/" target="_new">Original URL</a></p>
+<p><blockquote>Crank-Rocker -- Design and Analysis. Crocker is a javascript namespace and function library, which has proven successful in designing and analyzing Crank-Rockers as special planar fourbar mechanisms&hellip;</blockquote></p>
+<div><div id="readme" class="markdown">
+ <p><a href="https://github.com/goessner/g2/license.txt"><img src="http://img.shields.io/:license-mit-blue.svg" class="badge"></a>
+<a href="https://www.npmjs.com/package/crocker/"><img src="https://img.shields.io/npm/v/crocker.svg" class="badge"></a>
+<a href="https://www.npmjs.com/package/crocker"><img src="https://img.shields.io/npm/dt/crocker.svg" class="badge"></a>
+<a href="https://github.com/goessner/crocker"><img src="https://img.shields.io/gemnasium/mathiasbynens/he.svg" class="badge"></a></p>
+<h2 id="user-content-crank-rocker----design-and-analysis" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#crank-rocker----design-and-analysis">Crank-Rocker -- Design and Analysis.</a></h2>
+<p><code>Crocker</code> is a javascript namespace and function library, which has proven successful in designing and analyzing Crank-Rockers
+as special planar fourbar mechanisms in my lectures. <code>Crocker.js</code> is tiny, it weights only 1.5 kB compressed and gzipped.</p>
+<p><code>Crocker</code> is <em>not</em> meant to simulate mechanisms. For this and general fourbar mechanisms see <a href="https://github.com/goessner/fourbar">fourbar</a>.</p>
+<p>Here is a <em>Crank-Rocker</em> <a href="https://goessner.github.io/morphr/examples/complex.html">animation</a> using the tiny
+<a href="https://github.com/goessner/morphr">Morphr</a> javascript class and a <a href="https://github.com/goessner/g2">g2</a> command queue
+for vector graphics.</p>
+<h2 id="user-content-geometry" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#geometry">Geometry</a></h2>
+<p>A <em>Crank-Rocker</em> is a specific <em>fourbar</em> mechanism. It is composed of four binary links that are connected to each other
+by revolute joints. These links are called <em>crank</em>, <em>coupler</em>, <em>rocker</em> and <em>frame</em>. Their lengths are
+named <code>a, b, c, d</code> respectively.</p>
+<p><img src="https://raw.githubusercontent.com/goessner/crocker/master/img/extremepositions.png"></p>
+<p>The input <em>crank</em> is fully rotatable and performs a complete 360&#xB0; turn. At the same time the <em>rocker</em> oscillates
+between its extreme positions <code>&#x3C8;_min</code> and <code>&#x3C8;_max</code>. Both <em>crank</em> and <em>rocker</em> are connected to
+the <em>fixed frame</em> by pivots. The <em>coupler</em> functions as a <em>connecting rod</em> between that two.</p>
+<p><img src="https://raw.githubusercontent.com/goessner/crocker/master/img/extremepositions2.png"></p>
+<p>The rocker's working angular range is named <code>&#x3C8;_0</code> and corresponds during tracking motion
+(crank and rocker move unidirectional - counterclockwise here) to the crank's angular range <code>&#x3C6;_0</code>.
+On their way back they run in opposite directions. The crank's angle is <code>360&#xB0; - &#x3C6;_0</code> then and the rocker's
+<code>-&#x3C8;_0</code>. As a descriptive angle we use the difference <code>&#x3B1; = 180&#xB0; - &#x3C6;_0</code> here.
+So if <code>&#x3C6;_0</code> is not 180&#xB0; or <code>&#x3B1;</code> is not 0&#xB0;, the crank needs different times for the rocker's
+<em>back</em> and <em>forth</em> motion. This degree of non-uniformity can be expressed by the ratio <code>t_f/t_b</code>, which is
+an important parameter of the engineer's point of view while designing a crank-rocker mechanism and
+directly relates to <code>&#x3B1;</code>. The other important design parameter of course is the rocker's
+angular range <code>&#x3C8;_0</code>.</p>
+<p>As the four link lengths <code>a, b, c, d</code> sufficiently define a specific crank-rocker and <code>&#x3B1;</code> and <code>&#x3C8;_0</code>
+are added as important design parameters, there must be two relations between those now <em>six</em> parameters. It can be shown
+that these relations are:</p>
+<p><img src="https://raw.githubusercontent.com/goessner/crocker/master/img/relations.png"></p>
+<p>Another important value is the transmission angle <code>&#x3BC;</code> between <em>coupler</em> and <em>rocker</em>. Of special interest here is the
+<em>minimal</em> transmission angle <code>&#x3BC;_min</code> which occurs, when the <em>crank</em> is collinear with the <em>frame</em>. This happens two
+times while the crank performs a complete rotation.</p>
+
+<p>So the minimal transmission angle <code>&#x3BC;_min</code> has to be calculated as <code>min(&#x3BC;_inner,&#x3BC;_outer)</code>.
+Please note, that - as a convention - the transmission angle is always considered to be in the range <code>0 &lt; &#x3BC; &lt;= 90&#xB0;</code>. So in case
+<code>&#x3BC;</code> happens to be greater than 90&#xB0;, its supplement angle (<code>180&#xB0; - &#x3BC;</code>) should be taken instead.</p>
+<p>Ideally the transmission angle is always 90&#xB0;, which isn't possible of course. So a specific design goal with crank-rockers
+is to <em>maximize</em> the minimal transmission angle. A valuable optimization method regarding this can be applied with <code>crocker.js</code>.</p>
+<p>See <a href="https://www.npmjs.com/package/crocker/#fn1">[1]</a>, <a href="https://www.npmjs.com/package/crocker/#fn2">[2]</a> or <a href="https://www.npmjs.com/package/crocker/#fn3">[3]</a> for further details.</p>
+<h2 id="user-content-implementation" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#implementation">Implementation</a></h2>
+<p>The <code>crocker</code> library consists mostly of small functions. It is no <code>class</code>, so you cannot
+instantiate any Crank-Rocker objects.</p>
+<p>The most simple way to use the <code>crocker</code> library is with <code>node.js</code>.</p>
+<h3 id="user-content-node-example---simple-crank-rocker" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#node-example---simple-crank-rocker">Node Example - Simple Crank-Rocker</a></h3>
+<pre><code class="highlight javascript"><pre class="editor editor-colors"><p class="line"><span class="source js"><span class="keyword control js"><span>return</span></span><span>&#xA0;w/</span><span class="constant numeric js"><span>180</span></span><span class="keyword operator js"><span>*</span></span><span class="support class js"><span>Math</span></span><span class="support constant js"><span>PI</span></span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="keyword control js"><span>return</span></span><span>&#xA0;w</span><span class="keyword operator js"><span>*</span></span><span class="constant numeric js"><span>180</span></span><span>/</span><span class="support class js"><span>Math</span></span><span class="support constant js"><span>PI</span></span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="storage modifier js"><span>var</span></span><span>&#xA0;crocker&#xA0;</span><span class="keyword operator js"><span>=</span></span><span class="support function js"><span>require</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>../crocker.js</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="storage modifier js"><span>var</span></span><span>&#xA0;a&#xA0;</span><span class="keyword operator js"><span>=</span></span><span class="constant numeric js"><span>60</span></span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;d&#xA0;</span><span class="keyword operator js"><span>=</span></span><span class="constant numeric js"><span>120</span></span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;psi0&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;toRad</span><span class="constant numeric js"><span>80</span></span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;alfa&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;crocker</span><span>alfa_tfb</span><span class="constant numeric js"><span>10</span></span><span>/</span><span class="constant numeric js"><span>9</span></span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;b&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;crocker</span><span>b_ad</span><span>a</span><span>d</span><span>alfa</span><span>psi0</span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;c&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;crocker</span><span>c_ad</span><span>a</span><span>d</span><span>alfa</span><span>psi0</span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;muMin&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;crocker</span><span>muMin</span><span>a</span><span>b</span><span>c</span><span>d</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>psi0&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;toDeg</span><span>psi0</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>alfa&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;toDeg</span><span>alfa</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>b&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;b</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>c&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;c</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>muMin&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;toDeg</span><span>muMin</span><span class="punctuation terminator statement js"><span>;</span></span></span></p></pre></code></pre>
+<p>Here is a table of <code>Crocker</code> functions. Please note that these functions are only loosely coupled. Usually the validity
+of the parameter set handed over to them is checked in the context, from where they are invoked. So please ensure to use valid
+parameters, as</p>
+<ul>
+<li><code>a,b,c,d</code> are Grashof positive.</li>
+<li><code>a</code> is the smallest link length.</li>
+<li><code>&#x3C8;_0</code> is smaller than 180&#xB0;.</li>
+<li>All angles are provided in radians.</li>
+</ul>
+<p>just to name a few.</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Comment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.psiMin(a,b,c,d)</code></td>
+<td>Minimal Rocker angle <code>&#x3C8;_min</code>.</td>
+</tr>
+<tr>
+<td><code>.psiMax(a,b,c,d)</code></td>
+<td>Maximal Rocker angle <code>&#x3C8;_max</code>.</td>
+</tr>
+<tr>
+<td><code>.phiMin(a,b,c,d)</code></td>
+<td>Crank angle <code>&#x3D5;_min</code> corresponding to rocker angle <code>&#x3C8;_min</code>.</td>
+</tr>
+<tr>
+<td><code>.phiMax(a,b,c,d)</code></td>
+<td>Crank angle <code>&#x3D5;_max</code> corresponding to rocker angle <code>&#x3C8;_max</code>.</td>
+</tr>
+<tr>
+<td><code>.phi0(a,b,c,d)</code></td>
+<td>Crank angular range <code>&#x3D5;_0</code> corresponding to <code>&#x3C8;_0</code> in unidirectional mode.</td>
+</tr>
+<tr>
+<td><code>.muInner(a,b,c,d)</code></td>
+<td>Transmission angle <code>&#x3BC;_inner</code> corresponding to crank's inner frame position.</td>
+</tr>
+<tr>
+<td><code>.muOuter(a,b,c,d)</code></td>
+<td>Transmission angle <code>&#x3BC;_outer</code> corresponding to crank's outer frame position.</td>
+</tr>
+<tr>
+<td><code>.muMin(a,b,c,d)</code></td>
+<td>Minimal Transmission angle <code>&#x3BC;_min</code>.</td>
+</tr>
+<tr>
+<td><code>.alfa_tfb(tfb)</code></td>
+<td>Crank angular range difference <code>&#x3B1;</code> from time ratio <code>tf/tb</code> of rocker's forth and back moving times.</td>
+</tr>
+<tr>
+<td><code>.a_muMinMax(d,alfa,psi0)</code></td>
+<td>Crank length for maximized minimal transmission angle.</td>
+</tr>
+</tbody>
+</table>
+<p>The other functions in the <code>crocker</code> library help to determine the missing parameters when four
+out of the six <code>a, b, c, d, &#x3B1;, &#x3C8;_0</code> are given. The following table shows those
+functions with their required arguments:</p>
+<table>
+<thead>
+<tr>
+<th>function</th>
+<th><code>a</code></th>
+<th><code>b</code></th>
+<th><code>c</code></th>
+<th><code>d</code></th>
+<th><code>&#x3B1;</code></th>
+<th><code>&#x3C8;_0</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.alfa</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+</tr>
+<tr>
+<td><code>.alfa_abc</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.alfa_abd</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.alfa_acd</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.alfa_bcd</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.psi0</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+</tr>
+<tr>
+<td><code>.psi0_abc</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+</tr>
+<tr>
+<td><code>.psi0_abd</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+</tr>
+<tr>
+<td><code>.psi0_acd</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+</tr>
+<tr>
+<td><code>.psi0_bcd</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+</tr>
+<tr>
+<td><code>.a_bc</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.a_bd</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.a_cd</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.b_ac</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.b_ad</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.b_cd</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.c_ab</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.c_ad</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.c_bd</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.d_ab</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.d_ac</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td><code>.d_bc</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td><code>-</code></td>
+<td><code>*</code></td>
+<td><code>*</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="user-content-node-example---optimal-crank-rocker" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#node-example---optimal-crank-rocker">Node Example - Optimal Crank-Rocker</a></h3>
+<pre><code class="highlight javascript"><pre class="editor editor-colors"><p class="line"><span class="source js"><span class="keyword control js"><span>return</span></span><span>&#xA0;w/</span><span class="constant numeric js"><span>180</span></span><span class="keyword operator js"><span>*</span></span><span class="support class js"><span>Math</span></span><span class="support constant js"><span>PI</span></span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="keyword control js"><span>return</span></span><span>&#xA0;w</span><span class="keyword operator js"><span>*</span></span><span class="constant numeric js"><span>180</span></span><span>/</span><span class="support class js"><span>Math</span></span><span class="support constant js"><span>PI</span></span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="storage modifier js"><span>var</span></span><span>&#xA0;Crocker&#xA0;</span><span class="keyword operator js"><span>=</span></span><span class="support function js"><span>require</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>./crocker.js</span><span class="punctuation definition string end js"><span>"</span></span></span><span>Crocker</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="storage modifier js"><span>var</span></span><span>&#xA0;d&#xA0;</span><span class="keyword operator js"><span>=</span></span><span class="constant numeric js"><span>120</span></span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;psi0&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;toRad</span><span class="constant numeric js"><span>80</span></span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;alfa&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;Crocker</span><span>alfa_tfb</span><span class="constant numeric js"><span>10</span></span><span>/</span><span class="constant numeric js"><span>9</span></span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;a&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;Crocker</span><span>a_muMinMax</span><span>d</span><span>alfa</span><span>psi0</span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;b&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;Crocker</span><span>b_ad</span><span>a</span><span>d</span><span>alfa</span><span>psi0</span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;c&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;Crocker</span><span>c_ad</span><span>a</span><span>d</span><span>alfa</span><span>psi0</span></span></p><p class="line"><span class="source js"><span>&#xA0;&#xA0;&#xA0;&#xA0;muMin&#xA0;</span><span class="keyword operator js"><span>=</span></span><span>&#xA0;Crocker</span><span>muMin</span><span>a</span><span>b</span><span>c</span><span>d</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>psi0&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;toDeg</span><span>psi0</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>alfa&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;toDeg</span><span>alfa</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>a&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;a</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>b&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;b</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>c&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;c</span><span class="punctuation terminator statement js"><span>;</span></span></span></p><p class="line"><span class="source js"><span class="entity name type object js firebug"><span>console</span></span><span class="support function js firebug"><span>.log</span></span><span class="string quoted double js"><span class="punctuation definition string begin js"><span>"</span></span><span>muMin&#xA0;=&#xA0;</span><span class="punctuation definition string end js"><span>"</span></span></span><span class="keyword operator js"><span>+</span></span><span>&#xA0;toDeg</span><span>muMin</span><span class="punctuation terminator statement js"><span>;</span></span></span></p></pre></code></pre>
+<p>Here is a <a href="https://goessner.github.io/crocker/Examples/crockerdraw.html">graphics example</a> using <code>crocker.js</code> and <a href="https://github.com/goessner/g2">g2</a>.</p>
+<h2 id="user-content-references" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#references">References</a></h2>
+<p><a name="fn1">[1]</a> S. G&#xF6;ssner: <a href="http://www.amazon.de/Getriebelehre-Vektorielle-Analyse-ebener-Mechanismen/dp/3832530827">Getriebelehre - Vektorielle Analyse ebener Mechanismen</a></p>
+<p><a name="fn2">[2]</a> J.M. McCarthy: <a href="http://www.amazon.com/Geometric-Linkages-Interdisciplinary-Applied-Mathematics/dp/1441978917">Geometric Design of Linkages</a></p>
+<p><a name="fn3">[3]</a> J.J. Uicker: <a href="http://www.amazon.co.uk/Theory-Machines-Mechanisms-Joseph-Uicker/dp/0195371232">Theory of Machines and Mechanisms</a></p>
+<h2 id="user-content-gitcdn" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#gitcdn">GitCDN</a></h2>
+<p>Use the link <a href="https://gitcdn.xyz/repo/goessner/crocker/master/crocker.min.js">https://gitcdn.xyz/repo/goessner/crocker/master/crocker.min.js</a>
+for getting the latest commit as a raw file.</p>
+<p>In HTML use ...</p>
+<pre><code class="highlight"><pre class="editor editor-colors"></pre></code></pre>
+<h2 id="user-content-license" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#license">License</a></h2>
+<p><code>crocker.js</code> is licensed under the terms of the MIT License. See LICENSE-MIT for details.</p>
+<h2 id="user-content-api-reference" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#api-reference">API Reference</a></h2>
+<p>See the <a href="https://github.com/goessner/crocker/blob/master/api.md">API Reference</a> for details.</p>
+<h2 id="user-content-change-log" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#change-log">Change Log</a></h2>
+<p>All notable changes to this project will be documented here. This project adheres to Semantic Versioning.</p>
+<h2 id="user-content-086---2016-07-06" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#086---2016-07-06">0.8.6 - 2016-07-06</a></h2>
+<h3 id="user-content-added" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#added">Added</a></h3>
+
+<h2 id="user-content-080---2016-03-25" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#080---2016-03-25">0.8.0 - 2016-03-25</a></h2>
+<h3 id="user-content-first-commit-to-github" class="deep-link"><a href="https://www.npmjs.com/package/crocker/#first-commit-to-github">First Commit to Github</a></h3>
+
+ </div>
+
+</div>
+</body></html>

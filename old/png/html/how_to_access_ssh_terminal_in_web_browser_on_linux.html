@@ -1,0 +1,107 @@
+<!DOCTYPE html><html><head><title>How to access ssh terminal in web browser on Linux</title></head><body>
+<h1>How to access ssh terminal in web browser on Linux</h1><p><a href="http://xmodulo.com/access-ssh-terminal-web-browser-linux.html" target="_new">Original URL</a></p>
+<p><blockquote>Running "everything" in a web browser used to be a bold statement. Due to the powerful HTML5/JavaScript stack, however, a web browser increasingly becomes a dominant application delivery platform.&hellip;</blockquote></p>
+<div><div class="entry-content">
+
+<p>Running "everything" in a web browser used to be a bold statement. Due to the powerful HTML5/JavaScript stack, however, a web browser increasingly becomes a dominant application delivery platform. Even <a href="http://bellard.org/jslinux/tech.html" target="_blank">the Linux kernel sandboxed in a web browser</a> no longer sounds so crazy these days.</p>
+<p>In this tutorial, I describe <strong>how to access an SSH terminal in a web browser on Linux</strong>. <strong>Web-based SSH</strong> is useful when the firewall you are behind is so restrictive that only HTTP(s) traffic can get through.</p>
+<p><a href="http://list.xmodulo.com/shellinabox.html" target="_blank">Shell In A Box</a> (or <tt>shellinabox</tt>) is a web-based terminal emulator which can run as a web-based SSH client. It comes with its own web server (<tt>shellinaboxd</tt>) which exports a command line shell to a web-based terminal emulator via AJAX interface. Shell In a Box only needs JavaScript/CSS support from a web browser, and does not require any additional browser plugin.</p>
+<h2>Install Shell In A Box on Linux</h2>
+<p>To install <tt>shellinabox</tt> on Debian, Ubuntu or Linux Mint:</p>
+<p class="console">
+$ sudo apt-get install openssl shellinabox
+</p>
+
+<p>To install <tt>shellinabox</tt> on Fedora:</p>
+<p class="console">
+$ sudo yum install openssl shellinabox
+</p>
+
+<p>To install <tt>shellinabox</tt> on CentOS or RHEL, first <a href="http://xmodulo.com/how-to-set-up-epel-repository-on-centos.html" target="_blank">enable EPEL repository</a>, and then run:</p>
+<p class="console">
+$ sudo yum install openssl shellinabox
+</p>
+
+<h2>Configure Shellinaboxd Web Server</h2>
+<p>By default <tt>shellinaboxd</tt> web server listens on 4200 TCP port on localhost. In this tutorial, I change the default port to 443 for HTTPS. For that, modify <tt>shellinabox</tt> configuration as follows.</p>
+<p>Configure <tt>shellinaboxd</tt> On Debian, Ubuntu or Linux Mint:</p>
+
+
+
+
+<p class="console">
+$ sudo vi /etc/default/shellinabox
+</p>
+<pre>
+# TCP port that shellinboxd's webserver listens on
+SHELLINABOX_PORT=443
+
+# specify the IP address of a destination SSH server
+SHELLINABOX_ARGS="--o-beep -s /:SSH:192.168.1.7"
+
+# if you want to restrict access to shellinaboxd from localhost only
+SHELLINABOX_ARGS="--o-beep -s /:SSH:192.168.1.7 --localhost-only"
+</pre>
+<p>Configure <tt>shellinaboxd</tt> On Fedora, CentOS or RHEL:</p>
+<p class="console">
+$ sudo vi /etc/sysconfig/shellinaboxd
+</p>
+<pre>
+# TCP port that shellinboxd's webserver listens on
+PORT=443
+
+# specify the IP address of a destination SSH server
+OPTS="-s /:SSH:192.168.1.7"
+
+# if you want to restrict access to shellinaboxd from localhost only
+OPTS="-s /:SSH:192.168.1.7 --localhost-only"
+</pre>
+<p>Heads-up for Fedora users: According to the <a href="http://code.google.com/p/shellinabox/source/browse/README.Fedora" target="_blank">official document</a>, some operations may not work out of the box when you run <tt>shellinaboxd</tt> in SELinux mode on Fedora. Refer to the document if you have any issue.</p>
+<h2>Provision a Self-Signed Certificate</h2>
+<p>During the installation of Shell In A Box, <tt>shellinaboxd</tt> attempts to create a new self-signed certificate (certificate.pem) by using <tt>/usr/bin/openssl</tt> if no suitable certificate is found on your Linux. The created certificate is then placed in /var/lib/shellinabox.</p>
+<p>If no certificate is found in the directory for some reason, you can create one yourself as follows.</p>
+<p class="console">
+$ su (change to the root)<br>
+# cd /var/lib/shellinabox<br>
+# openssl genrsa -des3 -out server.key 1024<br>
+# openssl req -new -key server.key -out server.csr<br>
+# cp server.key server.key.org<br>
+# openssl rsa -in server.key.org -out server.key<br>
+# openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt<br>
+# cat server.crt server.key &gt; certificate.pem
+</p>
+
+<h2>Run Shellinaboxd Web Server</h2>
+<p>On Debian, Ubuntu or Linux Mint:</p>
+<p class="console">
+$ sudo service shellinabox start
+</p>
+
+<p>On Fedora, CentOS or RHEL:</p>
+<p class="console">
+$ sudo systemctl enable shellinaboxd.service<br>
+$ sudo systemctl start shellinaboxd.service
+</p>
+
+<p>To verify if <tt>shellinaboxd</tt> is running:</p>
+<p class="console">
+$ sudo netstat -nap | grep shellinabox
+</p>
+<pre>
+tcp 0 0 0.0.0.0:443 0.0.0.0:* LISTEN 4787/shellinaboxd
+</pre>
+<p>Now open up your web browser, and navigate to https://&lt;IP_address_of_SSH_server&gt;. You should be able to see a web-based SSH console, and log in to the remote SSH server via web browser interface.</p>
+<p><a target="_blank" rel="nofollow" href="http://www.flickr.com/photos/xmodulo/9960158224/"><img src="http://farm3.staticflickr.com/2869/9960158224_6392b74041_z.jpg"></a>
+</p><div><span>Download this article as ad-free PDF (made possible by <a target="_blank" rel="nofollow" href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&amp;hosted_button_id=PBHS9R4MB9RX4">your kind donation</a>):&#xA0;</span>
+<div><a class="wpptopdfenh" target="_blank" rel="noindex,nofollow" href="http://xmodulo.com/access-ssh-terminal-web-browser-linux.html?format=pdf" title="Download PDF"><img alt="Download PDF" src="http://d2j4ekq3nza4ef.cloudfront.net/wp-content/plugins/wp-post-to-pdf-enhanced/asset/images/pdf.png"></a></div>
+</div>
+
+<div><h3><img src="http://xmodulo.com/images/rss_small.png"> Subscribe to Xmodulo</h3>
+<p>Do you want to receive <strong>Linux FAQs, detailed tutorials and tips</strong> published at Xmodulo? Enter your email address below, and we will deliver our Linux posts straight to your email box, for free. Delivery powered by Google Feedburner.</p>
+<br>
+<h3><img src="http://xmodulo.com/images/heart_small.jpg"> Support Xmodulo</h3>
+<p>Did you find this tutorial helpful? Then please be generous and <a target="_blank" href="http://xmodulo.com/about">support Xmodulo!</a></p></div>
+</div> 
+ 				 
+ 			</div>
+</body></html>

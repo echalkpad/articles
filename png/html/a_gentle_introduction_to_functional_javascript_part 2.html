@@ -1,0 +1,295 @@
+<!DOCTYPE html><html><head><title>A Gentle Introduction to Functional JavaScript: Part 2</title></head><body>
+<h1>A Gentle Introduction to Functional JavaScript: Part 2</h1><p><a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-arrays/" target="_new">Original URL</a></p>
+<p><blockquote>This is part two of a three-part series introducing &#x2018;functional&#x2019; programming in JavaScript. In the previous article, we saw how functions can be used to make certain code abstractions&hellip;</blockquote></p>
+<div><div class="e-content entry-content">
+ <p>This is part two of a three-part series introducing &#x2018;functional&#x2019; programming in JavaScript. In the previous article, we saw how functions can be used to make certain code abstractions easier. In this article we apply these techniques to lists.</p>
+
+
+
+<h2 id="workingwitharraysandlists">Working with Arrays and Lists</h2>
+
+<p>Recall that in the previous article, we talked about DRY code. We saw that functions are useful for bundling up sets of
+actions that might be repeated. But what if we&#x2019;re repeating the same function lots of times? For example:</p>
+
+<pre><code class="javascript">function addColour(colour) {
+ var rainbowEl = document.getElementById('rainbow');
+ var div = document.createElement('div');
+ div.style.paddingTop = '10px';
+ div.style.backgroundColour = colour;
+ rainbowEl.appendChild(div);
+}
+
+addColour('red');
+addColour('orange');
+addColour('yellow');
+addColour('green');
+addColour('blue');
+addColour('purple');
+</code></pre>
+
+<p>That <code>addColour</code> function is called rather a lot. We are repeating ourselves&#x2014;something we wish to avoid. One way to refactor it is to move the list of colours into an array, and call <code>addColour</code> in a for-loop:</p>
+
+<pre><code class="javascript">var colours = [
+ 'red', 'orange', 'yellow',
+ 'green', 'blue', 'purple'
+];
+
+for (var i = 0; i &lt; colours.length; i = i + 1) {
+ addColour(colours[i]);
+}
+</code></pre>
+
+<p>This code is perfectly fine. It gets the job done, and it is less repetitive than the previous version. But it&#x2019;s not particularly expressive. We have to give the computer very specific instructions about creating an index variable and incrementing it, and checking to see if it&#x2019;s time to stop. What if we could wrap all that for-loop stuff into a function?</p>
+
+<h3 id="for-each">For-Each</h3>
+
+<p>Since JavaScript lets us pass a function as a parameter to another function, writing a <code>forEach</code> function is relatively straightforward:</p>
+
+<pre><code class="javascript">function forEach(callback, array) {
+ for (var i = 0; i &lt; array.length; i = i + 1) {
+ callback(array[i], i);
+ }
+}
+</code></pre>
+
+<p>This function takes another function, <code>callback</code>, as a parameter and calls it on every item in the array.</p>
+
+<p>Now, with our example, we want to run the <code>addColour</code> function on each item in the array. Using our new <code>forEach</code> function we can express that intent in just one line:</p>
+
+<pre><code class="javascript">forEach(addColour, colours);
+</code></pre>
+
+<p>Calling a function on every item in an array is such a useful tool that modern implementations of JavaScript include it as a built in method on arrays. So instead of using our own <code>forEach</code> function, we could use the built in one like so:</p>
+
+<pre><code class="javascript">var colours = [
+ 'red', 'orange', 'yellow',
+ 'green', 'blue', 'purple'
+];
+colours.forEach(addColour);
+</code></pre>
+
+<p>You can find out more about the built in <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach"><code>forEach</code> method in the MDN JavaScript reference</a>.</p>
+
+<h3 id="map">Map</h3>
+
+<p>Now, our <code>forEach</code> function is handy, but somewhat limited. If the callback function we pass in returns a value, <code>forEach</code> just ignores it. With a small adjustment, we can change our <code>forEach</code> function so that it gives us back whatever value the callback function returns. We would then have a new array with a corresponding value for each value in our original array.</p>
+
+<p>Let&#x2019;s look at an example. Say we have an array of IDs, and would like to get the corresponding DOM element for each of them. To find the solution in a &#x2018;procedural&#x2019; way, we use a for-loop:</p>
+
+<pre><code class="javascript">var ids = ['unicorn', 'fairy', 'kitten'];
+var elements = [];
+for (var i = 0; i &lt; ids.length; i = i + 1) {
+ elements[i] = document.getElementById(ids[i]);
+}
+// elements now contains the elements we are after
+</code></pre>
+
+<p>Again, we have to spell out to the computer how to create an index variable and increment it&#x2014;details we shouldn&#x2019;t really need to think about. Let&#x2019;s factor out the for-loop like we did with <code>forEach</code> and put it into a function called <code>map</code>:</p>
+
+<pre><code class="javascript">var map = function(callback, array) {
+ var newArray = [];
+ for (var i = 0; i &lt; array.length; i = i + 1) {
+ newArray[i] = callback(array[i], i);
+ }
+ return newArray;
+}
+</code></pre>
+
+<p>Now we have our shiny new <code>map</code> function, we can use it like so:</p>
+
+<pre><code class="javascript">var getElement = function(id) {
+ return document.getElementById(id);
+};
+
+var elements = map(getElement, ids);
+</code></pre>
+
+<p>The <code>map</code> function takes small, trivial functions and and turns them into super-hero functions&#x2014;it multiplies the function&#x2019;s effectiveness by applying it to an entire array with just one call.</p>
+
+<p>Like <code>forEach</code>, <code>map</code> is so handy that modern implementations have it as a built-in method for array objects. You can call the built-in method like this:</p>
+
+<pre><code class="javascript">var ids = ['unicorn', 'fairy', 'kitten'];
+var getElement = function(id) {
+ return document.getElementById(id);
+};
+var elements = ids.map(getElement, ids);
+</code></pre>
+
+<p>You can read more about the built-in <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map"><code>map</code> method in the MDN JavaScript reference</a>.</p>
+
+<h3 id="reduce">Reduce</h3>
+
+<p>Now, <code>map</code> is very handy, but we can make an even more powerful function if we take an entire array and return just one value. That may seem a little counter-intuitive at first&#x2014;how can a function that returns one value instead of many be <em>more</em> powerful? To find out why, we have to first look at how this function works.</p>
+
+<p>To illustrate, let&#x2019;s consider two similar problems:</p>
+
+<ol>
+<li>Given an array of numbers, calculate the sum; and</li>
+<li>Given an array of words, join them together with a space between each word.<a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-arrays/#fn:1" id="fnref:1" title="see footnote" class="footnote">[1]</a></li>
+</ol>
+
+<p>Now, these might seem like silly, trivial examples&#x2014;and they are. But, bear with me, once we see how this <code>reduce</code> function works, we&#x2019;ll apply it in more interesting ways.</p>
+
+<p>So, the &#x2018;procedural&#x2019; way to solve these problems is, again, with for-loops:</p>
+
+<pre><code class="javascript">// Given an array of numbers, calculate the sum
+var numbers = [1, 3, 5, 7, 9];
+var total = 0;
+for (i = 0; i &lt; numbers.length; i = i + 1) {
+ total = total + numbers[i];
+}
+// total is 25
+
+// Given an array of words, join them together with a space between each word.
+var words = ['sparkle', 'fairies', 'are', 'amazing'];
+var sentence = '';
+for (i = 0; i &lt; words.length; i++) {
+ sentence = sentence + ' ' + words[i];
+}
+// ' sparkle fairies are amazing'
+</code></pre>
+
+<p>These two solutions have a lot in common. They each use a for-loop to iterate over the array; they each have a working variable (<code>total</code> and <code>sentence</code>); and they both set their working value to an initial value.</p>
+
+<p>Let&#x2019;s refactor the inner part of each loop, and turn it into a function:</p>
+
+<pre><code class="javascript">var add = function(a, b) {
+ return a + b;
+}
+
+// Given an array of numbers, calculate the sum
+var numbers = [1, 3, 5, 7, 9];
+var total = 0;
+for (i = 0; i &lt; numbers.length; i = i + 1) {
+ total = add(total, numbers[i]);
+}
+// total is 25
+
+function joinWord(sentence, word) {
+ return sentence + ' ' + word;
+}
+
+// Given an array of words, join them together with a space between each word.
+var words = ['sparkle', 'fairies', 'are', 'amazing'];
+var sentence = '';
+for (i = 0; i &lt; words.length; i++) {
+ sentence = joinWord(sentence, words[i]);
+}
+// 'sparkle fairies are amazing'
+</code></pre>
+
+<p>Now, this is hardly more concise but the pattern becomes clearer. Both inner functions take the working variable as their first parameter, and the current array element as the second. Now that we can see the pattern more clearly, we can move those untidy for-loops into a function:</p>
+
+<pre><code class="javascript">var reduce = function(callback, initialValue, array) {
+ var working = initialValue;
+ for (var i = 0; i &lt; array.length; i = i + 1) {
+ working = callback(working, array[i]);
+ }
+ return working;
+};
+</code></pre>
+
+<p>Now we have a shiny new <code>reduce</code> function, let&#x2019;s take it for a spin:</p>
+
+<pre><code class="javascript">var total = reduce(add, 0, numbers);
+var sentence = reduce(joinWord, '', words);
+</code></pre>
+
+<p>Like <code>forEach</code> and <code>map</code>, <code>reduce</code> is also built in to the standard JavaScript array object. One would use it like so:</p>
+
+<pre><code class="javascript">var total = numbers.reduce(add, 0);
+var sentence = words.reduce(joinWord, '');
+</code></pre>
+
+<p>You can read more about the built-in <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/Reduce"><code>reduce</code> method in the MDN JavaScript Reference</a></p>
+
+<h2 id="puttingitalltogether">Putting it all together</h2>
+
+<p>Now, as we mentioned before, these are trivial examples&#x2014;the <code>add</code> and <code>joinWord</code> functions ave fairly simple&#x2014;and that&#x2019;s kind of the point really. Smaller, simpler functions are easier to think about and easier to test. Even when we take two small, simple functions and combine them (like <code>add</code> and <code>reduce</code>, for example), the result is still easier to reason about than a single giant, complicated function. But, with that said, we can do more interesting things than add numbers together.</p>
+
+<p>Let&#x2019;s try doing something a little more complicated. We&#x2019;ll start off with some inconveniently formatted data, and use our <code>map</code> and <code>reduce</code> functions to transform it into an HTML list. Here is our data:<a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-arrays/#fn:2" id="fnref:2" title="see footnote" class="footnote">[2]</a></p>
+
+<pre><code class="javascript">var ponies = [
+ [
+ ['name', 'Fluttershy'],
+ ['image', 'http://tinyurl.com/gpbnlf6'],
+ ['description', 'Fluttershy is a female Pegasus pony and one of the main characters of My Little Pony Friendship is Magic.']
+ ],
+ [
+ ['name', 'Applejack'],
+ ['image', 'http://tinyurl.com/gkur8a6'],
+ ['description', 'Applejack is a female Earth pony and one of the main characters of My Little Pony Friendship is Magic.']
+ ],
+ [
+ ['name', 'Twilight Sparkle'],
+ ['image', 'http://tinyurl.com/hj877vs'],
+ ['description', 'Twilight Sparkle is the primary main character of My Little Pony Friendship is Magic.']
+ ]
+];
+</code></pre>
+
+<p>The data is not terribly tidy. It would be much cleaner if those inner arrays were nicely formatted objects. Now, previously, we used the <code>reduce</code> function to calculate simple values like strings and numbers, but nobody said that the value returned by <code>reduce</code> has to be simple. We can use it with objects, arrays, or even DOM elements. Let&#x2019;s create a function that takes one of those inner arrays (like <code>['name', 'Fluttershy']</code>) and adds that key/value pair to an object.</p>
+
+<pre><code class="javascript">var addToObject = function(obj, arr) {
+ obj[arr[0]] = arr[1];
+ return obj;
+};
+</code></pre>
+
+<p>With this <code>addToObject</code> function, then we can convert each &#x2018;pony&#x2019; array into an object:</p>
+
+<pre><code class="javascript">var ponyArrayToObject = function(ponyArray) {
+ return reduce(addToObject, {}, ponyArray);
+};
+</code></pre>
+
+<p>If we then use our <code>map</code> function we can convert the whole array into something more tidy:</p>
+
+<pre><code class="javascript">var tidyPonies = map(ponyToObject, ponies);
+</code></pre>
+
+<p>We now have an array of pony objects. With a little help from <a href="http://mir.aculo.us/2011/03/09/little-helpers-a-tweet-sized-javascript-templating-engine/">Thomas Fuchs&#x2019; tweet-sized templating engine</a>, we can use <code>reduce</code> again to convert this into an HTML snippet. The template function takes a template string and an object, and anywhere it finds mustache-wrapped words (like, <code>{name}</code> or <code>{image}</code>), it replaces them with the correponding value from the object. For example:</p>
+
+<pre><code class="javascript">var data = { name: "Fluttershy" };
+t("Hello {name}!", data);
+// "Hello Fluttershy!"
+
+data = { who: "Fluttershy", time: Date.now() };
+t("Hello {name}! It's {time} ms since epoch.", data);
+// "Hello Fluttershy! It's 1454135887369 ms since epoch."
+</code></pre>
+
+<p>So, if we want to convert a pony object to a list item, we can do something like this:</p>
+
+<pre><code class="javascript">var ponyToListItem = function(pony) {
+ var template = '&lt;li&gt;&lt;img src="{image}" alt="{name}"/&gt;' +
+ '&lt;div&gt;&lt;h3&gt;{name}&lt;/h3&gt;&lt;p&gt;{description}&lt;/p&gt;' +
+ '&lt;/div&gt;&lt;/li&gt;';
+ return t(template, pony);
+};
+</code></pre>
+
+<p>That gives us a way to convert an individual item into HTML, but to convert the whole array, we&#x2019;ll need our <code>reduce</code> and <code>joinWord</code> functions:</p>
+
+<pre><code class="javascript">var ponyList = map(ponyToListItem, tidyPonies);
+var html = '&lt;ul&gt;' + reduce(joinWord, '', ponyList) + '&lt;/ul&gt;';
+</code></pre>
+
+<p>You can see the whole thing put together at <a href="http://jsbin.com/wuzini/edit?html,js,output">http://jsbin.com/wuzini/edit?html,js,output</a></p>
+
+<p>Once you understand the patterns that <code>map</code> and <code>reduce</code> are suited to, you may find yourself never needing to write an old-style for-loop again. In fact, it&#x2019;s a useful challenge to see if you can completely avoid writing for-loops on your next project. Once you&#x2019;ve used <code>map</code> and <code>reduce</code> a few times, you&#x2019;ll start to notice even more patterns that can be abstracted. Some common ones include <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter">filtering</a>, and <a href="http://ramdajs.com/docs/#pluck">plucking</a> values from an array. Since these patterns come up quite often, people have put together functional programming libraries so that you can re-use code to address common patterns. Some of the more popular libraries include:</p>
+
+<ul>
+<li><a href="http://ramdajs.com/">Ramda</a>,</li>
+<li><a href="https://lodash.com/">Lodash</a>, and</li>
+<li><a href="http://underscorejs.org/">Underscore</a>.</li>
+</ul>
+
+<p>Now that you&#x2019;ve seen how handy passing functions around as variables can be, especially when dealing with lists, you should have a whole suite of new techniques in your metaphorical tool-belt. And if that&#x2019;s where you choose to leave it, that&#x2019;s OK. You can quit reading here and nobody will think any less of you. You can go on to be a productive, successful programmer and never trouble your dreams with the complexities of <em>partial application</em>, <em>currying</em> or <em>composition</em>. These things are not for everyone.</p>
+
+<p>But, if you&#x2019;re up for a little bit of adventure, you can <a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-functions/">keep reading and see how deep the rabbit hole goes&#x2026;</a></p>
+
+
+ </div>
+ </div>
+</body></html>

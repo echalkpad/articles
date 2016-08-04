@@ -1,0 +1,196 @@
+<!DOCTYPE html><html><head><title>Record'IT Blog</title></head><body>
+<h1>Record'IT Blog</h1><p><a href="http://www.recorditblog.com/post/how-to-deploy-mesos-with-high-availability-on-coreos/" target="_new">Original URL</a></p>
+<p><blockquote>Mon, Jan 26, 2015 In a previous post I&#x2019;ve explained how to create a web scale infrastructure based on Docker, CoreOS, Vulcand and Mesos. And why Object Storage becomes the de facto data&hellip;</blockquote></p>
+<div><div class="post">
+ 
+ <span class="post-date">Mon, Jan 26, 2015</span>
+ 
+
+
+
+<p>In a previous post I&#x2019;ve explained how to create a web scale infrastructure based on Docker, CoreOS, Vulcand and Mesos. And why Object Storage becomes the de facto data repository.</p>
+
+<p>After this post, I&#x2019;ve been asked to provide more details about the way I&#x2019;ve implemented Mesos.</p>
+
+<p>I originally implemented Mesos using the Mesos-on-coreos Docker image available at <a href="https://registry.hub.docker.com/u/tnolet/mesos-on-coreos/">https://registry.hub.docker.com/u/tnolet/mesos-on-coreos/</a></p>
+
+<p>But, the Docker image was based on an old version of Mesos and wasn&#x2019;t providing High Availability. It was only using ETCD at launch time to check if a Mesos Master was already up.</p>
+
+<h3 id="how-to-provide-high-availability">How to provide High Availability ?</h3>
+
+<p>In fact, Mesos provides High Availability by supporting several Masters to run in the same Mesos cluster (one active master and several backups).</p>
+
+<p>More information available at <a href="http://mesos.apache.org/documentation/latest/high-availability/">http://mesos.apache.org/documentation/latest/high-availability/</a></p>
+
+<p>Marathon can also be deployed on several nodes in a cluster (<a href="https://mesosphere.github.io/marathon/docs/high-availability.html">https://mesosphere.github.io/marathon/docs/high-availability.html</a>)</p>
+
+<p>Both Mesos and Marathon are using a ZooKeeper quorum to perform leader selection</p>
+
+<h3 id="dockerfile">Dockerfile</h3>
+
+<p>To run Mesos and Marathon on CoreOS, I&#x2019;ve slightly modified the Dockerfile used for the mesos-on-coreos Docker image:</p>
+
+<pre><code>FROM ubuntu:latest
+
+RUN echo "deb http://repos.mesosphere.io/$(lsb_release -is | tr '[:upper:]' '[:lower:]') $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/mesosphere.list
+
+# update repos
+RUN sudo apt-get -y update
+RUN sudo apt-get -y install curl python-setuptools python-pip python-dev python-protobuf
+
+# install zookeeperd
+RUN sudo apt-get -y install zookeeperd
+
+# Install and run Docker
+RUN sudo apt-get -y install docker.io
+RUN sudo ln -sf /usr/bin/docker.io /usr/local/bin/docker
+
+# install mesos and marathon
+RUN sudo apt-get -y install mesos --force-yes
+RUN sudo apt-get -y install marathon --force-yes
+
+# Add the bootstrap script
+ADD ./mesos_bootstrap.sh /usr/local/bin/mesos_bootstrap.sh
+
+# use the mesos_bootstrap.sh script to start
+CMD ["/usr/local/bin/mesos_bootstrap.sh"]
+</code></pre>
+
+<p>Then, I&#x2019;ve completely modified the mesos_bootstrap.sh to start a Mesos master, a Mesos slave and a Marathon instance in the same Docker container:</p>
+
+<pre><code>#!/bin/bash
+
+# Set locale: this is required by the standard Mesos startup scripts
+echo "info: Setting locale to en_US.UTF-8..."
+locale-gen en_US.UTF-8 &gt; /dev/null 2&gt;&amp;1
+
+# Start syslog if not started....
+echo "info: Starting syslog..."
+service rsyslog start &gt; /dev/null 2&gt;&amp;1
+
+function start_zookeeper {
+ IFS=,
+ i=1
+ for server in ${SERVER_LIST}; do
+ echo server.$i=$server:2888:3888 &gt;&gt; /etc/zookeeper/conf/zoo.cfg
+ (( i += 1 ))
+ done
+ echo ${ZK_ID} &gt; /etc/zookeeper/conf/myid
+ echo "info: Starting Zookeeper..."
+ service zookeeper start
+ until /usr/share/zookeeper/bin/zkCli.sh ls / &gt; /dev/null 2&gt;&amp;1
+ do
+ echo "Waiting for the Zookeeper cluster to be ready"
+ sleep 5
+ done
+}
+
+function start_slave {
+ echo "info: Mesos slave will try to register with a master using ZooKeeper"
+ echo "info: Starting slave..."
+
+ echo /var/lib/mesos &gt; /etc/mesos-slave/work_dir
+ echo 'docker,mesos' &gt; /etc/mesos-slave/containerizers
+ echo '5mins' &gt; /etc/mesos-slave/executor_registration_timeout
+ /usr/bin/mesos-init-wrapper slave &gt; /dev/null 2&gt;&amp;1 &amp;
+
+ # wait for the slave to start
+ sleep 1 &amp;&amp; while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" &amp;&amp; \$4 ~ \".5051\" &amp;&amp; \$1 ~ tcp") ]] ; do
+ echo "info: Waiting for Mesos slave to come online..."
+ sleep 3;
+ done
+ echo "info: Mesos slave started on port 5051"
+}
+
+function start_master {
+ echo in_memory &gt; /etc/mesos/registry
+ echo zk://localhost:2181/mesos &gt; /etc/mesos/zk
+
+ echo "info: Starting Mesos master..."
+
+ /usr/bin/mesos-init-wrapper master &gt; /dev/null 2&gt;&amp;1 &amp;
+
+ # wait for the master to start
+ sleep 1 &amp;&amp; while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" &amp;&amp; \$4 ~ \".5050\" &amp;&amp; \$1 ~ tcp") ]] ; do
+ echo "info: Waiting for Mesos master to come online..."
+ sleep 3;
+ done
+ echo "info: Mesos master started on port 5050"
+}
+
+function start_marathon {
+ rm -f /etc/mesos/zk
+ export MARATHON_MASTER=zk://localhost:2181/mesos
+ export MARATHON_ZK=zk://localhost:2181/marathon
+
+ if [ ! -d /etc/marathon/conf ]; then
+ mkdir -p /etc/marathon/conf
+ fi
+
+ echo "http_callback" &gt; /etc/marathon/conf/event_subscriber
+
+ echo "info: Starting Marathon..."
+
+ marathon &gt; /dev/null 2&gt;&amp;1 &amp;
+
+ # wait for marathon to start
+ sleep 1 &amp;&amp; while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" &amp;&amp; \$4 ~ \".8080\" &amp;&amp; \$1 ~ tcp") ]] ; do
+ echo "info: Waiting for Mesos master to come online..."
+ sleep 3;
+ done
+ echo "info: Marathon started on port 8080"
+}
+
+start_zookeeper
+start_master
+start_slave
+start_marathon
+
+wait
+</code></pre>
+
+<p>One of the key feature of this script is to wait for the Zookeeper cluster to be ready before starting any Mesos component.</p>
+
+<h3 id="how-to-run-the-mesos-containers-on-coreos">How to run the Mesos containers on CoreOS</h3>
+
+<p>I&#x2019;m using a Cloud Config file on each CoreOS node to automatically start the Mesos container:</p>
+
+<pre><code>- name: mesos_bootstrap.service
+ command: start
+ runtime: true
+ content: |
+ [Unit]
+ Description=Mesos Bootstrapper
+ After=docker.service
+ After=fleet.service
+ [Service]
+ TimeoutStartSec=900
+ EnvironmentFile=/etc/environment
+ ExecStartPre=/bin/sh -c "/usr/bin/docker pull djannot/mesos"
+ ExecStart=/bin/sh -c "/usr/bin/docker rm -f mesos; /usr/bin/docker run --rm --name mesos --privileged --net=host -p 5050:5050 -p 5051:5051 -p 2888:2888 -p 3888:3888 -p 8080:8080 -v /var/lib/docker/btrfs/subvolumes:/var/lib/docker/btrfs/subvolumes -v /var/run/docker.sock:/var/run/docker.sock -v /sys:/sys -e SERVER_LIST=10.64.231.45,10.64.229.36,10.64.231.25 -e ZK_ID=1 djannot/mesos"
+ ExecStop=/usr/bin/docker rm -f mesos
+ Restart=always
+ RestartSec=10s
+</code></pre>
+
+<p>The <em>SERVER_LIST</em> variable contains the IP addresses of my 3 CoreOS nodes and the <em>ZK_ID</em> is different on each node and must correspond to the IP address of the CoreOS node (1 for 10.64.231.45, 2 for 10.64.229.36 and 3 for 10.64.231.25)</p>
+
+<h3 id="conclusion">Conclusion</h3>
+
+<p>After starting the unit on each CoreOS node, the Mesos UI can be accessed from any node and if the node is not the current Mesos active master, you will see a warning saying that you will be redirected to the active master in few seconds:</p>
+
+<p><img src="http://www.recorditblog.com/images/how-to-deploy-mesos-with-high-availability-on-coreos/mesos1.png" alt="alt text" title="Mesos backup master"></p>
+
+<p>After the redirection, you are now connected to the Mesos active master:</p>
+
+<p><img src="http://www.recorditblog.com/images/how-to-deploy-mesos-with-high-availability-on-coreos/mesos2.png" alt="alt text" title="Mesos active master"></p>
+
+<p>Finally, you can access the Marathon UI and API using any Marathon instance, which will proxy the requests to the current leader.</p>
+
+<p><img src="http://www.recorditblog.com/images/how-to-deploy-mesos-with-high-availability-on-coreos/marathon.png" alt="alt text" title="Marathon"></p>
+
+ </div>
+ 
+
+</div>
+</body></html>

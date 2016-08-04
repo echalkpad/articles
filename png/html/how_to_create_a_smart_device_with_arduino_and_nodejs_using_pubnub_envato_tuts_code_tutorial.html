@@ -1,0 +1,98 @@
+<!DOCTYPE html><html><head><title>How to Create a Smart Device With Arduino and Node.js Using PubNub - Envato Tuts+ Code Tutorial</title></head><body>
+<h1>How to Create a Smart Device With Arduino and Node.js Using PubNub - Envato Tuts+ Code Tutorial</h1><p><a href="http://code.tutsplus.com/tutorials/how-to-create-a-smart-device-with-arduino-and-nodejs-using-pubnub--cms-25508" target="_new">Original URL</a></p>
+<p><blockquote>With the rise of the maker movement&#x2014;Maker Faire, 3D printers, DIY robots, drones, and so on&#x2014;the popularity of Arduino, an open-source, microcontroller-based kit, has turned many&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>With the rise of the maker movement&#x2014;Maker Faire, 3D printers, DIY robots, drones, and so on&#x2014;the popularity of Arduino, an open-source, microcontroller-based kit, has turned many software engineers into hardware hackers. You can connect an Arduino to your computer with a USB cable, download the IDE, and boom: you&#x2019;re ready to&#xA0;go.</p><p>However, I see many web engineers feeling left out because Sketch, the C-based language required for programming an Arduino board, is not something web developers feel comfortable with. But what if you could use JavaScript, a language you&#x2019;re already familiar with? Wouldn&#x2019;t you want to play with one?</p><p>In this tutorial, I&#x2019;ll show you how to get started with Arduino using Node.js, and I'll walk through prototyping an Internet of Things application using PubNub&#x2019;s JavaScript APIs.</p><h3>Johnny-Five: JavaScript Robotics Framework</h3><p>Now, I would like to introduce you <a href="http://johnny-five.io/">Johnny-Five</a>, a JavaScript Robotics programming framework. Johnny-Five is open source and has growing developer communities, as we have started seeing community-driven <a href="http://nodebots.io/">NodeBots Days</a> all over the world.</p><p>So let&#x2019;s get started with Johnny-Five to program the Arduino Uno!</p><h2>
+<span class="sectionnum">1.</span> Setting Up Arduino</h2><p>Hardware and software you need:</p><ul>
+<li>
+<a href="https://www.arduino.cc/en/Main/ArduinoBoardUno">Arduino (Genuino) Uno</a>&#xA0;</li>
+<li><a href="http://arduino.cc/en/main/software">Arduino IDE</a></li>
+<li><a href="https://nodejs.org">Node.js</a></li>
+</ul><p>First connect your Arduino Uno to your computer with a USB cable. Meanwhile, download the Arduino IDE and install it on your computer. You will need the IDE only for the initial setup.</p><p>On Arduino IDE, go to <strong>Tools &gt; Port</strong> and make sure the right board, <strong>Arduino Uno</strong>, is connected to the right port (<strong>tty.usbmodem&#x2026;</strong> for Mac, <strong>cu.usbmodem&#x2026;</strong> for Windows).</p><figure class="post_image"><img alt="Arduino port" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/Arduino-port.png"></figure><p>Johnny-Five communicates with Arduino using the Firmata protocol, so you need to install <strong>StandardFirmata</strong>:</p><ul>
+<li>On IDE, open <strong>File &gt; Examples &gt; Firmata &gt; StandardFirmata</strong>.</li>
+<li>Click the upload button (arrow button).</li>
+<li>Wait until the IDE message window says &#x201C;Done uploading&#x201D;.</li>
+<li>Close the IDE. You don&#x2019;t need the IDE anymore unless you want to keep using it for coding.</li>
+</ul><figure class="post_image"><img alt="Arduino StandardFirmata" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/Arduino-StandardFirmata.jpg"></figure><p><img width="624" alt="Opening StandardFirmata" src="https://lh3.googleusercontent.com/TRbMuGrDe4KCziD2q9l5h1HFzJ55AMtGPlUI2gHIMZbSWR9nUJf0J55eCcZVUfInyAo5H5NykkkueYaoMDPZLDfFJ8MPPgx7GNA4NPK-bEYuxqE6l6osgTYT7l1JjaB7lRS19AxY"></p><h2>
+<span class="sectionnum">2.</span> Hello World</h2><p>Make sure Node.js is installed on your machine. Create an appropriate directory like <code class="inline">js-hello</code>, and then <code class="inline">cd</code> into the directory and install Johnny-five using the <code class="inline">npm</code> package manager.</p><pre class="brush: bash noskimlinks noskimwords">$ npm install johnny-five</pre><p>Now, let&#x2019;s write Hello World with Johnny-Five. Since you&#x2019;ve got some shiny hardware, you&#x2019;re going to create the &#x201C;Hello world&#x201D; of hardware, which is a blinking LED light!</p><h3>Hardware You Need</h3><ul>
+<li>1 Arduino Uno</li>
+<li>1 LED</li>
+<li>1 breadboard</li>
+<li>2 male/male jumper wire (1 red, 1 black)</li>
+<li>1 resistor&#xFF08;200 - 330&#x3A9;&#xFF09;</li>
+</ul><figure class="post_image"><img alt="What you need to build a hardware LED with Arduino" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/what-you-need-arduino-led-600.jpg"><br></figure><h3>Know Your LEDs</h3><p>LEDs, short for light-emitting diodes, are polarized: the positive (+) side is called the anode, and the negative side is called the cathode. Usually, each LED has two legs, and the longer leg is an anode pin. This is important when you build a circuit.</p><h3>Assembling a Circuit</h3><p>Let&#x2019;s use a color convention to avoid confusion:</p><ul>
+<li>Black wires for ground</li>
+<li>Red wires for voltage</li>
+</ul><p>Your wires do not have to be red and black, but do use two different colors so you don&#x2019;t confuse yourself. The best practice is to use red to connect to the positive end (in this practice, use pin 13), and block to ground (GND pin).</p><figure class="post_image"><img alt="Arduino circuit board" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/Arduino-circuit-board.png"></figure><p>You can learn more about breadboards, resistors, and all the basics of the parts at <a href="https://learn.adafruit.com/adafruit-arduino-lesson-2-leds">Adafruit</a>!</p><h3>Blinking an LED With Johnny-Five</h3><p>Now, you are going to work on the software side.</p><p>Create a file, blink.js, and paste the code below:</p><pre class="brush: javascript noskimlinks noskimwords">var five = require('johnny-five');
+var board = new five.Board();
+
+board.on('ready', function() {
+ var led = new five.Led(13); // pin 13
+ led.blink(500); // 500ms interval
+});
+</pre><p>Run:</p><pre class="brush: bash noskimlinks noskimwords">$ sudo node blink.js</pre><p>The LED should blink at a 500ms interval, otherwise check both the circuit and code.</p><figure class="post_image"><img alt="LED connected to circuit board" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/Arduino-LED.png"></figure><p><img width="497" alt="arduino-johnnyfive-blinkgif" src="https://lh6.googleusercontent.com/WjeRAj32yMXhcLljGQ4sXi8N5sKwXu47zC_UtKNViwTyaifxeepAEOXzRSUCZNIEsQ-Vm4Ss_FIYbhu_lA8BigV20cwa5i_ttPuPBYLhLV7EJvhw6UFGc8sHymhxfdyT5e89g_qH"></p><p>You have learned the basics, so let&#x2019;s move on and learn how to make your hardware talk to the Internet and prototype your first smart device!</p><h2>
+<span class="sectionnum">3.</span> Prototyping a Smart Lighting System</h2><p>There are varieties of smart LED light bulbs on the market, such as&#xA0;<a href="http://meethue.com/">Philips HUE</a> and <a href="http://www.lifx.com/">LIFX</a>. They let you change the brightness and color from your smartphones and tablets.</p><p>Now you are going to prototype something similar that lets you remote-control from a browser with Arduino and an LED!</p><h3>Internet of Things With JavaScript</h3><p>An important point here is making your hardware into an IoT (Internet of Things) device by connecting it to the Internet. Unlike with Bluetooth, once things are connected on the Internet, you can operate your LED from anywhere in the world. To make communicating with a socket connection easy, we will use the PubNub JavaScript API!</p><p><a href="http://pubnub.com">PubNub</a> Data Stream Network (DSN) provides global infrastructure, and allows you to build and scale real-time apps and IoT devices quite easily. The smart LED you are going to create works as follows:</p><figure class="post_image"><img alt="Smart LED flow chart" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/Arduino-LED-green.png"></figure><p>For example, when a user in San Francisco is controlling an Arduino in Tokyo:</p><ol>
+<li>The user publishes a message, &#x201C;Make the light green&#x201D;, from a mobile phone.</li>
+<li>The message is sent to a data center in San Francisco.</li>
+<li>The data is synchronized across all the data center.</li>
+<li>The Arduino subscribes the data from Tokyo data center, and changes the light&#xA0;color.</li>
+</ol><p>The operation is done in&#xA0;only a quarter of a&#xA0;second.</p><p>In this tutorial, you are going to make a prototype. However, if you use the embedded SDK, you can actually build real consumer products, like the&#xA0;<a href="https://www.pubnub.com/customers/emberlight/">Emberlight smart lighting platform</a>.</p><h3>Hardware You Need</h3><ul>
+<li>1 Arduino Uno</li>
+<li>1 RGB LED (Common cathode)</li>
+<li>1 Breadboard</li>
+<li>4 male/male jumper wires (red, green, blue, black)</li>
+<li>1 Resistor (220&#x3A9; x 2, 330&#x3A9; x 1&#xFF09;</li>
+</ul><figure class="post_image"><img alt="Hardware you need" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/what-you-need-arduino.png"></figure><h3>Know Your LED</h3><p>An RGB LED is a three-in-one LED that houses red, green, and blue colors in a single package. RGB LEDs combine these colors to produce millions of hues. Each LED comes with four legs&#x2014;one leg per color&#x2014;and a common cathode (or anode). In this tutorial, you are going to use one with a common cathode.</p><figure class="post_image"><img alt="LED RGB cathode diagram" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/led-rgb-cathode-arduino.png"></figure><h3>Assembling the Circuit</h3><p>Try building the circuit as follows. Unlike in the previous &#x201C;LED blink&#x201D; exercise, you will use PWM (Pulse Width Modulation) pins, which are denoted by &#x201C;~&#x201D; on your Arduino board.</p><p>The difference between these pins is basically the difference between analog and digital results. For example, when you connect an LED to a digital pin, you only get two states: on or off. Blinking the LED is simply toggling the two states. However, to generate millions of hues using an RGB LED, you need in-between states, so you need to use analog PWM pins.</p><p>Connect the RGB LED using wires and breadboard to Arduino pins 6, 5, and 3 for red, green, and blue respectively. The common pin is connected to GND.</p><figure class="post_image"><img alt="RGB LED connected to breadboard" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/arduino-uno-rgb-led.png"></figure><p>In this diagram, I used 220&#x3A9; (for red) and 330&#x3A9; (for green and blue) resistors, because red light gets too intense when using the same resistance with green and blue. You can adjust as you work. If you would like to learn more about resistance and how to calculate with Ohm&#x2019;s Law, I recommend learning from <a href="https://learn.adafruit.com/multimeters/resistance">Adafruit</a>.</p><h3>Creating the Web User Interface</h3><p>Now, you are going to build a web interface to control the LED.</p><p>Use the HTML5 element <code class="inline">&lt;input type="range"&gt;</code> to draw a slider bar to let a user to change the value of each &#x201C;R&#x201D;, &#x201C;G&#x201D;, and &#x201C;B&#x201D;. Each color has the values of 0 to 255 (min="0" max="255") and uses only integer values by setting the increment by 1 (step="1").</p><pre class="brush: html noskimlinks noskimwords">&lt;input id="red" type="range" min="0" max="255" step="1" value="0"&gt;</pre><p>This controls the intensity of the red color. I won&#x2019;t talk about styling with CSS in this tutorial, but you can view the <a href="https://github.com/girliemac/arduino-led-rgb">source code on GitHub</a> at the&#xA0;<a href="https://github.com/girliemac/arduino-led-rgb/tree/gh-pages">gh-pages branch</a> to see how I style the UI visual components.</p><p>Next, we will learn how to use <a href="https://www.pubnub.com/docs/web-javascript/pubnub-javascript-sdk">PubNub JavaScript API</a> to reflect the color data from the UI to Arduino.</p><p><a href="https://admin.pubnub.com">Get your own API keys</a>, and then import the JavaScript library from CDN, or locally.</p><pre class="brush: html noskimlinks noskimwords">&lt;script src="//cdn.pubnub.com/pubnub-3.7.18.min.js"&gt;&lt;/script&gt;</pre><p>Initialize the instance:</p><pre class="brush: javascript noskimlinks noskimwords">var pubnub = PUBNUB({
+&#x3000;subscribe_key : 'you_subscribe_key', 
+&#x3000;publish_key : 'your_publish_key'
+});</pre><p>Let&#x2019;s send data to change the color of the LED, as the UI event is fired.</p><p>Listen to the change event of the slider DOM, and send any changes to PubNub with the <code class="inline">publish</code> method.</p><pre class="brush: javascript noskimlinks noskimwords">var red = document.getElementById('red');
+
+red.addEventListener('change', function(){
+ pubnub.publish({
+ channel: 'smart-led', 
+ message: {color: 'red', brightness: +this.value}
+ });
+}, false);</pre><p>You can use any <code class="inline">channel</code> name in the string, but remember to use the same name when you receive the data later.</p><p>Next, you are going to use Node.js to receive the data with hardware!</p><h3>IoT-ifying Arduino With Johnny-Five and PubNub</h3><p>It&#x2019;s very easy to light up RGB LEDs with Johnny-Five. To install <code class="inline">johnny-five</code> with <code class="inline">npm</code>, try this code below:</p><pre class="brush: javascript noskimlinks noskimwords">var five = require('johnny-five');
+var led;
+
+five.Board().on('ready', function() {
+ console.log('ready');
+
+ // Initialize the RGB LED
+ led = new five.Led.RGB({
+ pins: { // pin numbers
+ red: 6,
+ green: 5,
+ blue: 3
+ }
+ });
+
+ // test
+ led.color({red: 255, blue: 0, green: 0});
+
+ led.on();
+});
+</pre><p>Is your LED turned on in red? If not, check your code and circuit. If it is still not working, you may be using a common anode LED, instead of cathode. Try removing the ping to GND and rewire to 5V pin.</p><p>Now, see the line under the comment, <code class="inline">// test</code>. You will notice the color method specifies the color. In this case, the value for red is 255, and the others are 0, so that your LED is in pure red.</p><p>With Johnny-Five, you can specify the RGB values in 0 to 255, just like the CSS color property. Try changing the values and experimenting with the color of your LED!</p><p>Next, you&#x2019;ll dynamically change the value using the data sent from the browser UI.</p><p>To receive the data, use the PubNub <code class="inline">subscribe</code> method.</p><p>Install <code class="inline">pubnub</code> using <code class="inline">npm</code>:</p><pre class="brush: bash noskimlinks noskimwords">$ npm install pubnub</pre><p>Initialize the instance, just like the browser-side code:</p><pre class="brush: javascript noskimlinks noskimwords">var pubnub = require('pubnub').init({
+ subscribe_key: 'your_subscribe_key',
+ publish_key: 'your_publish_key'
+});</pre><p>You can read the data by accessing the same channel that you are sending the data from. Once the data is received, the callback function is called, so you can reflect the value to the LED.</p><pre class="brush: javascript noskimlinks noskimwords">pubnub.subscribe({
+ channel: 'smart-led',
+ callback: function(m) {
+ if(led) {
+ r = (m.color === 'red') ? m.brightness : r;
+ g = (m.color === 'green') ? m.brightness : g;
+ b = (m.color === 'blue') ? m.brightness : b;
+
+ led.color({red: r, blue: b, green: g});
+
+ console.log( 'color change to...' );
+ console.log( led.color() );
+ }
+ }
+ error: function(err) {console.log(err);}
+});</pre><p>The returned object <code class="inline">m</code> is a message coming from the browser side. For instance, when the value of blue is 150, you get <code class="inline">{color: 'blue', brightness: 150}</code>, and then when the next data is <code class="inline">{color: 'red', brightness: 150}</code>, the red = 150 adds to the blue = 150, to make a purple color.</p><p>To view the entire source code, see /node/index.js on the&#xA0;<a href="https://github.com/girliemac/arduino-led-rgb">GitHub master branch</a>.</p><p>Ta-da! You just prototyped your first IoT smart LED!</p><figure class="post_image"><img alt="Internet of Things LED lit up" src="https://cms-assets.tutsplus.com/uploads/users/48/posts/25508/image/pseudo-philips-hue.jpg"></figure><p><img width="371" alt="" src="https://lh5.googleusercontent.com/IWYz5EusHMR8HXPD2-8OOKPvbC9yXe8ywfFrw-bNPGmDtdS6piTHGxDHZcS9Hhz74UWHoQonLILS8J65XKQw7VR_VhgLV9KjV6BW96xPbivepWCsxnLr3AiTqo-ktLgXsd2wCF1n"></p><p>You can use other microcontrollers like <a href="https://www.raspberrypi.org/">Raspberry Pi</a> with Johnny-Five and PubNub, so you should try creating more IoT apps!</p><h2>References</h2><ul>
+<li>
+<a href="http://johnny-five.io/">Johnny-Five</a>: The original JavaScript Robotics programming framework</li>
+<li>
+<a href="https://www.pubnub.com/">PubNub</a>: The Realtime Data Stream Network that enables developers to build and scale real-time apps for IoT, Mobile, and web applications</li>
+</ul></div></div>
+</body></html>

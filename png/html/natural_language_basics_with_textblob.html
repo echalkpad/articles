@@ -1,0 +1,644 @@
+<!DOCTYPE html><html><head><title>Natural Language Basics with TextBlob</title></head><body>
+<h1>Natural Language Basics with TextBlob</h1><p><a href="http://rwet.decontextualize.com/book/textblob/" target="_new">Original URL</a></p>
+<p><blockquote>by Allison Parrish In this chapter, we&#x2019;ll use a Python library called TextBlob to perform simple natural language processing tasks. &#x201C;Natural Language Processing&#x201D; is a field at&hellip;</blockquote></p>
+<div><article class="page">
+ 
+ <p>by <a href="http://www.decontextualize.com">Allison Parrish</a></p>
+
+<p>In this chapter, we&#x2019;ll use a Python library called <a href="http://textblob.readthedocs.org/en/dev/">TextBlob</a> to perform simple natural language processing tasks.</p>
+
+<p>&#x201C;Natural Language Processing&#x201D; is a field at the intersection of computer
+science, linguistics and artificial intelligence which aims to make the
+underlying structure of language available to computer programs for analysis
+and manipulation. It&#x2019;s a vast and vibrant field with a long history! New
+research and techniques are being developed constantly.</p>
+
+<p>The aim of this chapter is to introduce a few simple concepts and techniques
+from NLP&#x2014;just the stuff that&#x2019;ll help you do creative things quickly, and
+maybe open the door for you to understand more sophisticated NLP concepts that
+you might encounter elsewhere.</p>
+
+<p>The most commonly known library for doing NLP in Python is <a href="http://www.nltk.org/">NLTK</a>. NLTK is a fantastic library, but it&#x2019;s also a writhing behemoth: large
+and slippery and difficult to understand. TextBlob is a simpler, more humane
+interface to much of NLTK&#x2019;s functionality: perfect for NLP beginners or poets
+that just want to get work done.</p>
+
+<h2 id="natural-language">Natural language</h2>
+
+<p>&#x201C;Natural language&#x201D; is a loaded phrase: what makes one stretch of language
+&#x201C;natural&#x201D; while another stretch is not? NLP techniques are opinionated about
+what language is and how it works; as a consequence, you&#x2019;ll sometimes find
+yourself having to conceptualize your text with uncomfortable abstractions in
+order to make it work with NLP. (This is especially true of poetry, which
+almost by definition breaks most &#x201C;conventional&#x201D; definitions of how language
+behaves and how it&#x2019;s structured.)</p>
+
+<p>Of course, a computer can never really fully &#x201C;understand&#x201D; human language.<br>
+Even when the text you&#x2019;re using fits the abstractions of NLP perfectly, the
+results of NLP analysis are always going to be at least a little bit
+inaccurate. But often even inaccurate results can be &#x201C;good enough&#x201D;&#x2014;and in any
+case, inaccurate output from NLP procedures can be an excellent source of the
+sublime and absurd juxtapositions that we (as poets) are constantly in search
+of.</p>
+
+<h3 id="the-english-speakers-only-club">The English Speakers Only Club</h3>
+
+<p>The main assumption that most NLP libraries and techniques make is that the
+text you want to process will be in English. Historically, most NLP research
+has been on English specifically; it&#x2019;s only more recently that serious work
+has gone into applying these techniques to other languages. The examples in
+this chapter are all based on English texts, and the tools we&#x2019;ll use are
+geared toward English. If you&#x2019;re interested in working on NLP in other
+languages, here are a few starting points:</p>
+
+<ul>
+ <li><a href="https://github.com/konlpy/konlpy">Konlpy</a>, natural language processing in
+Python for Korean</li>
+ <li><a href="https://github.com/fxsjy/jieba">Jieba</a>, text segmentation and POS tagging in
+Python for Chinese</li>
+ <li>The <a href="http://www.clips.ua.ac.be/pattern">Pattern</a> library (like TextBlob, a
+simplified/augmented interface to NLTK) includes POS-tagging and some
+morphology for Spanish in its
+<a href="http://www.clips.ua.ac.be/pages/pattern-es">pattern.es</a> package.</li>
+</ul>
+
+<h2 id="english-grammar-a-crash-course">English grammar: a crash course</h2>
+
+<p>The only thing I believe about English grammar is <a href="http://www.writing.upenn.edu/~afilreis/88v/creeley-on-sentence.html">this</a>:</p>
+
+<blockquote>
+ <p>&#x201C;Oh yes, the sentence,&#x201D; Creeley once told the critic Burton Hatlen, &#x201C;that&#x2019;s
+what we call it when we put someone in jail.&#x201D;</p>
+</blockquote>
+
+<p>There is no such thing as a sentence, or a phrase, or a part of speech, or even
+a &#x201C;word&#x201D;&#x2014;these are all pareidolic fantasies occasioned by glints of sunlight
+we see on reflected on the surface of the ocean of language; fantasies that we
+comfort ourselves with when faced with language&#x2019;s infinite and unknowable
+variability.</p>
+
+<p>Regardless, we may find it occasionally helpful to think about language using
+these abstractions. The following is a gross oversimplification of both how
+English grammar works, and how theories of English grammar work in the context
+of NLP. But it should be enough to get us going!</p>
+
+<h3 id="sentences-and-parts-of-speech">Sentences and parts of speech</h3>
+
+<p>English texts can roughly be divided into &#x201C;sentences.&#x201D; Sentences are themselves
+composed of individual words, each of which has a function in expressing the
+meaning of the sentence. The function of a word in a sentence is called its
+&#x201C;part of speech&#x201D;&#x2014;i.e., a word functions as a noun, a verb, an adjective, etc.
+Here&#x2019;s a sentence, with words marked for their part of speech:</p>
+
+<table>
+ <tbody>
+ <tr>
+ <td>I</td>
+ <td>really</td>
+ <td>love</td>
+ <td>entrees</td>
+ <td>from</td>
+ <td>the</td>
+ <td>new</td>
+ <td>cafeteria.</td>
+ </tr>
+ <tr>
+ <td>pronoun</td>
+ <td>adverb</td>
+ <td>verb</td>
+ <td>noun (plural)</td>
+ <td>preposition</td>
+ <td>determiner</td>
+ <td>adjective</td>
+ <td>noun</td>
+ </tr>
+ </tbody>
+</table>
+
+<p>Of course, the &#x201C;part of speech&#x201D; of a word isn&#x2019;t a property of the word itself.
+We know this because a single &#x201C;word&#x201D; can function as two different parts of speech:</p>
+
+<blockquote>
+ <p>I love cheese.</p>
+</blockquote>
+
+<p>The word &#x201C;love&#x201D; here is a verb. But here:</p>
+
+<blockquote>
+ <p>Love is a battlefield.</p>
+</blockquote>
+
+<p>&#x2026; it&#x2019;s a noun. For this reason (and others), it&#x2019;s difficult for computers to
+accurately determine the part of speech for a word in a sentence. (It&#x2019;s
+difficult sometimes even for humans to do this.) But NLP procedures do their
+best!</p>
+
+<h3 id="phrases">Phrases</h3>
+
+<p>A sentence can be divided into groups of words that work as units, or &#x201C;phrases.&#x201D; Phrases themselves might have smaller phrases within them, forming a tree structure. Linguists traditionally draw the structure of a sentence out in an actual tree:</p>
+
+<p><img src="http://rwet.decontextualize.com/book/public/cafeteriatree.png" alt="Cafeteria tree"></p>
+
+<p>A declarative sentence consists of a noun phrase (the subject) and a verb
+phrase (the predicate). The verb phrase has a verb, followed (optionally, if
+the verb is transitive) by a noun phrase. A &#x201C;noun phrase&#x201D; is basically the
+noun, plus all of the stuff that surrounds and modifies the noun, like
+adjectives, relative clauses, prepositional phrases, etc. Noun phrases are
+handy things to be able to detect and extract, since they give us an idea of
+what a text might be &#x201C;about.&#x201D;</p>
+
+<p>NLP libraries give us tools to parse sentences into trees like this, and
+extract phrases from the sentence according to what kind of phrase it is.
+Notably, TextBlob makes extracting noun phrases super easy.</p>
+
+<p>But note: if computers are bad at identifying parts of speech, they&#x2019;re even
+<em>worse</em> at parsing grammar in sentences. You will get some wonky results, so be
+prepared.</p>
+
+<h3 id="morphology">Morphology</h3>
+
+<p>&#x201C;Morphology&#x201D; is the word that linguists use to describe all of the weird ways
+that individual words get modified to change their meaning, usually with
+prefixes and suffixes. e.g.</p>
+
+<pre><code>do -&gt; redo
+sing -&gt; singing
+monarch -&gt; monarchy
+teach -&gt; taught
+</code></pre>
+
+<p>A word&#x2019;s &#x201C;lemma&#x201D; is its most &#x201C;basic&#x201D; form, the form without any morphology
+applied to it. &#x201C;Sing,&#x201D; &#x201C;sang,&#x201D; &#x201C;singing,&#x201D; are all different &#x201C;forms&#x201D; of the
+lemma <em>sing</em>. Likewise, &#x201C;octopi&#x201D; is the plural of &#x201C;octopus&#x201D;; the &#x201C;lemma&#x201D; of
+&#x201C;octopi&#x201D; is <em>octopus</em>.</p>
+
+<p>&#x201C;Lemmatizing&#x201D; a text is the process of going through the text and replacing
+each word with its lemma. This is often done in an attempt to reduce a text
+to its most &#x201C;essential&#x201D; meaning, by eliminating pesky things like verb tense
+and noun number.</p>
+
+<h3 id="pluralization">Pluralization</h3>
+
+<p>There&#x2019;s one super important kind of morphology, and that&#x2019;s the rules for taking
+a singular noun and turning it into a plural noun, like:</p>
+
+<pre><code>cat -&gt; cats (easy)
+cheese -&gt; cheeses (also easy...)
+knife -&gt; knives (complicated)
+child -&gt; children (huh?)
+</code></pre>
+
+<p>Even though we as humans employ plural morphology in pretty much every
+sentence, without a second thought, the rules for how to do it are actually
+really weird and complicated (as with all elements of human language). A
+computer is never going to be able to 100% accurately make this transformation.
+But, again, some NLP libraries try. </p>
+
+<h2 id="using-textblob">Using TextBlob</h2>
+
+<p>At this point, let&#x2019;s actually start using TextBlob so we can put this boring
+theory into practice.</p>
+
+<h3 id="installation">Installation</h3>
+
+<p>To use textblob, we of course need to install it! And to install it, we need to
+create or activate a virtualenv.</p>
+
+<pre><code>$ virtualenv venv
+$ source venv/bin/activate
+</code></pre>
+
+<p>Then, install TextBlob with <code>pip</code>:</p>
+
+<pre><code>$ pip install textblob
+</code></pre>
+
+<p>Wait as things happen. When it&#x2019;s all done, you might need to download the
+TextBlob corpora; to do so, type the following on the command line:</p>
+
+<pre><code>$ python -m textblob.download_corpora
+</code></pre>
+
+<h2 id="sentences-words-and-noun-phrases">Sentences, words and noun phrases</h2>
+
+<p>Let&#x2019;s play with TextBlob in the interactive interpreter. The basic steps for
+using TextBlob are:</p>
+
+<ul>
+ <li>Create a TextBlob object, passing a string with the text we want to work with.</li>
+ <li>Use various methods and attributes of the resulting object to get at various parts of the text.</li>
+</ul>
+
+<p>For example, here&#x2019;s how to get a list of sentences from a string:</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import TextBlob
+&gt;&gt;&gt; blob = TextBlob("ITP is a two-year graduate program located in the Tisch School of the Arts. Perhaps the best way to describe us is as a Center for the Recently Possible.")
+&gt;&gt;&gt; for sentence in blob.sentences:
+... print sentence
+ITP is a two-year graduate program located in the Tisch School of the Arts.
+Perhaps the best way to describe us is as a Center for the Recently Possible.
+</pre>
+
+<p>The <code>.sentences</code> attribute of the resulting object is a list of sentences in the text. (Much easier than trying to split on punctuation, right?)</p>
+
+<p>Each sentence object also has an attribute <code>.words</code> that has a list of words in
+that sentence.</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import TextBlob
+&gt;&gt;&gt; blob = TextBlob("ITP is a two-year graduate program located in the Tisch School of the Arts. Perhaps the best way to describe us is as a Center for the Recently Possible.")
+&gt;&gt;&gt; for word in blob.sentences[1].words:
+... print word
+Perhaps
+the
+best
+way
+to
+describe
+us
+is
+as
+a
+Center
+for
+the
+Recently
+Possible
+</pre>
+
+<p>The TextBlob object also has a &#x201C;.noun_phrases&#x201D; attribute that simply returns the text of all noun phrases found in the original text:</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import TextBlob
+&gt;&gt;&gt; blob = TextBlob("ITP is a two-year graduate program located in the Tisch School of the Arts. Perhaps the best way to describe us is as a Center for the Recently Possible.")
+&gt;&gt;&gt; for np in blob.noun_phrases:
+... print np
+itp
+two-year graduate program
+tisch
+recently
+</pre>
+
+<p>(As you can see, this isn&#x2019;t terribly accurate, but we&#x2019;re working with computers
+here. What are you going to do.)</p>
+
+<h3 id="tagging-parts-of-speech">&#x201C;Tagging&#x201D; parts of speech</h3>
+
+<p>TextBlob can also tell us what part of speech each word in a text corresponds
+to. It can tell us if a word in a sentence is functioning as a noun, an
+adjective, a verb, etc. In NLP, associating a word with a part of speech is
+called &#x201C;tagging.&#x201D; Correspondingly, the attribute of the <code>TextBlob</code> object
+we&#x2019;ll use to access this information is <code>.tags</code>.</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import TextBlob
+&gt;&gt;&gt; blob = TextBlob("I have a lovely bunch of coconuts.")
+&gt;&gt;&gt; for word, pos in blob.tags:
+... print word, pos
+I PRP
+have VBP
+a DT
+lovely JJ
+bunch NN
+of IN
+coconuts NNS
+</pre>
+
+<p>This <code>for</code> loop is a little weird, because it has <em>two</em> temporary loop
+variables instead of one. (The underlying reason for this is that <code>.tags</code>
+evaluates to a list of two-item tuples, which we can automatically unpack
+by specifying two items in the for loop. Don&#x2019;t worry about this if it doesn&#x2019;t
+make sense. Just know that when we&#x2019;re using the <code>.tags</code> attribute, you need
+two loop variables instead of one.) The first variable, which we&#x2019;ve called
+<code>word</code> here, contains the word; the second variable, called <code>pos</code> here,
+contains the part of speech.</p>
+
+<p>Here&#x2019;s a brief list of what the tags mean. You can see a more complete list of POS tag meanings <a href="http://www.clips.ua.ac.be/pages/mbsp-tags">here</a>.</p>
+
+<ul>
+ <li>NN: noun</li>
+ <li>JJ: adjective</li>
+ <li>IN: preposition</li>
+ <li>VB_: verb (the <code>_</code> gets replaced with various letters depending on the form of the verb)</li>
+</ul>
+
+<h3 id="pluralization-1">Pluralization</h3>
+
+<p>The TextBlob library comes with a built-in kind of object called <code>Word</code>. If
+you create a <code>Word</code> object, you can use its <code>.pluralize()</code> method to get the
+plural form of that word:</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import Word
+&gt;&gt;&gt; w = Word("university")
+&gt;&gt;&gt; print w.pluralize()
+universities
+</pre>
+
+<p><code>Word</code> objects also have a <code>.lemmatize()</code> method, which returns the word, but with all morphology (suffixes, etc.) removed.</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import Word
+&gt;&gt;&gt; w = Word("running")
+&gt;&gt;&gt; print w.lemmatize()
+running
+</pre>
+
+<p>All items in the <code>.words</code> and <code>.tags</code> attribute of a sentence are also secretly
+<code>Word</code> objects, so you can call the <code>.pluralize()</code> method on those items when
+(e.g.) looping through a list:</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import TextBlob
+&gt;&gt;&gt; blob = TextBlob("I spy a lion, a tiger, and a bear.")
+&gt;&gt;&gt; sentence = blob.sentences[0]
+&gt;&gt;&gt; for word, pos in sentence.tags:
+... if pos == 'NN':
+... print word.pluralize()
+spies
+lions
+tigers
+</pre>
+
+<h2 id="some-examples">Some examples</h2>
+
+<h3 id="print-only-short-sentences">Print only short sentences</h3>
+
+<p>This example takes an arbitrary input text and parses it into sentences. It
+then prints out ten random sentences from the text that have five or fewer
+words.</p>
+
+<pre>
+from textblob import TextBlob
+import random
+import sys
+
+# stdin's read() method just reads in all of standard input as a string;
+# use the decode method to convert to ascii (textblob prefers ascii)
+text = sys.stdin.read().decode('ascii', errors="replace")
+blob = TextBlob(text)
+
+short_sentences = list()
+for sentence in blob.sentences:
+ if len(sentence.words) &lt;= 5:
+ short_sentences.append(sentence.replace("\n", " "))
+
+for item in random.sample(short_sentences, 10):
+	print item
+</pre>
+<p>Program: hemingwayize.py</p>
+
+<p>Here&#x2019;s what it looks like when using <em>Pride and Prejudice</em> as input:</p>
+
+<pre>$ python hemingwayize.py &lt; austen.txt
+"No, not at all."
+"Oh!
+"Ten thousand pounds!
+.
+said Frank Churchill.
+impossible!"
+'Lord!'
+But the effort was painful.
+But what shall I say?
+Let Wickham be _your_ man.
+</pre>
+
+<h4 id="dealing-with-unicode-errors">Dealing with Unicode errors</h4>
+
+<p>Wait, what&#x2019;s all that <code>decode('ascii', errors="replace")</code> business there?
+It turns out that TextBlob is really finicky about text: if it gets anything
+except plain ASCII text, it has a propensity to return strange errors. The
+<code>decode</code> method can be called on any string; you can use it to remove any
+non-ASCII characters from a string, making it safe for TextBlob. Use <code>replace</code>
+to replace non-ASCII characters with a placeholder, or <code>ignore</code> to remove them
+entirely. For example:</p>
+
+<pre>
+&gt;&gt;&gt; string_with_stuff = "weird \xe1ccents"
+&gt;&gt;&gt; print string_with_stuff.decode('ascii', errors="ignore")
+weird ccents
+</pre>
+
+<h3 id="turn-any-text-into-a-list-of-instructions">Turn any text into a list of instructions</h3>
+
+<p>This program extracts all noun phrases from a text, and all verbs; it then
+randomly selects from these lists to generate dada instructions from the text.</p>
+
+<pre>
+from textblob import TextBlob
+import sys
+import random
+
+text = sys.stdin.read().decode('ascii', errors="replace")
+blob = TextBlob(text)
+
+noun_phrases = blob.noun_phrases
+
+verbs = list()
+for word, tag in blob.tags:
+ if tag == 'VB':
+ verbs.append(word.lemmatize())
+
+for i in range(1, 11):
+ print "Step " + str(i) + ". " + random.choice(verbs).title() + " " + \
+ random.choice(noun_phrases)
+</pre>
+<p>Program: instructify.py</p>
+
+<p>Using some H. P. Lovecraft as input:</p>
+
+<pre>$ python instructify.py &lt; lovecraft.txt
+Step 1. Sail thick forests
+Step 2. Come new yearnings
+Step 3. Lessen long grass
+Step 4. Buy books men
+Step 5. Come kuranes
+Step 6. Prove new name
+Step 7. Exist ship
+Step 8. Sail celephais
+Step 9. Remember white summit
+Step 10. Be old world
+</pre>
+
+<h3 id="create-a-summary-of-a-text">Create a &#x201C;summary&#x201D; of a text</h3>
+
+<p>This program &#x201C;summarizes&#x201D; a text in a very basic way. It does so by examining
+the part of speech of each word, and appending the word to a list if the word
+is a noun; it then prints out five random nouns from the text in plural form.</p>
+
+<pre>
+from textblob import TextBlob, Word
+import sys
+import random
+
+text = sys.stdin.read().decode('ascii', errors="ignore")
+blob = TextBlob(text)
+
+nouns = list()
+for word, tag in blob.tags:
+	if tag == 'NN':
+		nouns.append(word.lemmatize())
+
+print "This text is about..."
+for item in random.sample(nouns, 5):
+	word = Word(item)
+	print word.pluralize()
+</pre>
+<p>Program: summarize_nouns.py</p>
+
+<p>Using Lovecraft as input, once again:</p>
+
+<pre>$ python summarize_nouns.py &lt; lovecraft.txt
+This text is about...
+men
+worlds
+seas
+flows
+autumns
+</pre>
+
+<h2 id="wordnet">Wordnet</h2>
+
+<p>TextBlob also provides an interface to WordNet data. <a href="http://wordnet.princeton.edu/">WordNet</a> is basically a computer-readable thesaurus. <a href="http://wordnetweb.princeton.edu/perl/webwn">You can use it online
+here</a>.</p>
+
+<p>Wordnet&#x2019;s most basic unit is the <em>synset</em>. A synset is essentially a &#x201C;group&#x201D; of
+different words that all mean the &#x201C;same&#x201D; thing. For example, wordnet might
+group &#x201C;kitty,&#x201D; &#x201C;cat,&#x201D; &#x201C;feline,&#x201D; etc. into a synset, categorized under the
+abstract concept of <em>CAT</em>.</p>
+
+<p>You can get a list of synsets that wordnet thinks a word belongs to like so:</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import Word
+&gt;&gt;&gt; bank = Word("bank")
+&gt;&gt;&gt; synsets = bank.synsets
+&gt;&gt;&gt; print synsets
+[Synset('bank.n.01'), Synset('depository_financial_institution.n.01'), Synset('bank.n.03'), Synset('bank.n.04'), Synset('bank.n.05'), Synset('bank.n.06'), Synset('bank.n.07'), Synset('savings_bank.n.02'), Synset('bank.n.09'), Synset('bank.n.10'), Synset('bank.v.01'), Synset('bank.v.02'), Synset('bank.v.03'), Synset('bank.v.04'), Synset('bank.v.05'), Synset('deposit.v.02'), Synset('bank.v.07'), Synset('trust.v.01')]
+</pre>
+
+<p>As you can see, the word &#x201C;bank&#x201D; belongs to many different synsets! We can print
+out WordNet&#x2019;s definition for a synset like so:</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import Word
+&gt;&gt;&gt; synsets = Word("bank").synsets
+&gt;&gt;&gt; for synset in synsets:
+... print synset.definition()
+sloping land (especially the slope beside a body of water)
+a financial institution that accepts deposits and channels the money into lending activities
+a long ridge or pile
+an arrangement of similar objects in a row or in tiers
+a supply or stock held in reserve for future use (especially in emergencies)
+the funds held by a gambling house or the dealer in some gambling games
+a slope in the turn of a road or track; the outside is higher than the inside in order to reduce the effects of centrifugal force
+a container (usually with a slot in the top) for keeping money at home
+a building in which the business of banking transacted
+a flight maneuver; aircraft tips laterally about its longitudinal axis (especially in turning)
+tip laterally
+enclose with a bank
+do business with a bank or keep an account at a bank
+act as the banker in a game or in gambling
+be in the banking business
+put into a bank account
+cover with ashes so to control the rate of burning
+have confidence or faith in
+</pre>
+
+<p>You can restrict which synsets to retrieve for a word for that word only when
+used as a particular part of speech (say noun or verb).</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import Word
+&gt;&gt;&gt; from textblob.wordnet import NOUN
+&gt;&gt;&gt; synsets = Word("bank").get_synsets(pos=NOUN)
+&gt;&gt;&gt; for synset in synsets:
+... print synset.definition()
+sloping land (especially the slope beside a body of water)
+a financial institution that accepts deposits and channels the money into lending activities
+a long ridge or pile
+an arrangement of similar objects in a row or in tiers
+a supply or stock held in reserve for future use (especially in emergencies)
+the funds held by a gambling house or the dealer in some gambling games
+a slope in the turn of a road or track; the outside is higher than the inside in order to reduce the effects of centrifugal force
+a container (usually with a slot in the top) for keeping money at home
+a building in which the business of banking transacted
+a flight maneuver; aircraft tips laterally about its longitudinal axis (especially in turning)
+</pre>
+
+<p>We can also take any synset and use its <code>.lemma_names()</code> method to get all of
+the words belonging to the synset, essentially giving us a list of synonyms
+(words that mean the same thing). Let&#x2019;s find synonyms for &#x201C;bank&#x201D; in the sense
+of &#x201C;financial institutions&#x201D; (element 1 from the list above):</p>
+
+<pre>
+&gt;&gt;&gt; from textblob import Word
+&gt;&gt;&gt; from textblob.wordnet import NOUN
+&gt;&gt;&gt; synsets = Word("bank").get_synsets(pos=NOUN)
+&gt;&gt;&gt; print synsets[1].lemma_names()
+[u'depository_financial_institution', u'bank', u'banking_concern', u'banking_company']
+</pre>
+
+<p>Thanks, WordNet!</p>
+
+<h3 id="example-synonymize">Example: Synonymize</h3>
+
+<p>This program reads in a ext, parses it into words, and then replaces each 
+word with a random synonym (according to WordNet). Only words with three
+or more letters that have synonyms in WordNet are replaced.</p>
+
+<pre>
+from textblob import Word
+import sys
+import random
+
+for line in sys.stdin:
+ line = line.strip()
+ line = line.decode('ascii', errors="replace")
+ words = line.split(" ")
+ output = list()
+ for word_str in words:
+ word_obj = Word(word_str)
+ if len(word_str) &gt; 3 and len(word_obj.synsets) &gt; 0:
+ random_synset = random.choice(word_obj.synsets)
+ random_lemma = random.choice(random_synset.lemma_names)
+ output.append(random_lemma.replace('_', ' '))
+ else:
+ output.append(word_str)
+ print " ".join(output)
+</pre>
+<p>Program: synonymize.py</p>
+
+<pre>$ python synonymize.py &lt; sea_rose.txt
+Rose, harsh rose,
+scarred and with stretch of petals,
+meager flower, thin,
+spare of leaf,
+
+more wanted
+than a wet climb up
+single on a stem --
+you are catch in the drift.
+
+Stunted, with minuscule leaf,
+you are fling on the sand,
+you are lift
+in the sharp sand
+that drive in the wind.
+
+Can the spice-rose
+drop such acid fragrancy
+harden in a leaf?
+</pre>
+
+<h2 id="further-reading">Further reading</h2>
+
+
+
+
+</article>
+
+
+ </div>
+</body></html>

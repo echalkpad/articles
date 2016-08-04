@@ -1,0 +1,106 @@
+<!DOCTYPE html><html><head><title>WebPack Code splitting with ES6 and Babel 6</title></head><body>
+<h1>WebPack Code splitting with ES6 and Babel 6</h1><p><a href="http://jonathancreamer.com/webpack-code-splitting-with-es6-and-babel-6/" target="_new">Original URL</a></p>
+<p><blockquote>Today is the day that finally, we decided it was time to make the move from Babel 5 to 6. It's been on our Technical Debt list for quite a while now. Here's what we had to do to get it working! First&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p>Today is the day that finally, we decided it was time to make the move from Babel 5 to 6. It's been on our Technical Debt list for quite a while now.</p>
+
+<p>Here's what we had to do to get it working!</p>
+
+
+
+<p>First and foremost was to get all the latest and greatest from the Babel folks...</p>
+
+<p><img src="http://d.pr/i/15CP5+" alt=""></p>
+
+<pre><code class="language-prettyprint lang-js">dependencies: { 
+ "babel-core": "^6.5.2",
+ "babel-polyfill": "^6.3.14",
+ ...
+},
+devDependencies: { 
+ "babel-loader": "^6.2.3",
+ "babel-plugin-transform-decorators-legacy": "^1.3.4",
+ "babel-preset-es2015": "^6.5.0",
+ "babel-preset-react": "^6.5.0",
+ ...
+}
+</code></pre>
+
+<p>That's easy enough.</p>
+
+
+
+<p>In case you hadn't yet yeard, Babel 6 is quite a bit different in it's philosophy. What started out as 6to5 whose job it was to merely transpile ES6 to ES5, Babel has now evolved into a transpiler of all the things. Highly plugable, faster, and easier to configure, Babel 6 is a fantastic way to usher in a new era of JavaScript tooling.</p>
+
+<p>Ok, so in order to get Babel 6 working with your webpack setup, you have to change the loader...</p>
+
+<pre><code class="language-prettyprint lang-js">test: /(\.jsx?)$/, 
+loader: "babel", 
+exclude: /node_modules/, 
+query: { 
+ "plugins": ["transform-decorators-legacy"],
+ "presets": ["es2015", "react"]
+}
+</code></pre>
+
+<p>That should get you most of the way there now.</p>
+
+<h3 id="athingweraninto">A thing we ran in to</h3>
+
+<p>As we were doing the upgrade, we ran into an interesting challenge. We use <a href="http://jonathancreamer.com/advanced-webpack-part-2-code-splitting/">Code Splitting</a> to divide up our app into multiple smaller modules. As soon as the webpack and npm updates were in place, everything compiled just fine, however, when it came to the browser, something a bit strange happened.</p>
+
+<p>We use ES6 modules for all our JavaScript code. More often than not, we use <code>export default</code>. I spent about an hour banging my head on the desk as the modules I was importing during my code splitting just were NOT working.</p>
+
+<p>Turns out Kent C. Dodds has a fantastic article on why this was happening... <a href="https://medium.com/@kentcdodds/misunderstanding-es6-modules-upgrading-babel-tears-and-a-solution-ad2d5ab93ce0#.wrsu2x6c5">https://medium.com/@kentcdodds/misunderstanding-es6-modules-upgrading-babel-tears-and-a-solution-ad2d5ab93ce0#.wrsu2x6c5</a></p>
+
+<p>This is how we're splitting our code up...</p>
+
+<pre><code class="language-prettypring lang-js">require([ 
+ "rizzo-next/src/components/things_to_do",
+ "rizzo-next/src/components/sights"
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ... */
+], function(ThingsToDo, Sights, /*...*/) {
+
+ rizzo.renderComponent(Sights, ".sights");
+ rizzo.renderComponent(ThingsToDo, ".ttd");
+});
+</code></pre>
+
+<p>All that code worked just fine in Babel 5, but apparently, thanks to Kent's article, I learned that we were all apparently using ES6 modules incorrectly and Babel 6 for better or worse let us know that. Turns out though, the solution was actually not so bad...</p>
+
+<pre><code class="language-prettyprint lang-js">rizzo.renderComponent(Sights.default, ".sights"); 
+rizzo.renderComponent(ThingsToDo.default, ".ttd"); 
+</code></pre>
+
+<p>The only way to use CodeSplitting in WebPack v1 is with the require syntax. That should change in v2, but that's not out yet.</p>
+
+<p>TL;DR</p>
+
+<p>Don't mix ES6 and Require syntax in WebPack v1, but if you want to use Code Splitting, add <code>.default</code> to your imported modules.</p>
+
+
+
+<p>Another hang up we had was, we like to <code>npm link</code> to our main component repository <code>rizzo-next</code>. Well, apparently if you <code>npm link</code> things, it gets all screwy when it comes to where loaders load things from.</p>
+
+<p>There are 2 ways to solve this problem...</p>
+
+<ol>
+<li>Install all the same tools in the other repository, aka all teh bablez in both places </li>
+<li>Use <code>require.resolve</code> in the <code>query</code> options in WebPack</li>
+</ol>
+
+<pre><code class="language-prettyprint lang-js">query: { 
+ "plugins": [require.resolve("babel-plugin-transform-decorators-legacy")],
+ "presets": [require.resolve("babel-preset-es2015")]
+}
+</code></pre>
+
+<h3 id="conclusion">Conclusion</h3>
+
+<p>All in all, it wasn't a hugely painful upgrade. After all, we knew going into it that it was a major version uprade so there'd most likely be hiccups. After just a few hours, everything was transpiling as it was in Babel 5 and we were on our way!</p>
+ </section>
+
+ 
+
+ </div>
+</body></html>

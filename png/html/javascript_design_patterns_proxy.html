@@ -1,0 +1,195 @@
+<!DOCTYPE html><html><head><title>JavaScript Design Patterns: Proxy</title></head><body>
+<h1>JavaScript Design Patterns: Proxy</h1><p><a href="http://www.joezimjs.com/javascript/javascript-design-patterns-proxy/" target="_new">Original URL</a></p>
+<p><blockquote>This is the 9th installment of the JavaScript Design Patterns series and today we&#x2019;re featuring the Proxy pattern. The word &#x201C;proxy&#x201D; can be defined as a substitute, and that&hellip;</blockquote></p>
+<div><div class="entry-content">
+<p>This is the 9th installment of the JavaScript Design Patterns series and today we&#x2019;re featuring the Proxy pattern. The word &#x201C;proxy&#x201D; can be defined as a substitute, and that essentially explains what a proxy is. A proxy is an object that has the same interface as another object and is used in place of that other object. The only question is why we would use a proxy instead of the original object.</p>
+<p>Before I answer that question, I wish to remind/inform everyone that this is part of a long series of posts. You can access the list of other posts in this series at the <a href="http://www.joezimjs.com/javascript/javascript-design-patterns-proxy/#series" title="List of JavaScript Design Patterns series Posts">bottom of the post</a>. It might not be a bad idea to review through them before (or after) you read this post. The proxy pattern doesn&#x2019;t really depend on the knowledge of any of the other patterns, so you can wait until after you&#x2019;re done here if you&#x2019;d like. If you&#x2019;ve already read all the other posts in the series then you deserve some brownie points! Too bad I don&#x2019;t really have any to give away.</p>
+<h2>Why Use a Proxy?</h2>
+<p>Returning to the question of why we would bother to use a proxy, we can give a few different scenarios where the proxy can come in handy: delaying instantiation of a large object, accessing a remote object, and access control.</p>
+<p>Before we get into each of those situations, we&#x2019;ll look at an example of a proxy with no purpose, just so you get the gist of what a proxy is. First we need to create a class &#x2013; <code>CarList</code> &#x2013; and then we&#x2019;ll just make the proxy class that wraps around it.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+/* For the sake of keeping us on track, we won't
+ show implementation code in great detail. */
+var CarList = function() {
+ //creation
+};
+
+CarList.prototype = {
+ getCar: function(...) {
+ // get a vehicle from the list using the 
+ // given parameters
+ },
+ 
+ search: function(...) {
+ // search through the cars using the query
+ },
+ 
+ addCar: function(...) {
+ // add a car to the database
+ },
+ .
+ .
+ .
+};
+
+var CarListProxy = function() {
+ this.carList = new CarList();
+};
+
+CarListProxy.prototype = {
+ getCar: function(...) {
+ return this.carList.getCar(...);
+ },
+ 
+ search: function(...) {
+ return this.carList.search(...);
+ },
+ 
+ addCar: function(...) {
+ return this.carList.addCar(...);
+ },
+ .
+ .
+ .
+};
+</pre>
+<h2>The Virtual Proxy</h2>
+<p>I&#x2019;m sure everyone reading this has some bit of imagination, so let&#x2019;s pretend that <code>CarList</code> has 10 times as many methods and most of them are very large and complicated. I know this circumstance might be a bit extreme, but I&#x2019;m just exaggerating a bit to make a point. The point is that we have a large object that would use up quite a few CPU cycles just to instantiate it. Wouldn&#x2019;t it make sense to put off that instantiation until we&#x2019;re sure it&#x2019;ll be used? Well, that&#x2019;s the point of the Virtual Proxy. Someone can instantiate a proxy and the normal large object won&#x2019;t be instantiated until a method is called that requires its creation. Let&#x2019;s convert our old useless proxy to a virtual proxy.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+var CarListProxy = function() {
+ // Don't initialize the CarList yet.
+ this.carList = null;
+};
+CarListProxy.prototype = {
+ // this function is called any time any other
+ // function gets called in order to initialize
+ // the CarList only when needed.
+ _init: function() {
+ if (!this.carList) {
+ this.carList = new CarList();
+ }
+ },
+ 
+ getCar: function(...) {
+ // every function makes this call to _init()
+ this._init();
+ return this.carList.getCar(...);
+ },
+ 
+ search: function(...) {
+ this._init();
+ return this.carList.search(...);
+ },
+ 
+ addCar: function(...) {
+ this._init();
+ return this.carList.addCar(...);
+ },
+ .
+ .
+ .
+}
+</pre>
+<p>Of course this may not necessarily be the best method of delaying the initialization of a large object. Let&#x2019;s imagine (again) that <code>CarList</code> didn&#x2019;t have countless complex methods, but just the data that it contains is large, such as an entire database of the make and model of every single commercially-produced vehicle in existence. In this case, we can just create a method that initiates all of that data, but only call that method when we are in need of that data. I&#x2019;m not saying to put down the power of the proxy pattern, but more so to help you be a better programmer by teaching you that a proxy isn&#x2019;t the answer to all problems.</p>
+<h2>Remotes Proxies in JavaScript</h2>
+<p>The second scenario I mentioned was accessing a remote object. This scenario makes more sense when using something along the lines of Java and SOAP, mostly because when we talk about something being remote, we&#x2019;re generally talking about something on the other end of an ethernet cable and it&#x2019;s highly unlikely we&#x2019;ll be accessing JavaScript objects on a server, though with <a href="http://nodejs.org/" title="Official site for Node.js" target="_blank">Node.js</a> gaining in popularity, it&#x2019;s becoming more and more likely. For our JavaScript proxy, we&#x2019;ll just use an object that gives a simplified way of accessing a web service&#x2019;s API. This may go a bit against the definition of the proxy implementing the same interface as the object it&#x2019;s being substituted for, but it&#x2019;ll have to do right now. I&#x2019;d consider this to be more like a <a href="http://www.joezimjs.com/javascript/javascript-design-patterns-facade/" title="JavaScript Design Patterns: Facade">facade</a>, though others have called this a form of proxy before.</p>
+<p>This time our <code>CarListProxy</code> isn&#x2019;t implementing the interface of an object, but instead just pulling information from the fictional web service on www.WeSeriouslyListEverySingleVehicleModelEver.com.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+// The real CarList is contained on the server, so
+// CarListProxy gets the information from the server
+var CarListProxy = function (){};
+
+CaListProxy.prototype = {
+ getCar: function(...) {
+ // Once again we don't show implementation code
+ // so that you don't get distracted by it
+ ajax('http://www.weseriouslylisteverysinglevehiclemodelever.com/getCar/'
+ + args);
+ },
+ 
+ search: function(...) {
+ ajax('http://www.weseriouslylisteverysinglevehiclemodelever.com/search/'
+ + args);
+ },
+ 
+ addCar: function(...) {
+ ajax('http://www.weseriouslylisteverysinglevehiclemodelever.com/addCar/'
+ + args);
+ },
+ .
+ .
+ .
+}
+</pre>
+<p>That&#x2019;s about all I can show you for the Remote Proxy for JavaScript. So what about that final situation: controlling access to the original object? That&#x2019;s up next!</p>
+<h2>Controlling Access to a JavaScript Object via Proxy</h2>
+<p>There can be any number of reasons that we don&#x2019;t want to allow access to the original object, but for the sake of this example we&#x2019;re waiting for a specific date, because the site that this script is on isn&#x2019;t technically supposed to be live yet. I&#x2019;m not sure why the developers felt it was necessary for all of the JavaScript files to be loaded on an &#x201C;Under Construction&#x201D; page, but who am I to argue with fictional characters?</p>
+<p>In order to truly control access, we have to make sure that there is no way to access the original object in any way except through the proxy, so we&#x2019;ll close it all up in a self-invoking anonymous function, but attach the proxy as a property to <code>window</code> in order to give access to it from the outside world.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">
+// self invoking anonymous function
+(function() {
+// We already know what the CarList looks like, so I
+// won't rewrite it here
+var CarList = ...
+
+var CarListProxy = function() {
+ // Don't initialize the CarList yet.
+ this.carList = null;
+ this.date = new Date();
+};
+CarListProxy.prototype = {
+ // this function is called any time any other
+ // function gets called in order to initialize
+ // the CarList only when needed. The CarList will
+ // not be initialized if it isn't time to yet.
+ _initIfTime: function() {
+ if (this._isTime() &amp;&amp; !this.carList) {
+ this.carList = new CarList();
+ return true;
+ }
+ return false;
+ },
+ // Check to see if we've reached the right date yet
+ _isTime() {
+ return this.date &gt; plannedReleaseDate;
+ },
+ 
+ getCar: function(...) {
+ // if _initIfTime returns a falsey value, getCar will 
+ // return a falsey value, otherwise it will continue
+ // and return the expression on the right side of the 
+ // &amp;&amp; operator
+ return this._initIfTime() &amp;&amp; this.carList.getCar(...);
+ },
+ 
+ search: function(...) {
+ return this._initIfTime() &amp;&amp; this.carList.search(...);
+ },
+ 
+ addCar: function(...) {
+ return this._initIfTime() &amp;&amp; this.carList.addCar(...);
+ },
+ .
+ .
+ .
+}
+
+// Make the CarListProxy publicly available 
+window.CarListProxy = CarListProxy;
+
+// you could also do the below statement so people don't even
+// know they're using a proxy:
+window.CarList = CarListProxy;
+}());
+</pre>
+<p>And there you have it: all three flavors of the proxy pattern with examples. Personally I don&#x2019;t see a whole lot of circumstances where a proxy will be all that useful, except maybe as a facade for web services, especially with the growing popularity of the use of web services. I hope that you all can find a reason to use it because knowledge is power, but only if it can be applied.</p>
+<p>As usual, your comments and sharing are greatly appreciated. In fact, this time I&#x2019;ll give a bit of incentive. We&#x2019;re drawing nearer to the end of the JavaScript Design Patterns series and after that I might be a bit hard-pressed to find material. If there&#x2019;s any JavaScript-related topic or subject you&#x2019;d particularly like to read about, let me know. I might just take your suggestion. Also, while you&#x2019;re thinking about what you&#x2019;d like to ask me to post, go ahead and share this post with your friends via the sharing buttons below. Finally, if you have a bit of time, maybe you&#x2019;d like to read some of the other JavaScript Design Patterns posts. The list of them should be immediately below:</p>
+<p id="series">JavaScript Design Patterns series:</p>
+
+
+<p id="jp-relatedposts" class="jp-relatedposts">
+<h3 class="jp-relatedposts-headline"><em>Related</em></h3>
+</p> <br class="clear">
+</div> 
+</div>
+</body></html>

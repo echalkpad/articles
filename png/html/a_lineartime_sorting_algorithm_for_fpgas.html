@@ -1,0 +1,107 @@
+<!DOCTYPE html><html><head><title>A Linear-Time Sorting Algorithm for FPGAs</title></head><body>
+<h1>A Linear-Time Sorting Algorithm for FPGAs</h1><p><a href="http://hackaday.com/2016/01/20/a-linear-time-sorting-algorithm-for-fpgas/" target="_new">Original URL</a></p>
+<p><blockquote>Sorting. It&#x2019;s a classic problem that&#x2019;s been studied for decades, and it&#x2019;s a great first step towards &#x201C;thinking algorithmically.&#x201D;&#xA0;Over the years, a handful of&hellip;</blockquote></p>
+<div><div class="entry-content">
+ <p>Sorting. It&#x2019;s a classic problem that&#x2019;s been studied for decades, and it&#x2019;s a great first step towards &#x201C;thinking algorithmically.&#x201D;&#xA0;Over the years, a handful of sorting algorithms have emerged, each characterizable by it&#x2019;s <em><a href="https://en.wikipedia.org/wiki/Big_O_notation" target="_blank">asymptotic order</a></em>, a measure of how much longer an algorithm takes as the problem size gets bigger. While all sorting algorithms take longer to complete the more elements that must be sorted, some are slower than others. </p>
+<p>For a sorter like&#xA0;<em>bubble sort</em>, the time grows quadradically longer for a linear increase in the&#xA0;number of inputs; it&#x2019;s of&#xA0;order <code>O(N&#xB2;)</code>.With a faster sorter like <em>merge-sort</em>, which&#xA0;is <code>O(N*log(N))</code>, the time required grows far&#xA0;less quickly as the&#xA0;problem size gets bigger. Since sorting is a bit old-hat among many folks here, and since&#xA0;<code>O(N*log(N))</code>&#xA0;seems to be the generally-accepted baseline for top speed with a single core, I thought I&#x2019;d pop the question: can we go faster?</p>
+<p>In short &#x2014; yes, we can! In fact, I&#x2019;ll claim that we can sort in linear time, i.e a running time of&#xA0;<code>O(N)</code>.&#xA0;There&#x2019;s a catch, though: to achieve linear time, we&#x2019;ll need to build some custom hardware to help us out. In this post, I&#x2019;ll unfold the problem of sorting in parallel, and then I&#x201D;ll take us through a linear-time solution that we can synthesize at home on an FPGA.</p>
+<p>Need to cut to the chase? Check out the full solution implemented in SystemVerilog on <a href="https://github.com/Poofjunior/fpga_fast_serial_sort" target="_blank">GitHub</a>. I&#x2019;ve wrapped it inside an SPI communication layer so that we can play with it using an everyday microcontroller.</p>
+<p>To understand how it works, join us as we&#xA0;embark on an adventure in designing algorithms for hardware. If you&#x2019;re used to thinking of programming in a stepwise fashion for a CPU, it&#x2019;s time to get out your thinking cap!</p>
+
+<h2>A Parallel Approach</h2>
+<p>Our goal is to deliver a module of digital logic that receives its data serially, or, once per clock cycle, and sorts that data. To achieve a linear-time benchmark, I&#x2019;ve opted for sorting the data&#xA0;<em>while it&#x2019;s being clocked in</em>. In that sense, once&#xA0;we&#x2019;ve finished clocking in our data, our array should be sorted immediately afterwards, ready to be clocked out again.</p>
+<p>If we can construct such a block, then our hardware solution is&#xA0;linear, or <code>O(N)</code>. The&#xA0;problem might&#xA0;seem&#xA0;complicated, but the&#xA0;solution is actually rather simple &#x2014; provided that we&#x2019;re doing our sorting in parallel. To unpack how this algorithm works, let&#x2019;s look at a simple case: sorting a three-element array.</p>
+<h3>Example Time: the Three-Sorter</h3>
+<p>Let&#x2019;s start with a quick example of sorting a&#xA0;three-element array into a container of size three.</p>
+<p><img class="size-medium wp-image-186870 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/3-sorter.png?w=400&amp;h=240" alt="3-sorter" width="400"></p>
+<p>On the left we&#x2019;ve got our unsorted list ready to be clocked in serially; on the right, our &#x201C;Three-Sorter&#x201D; sorting unit with a cell array&#xA0;of size&#xA0;three. (An <em>e</em> indicates that the cell is empty.)&#xA0;Inside the Three-Sorter, I&#x2019;ll declare that elements in this cell array&#xA0;from top-to-bottom are stored in increasing size. Our goal is to put each new element in the right spot based on what&#x2019;s currently inside the cell array. At this point, we don&#x2019;t actually&#xA0;know any details about the signals that will make this sorting happen, but we&#x2019;ll walk through the flow of data and build up that logic afterwards.</p>
+<h4>Sorting Step 1:</h4>
+<p><img class="size-medium wp-image-186863 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/insert_step_1_simple.png?w=400&amp;h=149" alt="insert_step_1_simple" width="400"></p>
+<p>In Step 1, all cells are empty. We start by inserting a new element, but we need a place to put it. Since all cells are empty, this new element is the smallest we&#x2019;ve seen so far, so let&#x2019;s insert it at the top. Even though there&#x2019;s just one element, I&#x2019;ll make a bold claim that our cell array&#xA0;is sorted.</p>
+<h4>Sorting Step 2:</h4>
+<p><img class="size-medium wp-image-186866 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/insert_step_2_simple.png?w=400&amp;h=149" alt="insert_step_2_simple" width="400"></p>
+<p>In Step 2, we try to insert the second element. Our first question might be: where does this element fit in the current container? Looking at all the cells, we can see that this second element <em>4</em> is greater than the elements in all other occupied cells.&#xA0;<em>4</em> fits into any of the empty slots after&#xA0;<em>3</em>, but we&#x2019;ll put it in the&#xA0;first empty slot&#xA0;<em>after</em> the last occupied slot. Hence, our new array is still sorted.</p>
+<h4>Sorting Step 3:</h4>
+<p><img class="size-medium wp-image-186867 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/insert_step_3_simple.png?w=400&amp;h=149" alt="insert_step_3_simple" width="400"></p>
+<p>In Step 3, we&#x2019;ll insert the third element, <i>3</i>. Looking at our container&#xA0;of cells, we know that <em>3</em>&#xA0;fits nicely between&#xA0;<em>2</em> and&#xA0;<em>4</em>, but there&#x2019;s simply no empty space. To make room, we&#x2019;ll kick&#xA0;<em>4</em>&#xA0;downwards into the next cell and put&#xA0;<em>3</em> in&#xA0;<em>4</em>&#x2018;s old spot. (Sorry,&#xA0;<em>4</em>,&#xA0;but it&#x2019;s for science!) Now that we&#x2019;ve inserted <em>3</em> &#x2014; guess what &#x2014; our internal cells are&#xA0;still sorted!</p>
+<p>Taking a step back, every&#xA0;time we insert a new element, we look at each&#xA0;cell and ask ourselves: &#x201C;Does my new data fit&#xA0;here?&#x201D; Because we&#x2019;ve&#xA0;agreed beforehand that the contents of our cell array will always be sorted, it turns out that every cell can answer this question independently without knowing the contents of the rest of the cells. All it needs to do is ask for a&#xA0;few bits of&#xA0;information from the cell above it.</p>
+<p>Alas, if only these cells were&#xA0;&#x201C;intelligent&#x201D; enough to act on their own and ask questions&#xA0;about their data and their neighbor&#x2019;s data. If they could, then I claim that all cells&#xA0;could independently agree&#xA0;on who gets to hold the new element as each element&#xA0;gets clocked in.</p>
+<h3>Signals for Parallel Sorting</h3>
+<p>Now that we&#x2019;ve seen cell-sorting in action, let&#x2019;s revisit this example while we take a deeper look at how these cells communicate. Without knowing the contents of the rest of the cells, all cells need to independently agree where the new element goes so that our new element gets stored once and only once. Let&#x2019;s see this &#x201C;cell-talk&#x201D; in action.</p>
+<h4>Detailed Sorting Step 1:</h4>
+<p><img class="size-medium wp-image-186875 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/insert_step_1_detailled.png?w=400&amp;h=200" alt="insert_step_1_detailled" width="400"></p>
+<p>In Step 1, we start by inserting&#xA0;<em>2</em>. Here, all cells are empty, so any spot would be fair game. Since&#xA0;<em>2</em> is the smallest element we&#x2019;ve seen so far, it needs to go in the top cell. The top cell also needs a way to tell&#xA0;all other cells that it just got dibs on&#xA0;the&#xA0;incoming&#xA0;<em>2</em>. We don&#x2019;t want to have a &#x201C;cell-claimed&#x201D; signal that propagates all the way down the chain; that&#x2019;s just too slow. Rather, we&#x2019;ll make a deal across all cells. If a cell is empty, it will&#xA0;<em>only</em> claim the incoming element if its above neighboring cell is occupied. Now, when new data arrives, each empty cell just needs to look above at the cell on top of it to see if that cell is occupied. If it is, that empty cell claims the new data. If it isn&#x2019;t, then we&#x2019;ll assume that some empty cell above it already has dibs. To bootstrap the first cell into always claiming the first element of an incoming array, we&#x2019;ll hard wire it&#x2019;s &#x201C;above-cell-is-occupied&#x201D; signal to True. (That&#x2019;s the fake grey cell in the diagram above.)</p>
+<p>This &#x201C;deal&#x201D; we just made needs to be so strict that we&#x2019;ll call it &#x201C;Rule Number 1.&#x201D;</p>
+<ul>
+<li><strong><em>Rule No. 1:</em></strong><em> if a cell is empty, it will only claim the incoming element if the above cell is not empty.</em></li>
+</ul>
+<h4>Detailed Sorting Step 2:</h4>
+<p><img class="size-medium wp-image-186879 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/insert_step_2_detailed.png?w=400&amp;h=200" alt="insert_step_2_detailed" width="400"></p>
+<p>In Step 2, a second element,&#xA0;<em>4</em>, arrives to be sorted. Here, we know that&#xA0;<em>4</em> should go after&#xA0;<em>2</em>, but how do our cells know? If a cell is&#xA0;occupied, it needs to ask the question: &#x201C;is this incoming new number less than my current number?&#x201D; If it is, then that cell will kick out its current number and replace it with the new number. That current number can get kicked down to the next cell below it.&#xA0;Hmm, if every occupied cell asks that same question, then there could be multiple cells that would be more than happy to replace their current number with the new number. If that were true, then we risk storing multiple copies of an input element. Well, we can&#x2019;t have that, so we&#x2019;ll make another rule.</p>
+<ul>
+<li><strong><em>Rule No. 2:</em></strong><em> If a cell is occupied, it will claim the incoming element&#xA0;if both the incoming element&#xA0;is less than the stored element AND the occupied cell above this cell is not kicking out its element.</em></li>
+</ul>
+<p>Phew! Now only one copy of the incoming element will be stored in the entire cell array.</p>
+<p>To make sure that we aren&#x2019;t losing data when cells kick out their data, we&#x2019;ll make another rule.</p>
+<ul>
+<li><strong><em>Rule No. 3:</em></strong><em> If the cell above the current cell kicks out it&#x2019;s stored element, then the current cell MUST claim the above cell&#x2019;s element, regardless of whether or not the current cell is empty or occupied.</em></li>
+</ul>
+<p>If a cell is empty &#x2014; phew &#x2014; it&#x2019;ll just follow &#x201C;Rule Number 1&#x201D; and &#x201C;Rule Number 3.&#x201D;</p>
+<h4>Detailed Sorting Step 3:</h4>
+<p><img class="size-medium wp-image-186881 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/insert_step_3_detailed.png?w=400&amp;h=200" alt="insert_step_3_detailed" width="400"></p>
+<p>Now, let&#x2019;s try to insert a&#xA0;<em>3</em> as in the last example.&#xA0;<em>3</em> should fit nicely in&#xA0;<em>4</em>&#x2018;s spot, but how do our cells know? The top cell is holding a&#xA0;<em>2</em>, and since two is less than three, the&#xA0;<em>2</em> stays put. The second cell, however, is holding a <em>4</em>, and since three is less than four, <em>4</em> gets the boot and needs to go down a cell. The first empty cell could take the&#xA0;new data since it&#x2019;s empty, but since&#xA0;<em>4</em> just got kicked out from the cell above, this empty cell gets the&#xA0;<em>4</em> instead. All other empty cells below follow &#x201C;Rule Number 1&#x201D;. Each of these cells is empty and each cell above these cells was also empty at the time, so they stay empty.</p>
+<p>We&#x2019;ll make one last rule for cells that claim new data:</p>
+<ul>
+<li><strong><em>Rule No. 4:</em></strong><em> If a cell is occupied and accepts a new element (either from the above cell or from the incoming data), it must kick out its current element.</em></li>
+</ul>
+<p>With all our other rules, we can guarantee that any element that gets kicked out will be caught by the cell below.</p>
+<p>If all of our cells follow these rules, then we can guarantee that, together, they can sort arrays without needing to know about the cell contents of all other cells, because it is implicit to the cell array structure. And with that said, each sorting step is fast, bubbling down to&#xA0;<em>N</em> identical and independent questions asked in parallel at every clock cycle.</p>
+<h3>Behold&#x2013;a&#xA0;Sorting Cell</h3>
+<p>Now that we&#x2019;ve ironed out the rules, let&#x2019;s look at the anatomy of a single sorting cell, each of which makes up a unit in our cell array.</p>
+<p><img class="wp-image-186486 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/sorting_cell1.png?w=449&amp;h=209" alt="sorting_cell" width="449"></p>
+<p>To follow the rules we just generated, each cell needs to know information about it&#x2019;s upstream cell and pass along information about it&#x2019;s current state and data. In a nutshell, these signals just become inputs and outputs to a collection of internal digital logic. To &#x201C;follow the rules&#x201D; of our architecture, we&#x2019;ll need to resort to a small snippet of sequential and combinational logic.</p>
+<p>First, each cell needs to keep track of its own state,&#xA0;<em>empty</em> or&#xA0;<em>occupied</em>. In SystemVerilog, we can implement this feature as a two-state state machine. To make determine whether or not we&#x2019;ll claim the new data, previous data, or hold on to our current data, we&#x2019;ll need to follow the rules, which I&#x2019;ve wrapped up as one block of combinational logic.</p>
+<p>First, we&#x2019;ll need some intermediate signals:</p>
+<pre class="brush: cpp; title: ; notranslate" title="">
+assign new_data_fits = (new_data &lt; cell_data) || (cell_state == EMPTY);
+assign cell_data_is_pushed = new_data_fits &amp; (cell_state == OCCUPIED);
+</pre>
+<p><code>new_data_fits</code> is simply our criteria for whether or not a cell can accommodate new data.</p>
+<p><code>cell_data_is_pushed</code>&#xA0;tells us whether or not the current cell data in an occupied cell is getting kicked out to the lower level.</p>
+<p>Now, we can put together the true nuts and bolts of our sorting cell: the logic for determining what data gets stored.</p>
+<pre class="brush: cpp; title: ; notranslate" title="">
+if (reset)
+ begin
+ cell_data &lt;= 'b0; // actual reset value is irrelevant since cell is empty
+ end
+ else if (enable)
+ begin
+//{shift_up, new_data_fits, prev_cell_data_pushed, cell_state, prev_cell_state}
+ casez (priority_vector)
+ 'b0?1??: cell_data &lt;= prev_cell_data;
+ 'b0101?: cell_data &lt;= new_data;
+ 'b0?001: cell_data &lt;= new_data;
+ 'b1????: cell_data &lt;= next_cell_data;
+ default: cell_data &lt;= cell_data;
+ endcase
+ end
+ else
+ begin
+ cell_data &lt;= cell_data;
+ end
+</pre>
+<p>The block above is a Verilog case statement with &#x201C;don&#x2019;t cares&#x201D; making some signals take priority over others. The first case is just &#x201C;Rule Number 3&#x201D; where a cell always takes the previous cell&#x2019;s contents if that number is kicked out. The second case is for a cell that is currently occupied, but satisfies the &#x201C;strictly-less-than&#x201D; criteria. The third case is for storing the biggest element yet in the first empty cell, or &#x201C;Rule Number 1&#x201D; with &#x201C;Rule Number 3.&#x201D; The final case isn&#x2019;t part of the algorithm, but it&#x2019;s for shifting our data back up the chain when we want to retrieve our array of sorted elements.</p>
+<p>Perfect! Now that our sorting cells are encoded to follow the rules, we simply create an array of these with a Verilog&#xA0;<code>generate</code> statement, and our linear-time sorter is complete! Now, give it a go by <a href="https://github.com/Poofjunior/fpga_fast_serial_sort" target="_blank">uploading the source code</a> to real FPGA hardware.</p>
+<h2>Getting Edgy with Edge Cases</h2>
+<p>Before celebrating, it&#x2019;s worth bringing up some edge cases. What happens if our unsorted array has repeats? Can we sort fewer elements than&#xA0; the maximum capacity of our hardware sorter? Without transforming this post into a novel, I&#x2019;ll reassure you that this solution does indeed handle repeats and also sorts arrays from size 0 up to&#xA0;<em>N</em>, where&#xA0;<em>N</em> is the total number of sorting cells that we&#x2019;ve synthesized onto our FPGA. It can&#x2019;t however, swap back and forth between sorting arrays of signed or unsigned data types without tweaking a few parameters in the source code first. All that said, I encourage you:&#xA0;<em>be skeptical!</em> Don&#x2019;t believe me until you worked these edge cases out for yourself on paper or in simulation.</p>
+<h2>Trading Time for Space</h2>
+<p>We did it! We&#x2019;ve built our very own sorting peripheral in hardware that chews through unsorted arrays and sorts them in linear time! But, as with all too-good-to-be-true scenarios, we&#x2019;ve paid a hefty price in FPGA resources. While we may have an ultra-fast sorter built in hardware, I can only instantiate sorting hardware to sort 8-bit arrays up to ~1000 elements long before I&#x2019;ve exhausted my FPGA&#x2019;s resources. We&#x2019;ve traded time for FPGA macrocells. Luckily, the amount of hardware grows linearly as we increase the number of sorting cells to sort larger arrays.</p>
+<h2>Putting on your &#x201C;Algorithms-in-Hardware&#x201D; Hat</h2>
+<p><img class=" wp-image-186891 aligncenter" src="https://hackadaycom.files.wordpress.com/2016/01/parameterized_length.png?w=684&amp;h=181" alt="parameterized_length" width="684"></p>
+<p>I snagged the image above from Atera&#x2019;s RTL Viewer after synthesizing a Ten-Sorter, and something is&#xA0;strange. As I grow the size of the sorting hardware or change the data type from 8-bit to 16-bit to 32-bit integer by tweaking some top-level parameters, I lose the ability to see all of the connections and signals passing back and forth in my head. It&#x2019;s just too complicated. There are too many wires.</p>
+<p>Nevertheless, the design itself bubbles down to a very simple unit, the <em>sorting cell</em>, that repeats itself many times over with each repeat performing the exact same task. Because we know the behavior of each of these sorting cells, we can predict the behavior of an entire system made up from these blocks &#x2014; even if we can&#x2019;t visualize all of the connections in our heads! This type of procedurally generated complexity strikes me as very beautiful, the same kind of beauty that we&#x2019;d find in fractals or recursive algorithms. If you&#x2019;ve made it this far, thanks for joining me, and keep us all posted on your adventures in the world of &#x201C;algorithms in hardware.&#x201D;</p>
+ </div>
+
+ 
+</div>
+</body></html>

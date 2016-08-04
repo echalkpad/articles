@@ -1,0 +1,221 @@
+<!DOCTYPE html><html><head><title>NGINX as a Reverse Proxy for Docker Swarm Clusters</title></head><body>
+<h1>NGINX as a Reverse Proxy for Docker Swarm Clusters</h1><p><a href="https://www.systemcodegeeks.com/web-servers/nginx/nginx-reverse-proxy-docker-swarm-clusters/" target="_new">Original URL</a></p>
+<p><blockquote>Spawning services across multiple Docker engines is a very cool thing, but those services need to connect each other and be found by public-facing nodes in order to be routed to users. A way to&hellip;</blockquote></p>
+<div><div class="entry"><p>Spawning services across multiple Docker engines is a very cool thing, but those services need to connect each other and be found by public-facing nodes in order to be routed to users. A way to achieve that is to use NGINX as a reverse proxy by defining one or more public-facing nodes. These nodes are going to have NGINX configured to proxy request to each container exposing your service.</p><p>In this post, we are going to see how to use NGINX as a reverse proxy for load-balancing containerized HTTP applications running in a Swarm cluster. We&#x2019;ll also look at how to automate the service discovery (<em>a.k.a.</em>, auto-add new containers running the same service) to the NGINX configuration using <a href="https://github.com/ehazlett/interlock">ehazlett/interlock</a>.</p><h2>Prerequisites</h2><p>To follow this post and execute all the examples, you will need the following:</p><ul><li><strong>Docker Machine &gt;= 0.7.0</strong>: to provision Docker engines. You can obtain Docker Machine <a href="https://github.com/docker/machine/releases">here</a>.</li><li><strong>Docker Compose &gt;= 1.7.1</strong>: to orchestrate the application&#x2019;s services.</li><li><strong>Docker client &gt;= 1.11.1</strong>: for talking with the Swarm manager. You can obtain the Docker client <a href="https://github.com/docker/docker/releases/latest">here</a>.</li><li><strong>Digital Ocean API Token</strong>: to allow docker-machine to create machines on which to provision its engines. You can generate your token <a href="https://cloud.digitalocean.com/settings/api/tokens/new">here</a>.</li></ul><h3>Creating the Swarm cluster</h3><p>To begin, we need a Swarm cluster with these characteristics:</p><ul><li>At least one public-facing node to host the NGINX proxy. Multiple nodes can be created and balanced using DNS.</li><li>At least one node to host the Swarm manager. Swarm has built-in HA, which is not needed for this tutorial. Implementing it is left as an exercise for the reader; see <a href="https://docs.docker.com/swarm/multi-manager-setup/">here</a>.</li><li>At least one node to host the key/value datastore. Here I used Consul. As for the Swarm manager, you might want to have at least three nodes for this in production. This kind of node is not in the Swarm cluster.</li></ul><p>To make this step easier, I created a script that creates all the required nodes on Digital Ocean.</p><pre class="brush:php">#!/bin/bash
+
+# nodes to create configuration
+public_nodes="public01"
+nodes="node01 node02 node03"
+
+# Create the KV node using consul
+docker-machine create \
+ -d digitalocean \
+ --digitalocean-access-token=$DO_ACCESS_TOKEN \
+ consul
+
+docker-machine ssh consul docker run -d \
+ -p "8500:8500" \
+ -h "consul" \
+ progrium/consul -server -bootstrap
+
+KV_IP=$(docker-machine ip consul)
+KV_ADDR="consul://${KV_IP}:8500"
+
+# Create the Swarm Manager
+echo "Create swarm manager"
+docker-machine create \
+ -d digitalocean \
+ --digitalocean-access-token=$DO_ACCESS_TOKEN \
+ --swarm --swarm-master \
+ --swarm-discovery=$KV_ADDR \
+ --engine-opt="cluster-store=${KV_ADDR}" \
+ --engine-opt="cluster-advertise=eth0:2376" \
+ manager
+
+# Create Public facing Swarm nodes
+for node in $public_nodes; do
+ (
+ echo "Creating ${node}"
+
+ docker-machine create \
+ -d digitalocean \
+ --digitalocean-size "4gb" \
+ --engine-label public=yes \
+ --digitalocean-access-token=$DO_ACCESS_TOKEN \
+ --swarm \
+ --swarm-discovery=$KV_ADDR \
+ --engine-opt="cluster-store=${KV_ADDR}" \
+ --engine-opt="cluster-advertise=eth0:2376" \
+ $node
+ ) &amp;
+done
+wait
+
+# Create other Swarm nodes
+for node in $nodes; do
+ (
+ echo "Creating ${node}"
+
+ docker-machine create \
+ -d digitalocean \
+ --digitalocean-size "2gb" \
+ --engine-label public=no \
+ --digitalocean-access-token=$DO_ACCESS_TOKEN \
+ --swarm \
+ --swarm-discovery=$KV_ADDR \
+ --engine-opt="cluster-store=${KV_ADDR}" \
+ --engine-opt="cluster-advertise=eth0:2376" \
+ $node
+ ) &amp;
+done
+wait
+
+# Print Cluster Information
+echo ""
+echo "CLUSTER INFORMATION"
+echo "Consul UI: http://${KV_IP}:8500"
+echo "Environment variables to connect trough docker cli"
+docker-machine env --swarm manager</pre><p>Just copy the script to a file named <code>create-swarm-cluster.sh</code> and give execution permissions with <code>chmod +x create-swarm-cluster.sh</code>. To execute the script, you will need to give it the previously generated Digital Ocean API token.</p><pre class="brush:php">export DO_ACCESS_TOKEN=&lt;your-digitalocean-api-token&gt;
+./create-swarm-cluster.sh</pre><p>This is how our cluster looks:</p><p><a href="http://www.systemcodegeeks.com/wp-content/uploads/2016/06/cluster.png"><img class="aligncenter wp-image-1446 size-large" src="https://www.systemcodegeeks.com/wp-content/uploads/2016/06/cluster-1024x588.png" alt="cluster" width="620"></a></p><p>Now that we have our cluster, we have to export the right environment variables to connect to it using our local Docker client. To do that:</p><pre class="brush:php">eval $(docker-machine env --swarm manager)</pre><p>To verify that you are connected to the Swarm cluster:</p><pre class="brush:php">docker info | grep "Server Version:"</pre><p>That should output something like:</p><pre class="brush:php">Server Version: swarm/1.2.3</pre><h2>Running Your Application into the Cluster</h2><p>Now that our Swarm cluster is ready, we just need to start our application. For this purpose, I chose the super cool <a href="https://github.com/docker/example-voting-app">Cats vs Dogs Voting Demo Application</a>.</p><p>The application consists of three parts:</p><ul><li>The Voting Application, where you actually choose between cats and dogs</li><li>The Result Application</li><li>The worker, in charge of persisting votes in the Postgres database</li></ul><p>For dependencies, it has Postgres and Redis databases.</p><p>In order to run our application, we&#x2019;re going to need a <code>docker-compose.yml</code> file that will start an instance of each microservice and the dependencies.</p><pre class="brush:php">version: "2"
+
+services:
+ voting-app:
+ image: docker/example-voting-app-voting-app:latest
+ ports:
+ - "80"
+ links:
+ - redis
+ networks:
+ - front-tier
+ - back-tier
+
+ result-app:
+ image: docker/example-voting-app-result-app:latest
+ ports:
+ - "80"
+ links:
+ - db
+ networks:
+ - front-tier
+ - back-tier
+
+ worker:
+ image: docker/example-voting-app-worker:latest
+ networks:
+ - back-tier
+
+ redis:
+ image: redis:alpine
+ ports: ["6379"]
+ networks:
+ - back-tier
+
+ db:
+ image: postgres:9.5
+ volumes:
+ - "db-data:/var/lib/postgresql/data"
+ networks:
+ - back-tier
+
+volumes:
+ db-data:
+
+networks:
+ front-tier:
+ back-tier:</pre><p>If you start it, you should obtain something like this:</p><pre class="brush:php">CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
+266c4ec6c51d docker/example-voting-app-result-app:latest "node server.js" 14 seconds ago Up 10 seconds 104.236.XXX.XXX:32768-&gt;80/tcp node01/nginxreverseproxy_result-app_1
+8cefe6ad38b9 docker/example-voting-app-voting-app:latest "python app.py" 14 seconds ago Up 11 seconds 104.236.XXX.XXX:32769-&gt;80/tcp node02/nginxreverseproxy_voting-app_1
+e04fa43c9909 redis:alpine "docker-entrypoint.sh" 17 seconds ago Up 14 seconds 104.236.XXX.XXX:32768-&gt;6379/tcp node02/nginxreverseproxy_redis_1
+8e802ff973aa postgres:9.5 "/docker-entrypoint.s" 17 seconds ago Up 14 seconds 5432/tcp node01/nginxreverseproxy_db_1
+e434f6a9ff9c docker/example-voting-app-worker:latest "java -jar target/wor" 17 seconds ago Up 15 seconds public01/nginxreverseproxy_worker_1</pre><p>But hang on. We&#x2019;re not going to start <code>docker-compose.yml</code> because it&#x2019;s not suitable for a cluster. In fact:</p><ul><li>We don&#x2019;t have an entry point or a defined set of entry points which point to our DNS. If you look at the above output, you should note that things were scheduled without any specific constraint.</li><li>Our Postgres database has a mounted volume bound to the node on which the container is running. But what happens if the container is rescheduled on another node?</li><li>Front-end applications should be on the 80 or 443 ports, not on casual ones.</li><li>If you scale web applications with <code>docker-compose scale</code>, those are not load balanced.</li></ul><p>!New Call-to-action</p><p>So, one thing at a time: To solve the problem of the single entry point for our DNS servers, we are going to need an automated way to register our services into a proxy. In our case, we&#x2019;ll use NGINX and <a href="https://github.com/ehazlett/interlock">ehazlett/interlock</a> for this purpose.</p><p>With Interlock, each time that a service is added or scaled, it will be added into the pool of the NGINX <code>proxy_pass</code> so that NGINX can route and balance request to the right containers. In this way, the single entry point for the HTTP requests made to the cluster will be the NGINX container that&#x2019;s bound to the <code>public01</code> node using the constraint: <code>constraint:node==public01</code>. This also solves the problem that, when scaling containers using <code>docker-compose scale</code>, requests across containers are balanced. You can always start more public nodes and balance them using DNS balancing.</p><p>For the Postgres database, the only thing we can do here is to bind it to a specific node so that we can be sure that it is not rescheduled on another machine.</p><p>Obviously this will increase the chances of failure &#x2014; it&#x2019;s creating a single point of failure on the cluster. However, there&#x2019;s a way to run stateful services like databases in production by allowing your volumes to follow your containers. It&#x2019;s called Flocker, and unfortunately it was not suitable for this post, but you can learn more <a href="https://clusterhq.com/flocker/introduction/">here</a>.</p><p>To set up this interlock, you will need this <code>docker-compose.yml</code>:</p><pre class="brush:php">interlock:
+ image: ehazlett/interlock:master
+ command: -D run -c /etc/interlock/config.toml
+ tty: true
+ ports:
+ - 8080
+ environment:
+ INTERLOCK_CONFIG: |
+ ListenAddr = ":8080"
+ DockerURL = "${SWARM_HOST}"
+ TLSCACert = "/etc/docker/ca.pem"
+ TLSCert = "/etc/docker/server.pem"
+ TLSKey = "/etc/docker/server-key.pem"
+ [[Extensions]]
+ Name = "nginx"
+ ConfigPath = "/etc/nginx/nginx.conf"
+ PidPath = "/var/run/nginx.pid"
+ TemplatePath = ""
+ MaxConn = 1024
+ Port = 80
+ volumes:
+ - /etc/docker:/etc/docker:ro
+
+nginx:
+ image: nginx:latest
+ entrypoint: nginx
+ command: -g "daemon off;" -c /etc/nginx/nginx.conf
+ ports:
+ - 80:80
+ labels:
+ - "interlock.ext.name=nginx"
+ environment:
+ - "constraint:node==public01</pre><p>As you can see, we&#x2019;re starting an interlock container that can connect to the Swarm cluster and updates the <code>/etc/nginx/nginx.conf</code> each time it&#x2019;s needed. Note that the NGINX container is bound to the <code>public01</code> node, so all our HTTP services will be accessible trough that node.</p><p>To start this on your cluster:</p><pre class="brush:php">eval $(docker-machine env --swarm manager)
+export SWARM_HOST=tcp://$(docker-machine ip manager):2376
+docker-compose up -d</pre><p>Now that our cluster is ready, we can change our application&#x2019;s <code>docker-compose.yml</code> to reflect our thoughts:</p><pre class="brush:php">version: "2"
+
+services:
+ voting-app:
+ hostname: voting.local
+ image: docker/example-voting-app-voting-app:latest
+ ports:
+ - "80"
+ links:
+ - redis
+ networks:
+ - front-tier
+ - back-tier
+ labels:
+ - "interlock.hostname=voting"
+ - "interlock.domain=local"
+
+ result-app:
+ hostname: result.local
+ image: docker/example-voting-app-result-app:latest
+ ports:
+ - "80"
+ links:
+ - db
+ networks:
+ - front-tier
+ - back-tier
+ labels:
+ - "interlock.hostname=result"
+ - "interlock.domain=local"
+
+ worker:
+ image: docker/example-voting-app-worker:latest
+ networks:
+ - back-tier
+
+ redis:
+ image: redis:alpine
+ ports: ["6379"]
+ networks:
+ - back-tier
+
+ db:
+ image: postgres:9.5
+ volumes:
+ - "db-data:/var/lib/postgresql/data"
+ networks:
+ - back-tier
+ environment:
+ - "constraint:node==node01"
+
+volumes:
+ db-data:
+
+networks:
+ front-tier:
+ back-tier:</pre><p>A few things are different now:</p><ul><li>The voting and result apps now have the <code>hostname</code> and the interlock&#x2019;s hostname and domain labels that are used by interlock to configure NGINX.</li><li>The Postgres database now is bound to the <code>node01</code>.</li></ul><p>The last thing to do is to add the IP address of the <code>public01</code> node to your DNS records. For simplicity, you can add it to your local host&#x2019;s file. You can obtain the right host&#x2019;s line with this command:</p><pre class="brush:php">echo $(docker-machine ip public01) voting.local result.local</pre><p>Now you can just run the applications with a <code>docker-compose up</code> and point your browser to <a href="http://voting.local">http://voting.local</a> to choose your favorite pet! (Pro tip: Cats are the right choice.)</p><h2>Conclusion</h2><p>In this post, we achieved a few things in a relatively simple way by using just the official tools provided by Docker. The coolest achievement was that our entire cluster is now exposed as a single Docker daemon by the Swarm manager which also matches the definition of cluster you can find <a href="https://en.wikipedia.org/wiki/Computer_cluster">on Wikipedia</a>:</p><blockquote><p>A computer cluster consists of a set of loosely or tightly connected computers that work together so that, in many respects, they can be viewed as a single system.</p></blockquote></div> </div>
+</body></html>

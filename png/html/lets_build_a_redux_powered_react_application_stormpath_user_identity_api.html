@@ -1,0 +1,563 @@
+<!DOCTYPE html><html><head><title>Let's Build a Redux Powered React Application - Stormpath User Identity API</title></head><body>
+<h1>Let's Build a Redux Powered React Application - Stormpath User Identity API</h1><p><a href="https://stormpath.com/blog/build-a-redux-powered-react-application/" target="_new">Original URL</a></p>
+<p><blockquote>In this blogpost, we&#x2019;ll dig into Redux and learn why it&#x2019;s valuable when building a React application. I&#x2019;ll also walk you through building your first Redux application, including&hellip;</blockquote></p>
+<div><div class="clearfix"><p>In this blogpost, we&#x2019;ll dig into Redux and learn why it&#x2019;s valuable when building a React application. I&#x2019;ll also walk you through building your first Redux application, including how to use the <a href="https://github.com/stormpath/stormpath-sdk-react">Stormpath React SDK</a> for <a href="https://stormpath.com/product/authentication/">user authentication</a>. When you are finished you can take that knowledge and apply that to your existing React applications!</p>
+
+
+
+
+<h2>What Is Redux?</h2>
+
+<p><a href="https://github.com/reactjs/redux">Redux</a> is a library that helps you with managing state in your application. It has its design origins in <a href="https://facebook.github.io/react/docs/flux-overview.html">Flux</a>, but evolved from the pain of writing Flux applications. If you have written a Flux application, what you&#x2019;ll quickly notice is that Redux helps you with all the boilerplate that you had to manually write before. Also, unlike Flux, you have a single state container. This is a big advantage because it makes sharing state and reusing code as you build out your application a lot easier.</p>
+
+<h3>Stores</h3>
+
+<p>A store is simply a state container. This is the place where your state lives and where actions are dispatched and handled. When you start out building a Redux application, you&#x2019;ll have to think about how you want to model your application and how the state should be stored. This is important because in Redux it&#x2019;s recommended to only have one store, and since state is shared it&#x2019;s a good idea to think of that before you get started.</p>
+
+<h3>Actions</h3>
+
+<p>Actions are objects that describe how we want to mutate our state. You can think of actions as the API to your state tree. To illustrate, an action for adding a new user could be:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="p">{</span>
+</span><span class="line"> <span class="nx">type</span><span class="o">:</span> <span class="s1">'ADD_USER'</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">data</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">name</span><span class="o">:</span> <span class="s1">'Foo'</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">email</span><span class="o">:</span> <span class="s1">'foo@bar.com'</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">password</span><span class="o">:</span> <span class="s1">'Foobar123_'</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To make things clearer and easier to reuse, convention is to use a builder to build the action object. I.e. in the case above, you would create a function such as <code>addUser(name, email, password)</code> and have that build the object. As you can see, actions themselves doesn&#x2019;t call anything. An action is simply just an object that describes how we want to change the state.</p>
+
+<h3>Reducers</h3>
+
+<p>Actions are cool, but they don&#x2019;t make much sense by themselves. This is where reducers come in. Reducers are action handlers that act upon dispatched actions in your store and reduce these actions into state changes. If we were to dispatch an action such as <code>ADD_USER</code> in our store, we could have a reducer that would pick that action up and add a new user entry to our state.</p>
+
+<h2>Create The Redux Application</h2>
+
+<p>Now when you understand the basics, let&#x2019;s go ahead and design and build our first Redux driven application.</p>
+
+<p>To make things simple, we&#x2019;re going to build a to-do application. This way we&#x2019;ll be able to play around with most of the most important concepts of Redux without focusing too much on the application itself.</p>
+
+<p>If we think of a to-do application, what we&#x2019;ll need is a few basic things. First off, a to-do usually consists of a list. Also, this list contains to-do items that we can mutate.</p>
+
+<p>From a state perspective, we can model this application like:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="p">{</span>
+</span><span class="line"> <span class="nx">todo</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="p">[</span>
+</span><span class="line"> <span class="p">{</span>
+</span><span class="line"> <span class="nx">message</span><span class="o">:</span> <span class="s2">"Finish Redux blog post..."</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">completed</span><span class="o">:</span> <span class="kc">false</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">]</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Add Actions</h3>
+
+<p>What would we like to do with this state? First off, we&#x2019;d like to add new to-do items to it. Let&#x2019;s create an action that does that:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">addTodo</span><span class="p">(</span><span class="nx">message</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">type</span><span class="o">:</span> <span class="s1">'ADD_TODO'</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">message</span><span class="o">:</span> <span class="nx">message</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">completed</span><span class="o">:</span> <span class="kc">false</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Notice the <code>type</code> field. This should be a unique name that indicates the intention of your action. Convention is to format the type in uppercase and with underscore the as a word separator. Further on you&#x2019;ll use this name/identifier in your reducers in order to handle specific actions and turn them into state mutations.</p>
+
+<p>Once we have added our to-do item, we definitely want to be able to mark it as completed, and we also want to be able to delete it, and maybe even clear all of the to-do items.</p>
+
+<p>So let&#x2019;s also add actions for those things:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">completeTodo</span><span class="p">(</span><span class="nx">index</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">type</span><span class="o">:</span> <span class="s1">'COMPLETE_TODO'</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">index</span><span class="o">:</span> <span class="nx">index</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="kd">function</span> <span class="nx">deleteTodo</span><span class="p">(</span><span class="nx">index</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">type</span><span class="o">:</span> <span class="s1">'DELETE_TODO'</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">index</span><span class="o">:</span> <span class="nx">index</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="kd">function</span> <span class="nx">clearTodo</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">type</span><span class="o">:</span> <span class="s1">'CLEAR_TODO'</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now when we have our actions in place, let&#x2019;s continue by setting up our store. If you remember from earlier, the store is the central place in our Redux application, where all of the state, dispatched actions and reducers will live.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kr">import</span> <span class="p">{</span> <span class="nx">createStore</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">'redux'</span><span class="p">;</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">defaultState</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">todo</span><span class="o">:</span><span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="p">[]</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">};</span>
+</span><span class="line"><span class="kd">function</span> <span class="nx">todoApp</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span> <span class="nx">action</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">store</span> <span class="o">=</span> <span class="nx">redux</span><span class="p">.</span><span class="nx">createStore</span><span class="p">(</span><span class="nx">todoApp</span><span class="p">,</span> <span class="nx">defaultState</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Add Reducers</h3>
+
+<p>Now when we have some actions and a store to work with, let&#x2019;s create our first reducer. If you remember from earlier, a reducer is just an action handler which you can use to handle actions and mutate the state.</p>
+
+<p>So let&#x2019;s start by handling the <code>ADD_TODO</code> action as shown below:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">todoApp</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span> <span class="nx">action</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">switch</span> <span class="p">(</span><span class="nx">action</span><span class="p">.</span><span class="nx">type</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">case</span> <span class="s1">'ADD_TODO'</span><span class="o">:</span>
+</span><span class="line"> <span class="k">return</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">assign</span><span class="p">({},</span> <span class="nx">state</span><span class="p">,</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="nx">items</span><span class="p">.</span><span class="nx">concat</span><span class="p">([{</span>
+</span><span class="line"> <span class="nx">message</span><span class="o">:</span> <span class="nx">action</span><span class="p">.</span><span class="nx">message</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">completed</span><span class="o">:</span> <span class="kc">false</span>
+</span><span class="line"> <span class="p">}])</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="k">default</span><span class="o">:</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">state</span><span class="p">;</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Notice that when we say that a reducer &#x201C;mutates&#x201D; the state, if a state change needs to occur, what it actually should do is create a new copy of the state and make the changes to that. If there are no changes, then it&#x2019;s okay to return the same state. But in no case should you ever change the state directly since that would imply altering the state history.</p>
+
+<p>Now when we have our first action handled, let&#x2019;s add support for the rest of them:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+<span class="line-number">21</span>
+<span class="line-number">22</span>
+<span class="line-number">23</span>
+<span class="line-number">24</span>
+<span class="line-number">25</span>
+<span class="line-number">26</span>
+<span class="line-number">27</span>
+<span class="line-number">28</span>
+<span class="line-number">29</span>
+<span class="line-number">30</span>
+<span class="line-number">31</span>
+<span class="line-number">32</span>
+<span class="line-number">33</span>
+<span class="line-number">34</span>
+<span class="line-number">35</span>
+<span class="line-number">36</span>
+<span class="line-number">37</span>
+<span class="line-number">38</span>
+<span class="line-number">39</span>
+<span class="line-number">40</span>
+<span class="line-number">41</span>
+<span class="line-number">42</span>
+<span class="line-number">43</span>
+<span class="line-number">44</span>
+<span class="line-number">45</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">todoApp</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span> <span class="nx">action</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">switch</span> <span class="p">(</span><span class="nx">action</span><span class="p">.</span><span class="nx">type</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">case</span> <span class="s1">'ADD_TODO'</span><span class="o">:</span>
+</span><span class="line"> <span class="k">return</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">assign</span><span class="p">({},</span> <span class="nx">state</span><span class="p">,</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">todo</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="nx">items</span><span class="p">.</span><span class="nx">concat</span><span class="p">([{</span>
+</span><span class="line"> <span class="nx">message</span><span class="o">:</span> <span class="nx">action</span><span class="p">.</span><span class="nx">message</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">completed</span><span class="o">:</span> <span class="kc">false</span>
+</span><span class="line"> <span class="p">}])</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="k">case</span> <span class="s1">'COMPLETE_TODO'</span><span class="o">:</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">items</span> <span class="o">=</span> <span class="p">[].</span><span class="nx">concat</span><span class="p">(</span><span class="nx">state</span><span class="p">.</span><span class="nx">todo</span><span class="p">.</span><span class="nx">items</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">items</span><span class="p">[</span><span class="nx">action</span><span class="p">.</span><span class="nx">index</span><span class="p">].</span><span class="nx">completed</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+</span><span class="line"> <span class="k">return</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">assign</span><span class="p">({},</span> <span class="nx">state</span><span class="p">,</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">todo</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="nx">items</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="k">case</span> <span class="s1">'DELETE_TODO'</span><span class="o">:</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">items</span> <span class="o">=</span> <span class="p">[].</span><span class="nx">concat</span><span class="p">(</span><span class="nx">state</span><span class="p">.</span><span class="nx">todo</span><span class="p">.</span><span class="nx">items</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">items</span><span class="p">.</span><span class="nx">splice</span><span class="p">(</span><span class="nx">action</span><span class="p">.</span><span class="nx">index</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">assign</span><span class="p">({},</span> <span class="nx">state</span><span class="p">,</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">todo</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="nx">items</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="k">case</span> <span class="s1">'CLEAR_TODO'</span><span class="o">:</span>
+</span><span class="line"> <span class="k">return</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">assign</span><span class="p">({},</span> <span class="nx">state</span><span class="p">,</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">todo</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="p">[]</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="k">default</span><span class="o">:</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">state</span><span class="p">;</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Combine It All in a React UI</h3>
+
+<p>Now that we have the business logic in place, let&#x2019;s write some UI code. Since most of this is common React knowledge and very alike building a Flux application, I won&#x2019;t dig too deep into it.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+<span class="line-number">21</span>
+<span class="line-number">22</span>
+<span class="line-number">23</span>
+<span class="line-number">24</span>
+<span class="line-number">25</span>
+<span class="line-number">26</span>
+<span class="line-number">27</span>
+<span class="line-number">28</span>
+<span class="line-number">29</span>
+<span class="line-number">30</span>
+<span class="line-number">31</span>
+<span class="line-number">32</span>
+<span class="line-number">33</span>
+<span class="line-number">34</span>
+<span class="line-number">35</span>
+<span class="line-number">36</span>
+<span class="line-number">37</span>
+<span class="line-number">38</span>
+<span class="line-number">39</span>
+<span class="line-number">40</span>
+<span class="line-number">41</span>
+<span class="line-number">42</span>
+<span class="line-number">43</span>
+<span class="line-number">44</span>
+<span class="line-number">45</span>
+<span class="line-number">46</span>
+<span class="line-number">47</span>
+<span class="line-number">48</span>
+<span class="line-number">49</span>
+<span class="line-number">50</span>
+<span class="line-number">51</span>
+<span class="line-number">52</span>
+<span class="line-number">53</span>
+<span class="line-number">54</span>
+<span class="line-number">55</span>
+<span class="line-number">56</span>
+<span class="line-number">57</span>
+<span class="line-number">58</span>
+<span class="line-number">59</span>
+<span class="line-number">60</span>
+<span class="line-number">61</span>
+<span class="line-number">62</span>
+<span class="line-number">63</span>
+<span class="line-number">64</span>
+<span class="line-number">65</span>
+<span class="line-number">66</span>
+<span class="line-number">67</span>
+<span class="line-number">68</span>
+<span class="line-number">69</span>
+<span class="line-number">70</span>
+<span class="line-number">71</span>
+<span class="line-number">72</span>
+<span class="line-number">73</span>
+<span class="line-number">74</span>
+<span class="line-number">75</span>
+<span class="line-number">76</span>
+<span class="line-number">77</span>
+<span class="line-number">78</span>
+<span class="line-number">79</span>
+<span class="line-number">80</span>
+<span class="line-number">81</span>
+<span class="line-number">82</span>
+<span class="line-number">83</span>
+<span class="line-number">84</span>
+<span class="line-number">85</span>
+<span class="line-number">86</span>
+<span class="line-number">87</span>
+<span class="line-number">88</span>
+<span class="line-number">89</span>
+<span class="line-number">90</span>
+<span class="line-number">91</span>
+<span class="line-number">92</span>
+<span class="line-number">93</span>
+<span class="line-number">94</span>
+<span class="line-number">95</span>
+<span class="line-number">96</span>
+<span class="line-number">97</span>
+<span class="line-number">98</span>
+<span class="line-number">99</span>
+<span class="line-number">100</span>
+<span class="line-number">101</span>
+<span class="line-number">102</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kr">import</span> <span class="nx">React</span> <span class="nx">from</span> <span class="s1">'react'</span><span class="p">;</span>
+</span><span class="line"><span class="kr">import</span> <span class="nx">ReactDOM</span> <span class="nx">from</span> <span class="s1">'react-dom'</span><span class="p">;</span>
+</span><span class="line"><span class="kr">import</span> <span class="p">{</span> <span class="nx">createStore</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">'redux'</span><span class="p">;</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">defaultState</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">todo</span><span class="o">:</span><span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="p">[]</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">};</span>
+</span><span class="line"><span class="c1">// Add the actions here that we created in the previous steps...</span>
+</span><span class="line"><span class="kd">function</span> <span class="nx">todoApp</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span> <span class="nx">action</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="c1">// Add the reducer logic that we added in the previous steps...</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="kd">var</span> <span class="nx">store</span> <span class="o">=</span> <span class="nx">redux</span><span class="p">.</span><span class="nx">createStore</span><span class="p">(</span><span class="nx">todoApp</span><span class="p">,</span> <span class="nx">defaultState</span><span class="p">);</span>
+</span><span class="line"><span class="kr">class</span> <span class="nx">AddTodoForm</span> <span class="kr">extends</span> <span class="nx">React</span><span class="p">.</span><span class="nx">Component</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">state</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">message</span><span class="o">:</span> <span class="s1">''</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"> <span class="nx">onFormSubmit</span><span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">e</span><span class="p">.</span><span class="nx">preventDefault</span><span class="p">();</span>
+</span><span class="line"> <span class="nx">store</span><span class="p">.</span><span class="nx">dispatch</span><span class="p">(</span><span class="nx">addTodo</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="nx">message</span><span class="p">));</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">setState</span><span class="p">({</span> <span class="nx">message</span><span class="o">:</span> <span class="s1">''</span> <span class="p">});</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="nx">onMessageChanged</span><span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">message</span> <span class="o">=</span> <span class="nx">e</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">trim</span><span class="p">();</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">setState</span><span class="p">({</span> <span class="nx">message</span><span class="o">:</span> <span class="nx">message</span> <span class="p">});</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="nx">render</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="p">(</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">form</span> <span class="nx">onSubmit</span><span class="o">=</span><span class="p">{</span><span class="k">this</span><span class="p">.</span><span class="nx">onFormSubmit</span><span class="p">.</span><span class="nx">bind</span><span class="p">(</span><span class="k">this</span><span class="p">)}</span><span class="o">&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">input</span> <span class="nx">type</span><span class="o">=</span><span class="s2">"text"</span> <span class="nx">placeholder</span><span class="o">=</span><span class="s2">"Todo..."</span> <span class="nx">onChange</span><span class="o">=</span><span class="p">{</span><span class="k">this</span><span class="p">.</span><span class="nx">onMessageChanged</span><span class="p">.</span><span class="nx">bind</span><span class="p">(</span><span class="k">this</span><span class="p">)}</span> <span class="nx">value</span><span class="o">=</span><span class="p">{</span><span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="nx">message</span><span class="p">}</span> <span class="o">/&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">button</span> <span class="nx">type</span><span class="o">=</span><span class="s2">"submit"</span> <span class="nx">value</span><span class="o">=</span><span class="s2">"Add"</span> <span class="o">/&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="err">/form&gt;</span>
+</span><span class="line"> <span class="p">);</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="kr">class</span> <span class="nx">TodoItem</span> <span class="kr">extends</span> <span class="nx">React</span><span class="p">.</span><span class="nx">Component</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">onDeleteClick</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">store</span><span class="p">.</span><span class="nx">dispatch</span><span class="p">(</span><span class="nx">deleteTodo</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">props</span><span class="p">.</span><span class="nx">index</span><span class="p">));</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="nx">onCompletedClick</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">store</span><span class="p">.</span><span class="nx">dispatch</span><span class="p">(</span><span class="nx">completeTodo</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">props</span><span class="p">.</span><span class="nx">index</span><span class="p">));</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="nx">render</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="p">(</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">li</span><span class="o">&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">a</span> <span class="nx">href</span><span class="o">=</span><span class="s2">"#"</span> <span class="nx">onClick</span><span class="o">=</span><span class="p">{</span><span class="k">this</span><span class="p">.</span><span class="nx">onDeleteClick</span><span class="p">.</span><span class="nx">bind</span><span class="p">(</span><span class="k">this</span><span class="p">)}</span><span class="o">&gt;</span><span class="p">[</span><span class="nx">x</span><span class="p">]</span><span class="o">&lt;</span><span class="err">/a&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">a</span> <span class="nx">href</span><span class="o">=</span><span class="s2">"#"</span> <span class="nx">onClick</span><span class="o">=</span><span class="p">{</span><span class="k">this</span><span class="p">.</span><span class="nx">onCompletedClick</span><span class="p">.</span><span class="nx">bind</span><span class="p">(</span><span class="k">this</span><span class="p">)}</span><span class="o">&gt;</span><span class="p">{</span><span class="k">this</span><span class="p">.</span><span class="nx">props</span><span class="p">.</span><span class="nx">message</span><span class="p">}</span><span class="o">&lt;</span><span class="err">/a&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="err">/li&gt;</span>
+</span><span class="line"> <span class="p">);</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="kr">class</span> <span class="nx">TodoList</span> <span class="kr">extends</span> <span class="nx">React</span><span class="p">.</span><span class="nx">Component</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">state</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="p">[]</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"> <span class="nx">componentWillMount</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">store</span><span class="p">.</span><span class="nx">subscribe</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">state</span> <span class="o">=</span> <span class="nx">store</span><span class="p">.</span><span class="nx">state</span><span class="p">();</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">setState</span><span class="p">({</span>
+</span><span class="line"> <span class="nx">items</span><span class="o">:</span> <span class="nx">state</span><span class="p">.</span><span class="nx">todo</span><span class="p">.</span><span class="nx">items</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="nx">render</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="kd">var</span> <span class="nx">items</span> <span class="o">=</span> <span class="p">[];</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="nx">items</span><span class="p">.</span><span class="nx">forEach</span><span class="p">((</span><span class="nx">item</span><span class="p">,</span> <span class="nx">index</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">items</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="o">&lt;</span><span class="nx">TodoItem</span>
+</span><span class="line"> <span class="nx">index</span><span class="o">=</span><span class="p">{</span><span class="nx">index</span><span class="p">}</span>
+</span><span class="line"> <span class="nx">message</span><span class="o">=</span><span class="p">{</span><span class="nx">item</span><span class="p">.</span><span class="nx">message</span><span class="p">}</span>
+</span><span class="line"> <span class="nx">completed</span><span class="o">=</span><span class="p">{</span><span class="nx">item</span><span class="p">.</span><span class="nx">completed</span><span class="p">}</span>
+</span><span class="line"> <span class="o">/&gt;</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="k">return</span> <span class="p">(</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">ol</span><span class="o">&gt;</span><span class="p">{</span> <span class="nx">items</span> <span class="p">}</span><span class="o">&lt;</span><span class="err">/ol&gt;</span>
+</span><span class="line"> <span class="p">);</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="nx">ReactDOM</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">div</span><span class="o">&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">h1</span><span class="o">&gt;</span><span class="nx">Todo</span><span class="o">&lt;</span><span class="err">/h1&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">AddTodoForm</span> <span class="o">/&gt;&lt;</span><span class="nx">hr</span> <span class="o">/&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="nx">TodoList</span> <span class="o">/&gt;</span>
+</span><span class="line"> <span class="o">&lt;</span><span class="err">/div&gt;,</span>
+</span><span class="line"> <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'app'</span><span class="p">)</span>
+</span><span class="line"><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As you can see, building a UI for our Redux application wasn&#x2019;t that hard. The only difference is that you use <code>store.subscribe(listener)</code> to listen to state changes, and then <code>store.getState()</code> to retrieve the state. But besides that, it&#x2019;s very much like building a Flux application.</p>
+
+<h2>Redux Support in Stormpath React SDK</h2>
+
+<p>Because there&#x2019;s been quite a few requests for adding Redux support to the <a href="https://github.com/stormpath/stormpath-sdk-react">Stormpath React SDK</a>, we went ahead and did that. If you want to configure the SDK to use Redux, simply configure the <a href="https://github.com/stormpath/stormpath-sdk-react">Stormpath React SDK</a> with the <code>dispatcher</code> option and set the <code>type</code> to <code>redux</code> and point <code>store</code> to your Redux store as shown below:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">myApp</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span> <span class="nx">action</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">state</span><span class="p">;</span>
+</span><span class="line"><span class="p">}</span>
+</span><span class="line"><span class="nx">ReactStormpath</span><span class="p">.</span><span class="nx">init</span><span class="p">({</span>
+</span><span class="line"> <span class="nx">dispatcher</span><span class="o">:</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">type</span><span class="o">:</span> <span class="s1">'redux'</span><span class="p">,</span>
+</span><span class="line"> <span class="nx">store</span><span class="o">:</span> <span class="nx">createStore</span><span class="p">(</span><span class="nx">myApp</span><span class="p">)</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Once this is done you can intercept and handle all actions dispatched from the <a href="https://github.com/stormpath/stormpath-sdk-react">Stormpath React SDK</a>. For example, if you wish to enrich your state with user data, then simply handle the <code>USER_SET</code> action and add the user data to your state.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">myApp</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span> <span class="nx">action</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">switch</span> <span class="p">(</span><span class="nx">action</span><span class="p">.</span><span class="nx">type</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">case</span> <span class="s1">'USER_SET'</span><span class="o">:</span>
+</span><span class="line"> <span class="k">return</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">assign</span><span class="p">({},</span> <span class="nx">state</span><span class="p">,</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">user</span><span class="o">:</span> <span class="nx">action</span><span class="p">.</span><span class="nx">data</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="k">default</span><span class="o">:</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">state</span><span class="p">;</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Wrapping Up</h2>
+
+<p>As you just saw in this post, building a Redux driven application is pretty easy and straight forward. It&#x2019;s very much like building one with Flux, just that the concepts are slightly different and there&#x2019;s less boilerplate code to write.</p>
+
+<p>Hopefully you enjoyed following this tutorial and you&#x2019;ll find use of it in the future.</p>
+
+<p>If there&#x2019;s anything that didn&#x2019;t work or that you had trouble with, please take a look at the <a href="http://github.com/typerandom/stormpath-react-flux-todo-example-application">reference application</a>.</p>
+
+<p>And if you have any feedback, please let me know in the comment section below.</p>
+
+<h2>Further Reading</h2>
+
+<p>Want to learn more about adding user authentication to React applications? Check out these tutorials:</p>
+
+
+
+</div>
+
+ </div>
+</body></html>

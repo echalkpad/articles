@@ -1,0 +1,142 @@
+<!DOCTYPE html><html><head><title>Launching nginScript and Looking Ahead - NGINX</title></head><body>
+<h1>Launching nginScript and Looking Ahead - NGINX</h1><p><a href="https://www.nginx.com/blog/launching-nginscript-and-looking-ahead/" target="_new">Original URL</a></p>
+<p><blockquote>I&#x2019;ve been wanting to add more scripting capabilities to NGINX for a long time. Scripting lets people do more in NGINX without having to write C modules, for example. Lua is a good tool in this&hellip;</blockquote></p>
+<div><div class="entry-content blog-post">
+		<p>I&#x2019;ve been wanting to add more scripting capabilities to NGINX for a long time. Scripting lets people do more in NGINX without having to write C modules, for example. Lua is a good tool in this area, but it&#x2019;s not as widely known as some other languages.</p>
+<p>JavaScript was the most obvious language to add next. It&#x2019;s the most popular language&#xA0;&#x2013;&#xA0;<a target="_blank" href="http://venturebeat.com/2015/08/19/here-are-the-top-10-programming-languages-used-on-github/">#1 on GitHub</a> for the past three years. JavaScript is also a good fit for the way we configure NGINX.</p>
+<p>I recently <a href="https://www.nginx.com/blog/nginx-open-source-reflecting-back-and-looking-ahead/">announced</a> a working prototype of a JavaScript virtual machine (VM) that would be embedded within NGINX. Today we announced the launch of the first preview of this software, <i>nginScript</i>, at <a href="https://www.nginx.com/nginxconf/">nginx.conf 2015</a>.</p>
+<p>This is another milestone in the development of NGINX open source software and NGINX Plus. I want to take the opportunity to explain what nginScript is, describe why it&#x2019;s needed, share some examples, and talk about the future.</p>
+<h2>What nginScript Is</h2>
+<p>nginScript is a robust implementation of much of JavaScript, including the parts most useful for configuring NGINX. Some less-used parts of JavaScript and some less relevant built-in objects are not supported.</p>
+<p>nginScript can be used for quick fixes, making NGINX configuration more convenient and operations more efficient. But, because it runs at the application delivery level, it will also enable you to refactor your applications for greater long-term stability, security, and scale.</p>
+<p>nginScript has two parts:</p>
+<ol>
+<li>A custom virtual machine (VM) and byte-code compiler with a very fast start-up and tear-down time. Blocking operations, such as an HTTP subrequest, can be suspended and resumed, in the same way as other blocking operations in JavaScript.</li>
+<li>A configuration syntax for embedding snippets of JavaScript in your NGINX configuration. These snippets are evaluated at runtime, as HTTP transactions proceed. You can create powerful conditional configurations, modify requests and responses on the fly, and adjust the internal operations of NGINX specifically for each request.</li>
+</ol>
+<p>There are currently several popular JavaScript VMs out there, but they are optimized for use with browsers. The nginScript VM is focused on server requirements. We run a separate VM for each request, so there&#x2019;s no need for garbage collection. And an nginScript program can be pre-empted so NGINX code can run.</p>
+<h2>What nginScript Makes Possible</h2>
+<p>nginScript has a wide range of potential uses. The following capabilities are available today, and they will be extended over time:</p>
+<ul>
+<li><b>Defend against security threats</b> &#x2013; nginScript can dynamically respond to abusive traffic sources by rate-limiting or denying requests.</li>
+<li><b>Gain richer control over traffic</b> &#x2013; You can implement flexible control over how traffic is routed using information in the request or other sources.</li>
+<li><b>Consolidate functions across applications</b> &#x2013; You can move duplicated functionality out of applications and into the application delivery platform.</li>
+<li><b>Speed application development with function libraries</b> &#x2013; nginScript code can be developed, reused, improved, stored, and shared.</li>
+</ul>
+<p>In the future, we&#x2019;ll add more capabilities to nginScript and broaden its scope, so you can use it for tasks such as fixing application bugs, changing business rules, personalizing the user experience, and sharding requests across servers and aggregating the replies.</p>
+<h2>nginScript in Action</h2>
+<p>There are two new directives that can be used to insert JavaScript code into NGINX, <code>js_set</code> and <code>js_run</code>.</p>
+<h3>js_set</h3>
+<p>The <code>js_set</code> directive sets the value of a variable to the result of the execution of JavaScript code:</p>
+<pre><code>http {
+ js_set $hello_world "
+ var str = 'Hello World!';
+ // JavaScript
+ str;
+ ";
+
+ server {
+ ...
+ location /{
+ return 200 $hello_world;
+ }
+ }
+}</code></pre>
+<p>In the above example, the value of <code>$hello_world</code> is set to the value of the last statement in the JavaScript code. The client is then returned the value of this variable: &#x201C;Hello World!&#x201D;.</p>
+<p>A variable set by <code>js_set</code> can be used in any NGINX directive that takes a variable parameter, such as <code>limit_req_zone</code>, <code>proxy_pass</code>, and <code>sub_filter</code>.</p>
+<h3>js_run</h3>
+<p>The <code>js_run</code> directive is evaluated at the content-generation stage. It&#x2019;s used to execute JavaScript natively and generate an HTTP response. It goes inside a <code>location</code> block and triggers execution of JavaScript code when the location matches a request URL.</p>
+<pre><code>location / {
+ js_run "
+ var res;
+ res = $r.response;
+ res.status = 200;
+ res.send('Hello World!');
+ res.finish();
+ ";
+}
+</code></pre>
+<h3>Request Parameters</h3>
+<p>With nginScript you have full access to the request parameters, with the <code>$r</code> variable. The following example returns the request parameters back to the requester.</p>
+<pre><code>http {
+ js_set $summary "
+ var a, s, h;
+
+ s = 'JS summary\n\n';
+
+ s += 'Method: ' + $r.method + '\n';
+ s += 'HTTP version: ' + $r.httpVersion + '\n';
+ s += 'Host: ' + $r.headers.host + '\n';
+ s += 'Remote Address: ' + $r.remoteAddress + '\n';
+ s += 'URI: ' + $r.uri + '\n';
+
+ s += 'Headers:\n';
+ for (h in $r.headers) {
+ s += ' header \"' + h + '\" is \"' + $r.headers[h] + '\"\n';
+ }
+
+ s += 'Args:\n';
+ for (a in $r.args) {
+ s += ' arg \"' + a + '\" is \"' + $r.args[a] + '\"\n';
+ }
+
+ s;
+ ";
+
+ server {
+ listen 8000;
+
+ location /summary {
+ return 200 $summary;
+ }
+}</code></pre>
+<h3>Custom Request Routing</h3>
+<p>With the <code>location</code> block in NGINX you can route traffic based on URI. With nginScript you can route traffic based on any data in the request, including cookies, headers, arguments, or any keywords in the request body. The following example routes traffic based on the presence of an argument named <code>upstream</code>:</p>
+<pre><code>upstream my_upstream0 {
+ server server1.example.com;
+ server server2.example.com;
+}
+upstream my_upstream1 {
+ server server3.example.com;
+ server server4.example.com;
+}
+
+js_set $my_upstream "
+ var s, upstream, upstream_num;
+
+ upstream = $r.args.upstream;
+
+ // convert upstream number to integer
+ upstream_num = +upstream;
+
+ if (upstream_num &lt; 0 || upstream_num &gt; 1) {
+ upstream_num = 0;
+ }
+
+ s = 'my_upstream' + upstream_num;
+
+ s;
+";
+
+server {
+ listen 80;
+
+ location / {
+ proxy_set_header Host $host;
+ proxy_pass http://$my_upstream;
+ }
+}</code></pre>
+<h2>The Future of nginScript</h2>
+<p>Our goal is to make NGINX the connective tissue and traffic management layer for all modern web applications. Embedding JavaScript in NGINX is a major step in this direction. nginScript joins Lua, Perl, and modules as robust ways to extend NGINX.</p>
+<p>nginScript is not intended to replace Lua or other embedded languages in NGINX. JavaScript has now been added to the existing community of extensions to NGINX, and we expect the number of alternatives continues to grow in the future.</p>
+<p>nginScript enables testing and prototyping, functionality and security fixes, and strategic refactoring of application development and deployment. We look forward to your feedback as you try out nginScript and consider its long-term place in your application development and delivery strategy.</p>
+<p>For more information, check out these resources:</p>
+<ul>
+<li><a href="https://www.nginx.com/resources/wiki/nginScript/">Wiki documentation</a></li>
+<li><a target="_blank" href="http://hg.nginx.org/njs/file/11d4d66851ed/README">README</a></li>
+<li><a target="_blank" href="http://hg.nginx.org/njs">Mercurial repository</a></li>
+</ul>
+<p>To provide feedback, please use our <a target="_blank" href="http://mailman.nginx.org/mailman/listinfo/nginx">mailing list</a>. </p>
+	</div>
+</div>
+</body></html>

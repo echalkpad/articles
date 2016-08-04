@@ -1,0 +1,301 @@
+<!DOCTYPE html><html><head><title>Heroku-like WordPress Deployments with git & dokku | Exygy</title></head><body>
+<h1>Heroku-like WordPress Deployments with git & dokku | Exygy</h1><p><a href="http://exygy.com/heroku-like-wordpress-deployments-with-git-and-dokku/" target="_new">Original URL</a></p>
+<p><blockquote>This is part 2 of a 3 part tutorial: For WordPress sites, I&#x2019;m always in search of making updates as easy as possible. For me, this means using some form of git deployment. There are a number&hellip;</blockquote></p>
+<div><div class="article-body clearfix">
+
+					<p>This is part 2 of a 3 part tutorial:</p>
+
+<p>For WordPress sites, I&#x2019;m always in search of making updates as easy as possible. For me, this means using some form of git deployment. There are a number of options for WordPress-powered sites. WP Engine and Pantheon have excellent git based deployment systems if you&#x2019;re looking for a managed server environment. You can roll your own Capistrano setup, if you have the ability to change the web root to a symlink (usually need root access on a VPS). Probably the simplest version is to have your web server work as a bare git remote and use the post-receive hook to checkout the new code into your web root.</p>
+<p>dokku is a newer option, that combines git, Heroku build packs, and docker for a sweet container based server setup. Let&#x2019;s see what it takes for us to get WordPress up and running with dokku.</p>
+
+<p>See <a href="http://exygy.com/dokku-a-mini-heroku-on-your-vps" title="dokku: a mini-Heroku on your VPS">part 1</a> of this tutorial for getting a server setup</p>
+<h3 id="wordpress-git-repo">2. Start a new git repo with a copy of WordPress.</h3>
+<p>I like to run the root of the website from a subdirectory in my application repository, so my configuration files aren&#x2019;t hanging around in the web root. So let&#x2019;s create a git repo with WordPress core in the <code>/web</code> directory</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ curl -O https://wordpress.org/latest.zip # get the latest version of WordPress
+$ unzip latest.zip
+$ mkdir mysite # or whatever you&#x2019;d like your site repo to be called
+$ mv wordpress mysite/web # move WordPress into a subdirectory of your repo
+$ cd mysite
+$ git init</pre>
+<p>Add a WordPress specific <code>.gitignore</code> file:</p>
+<pre class="brush: plain; title: ; notranslate" title=""># Always-ignore extensions #
+############################
+*.bak
+*.diff
+*.err
+*.orig
+*.log
+*.rej
+*.swo
+*.swp
+*.zip
+*.vi
+*~
+*.un~
+*.sass-cache
+
+# OS generated files #
+######################
+*~
+.svn
+.cvs
+.DS_Store*
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+.cache
+.project
+.settings
+.tmproj
+*.esproj
+nbproject
+*.sublime*
+
+# Folders to ignore #
+#####################
+.hg
+.svn
+.CVS
+.idea
+node_modules
+dist
+.rvmrc
+.vagrant
+vendor
+
+# WordPress files #
+###################
+.env
+**/wp-content/uploads/
+**/wp-content/blogs.dir/
+**/wp-content/upgrade/
+**/wp-content/backup-db/
+**/wp-content/wp-cache-config.php
+**/wp-content/cache/
+**/wp-content/backups/
+sitemap.xml
+sitemap.xml.gz</pre>
+<p>Make your first commit:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ git add .
+$ git commit -m &#x201C;Initial commit&#x201D;</pre>
+<h3 id="configureourapplicationtoforusingphp">3. Configure our application to for using php</h3>
+<p>The <a href="https://github.com/heroku/heroku-buildpack-php">Heroku php buildpack</a> uses composer for configuration and setup.</p>
+<p>a. Install composer for your system: <a href="https://getcomposer.org/doc/00-intro.md">https://getcomposer.org/doc/00-intro.md</a></p>
+<p>Installing through <a href="http://brew.sh/">homebrew</a> is recommended for Mac OSX users:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ brew tap homebrew/dupes
+$ brew tap homebrew/versions
+$ brew tap homebrew/homebrew-php
+$ brew update
+$ brew install composer</pre>
+<p>b. Create a composer.json file:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ composer init
+
+Welcome to the Composer config generator 
+This command will guide you through creating your composer.json config.
+
+Package name (&lt;vendor&gt;/&lt;name&gt;) [you/mysite]: you/mysite
+Description []: WordPress powered website
+Author [John Doe &lt;john@doe.com&gt;]: 
+Minimum Stability []: stable
+License []: GPL-2.0
+
+Define your dependencies.
+
+Would you like to define your dependencies (require) interactively [yes]? no
+Would you like to define your dev dependencies (require-dev) interactively [yes]? no
+
+{
+ &#x201C;name&#x201D;: &#x201C;you/mysite&#x201D;,
+ &#x201C;description&#x201D;: &#x201C;WordPress powered website&#x201D;,
+ &#x201C;license&#x201D;: &#x201C;GPL-2.0&#x201D;,
+ &#x201C;authors&#x201D;: [
+ {
+ &#x201C;name&#x201D;: &#x201C;John Doe&#x201D;,
+ &#x201C;email&#x201D;: &#x201C;john@doe.com&#x201D;
+ }
+ ],
+ &#x201C;minimum-stability&#x201D;: &#x201C;stable&#x201D;,
+ &#x201C;require&#x201D;: {}
+}
+
+Do you confirm generation [yes]? yes</pre>
+<p>Now add which version of php we require:</p>
+<pre class="brush: bash; title: ; notranslate" title="">&#x201C;require&#x201D;: {
+ &#x201C;php&#x201D;: &#x201C;&gt;=5.2.4&#x201D;
+}</pre>
+<p>And add our <code>composer.json</code> to git:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ git add .
+$ git commit -m &#x201C;Added composer configuration&#x201D;</pre>
+<h3 id="configurethewebserver">4. Configure the web server</h3>
+<p>Heroku&#x2019;s php build pack offers a number of configuration options:</p>
+<p><a href="https://devcenter.heroku.com/categories/php">https://devcenter.heroku.com/categories/php</a></p>
+<p>Of particular interest are</p>
+<p><a href="https://devcenter.heroku.com/articles/php-support">https://devcenter.heroku.com/articles/php-support</a><br>
+<a href="https://devcenter.heroku.com/articles/custom-php-settings">https://devcenter.heroku.com/articles/custom-php-settings</a></p>
+<p>First we need to create a Procfile. This will tell the buildpack which web server to use, what the web root should be, and specify a custom configuration file.</p>
+<pre class="brush: bash; title: ; notranslate" title="">web: vendor/bin/heroku-php-nginx -C config/nginx-custom.conf web/</pre>
+<p>This tells the buildpack</p>
+<ul>
+<li>Use nginx for the web server</li>
+<li>Add the settings in <code>config/nginx-custom.conf</code> to the configuration</li>
+<li>Serve the site from the <code>web/</code> directory (this should always be the last argument in the command, after any other options)</li>
+</ul>
+<p>nginx needs some custom settings for WordPress to work correctly. Let&#x2019;s create our <code>config/nginx.custom.conf</code> file</p>
+<pre class="brush: plain; title: ; notranslate" title=""># Custom nginx configuration #
+##############################
+
+# WordPress permalinks
+location / {
+ index index.php index.html;
+ try_files $uri $uri/ /index.php?$args;
+}
+
+# Everything below here is optional, but recommended
+
+# Add trailing slash to */wp-admin requests.
+rewrite /wp-admin$ $scheme://$host$uri/ permanent;
+
+# Deny access to any files with a .php extension in the uploads directory
+# Works in sub-directory installs and also in multisite network
+location ~* /(?:uploads|files)/.*.php$ {
+ deny all;
+}
+
+# enable gzip compression
+ gzip on;
+ # Minimum file size in bytes (really small files aren&#x2019;t worth compressing)
+ gzip_min_length 1000;
+ # Compression level, 1-9
+ gzip_comp_level 2;
+ gzip_buffers 4 32k;
+ gzip_types text/plain application/javascript text/xml text/css image/svg+xml;
+ # Insert `Vary: Accept-Encoding` header, as specified in HTTP1.1 protocol 
+ gzip_vary on;
+# end gzip configuration
+
+# Set time to expire for headers on assets
+location ~* .(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+ expires 1y;
+}
+
+# Sitemap url, for WordPress SEO plugin
+rewrite ^/sitemap_index.xml$ /index.php?sitemap=1 last;
+rewrite ^/([^/]+?)-sitemap([0-9]+)?.xml$ /index.php?sitemap=$1&amp;amp;sitemap_n=$2 last;&lt;/code&gt;&lt;/pre&gt;
+Now commit our configuration files to git.</pre>
+<h3 id="deploytodokku">5. Deploy to dokku</h3>
+<p>We&#x2019;re ready for our first deployment to dokku. Add dokku as a git remote and push.</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ git remote add dokku dokku@myserver.com:my site
+$ git push dokku master
+Counting objects: 1275, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (1251/1251), done.
+Writing objects: 100% (1275/1275), 5.94 MiB | 388.00 KiB/s, done.
+Total 1275 (delta 101), reused 0 (delta 0)
+&#x2014;&#x2014;&gt; Cleaning up &#x2026;
+&#x2014;&#x2014;&gt; Building mysite &#x2026;
+&#x2014;&#x2014;&gt; PHP app detected
+&#x2014;&#x2014;&gt; Resolved composer.json requirement for PHP &gt;=5.2.4 to version 5.6.1.
+&#x2014;&#x2014;&gt; Installing system packages&#x2026;
+ - PHP 5.6.1
+ - Apache 2.4.10
+ - Nginx 1.6.0
+&#x2014;&#x2014;&gt; Installing PHP extensions&#x2026;
+ - zend-opcache (automatic; bundled, using &#x2018;ext-zend-opcache.ini&#x2019;)
+&#x2014;&#x2014;&gt; Installing dependencies&#x2026;
+ Composer version 1.0-dev (1d8f05f1dd0e390f253f79ea86cd505178360019) 2015-02-11 11:31:57
+ Loading composer repositories with package information
+ Installing dependencies
+ Nothing to install or update
+ Generating optimized autoload files
+&#x2014;&#x2014;&gt; Preparing runtime environment&#x2026;
+&#x2014;&#x2014;&gt; Discovering process types
+ Procfile declares types -&gt; web
+ Default process types for PHP -&gt; web
+&#x2014;&#x2014;&gt; Releasing mysite &#x2026;
+&#x2014;&#x2014;&gt; Deploying mysite &#x2026;
+&#x2014;&#x2014;&gt; Running pre-flight checks
+ check-deploy: /home/dokku/mysite/CHECKS not found. attempting to retrieve it from container &#x2026;
+ CHECKS file not found in container. skipping checks.
+&#x2014;&#x2014;&gt; Running post-deploy
+&#x2014;&#x2014;&gt; Creating new /home/dokku/mysite/VHOST&#x2026;
+&#x2014;&#x2014;&gt; Configuring mysite.myserver.com&#x2026;
+&#x2014;&#x2014;&gt; Creating http nginx.conf
+&#x2014;&#x2014;&gt; Running nginx-pre-reload
+ Reloading nginx
+=====&gt; Application deployed:
+ http://mysite.myserver.com
+
+To dokku:mysite
+ 01orgvirtualstoragemanager.md avrtutorial.md azureazurexplatcli.md data.json data_ml devops docker embedded gaming github go how_to_create_flexible_services_for_a_coreos_cluster_with_fleet_unit_files.md how_to_serve_flask_applications_with_uwsgi_and_nginx_on_ubuntu_1404.md how_to_set_up_automatic_deployment_with_git_with_a_vps.md how_to_use_fabric_to_automate_administration_tasks_and_deployments.md how_to_use_fleet_and_fleetctl_to_manage_your_coreos_cluster.md html installing_paz_on_digital_ocean_·_paz.md javascript linux mobile null.md one_ui_to_rule_them_all_manage_your_docker_containers_along_with_your_servers_and_vms.md piwigo_is_open_source_photo_gallery_software_for_the_web.md png programming quick_start_guide_—_gluster.md recordit_blog.md science simple_blog_deployment_using_ghost_and_docker__packt.md social storage_ceph.md tidy url_to_filename.csv web_dev yodlrcoregi.md [new branch] master -&gt; master</pre>
+<p>Woohoo! You&#x2019;ve deployed the site. Now visit mysite.myserver.com.</p>
+<p><a href="http://exygy.com/wp-content/uploads/2015/02/Screen-Shot-2015-02-12-at-2.16.50-PM.png"><img class="alignnone size-medium wp-image-1933" src="http://exygy.com/wp-content/uploads/2015/02/Screen-Shot-2015-02-12-at-2.16.50-PM-198x300.png" alt="Screen Shot 2015-02-12 at 2.16.50 PM" width="198"></a></p>
+<p>You&#x2019;re prompted to setup WordPress. However, we still need a database for WordPress to work. It would also be nice to have a domain.</p>
+<h3 id="domainforourwordpresssiteoptional">6. Domain for our WordPress site (optional)</h3>
+<p>If we want our site to have it&#x2019;s own domain, rather than just a subdomain of myserver.com, dokku makes it easy for our web server to assign a domain to this application.</p>
+<pre class="brush: bash; title: ; notranslate" title=""># To access the site from http://mysite.com
+$ ssh -t dokku@myserver.com domains:add mysite mysite.com</pre>
+<p>After change your domain&#x2019;s DNS settings to point to your dokku server you should now be able to visit the site in your browser using the domain you specified.</p>
+<h3 id="setupadatabase">7. Setup a database</h3>
+<p>dokku has several plugins that extend its functionality, like for databases and caching. Let&#x2019;s add mariadb as a database to our application. (mariadb is a drop-in, fully compatible alternative to mysql)</p>
+<p><a href="https://github.com/ohardy/dokku-mariadb">Maria DB plugin for dokku</a></p>
+<p>This plugin is meant to use one database container for all of your applications. If you prefer a separate container for each app, try <a href="https://github.com/Kloadut/dokku-md-plugin">https://github.com/Kloadut/dokku-md-plugin</a></p>
+<p>To setup, ssh into your dokku server. You should run these commands with root privileges:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ cd /var/lib/dokku/plugins
+$ sudo git clone https://github.com/ohardy/dokku-mariadb mariadb
+$ sudo dokku plugins-install</pre>
+<p>Now, from your local machine, setup a database for the WordPress site:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ ssh -t dokku@myserver.com mariadb:start
+$ ssh -t dokku@myserver.com mariadb:create mysite
+
+# We should now see a database with the same name as our application
+ssh -t dokku@myserver.com mariadb:list
+Database
+information_schema
+mysql
+performance_schema
+mysite</pre>
+<h3 id="configurewordpress">8. Configure WordPress</h3>
+<p>Create a <code>wp-config.php</code> file with with database credentials:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ cp web/wp-config-sample.php web/wp-config.php</pre>
+<p>And add our database credentials. The mariadb plugin add them to the server environment, so we can access them with <code>get_env()</code>. Note that the password is <code>&#x2019;DB_PASS&#x2019;</code> (as opposed to the WordPress php constant, <code>DB_PASSWORD</code>) and to include both the host and port for <code>&#x2019;DB_HOST&#x2019;</code> :</p>
+<pre class="brush: bash; title: ; notranslate" title="">// 01orgvirtualstoragemanager.md avrtutorial.md azureazurexplatcli.md data.json data_ml devops docker embedded gaming github go how_to_create_flexible_services_for_a_coreos_cluster_with_fleet_unit_files.md how_to_serve_flask_applications_with_uwsgi_and_nginx_on_ubuntu_1404.md how_to_set_up_automatic_deployment_with_git_with_a_vps.md how_to_use_fabric_to_automate_administration_tasks_and_deployments.md how_to_use_fleet_and_fleetctl_to_manage_your_coreos_cluster.md html installing_paz_on_digital_ocean_·_paz.md javascript linux mobile null.md one_ui_to_rule_them_all_manage_your_docker_containers_along_with_your_servers_and_vms.md piwigo_is_open_source_photo_gallery_software_for_the_web.md png programming quick_start_guide_—_gluster.md recordit_blog.md science simple_blog_deployment_using_ghost_and_docker__packt.md social storage_ceph.md tidy url_to_filename.csv web_dev yodlrcoregi.md MySQL settings - You can get this info from your web host 01orgvirtualstoragemanager.md avrtutorial.md azureazurexplatcli.md data.json data_ml devops docker embedded gaming github go how_to_create_flexible_services_for_a_coreos_cluster_with_fleet_unit_files.md how_to_serve_flask_applications_with_uwsgi_and_nginx_on_ubuntu_1404.md how_to_set_up_automatic_deployment_with_git_with_a_vps.md how_to_use_fabric_to_automate_administration_tasks_and_deployments.md how_to_use_fleet_and_fleetctl_to_manage_your_coreos_cluster.md html installing_paz_on_digital_ocean_·_paz.md javascript linux mobile null.md one_ui_to_rule_them_all_manage_your_docker_containers_along_with_your_servers_and_vms.md piwigo_is_open_source_photo_gallery_software_for_the_web.md png programming quick_start_guide_—_gluster.md recordit_blog.md science simple_blog_deployment_using_ghost_and_docker__packt.md social storage_ceph.md tidy url_to_filename.csv web_dev yodlrcoregi.md //
+/** The name of the database for WordPress */
+define(&#x2018;DB_NAME&#x2019;, getenv(&#x2018;DB_NAME&#x2019;));
+
+/** MySQL database username */
+define(&#x2018;DB_USER&#x2019;, getenv(&#x2018;DB_USER&#x2019;));
+
+/** MySQL database password */
+define(&#x2018;DB_PASSWORD&#x2019;, getenv(&#x2018;DB_PASS&#x2019;));
+
+/** MySQL hostname */
+define(&#x2018;DB_HOST&#x2019;, getenv(&#x2018;DB_HOST&#x2019;).&#x2019;:&#x2019;.getenv(&#x2018;DB_PORT&#x2019;));</pre>
+<p>It&#x2019;s also a good idea to fill out the authentication keys and salts, by visiting <a href="https://api.wordpress.org/secret-key/1.1/salt/">https://api.wordpress.org/secret-key/1.1/salt/</a> and pasting that into the file. You could also get fancy and add them as environmental variables to your dokku application environment, but I&#x2019;ll leave that for you to figure out.</p>
+<p>Commit <code>wp-config.php</code> to git, and push to dokku. You should now be able to finish WordPress setup from mysite.com</p>
+<p><a href="http://exygy.com/wp-content/uploads/2015/02/Screen-Shot-2015-02-12-at-3.03.57-PM.png"><img class="alignnone size-medium wp-image-1934" src="http://exygy.com/wp-content/uploads/2015/02/Screen-Shot-2015-02-12-at-3.03.57-PM-246x300.png" alt="Screen Shot 2015-02-12 at 3.03.57 PM" width="246"></a></p>
+<h3 id="uploads">9. Uploads</h3>
+<p>We&#x2019;re almost there. Now you should have a functioning WordPress site. However, whenever you update the code for the site, the server environment is recreated from scratch. This means that any file uploads will get wiped out. We need to use set a persistent volume for our <code>wp-content/uploads</code> folder to save our uploads.</p>
+<p>Let&#x2019;s leverage another docker plugin, <a href="https://github.com/ohardy/dokku-volume">https://github.com/ohardy/dokku-volume</a></p>
+<p>ssh into our dokku server to install:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ cd /var/lib/dokku/plugins
+$ sudo git clone https://github.com/ohardy/dokku-volume volume
+$ sudo dokku plugins-install</pre>
+<p>And now, from our local machine, configure the volume. We need to reference the path absolutely (with a leading <code>/</code>). Docker runs our app from within an <code>app/</code> directory, so we reference the uploads folder from there:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ ssh -t dokku@myserver.com volume:add mysite /app/web/wp-content/uploads 
+$ ssh -t dokku volume:list mysite
+/home/dokku/.o_volume/data/random-hash:/app/web/wp-content/uploads</pre>
+<p>In order to activate the volume, we need to push our application again. Make some incremental change, like adding an extra line, commit, and push to dokku.</p>
+<p>Now upload an image. To check and make sure our volume is working, ssh into your dokku server:</p>
+<pre class="brush: bash; title: ; notranslate" title="">$ ls /home/dokku/.o_volume/data/random-hash # use the same hash that displayed above when we listed the volumes</pre>
+<p>You should see a folder for the current year, after you&#x2019;ve uploaded a file. Now uploads will persist across deployments.</p>
+<p>You now have a working WordPress site running on dokku!</p>
+<p>In Part III of this tutorial, I&#x2019;ll cover optimizing your WordPress site with redis caching and configuring SSL. And let me know in the comments if there&#x2019;s anything else I should cover about WordPress and dokku.</p>
+
+				</div>
+
+									
+							</div>
+</body></html>

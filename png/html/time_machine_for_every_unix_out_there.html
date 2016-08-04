@@ -1,0 +1,95 @@
+<!DOCTYPE html><html><head><title>Time Machine for every Unix out there</title></head><body>
+<h1>Time Machine for every Unix out there</h1><p><a href="https://blog.interlinked.org/tutorials/rsync_time_machine.html" target="_new">Original URL</a></p>
+<p><blockquote>Using rsync to mimic the behavior of Apple's Time Machine feature rsync is one of the tools that have gradually infiltrated my day to day tool-box (aside Vim and Zsh). Using rsync it&#x2019;s very&hellip;</blockquote></p>
+<div><h2 class="entryTagline">Using rsync to mimic the behavior of Apple's Time Machine feature</h2>
+
+<div class="entryContent">
+
+ 
+ <p><a href="http://rsync.samba.org">rsync</a> is one of the tools that have gradually infiltrated my day to day tool-box (aside Vim and Zsh).</p>
+<p>Using rsync it&#x2019;s very easy to mimic Mac OS X new feature called Time Machine. In this article I&#x2019;ll show how to do it, but there is still a nice <span class="caps">GUI</span> missing &#x2013; for those who like it shiny.</p>
+<h2>What Time Machine does</h2>
+<p>Time Machine makes a snapshot of your files every hour. The files are usually stored on a external hard drive connected to your Mac via <span class="caps">USB</span> or Firewire. Earlier Leopard versions (<span class="caps">ADC</span> preview versions) had the ability to make the backups to a remote drive (I&#x2019;ve heard).</p>
+<p>So if you lose a file, or did a devastating change to one of your files, simply go back in time until you find your file or a version that&#x2019;s not corrupted.</p>
+<p>Incrementally backing up all files every hour so that you can access them in reversed chronological order isn&#x2019;t that hard with standard Unix utilities like rsync. The only missing thing is a nice <span class="caps">GUI</span> for which Apple is known to be quite good at.</p>
+<h2>Making full backups in no time every hour</h2>
+<p>You can use this method to make a backup every hour or every ten minutes if you like. There are many many features you can tune or configure to your own taste &#x2013; excluding files that are larger than 1GB for example.</p>
+<p>So, here the command to make the backup:</p>
+<div class="highlight"><pre><code class="bash">rsync -aP --link-dest<span class="o">=</span>PATHTO/<span class="nv">$PREVIOUSBACKUP</span> <span class="nv">$SOURCE</span> <span class="nv">$CURRENTBACKUP</span>
+</code></pre></div><p>Lets go through the parameters step by step.</p>
+<ul>
+	<li><code>-a</code> means Archive and includes a bunch of parameters to recurse directories, copy symlinks as symlinks, preserve permissions, preserve modification times, preserve group, preserve owner, and preserve device files. You usually want that option for all your backups.</li>
+	<li><code>-P</code> allows rsync to continue interrupted transfers and show a progress status for each file. This isn&#x2019;t really necessary but I like it.</li>
+	<li><code>--link-dest</code> this is a neat way to make full backups of your computers without losing much space. rsync links unchanged files to the previous backup (using hard-links, see below if you don&#x2019;t know hard-links) and only claims space for changed files. This only works if you have a backup at hand, otherwise you have to make at least one backup beforehand.</li>
+	<li><code>PATHTO/$PREVIOUSBACKUP</code> is the path to the previous backup for linking. Note: if you delete this directory, <strong>no other backup is harmed</strong> because rsync uses <strong>hard-links</strong> and the operating system (or filesystem) takes care of releasing space if no link points to that region anymore.</li>
+	<li><code>$SOURCE</code> is the directory you&#x2019;d like to backup.</li>
+	<li><code>$CURRENTBACKUP</code> is the directory to which you&#x2019;d like to make the backup. This should be a <strong>non-existing directory</strong>.</li>
+</ul>
+<p>As said earlier, rsync has many many features. To exclude files over a certain size for example, use the option <code>--max-size</code> (unfortunately this is not available on the rsync version shipped with Mac OS X Leopard). The man page or the <a href="http://rsync.samba.org/documentation.html">documentation</a> can give you plenty of ideas in this direction.</p>
+<p>So much for the theory of the most important command for our purpose. Here a simple script that makes an incremental backup every time you call it:</p>
+<div class="highlight"><pre><code class="bash"><span class="c">#!/bin/sh</span>
+
+<span class="nv">date</span><span class="o">=</span><span class="sb">`</span>date <span class="s2">"+%Y-%m-%dT%H:%M:%S"</span><span class="sb">`</span>
+rsync -aP --link-dest<span class="o">=</span><span class="nv">$HOME</span>/Backups/current /path/to/important_files <span class="nv">$HOME</span>/Backups/back-<span class="nv">$date</span>
+rm -f <span class="nv">$HOME</span>/Backups/current
+ln -s back-<span class="nv">$date</span> <span class="nv">$HOME</span>/Backups/current
+</code></pre></div><p>The script creates a file called &#x201C;back&#x201D; appended by the current date and time, for example <code>back-2007-11-13T22:03:32</code> which contains the <strong>full backup</strong>. Then there is a symbolic link called &#x201C;current&#x201D; which points to the most recent directory. This directory-link is used for the <code>--link-dest</code> parameter.</p>
+<p>You should look at the <code>--exclude</code> parameter (or better, <code>--exclude-from=</code> parameter) and learn how to exclude certain files or directories from the backup (you shouldn&#x2019;t backup your backup for example).</p>
+<p>The script above only works on the local machine because making links on a remote machine needs some extra work. But not much:</p>
+<div class="highlight"><pre><code class="bash"><span class="c">#!/bin/sh</span>
+
+<span class="nv">date</span><span class="o">=</span><span class="sb">`</span>date <span class="s2">"+%Y-%m-%dT%H:%M:%S"</span><span class="sb">`</span>
+rsync -azP --link-dest<span class="o">=</span>PATHTOBACKUP/current <span class="nv">$SOURCE</span> <span class="nv">$HOST</span>:PATHTOBACKUP/back-<span class="nv">$date</span>
+ssh <span class="nv">$HOST</span> <span class="s2">"rm -f PATHTOBACKUP/current &amp;&amp; ln -s back-$date PATHTOBACKUP/current"</span>
+</code></pre></div><p>The <code>-f</code> parameter for the <code>rm</code> command is used to supress error messages if the <code>current</code> directory is not present, which would in turn prevent the link to be created.</p>
+<p>To get that working you either use a public/private key authentication scheme or something else to avoid typing in your password. Another possibility is, of course, to mount the remote file-system on the local computer using the above script.</p>
+<p>On my setup the script takes about 6 seconds to synchronize 46968 files and 29GB &#x2013; this takes 20MB for the file structure (with no actual files to transfer of course). But afterwards, I have a complete backup of my system in a new directory.</p>
+<p>On a much bigger setup (1.2 million files and 50GB of data) the backup takes about 30 minutes and takes about 3GB of space (just for links!), so it isn&#x2019;t exactly <strong>free</strong>, but very convenient.</p>
+<p>The space needed for the backup is determined by the shape of your directory structure. On the larger setup I have lots of Maildirs and a very deep directory structure so it takes much more space than my home-directory backup above. 3GB is quite a lot, but 20MB doesn&#x2019;t hurt.</p>
+<h2>Advanced <code>rsync</code> parameters</h2>
+<p>Additional to the parameters described above, I usually employ a combination of these parameters in my backup:</p>
+<ul>
+	<li><code>--delete</code> and <code>--delete-excluded</code> this tells rsync to remove files from my backups either if they are gone on my local machine, or if I decided to exclude them from my backup.</li>
+	<li><code>--exclude-from=FILE</code> the file specified here is a simple list of directories of files (one per line) which should <strong>not</strong> be backed up. My <code>Trash</code> folder oder some <code>.cache</code> folders are candidates for this file.</li>
+	<li><code>-P</code> is used to give more information on how far the backup is, and how many files are to be backed up. Additional it could resume an interrupted transfer (which doesn&#x2019;t apply here because we create a blank backup each time we call the script).</li>
+	<li><code>-x</code> this one is <strong>important</strong> because it prohibits rsync to go beyond the local filesystem. For example if you backup you Linux-root partition, you should not include the /proc directory because rsync will get stuck in it. <code>-x</code> excludes all mounted filesystems from the backup which is probably what you want in most cases.</li>
+</ul>
+<h2>Hard-Links</h2>
+<p>Each file in a directory is a link to the actual data on your hard-disk. The file-system keeps track of how many links to a area point, and only if the last link is deleted, the whole area gets deleted (in contrast to soft-links, these are pointers to the file-name, not the contents).</p>
+<p>Here an illustration of two backups with three files each. <code>File1</code> and <code>File2</code> are the <em>same</em> in both backups, only <code>File3</code> changed between <code>Backup1</code> and <code>Backup2</code>. So in <code>Backup2</code>, <code>File3 (changed)</code> has to point to a different area than <code>File3</code> in <code>Backup1</code>.</p>
+<p><img src="http://blog.interlinked.org/static/images/hardlinks.png" alt=""></p>
+<p><span class="caps">BTW</span>, there is a <a href="http://code.google.com/p/flyback/">nice project for Linux</a> out there which provides the same functionality as Time Machine including a nice <span class="caps">GUI</span> which is also based on <strong><code>rsync</code></strong> and the procedure presented here.</p>
+<h2>The End</h2>
+<p>Credit: The initial idea for this approach came from <a href="http://www.mikerubel.org/computers/rsync_snapshots/">Mike Rubel &#x2013; rsync snapshots</a>.</p>
+<p>Also interesting if you have to cope with Windows: <a href="http://www.softlab.ntua.gr/~ttsiod/backup.html">Optimal remote backups with rsync over Samba</a>.</p>
+<p>There are quite a few approaches out there which more or less do the same, but rsync is available on virtually every Unix out there (even the <a href="http://damnsmalllinux.org/"><span class="caps">DSL</span></a> with its 50MB footprint includes rsync). So using other tools might be more convenient, but I&#x2019;ll stick with the omnipresent rsync.</p>
+<p>rsync offers the possibility to store only the differences to the previous backup (using <code>--compare-dest</code> which should point to a full-backup instead of <code>--link-dest</code>). It then doesn&#x2019;t make links to the unchanged files, it just leaves them out. This way you get an incremental backup without the &#x201C;directory-overhead&#x201D; of the <code>--link-dest</code> approach. <strong>But</strong> you have to be <strong>extremely</strong> cautious which one of older backups you delete because the newer backups just don&#x2019;t contain some of these files (think of full-backups as checkpoints)! Using the <code>--link-dest</code> you can delete all backups but the last and you still got all the files, so I&#x2019;m happy to pay 20MB per backup for this safety.</p>
+<h2>Full script</h2>
+<p>Here my full script with additional features:</p>
+<div class="highlight"><pre><code class="bash"><span class="c">#!/bin/sh</span>
+
+<span class="nv">date</span><span class="o">=</span><span class="sb">`</span>date <span class="s2">"+%Y-%m-%dT%H_%M_%S"</span><span class="sb">`</span>
+<span class="nv">HOME</span><span class="o">=</span>/home/user/
+
+rsync -azP <span class="se">\</span>
+ --delete <span class="se">\</span>
+ --delete-excluded <span class="se">\</span>
+ --exclude-from<span class="o">=</span><span class="nv">$HOME</span>/.rsync/exclude <span class="se">\</span>
+ --link-dest<span class="o">=</span>../current <span class="se">\</span>
+ <span class="nv">$HOME</span> user@backupserver:Backups/incomplete_back-<span class="nv">$date</span> <span class="se">\</span>
+ <span class="o">&amp;&amp;</span> ssh user@backupserver <span class="se">\</span>
+ <span class="s2">"mv Backups/incomplete_back-$date Backups/back-$date \</span>
+<span class="s2"> &amp;&amp; rm -f Backups/current \</span>
+<span class="s2"> &amp;&amp; ln -s back-$date Backups/current"</span>
+</code></pre></div>
+ 
+ 
+ 
+ 
+
+</div>
+
+
+
+</div>
+</body></html>

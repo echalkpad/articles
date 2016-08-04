@@ -1,0 +1,182 @@
+<!DOCTYPE html><html><head><title>Creating KVM machines with BoxGrinder and VMBuilder</title></head><body>
+<h1>Creating KVM machines with BoxGrinder and VMBuilder</h1><p><a href="http://www.admin-magazine.com/Articles/Building-Virtual-Images-with-BoxGrinder-and-VMBuilder" target="_new">Original URL</a></p>
+<p><blockquote>By Michael Kofler Virtualization technologies are supposed to make life easier for the administrator, but after converting a number of servers to a few dozen VMs, what was supposed to make things&hellip;</blockquote></p>
+<div><p class="author">
+		 	 	 	 	 	 			 	 
+
+	 	 		<span class="author">By Michael Kofler</span>
+	 	 	 </p>
+	 <div class="attribute-body">
+	<p class=" text-LEFT"><b>Virtualization technologies</b> are supposed to make life easier for the administrator, but after converting a number of servers to a few dozen VMs, what was supposed to make things easier can quickly become a burden. Tools that facilitate the process of creating new virtual machines are therefore quite useful.</p><p class=" text-LEFT">The fastest and easiest way to set up a new virtual machine is by cloning. To do this, you can run the <i>virt-clone</i>
+ command in the shell:</p><pre>virt-clone --original userver5 --name userver6 \
+ --file /var/lib/libvirt/images/userver6.img</pre><p class=" text-LEFT"><i>virt-clone</i>
+ creates a new XML definition file for the virtual machine, copies the image file for the virtual disk, and gives the network adapter a new, random MAC address. The remaining hardware components remain unchanged.</p><p class=" text-LEFT">After cloning, however, much manual work is required: You need to modify the virtual machine&#x2019;s network configuration and change the hostname. If the original virtual machine ran an SSH server, you also need to create a new SSH key for the new virtual machine.</p><p class=" text-LEFT"><b>BoxGrinder</b></p><p class=" text-LEFT">The manual intervention required after cloning is prone to error, so why bother cloning if you can create virtual machines from scratch with a single command? In the Red Hat world, the <u><a href="http://boxgrinder.org/" target="_blank">BoxGrinder project</a></u> can help you. With BoxGrinder, you can create virtual Fedora, RHEL, CentOS, and Scientific Linux machines in almost no time. Incidentally, BoxGrinder is not a KVM-specific tool: It can also cope with various other virtualization and cloud systems and &#x2013; besides KVM &#x2013; also supports VMware, Amazon EC2, and VirtualBox. Unfortunately, prebuilt BoxGrinder packages exist only for Fedora right now. The installation is straightforward:</p><pre>yum install rubygem-boxgrinder-build</pre><p class=" text-LEFT">It looks like RHEL and CentOS users will have to wait for version 6.4 before official BoxGrinder packages become available. Even though you will probably not want to use Fedora as the KVM host in a production environment, this restriction is not as bad as it seems: For one thing, you can run BoxGrinder on Fedora to create, for example, a virtual CentOS machine and then install the VM on a KVM host running on CentOS. In other words, Fedora is only used as a vehicle for executing BoxGrinder, not as a virtualization system. Also, you can run BoxGrinder on the KVM host in a virtual machine. The BoxGrinder website even has a <u><a href="http://boxgrinder.org/tutorials/boxgrinder-build-meta-appliance/" target="_blank">prebuilt image</a></u> for this purpose.</p><p class=" text-LEFT">Many BoxGrinder features are implemented as plugins, of which there are three types:</p>
+<ul>
+
+<li>OS plugins manage the OS-specific details of the virtual machines.</li>
+
+<li>Platform plugins are responsible for accommodating the special features of the respective virtualization system. If you do not use a platform plugin, virtual KVM machines are created.</li>
+
+<li>Delivery plugins are responsible for how the virtual machine is delivered &#x2013; that is, how it is transferred to the virtualization host.</li>
+
+</ul>
+<p class=" text-LEFT">After installing BoxGrinder, you can run the</p><pre>boxgrinder-build --version</pre><p class=" text-LEFT">command for an overview of the available plugins (Listing 1).</p><p class=" text-LEFT"><b>Listing 1: BoxGrinder Plugins</b></p><pre>01&#x2008;boxgrinder-build&#x2008;--version
+02&#x2008;&#x2008;&#x2008;BoxGrinder&#x2008;Build&#x2008;0.10.2
+03
+04&#x2008;&#x2008;&#x2008;Available&#x2008;os&#x2008;plugins:
+05&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;rhel&#x2008;plugin&#x2008;for&#x2008;Red&#x2008;Hat&#x2008;Enterprise&#x2008;Linux
+06&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;centos&#x2008;plugin&#x2008;for&#x2008;CentOS
+07&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;fedora&#x2008;plugin&#x2008;for&#x2008;Fedora
+08&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;sl&#x2008;plugin&#x2008;for&#x2008;Scientific&#x2008;Linux
+09
+10&#x2008;&#x2008;&#x2008;Available&#x2008;platform&#x2008;plugins:
+11&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;vmware&#x2008;plugin&#x2008;for&#x2008;VMware
+12&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;ec2&#x2008;plugin&#x2008;for&#x2008;Amazon&#x2008;Elastic&#x2008;Compute&#x2008;Cloud&#x2008;(Amazon&#x2008;EC2)
+13&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;virtualbox&#x2008;plugin&#x2008;for&#x2008;VirtualBox
+14&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;virtualpc&#x2008;plugin&#x2008;for&#x2008;VirtualPC
+15
+16&#x2008;&#x2008;&#x2008;Available&#x2008;delivery&#x2008;plugins:
+17&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;s3&#x2008;plugin&#x2008;for&#x2008;Amazon&#x2008;Simple&#x2008;Storage&#x2008;Service&#x2008;(Amazon&#x2008;S3)
+18&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;cloudfront&#x2008;plugin&#x2008;for&#x2008;Amazon&#x2008;Simple&#x2008;Storage&#x2008;Service&#x2008;(Amazon&#x2008;S3)
+19&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;ami&#x2008;plugin&#x2008;for&#x2008;Amazon&#x2008;Simple&#x2008;Storage&#x2008;Service&#x2008;(Amazon&#x2008;S3)
+20&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;sftp&#x2008;plugin&#x2008;for&#x2008;SSH&#x2008;File&#x2008;Transfer&#x2008;Protocol
+21&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;ebs&#x2008;plugin&#x2008;for&#x2008;Elastic&#x2008;Block&#x2008;Storage
+22&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;local&#x2008;plugin&#x2008;for&#x2008;Local&#x2008;file&#x2008;system
+23&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;elastichosts&#x2008;plugin&#x2008;for&#x2008;ElasticHosts
+24&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;openstack&#x2008;plugin&#x2008;for&#x2008;OpenStack
+25&#x2008;&#x2008;&#x2008;&#x2008;-&#x2008;libvirt&#x2008;plugin&#x2008;for&#x2008;libvirt&#x2008;Virtualisation&#x2008;API</pre><p class=" text-LEFT"><b>The Appliance Definition File</b></p><p class=" text-LEFT">Before you create your first virtual machine with BoxGrinder, you must describe the virtual machine in a text file known as the appliance definition file. This file might look something like Listing 2.</p><p class=" text-LEFT"><b>Listing 2: Application Definition File for CentOS</b></p><pre>01&#x2008;name:&#x2008;centos
+02&#x2008;summary:&#x2008;CentOS&#x2008;installation&#x2008;with&#x2008;BoxGrinder
+03&#x2008;os:
+04&#x2008;&#x2008;&#x2008;name:&#x2008;centos
+05&#x2008;&#x2008;&#x2008;version:&#x2008;6
+06&#x2008;hardware:
+07&#x2008;&#x2008;&#x2008;partitions:
+08&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;"/":
+09&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;size:&#x2008;4
+10&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;"/home":
+11&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;size:&#x2008;1
+12&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;"swap":
+13&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;size:&#x2008;0.5
+14&#x2008;&#x2008;&#x2008;cpus:&#x2008;1
+15&#x2008;&#x2008;&#x2008;memory:&#x2008;1024
+16&#x2008;packages:
+17&#x2008;&#x2008;&#x2008;-&#x2008;@core
+18&#x2008;&#x2008;&#x2008;-&#x2008;@mysql
+19&#x2008;&#x2008;&#x2008;-&#x2008;acpid</pre><p class=" text-LEFT">The only mandatory items are the <i>name</i>
+, the <i>os/name</i>
+, and <i>os/version</i>
+. If you specify <i>rhel</i>
+, <i>centos</i>
+, or <i>sl</i>
+ (for Scientific Linux) as the operating system, you only need to specify <i>5</i>
+ or <i>6</i>
+ as the version number. BoxGrinder then automatically uses the latest version (currently version 6.3). Default values are used for all other parameters. In the <i>os</i>
+ section, you can use <i>password</i>
+ to specify the desired root password (by default, it is <i>boxgrinder</i>
+).</p><p class=" text-LEFT">The <i>hardware</i>
+ section is where you partition the virtual hard disk. Enter the desired partition sizes in gigabytes and the mountpoint. If you want a swap partition, enter <i>swap</i>
+ instead of the mountpoint. If the partition info is missing, BoxGrinder only sets up a 1GB root partition. Additionally, the <i>hardware</i>
+ section defines the number of CPU cores (by default, <i>1</i>
+) and the RAM size in megabytes (by default, <i>256</i>
+).</p><p class=" text-LEFT">The <i>packages</i>
+ section determines which packages are installed on the virtual machine. Enter the desired packages line by line, starting each line with a dash. <i>@name</i>
+ designates a package group.</p><p class=" text-LEFT">The <i>core</i>
+ package group is automatically selected. In Fedora and RHEL, this setup gives you a minimal, text-based installation (about 200 packages occupying 600MB). The names and scopes of the packages for Red Hat-based distributions are listed in the <i>repodata/xxx-comps.xml</i>
+ file on the installation DVD. Additionally,</p><pre>yum grouplist -v</pre><p class=" text-LEFT">provides a list of all groups, where the group IDs relevant for BoxGrinder are indicated in brackets. However, <i>yum grouplist</i>
+ does not know about the minimum core group. Besides the keywords described here, you can use the appliance definition file to specify other package repositories (<i>packages</i>
+), integrate other <u><a href="http://boxgrinder.org/tutorials/appliance-definition/" target="_blank">appliance files</a></u> (<i>appliances</i>
+), add individual files (<i>files</i>
+), and run commands after completing the installation (<i>post</i>
+). Detailed options are described on the BoxGrinder website.</p><p class=" text-LEFT"><b>Build a Box</b></p><p class=" text-LEFT">In the simplest case, you can create the new virtual machine by a simple call to <i>boxgrinder-build</i>
+, where the only parameter you specify is the name of the appliance definition file:</p><pre>boxgrinder-build centos.appl</pre><p class=" text-LEFT">Note that <i>boxgrinder-build</i>
+ must be executed by root. The program will run for several minutes. The first time a distribution is generated, all required packages must be downloaded. BoxGrinder stores the packages in the <i>/var/cache/boxgrinder/rpms-cache</i>
+ directory; after this, subsequent runs of the commands are processed more quickly.</p><p class=" text-LEFT">By default, BoxGrinder stores the resulting files (i.e., a RAW file with the virtual disk and a libvirt XML file) in the following directory:</p><pre>build/appliances/x86_64/&lt;osplugin&gt;/&lt;osversion&gt;/&lt;name&gt;/1.0/&lt;osplugin&gt;-plugin/</pre><p class=" text-LEFT">Using the appliance definition file from Listing 2 thus results in the following:</p><pre>build/appliances/x86_64/centos/6/centos/1.0/centos-plugin/</pre><p class=" text-LEFT">BoxGrinder normally uses the RAW format for image files. If you prefer the QCOW2 format, run BoxGrinder as follows:</p><pre>boxgrinder-build centos.appl --os-config: format:qcow2</pre><p class=" text-LEFT">On the virtual machine, only the root user is set up. By default, the root password is <i>boxgrinder</i>
+ and should be changed immediately for security reasons when you first start the virtual machine.</p><p class=" text-LEFT">Please note that, when executed, BoxGrinder tests whether a virtual machine with the specified name already exists. If so, the command does not create a new VM. This saves time but also means that changes to the appliance definition file are ignored. After each and every change to the file, you must explicitly tell BoxGrinder to set up the virtual machine using the <i>-f</i>
+ (for force) option.</p><p class=" text-LEFT"><b>BoxGrinder and Libvirt</b></p><p class=" text-LEFT">At this point, you could now manually install the resulting image file and the associated XML file on the virtualization host, but BoxGrinder can help you with this task, too. To begin, select a delivery plugin with the <i>-d</i>
+ option. The libvirt plugin is best suited for KVM machines (i.e., you need <i>-d libvirt</i>
+).</p><p class=" text-LEFT">Without any other options, BoxGrinder will then copy the image file to the <i>/var/lib/libvirt/images</i>
+ directory and add the virtual machine to the list of libvirt-managed machines. If the KVM host is running on a different machine, or if you want to put the disk image file in a different storage pool, you must specify two options: <i>connection_uri</i>
+ for delivering the virtual machine description (XML file) and <i>image_delivery_uri</i>
+ for transferring the image file:</p><pre>boxgrinder centos.appl --os-config format:qcow2 -d libvirt \
+ --delivery-config connection_uri:qemu+\
+ ssh://root@kvmhost/system,image_delivery_uri:\
+ sftp://root@kvmhost/var/lib/libvirt/images</pre><p class=" text-LEFT">This makes the BoxGrinder command quite confusing. As far as options for each BoxGrinder call are concerned, you will probably prefer to save them in <i>/root/.boxgrinder/config</i>
+. This file might look something like Listing 3.</p><p class=" text-LEFT"><b>Listing 3: Sample BoxGrinder Configuration</b></p><pre>01&#x2008;plugins:
+02&#x2008;&#x2008;&#x2008;&#x2008;fedora:
+03&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;format:&#x2008;qcow2
+04&#x2008;&#x2008;&#x2008;&#x2008;centos:
+05&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;format:&#x2008;qcow2
+06&#x2008;&#x2008;&#x2008;&#x2008;libvirt:
+07&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;connection_uri:&#x2008;qemu+ssh://root@kvmhost/system
+08&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;image_delivery_uri:&#x2008;sftp://root@kvmhost/var/lib/libvirt/images
+09&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;bus:&#x2008;virtio
+10&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;overwrite:&#x2008;true
+11&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;&#x2008;domain_type:&#x2008;kvm</pre><p class=" text-LEFT">This again simplifies the BoxGrinder command line to:</p><pre>boxgrinder centos.appl -d libvirt</pre><p class=" text-LEFT">Unfortunately, BoxGrinder applies some strange default settings to the virtual machines that it produces. For example, the virtual disks are IDE by default. You can change this using the <i>bus:virtio</i>
+ option in <i>/root/.boxgrinder/config</i>
+, which switches to the Virtio drivers. If you set up the virtual machine as a QCOW2 image, the XML file for the virtual machine gives you the wrong format. You can correct this setting using <i>virsh edit</i>
+ or in the Virt Manager (Figure 1).</p>
+<div class="" id=""> 
+ 	 
+	<a href="http://www.admin-magazine.com/var/ezflow_site/storage/images/media/images/box-f01/68400-1-eng-US/box-F01_reference.jpg" rel="lightbox[image]" title="Figure 1: The disk storage format is wrongly preset for QCOW2 images.">
+	 <img src="http://www.admin-magazine.com/var/ezflow_site/storage/images/media/images/box-f01/68400-1-eng-US/box-F01_reference.jpg" alt="">
+	</a>
+	<span class="attribute-caption">
+Figure 1: The disk storage format is wrongly preset for QCOW2 images.
+</span> </div><p class=" text-LEFT">Qemu is used instead of KVM as the hypervisor, which is also why the virtual machines run so slowly. The solution here is the <i>domain_type:kvm</i>
+ option in <i>/root/.boxgrinder/config</i>
+.</p><p class=" text-LEFT"><b>Faster Networking</b></p><p class=" text-LEFT">Also, network connectivity uses a RTL8139 adapter rather than Virtio. The network runs faster if you change the network card to <i>virtio</i>
+. Unfortunately, there is no corresponding option in the BoxGrinder libvirt plugin.</p><p class=" text-LEFT">ACPI and APIC are disabled by default. ACPI lets you gracefully shut down or restart the virtual machine using an ACPI command. APIC stands for Advanced Programmable Interrupt Controller and is a schema for forwarding hardware interrupts to the CPUs. You will want to set both options in the <i>Overview</i>
+ dialog of the Virtual Machine Manager (under <i>Machine Settings</i>
+).</p><p class=" text-LEFT">The virtual machine uses a US keyboard layout. To change this, you can set your preferred keyboard layout in the <i>/etc/sysconfig/keyboard</i>
+ file. Also, the virtual machine uses the EDT (Eastern Daylight Time) time zone. If you live elsewhere, copy the appropriate time zone file from <i>/usr/share/zoneinfo</i>
+ to <i>/etc/localtime</i>
+. You will still need to modify the network settings manually on the virtual machine.</p><p class=" text-LEFT">Of course, you always run the risk that some of these options will be overlooked, and the virtual machine will thus run less efficiently than it should. It is hard to understand why the default settings are not defined to be more meaningful from the outset. Because of the need to manually adjust various settings, very little of the time saved by BoxGrinder remains when setting up virtual machines. Scripts that modify the XML file of the new virtual machine on the KVM host and change various settings on the virtual machine (e.g., keyboard layout, time zone) can help.</p><p class=" text-LEFT">Future versions of BoxGrinder will also have a graphical front end called BoxGrinder Studio, which uses a REST interface to collaborate with the build tools (Figure 2).</p>
+<div class="" id=""> 
+ 	 
+	<a href="http://www.admin-magazine.com/var/ezflow_site/storage/images/media/images/box-f02/68404-1-eng-US/box-F02_reference.jpg" rel="lightbox[image]" title="Figure 2: BoxGrinder Studio is a graphical front end used to facilitate the creation of virtual machines with BoxGrinder.">
+	 <img src="http://www.admin-magazine.com/var/ezflow_site/storage/images/media/images/box-f02/68404-1-eng-US/box-F02_large.jpg" alt="">
+	</a>
+	<span class="attribute-caption">
+Figure 2: BoxGrinder Studio is a graphical front end used to facilitate the creation of virtual machines with BoxGrinder.
+</span> </div><p class=" text-LEFT"><b>VMBuilder</b></p><p class=" text-LEFT">The Ubuntu-specific counterpart to BoxGrinder is VMBuilder. It helps you set up virtual Ubuntu machines with minimal effort. Besides supporting KVM/libvirt virtualization systems, it also supports Amazon EC2, VirtualBox, VMware, and Xen. VMBuilder is implemented as a Python script in the <i>python-vm-builder</i>
+ package:</p><pre>apt-get install python-vm-builder</pre><p class=" text-LEFT">The man page for VMBuilder command unfortunately provides very little help. The</p><pre>vmbuilder kvm ubuntu --help</pre><p class=" text-LEFT">command provides a list of options, and the Ubuntu Server Guide has a <u><a href="https://help.ubuntu.com/12.04/serverguide/C/jeos-and-vmbuilder.html" target="_blank">VMBuilder</a></u> section. VMBuilder must be run as root or with <i>sudo</i>
+. In a minimalist scenario, the syntax is:</p><pre>vmbuilder kvm ubuntu --suite precise --libvirt qemu:///system</pre><p class=" text-LEFT">The first parameter specifies the desired virtualization system, and the second parameter specifies the distribution. The <i>--suite</i>
+ option determines the Ubuntu version, where <i>precise</i>
+ is the code name for Ubuntu 12.04. Finally, the <i>--libvirt &lt;uri&gt;</i>
+ option specifies the KVM host on which VMBuilder should set up the virtual machine.</p><p class=" text-LEFT">VMBuilder always performs a minimal installation comprising approximately 190 packages and occupying 500MB of space on the hard disk. The installation does not include a graphical desktop.</p><p class=" text-LEFT">VMBuilder creates the image file for the virtual disk in the <i>ubuntu-kvm</i>
+ subdirectory relative to the current working directory. If you want to save the virtual machine in another location, change directory before running VMBuilder and use the <i>--dest</i>
+ option to specify the destination directory. VMBuilder creates the target directory itself, so it must not already exist! If this is the case, VMBuilder returns an error message &#x2013; but, annoyingly, only at the end of the build process.</p><p class=" text-LEFT">A number of default settings exist for the virtual machines created by VMBuilder. For example, it uses the same CPU architecture as the computer on which you run VMBuilder. So, if you run VMBuilder on 64-bit Ubuntu, it also installs a 64-bit version of Ubuntu on the virtual machine. The virtual machine uses one CPU (core) and 128MB of RAM.</p><p class=" text-LEFT">The filesystem is created as a QCOW2 image file of 4GB. Of these, 3GB are reserved for the system partition and another 1GB for swap. The image file is stored in the <i>KVM-ubuntu</i>
+ directory and not transferred to a libvirt storage pool. The image file is passed to the virtual machine via the IDE driver (i.e., not by the more efficient Virtio driver). In contrast, the network adapter uses the Virtio driver. The virtual machine, on which the <i>ubuntu</i>
+ user account is set up with a password of <i>ubuntu</i>
+, resides on the default network of the libvirt tools. The host name is also <i>ubuntu</i>
+. If you want to change any of these key settings, you must specify corresponding options (Table 1).</p>
+<div class="" id=""> 
+ 	 
+	<a href="http://www.admin-magazine.com/var/ezflow_site/storage/images/media/images/box-t01/68408-1-eng-US/box-T01_reference.jpg" rel="lightbox[image]" title="box-T01">
+	 <img src="http://www.admin-magazine.com/var/ezflow_site/storage/images/media/images/box-t01/68408-1-eng-US/box-T01_reference.jpg" alt="">
+	</a>
+	 </div><p class=" text-LEFT">This makes the command line for VMBuilder quite confusing.</p><p class=" text-LEFT">Listing 4 shows a real Ubuntu server installation.</p><p class=" text-LEFT"><b>Listing 4: Virtual Ubuntu Server with VMBuilder</b></p><pre>vmbuilder&#x2008;kvm&#x2008;ubuntu&#x2008;--suite&#x2008;precise&#x2008;&#x2008;--libvirt&#x2008;qemu:///system&#x2008;&#x2008;\
+ --mem&#x2008;512&#x2008;--user&#x2008;kofler&#x2008;&#x2008;--dest&#x2008;/var/lib/libvirt/images/firma-abc.de&#x2008;\
+ --hostname&#x2008;firma-abc.de&#x2008;--bridge&#x2008;br0&#x2008;&#x2008;--ip&#x2008;79.47.194.162&#x2008;\
+ --mask&#x2008;255.255.255.248&#x2008;--net&#x2008;79.47.194.160&#x2008;&#x2008;--gw&#x2008;79.47.194.166&#x2008;\
+ --dns&#x2008;213.211.98.98&#x2008;&#x2008;--addpkg&#x2008;openssh-server&#x2008;--addpkg&#x2008;acpid&#x2008;&#x2008;-v</pre><p class=" text-LEFT">If you configure these options (note --dest and --hostname in particular), <i>vmbuilder</i>
+ generates the following files, where <i>xxxxxx</i>
+ is a random string:</p><pre>/etc/libvirt/qemu/firma-abc.de.xml
+/var/lib/libvirt/images/firma-abc.de/xxxxxx.qcow2</pre><p class=" text-LEFT">The first line is the XML file for libvirt, and the second line specifies the image file.</p><p class=" text-LEFT"><b>VMBuilder Peculiarities</b></p><p class=" text-LEFT">Unfortunately, VMBuilder also has some quirks. It refuses to set up the new virtual machine in Libvirt Manager if you already have a machine of the same name. This makes sense to a certain point, but it would be friendlier to run the corresponding test at the beginning of the build process, rather than after completing it. In other words, you should always state a unique name for <i>--hostname</i>
+ that is not only used as the hostname, but also as the name for the libvirt tools.</p><p class=" text-LEFT">VMBuilder creates the <i>kvm-ubuntu</i>
+ directory to create virtual machines but does not delete it later, not even if the directory is empty (thanks to the <i>&#xA0;--dest</i>
+ option). The next time you run VMBuilder, the script outputs an error message telling you <i>ubuntu-kvm already exists</i>
+. The solution is to delete the directory manually.</p><p class=" text-LEFT">VMBuilder selects less than optimum hardware components for the virtual machine. In particular, hard disk access via a virtual IDE controller slows down the VM. If you want to use the faster Virtio driver, replace <i>/dev/sda</i>
+ with <i>/dev/vda</i>
+ in <i>/etc/fstab</i>
+ on the virtual machine and then shut down the virtual machine. Then, in the virtual machine configuration, change IDE to Virtio (the easiest way to do this is to use Virtual Machine Manager).</p><p class=" text-LEFT">The <i>acpid</i>
+ package is not installed automatically. The virtual machine thus does not respond to ACPI events (e.g., shutdown requests sent by Virtual Machine Manager). To solve this problem, you can install the <i>acpid</i>
+ package or enter the <i>--addpkg acpid</i>
+ option when you set up the virtual machine.</p><p class=" text-LEFT">The virtual machine uses a US keyboard layout by default. To change this, you can run the</p><pre>dpkg-reconfigure keyboard-configuration</pre><p class=" text-LEFT">command. VMBuilder installs GRUB 0.97 as the bootloader on the virtual machine &#x2013; not version 2, which is normally used by Ubuntu.</p><p class=" text-LEFT">In contrast to BoxGrinder, VMBuilder does not use a cache for the required installation packages. Thus, all required packages must be downloaded again for each installation. It therefore makes sense to set up an APT-proxy (e.g., using <i>approx</i>
+ or <i>apt-cacher-ng</i>
+). When you call VMBuilder, you need to specify the proxy address for the <i>--install-mirror</i>
+ option.</p><p class=" text-LEFT"><b>Conclusions</b></p><p class=" text-LEFT">BoxGrinder and VMBuilder can save you a huge amount of time if you set up virtual machines regularly. However, both of these tools are quirky, and both are designed for professional administrators. For KVM users who occasionally need to create a new virtual machine, the effort is just not worthwhile.</p><p class=" text-LEFT"><b>The Author</b></p><p class=" text-LEFT"><u><a href="http://kofler.info/" target="_blank">Michael Kofler</a></u> is a freelance computer book author and trainer. He recently published the Addison-Wesley book KVM for Server Virtualization in collaboration with Ralf Spenneberg.</p>
+ </div>
+ 
+ </div>
+</body></html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html><html><head><title>Get CoreOS Logs into ELK in 5 Minutes</title></head><body>
+<h1>Get CoreOS Logs into ELK in 5 Minutes</h1><p><a href="http://blog.sematext.com/2015/06/22/5-minute-recipe-centralize-logging-in-coreos/" target="_new">Original URL</a></p>
+<p><blockquote>June 22, 2015 by Stefan Thies CoreOS Linux&#xA0;is the operating system for &#x201C;Super Massive Deployments&#x201D;. &#xA0;We wanted to see how easily we can get CoreOS logs into Elasticsearch&hellip;</blockquote></p>
+<div><div class="entry">
+
+					
+
+					<div class="post-info">
+						<p>
+							<span class="time">June 22, 2015</span>
+															<span class="author">by <a href="http://blog.sematext.com/author/seti123/" title="Posts by Stefan Thies" rel="author">Stefan Thies</a></span>
+																						
+																				</p>
+					</div>
+
+					<p><a href="https://coreos.com/using-coreos/">CoreOS Linux</a>&#xA0;is the operating system for &#x201C;Super Massive Deployments&#x201D;. &#xA0;We wanted to see how easily we can get CoreOS logs into Elasticsearch /&#xA0;<a href="http://sematext.com/logsene/">ELK</a>-powered centralized logging service. Here&#x2019;s how to <strong>get your CoreOS logs into ELK in about 5 minutes</strong>, give or take. &#xA0;Here&#x2019;s an example Kibana Dashboard you can get in the end:</p>
+<div id="attachment_5144" class="wp-caption alignnone"><a href="https://sematext.files.wordpress.com/2015/06/coreos-kibana-dashboard.png"><img class="size-large wp-image-5144" src="https://sematext.files.wordpress.com/2015/06/coreos-kibana-dashboard.png?w=630&amp;h=457" alt="CoreOS Kibana Dashboard" width="630"></a><p class="wp-caption-text">CoreOS Kibana Dashboard</p></div>
+<p>CoreOS is based on the following:</p>
+<ul>
+<li><strong>Docker</strong>&#xA0;and <strong>rkt</strong> for containers</li>
+<li><strong>systemd</strong> for startup scripts, and restarting services automatically</li>
+<li><strong>etcd</strong> as centralized configuration key/value store</li>
+<li><strong>fleetd</strong> to distribute services over all machines in the cluster. Yum.</li>
+<li><strong>journald</strong>&#xA0;to manage logs. Another yum.</li>
+</ul>
+<p>Amazingly, with CoreOS managing a cluster feels a&#xA0;lot like managing a single machine! &#xA0;We&#x2019;ve come a long way since ENIAC!</p>
+<p>There&#x2019;s one thing people&#xA0;notice&#xA0;when working with CoreOS &#x2013; the repetitive inspection of&#xA0;local or remote logs using &#x201C;<strong>journalctl -M machine-N -f | grep something</strong>&#x201C;. &#xA0;It&#x2019;s great to have easy access to logs from&#xA0;all&#xA0;machines in the cluster, but &#x2026; grep? Really? Could this&#xA0;be done better? &#xA0;Of course, it&#x2019;s 2015!</p>
+<p>Here is a quick example that shows how to centralize logging with CoreOS&#xA0;with just a&#xA0;few commands. The idea is to forward the output of &#x201C;<strong>journalctl -o short</strong>&#x201D; to <a href="http://sematext.com/logsene/">Logsene</a>&#x2018;s&#xA0;<a href="https://sematext.atlassian.net/wiki/display/PUBLOGSENE/Syslog" target="_blank">Syslog Receiver</a> and take&#xA0;advantage of all its functionality &#x2013; log searching, alerting, anomaly detection, <a href="http://blog.sematext.com/2015/06/11/1-click-elk-stack-hosted-kibana-4/" target="_blank">integrated Kibana</a>, even correlation of logs with <a href="http://blog.sematext.com/2015/06/09/docker-monitoring-support/" target="_blank">Docker performance metrics</a> &#x2014; hey, why not, it&#x2019;s all available right there, so we may as well make use of it all! &#xA0;Let&#x2019;s get started!</p>
+<p><strong>Preparation: </strong></p>
+<p>1) Get a list of IP addresses of your CoreOS machines</p>
+<pre>fleetctl list-machines
+</pre>
+<p>2) Create a new Logsene App (<a href="https://apps.sematext.com/logsene-reports/registerApplication.do" target="_blank">here</a>)<br>
+3) Change the Logsene App Settings, and authorize the CoreOS host IP Addresses from step 1) (<a href="https://sematext.atlassian.net/wiki/display/PUBLOGSENE/Authorizing+IPs+for+Syslog" target="_blank">here&#x2019;s how/where</a>)</p>
+<p>Congratulations &#x2013; you just&#xA0;made it possible for your CoreOS machines to ship their logs to your new Logsene app!<br>
+Test it by running the following on any of your CoreOS machines:</p>
+<pre>journalctl -o short -f | ncat --ssl logsene-receiver-syslog.sematext.com 10514</pre>
+<p>&#x2026;and check if the logs arrive in Logsene (<a href="https://apps.sematext.com/logsene-reports/mainPage.do" target="_blank">here</a>). &#xA0;If they don&#x2019;t,&#xA0;yell at us&#xA0;<a href="http://twitter.com/sematext" target="_blank">@sematext</a>&#xA0;&#x2013; there&#x2019;s nothing better than&#xA0;public shaming on Twitter to get us to fix things. <span class="wp-smiley wp-emoji wp-emoji-smile" title=":)">:)</span></p>
+<p><strong>Create a fleet unit file called logsene.service</strong></p>
+<pre>[Unit]
+Description=Logsene Log Forwarder
+
+[Service]
+Restart=always
+RestartSec=10s
+ExecStartPre=/bin/sh -c "if [ -n \"$(etcdctl get /sematext.com/logsene/`hostname`/lastlog)\" ]; then echo \"Value Exists: /sematext.com/logsene/`hostname`/lastlog $(etcdctl get /sematext.com/logsene/`hostname`/lastlog)\"; else etcdctl set /sematext.com/logsene/`hostname`/lastlog\"`date +\"%Y-%%m-%d %%H:%M:%S\"`\"; fi"
+ExecStart=/bin/sh -c "journalctl --since \"$(etcdctl get /sematext.com/logsene/`hostname`/lastlog)\" -o short -f | ncat --ssl logsene-receiver-syslog.sematext.com 10514"
+ExecStopPost=/bin/sh -c "export D=\"`date +\"%Y-%%m-%%d %%H:%M:%S\"`\"; /bin/etcdctl set /sematext.com/logsene/$(hostname)/lastlog \"$D\""
+
+[Install]
+WantedBy=multi-user.target
+
+[X-Fleet]
+Global=true
+</pre>
+<p><strong>Activate cluster-wide logging to Logsene with fleet</strong></p>
+<p>To&#xA0;start logging to Logsene from&#xA0;<strong><em>all</em></strong> machines activate logsene.service:</p>
+<pre>fleetctl load logsene.service
+fleetctl start logsene.service
+</pre>
+<p>There. &#xA0;That&#x2019;s all there is to it! &#xA0;Hope this worked for you!</p>
+<p>At this point all your CoreOS logs should be going to <a href="http://sematext.com/logsene/" target="_blank">Logsene</a>. &#xA0;Now you have a <strong>central place to see all your CoreOS logs</strong>. &#xA0;If you want to send your app logs to Logsene, you can do that, too &#x2014; anything that can send logs via Syslog or to Elasticsearch can also <a href="https://sematext.atlassian.net/wiki/display/PUBLOGSENE/Sending+Events+to+Logsene" target="_blank">ship logs to Logsene</a>. If you want some <a href="http://sematext.com/spm/integrations/docker-monitoring.html" target="_blank">Docker containers &amp; host monitoring</a> to go with your CoreOS logs, just <a href="https://registry.hub.docker.com/u/sematext/spm-agent-docker/" target="_blank">pull spm-agent-docker</a>&#xA0;from Docker Registry. &#xA0;Enjoy!</p>
+<div id="jp-post-flair" class="sharedaddy sd-rating-enabled sd-like-enabled sd-sharing-enabled"><div class="sharedaddy sd-block sd-like jetpack-likes-widget-wrapper jetpack-likes-widget-unloaded" id="like-post-wrapper-7678707-5114-558863b60ae5b"><h3 class="sd-title">Like this:</h3><p class="likes-widget-placeholder post-likes-widget-placeholder"><span class="button"><span>Like</span></span> <span class="loading">Loading...</span></p><a class="sd-link-color"></a></div>
+<p id="jp-relatedposts" class="jp-relatedposts">
+	<h3 class="jp-relatedposts-headline"><em>Related</em></h3>
+</p></div>
+					
+					
+
+				</div>
+
+				
+
+			</div>
+</body></html>

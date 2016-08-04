@@ -1,0 +1,512 @@
+<!DOCTYPE html><html><head><title>Building Real-Time Web Applications with Meteor</title></head><body>
+<h1>Building Real-Time Web Applications with Meteor</h1><p><a href="http://www.toptal.com/meteor/building-real-time-web-applications-with-meteor" target="_new">Original URL</a></p>
+<p><blockquote>Meteor is a full-stack JavaScript framework for web and mobile applications. Meteor has been around since 2011, and has gained a strong reputation for being an ideal, easy-to-use solution for rapid&hellip;</blockquote></p>
+<div><div class="content_body"><p><a href="http://www.meteor.com">Meteor</a> is a full-stack JavaScript framework for web and mobile applications. Meteor has been around since 2011, and has gained a strong reputation for being an ideal, easy-to-use solution for rapid prototyping. However, lately developers have realized Meteor isn&#x2019;t just for prototyping anymore: it&#x2019;s ready to be used for commercial development. With the arsenal of packages that it provides, the solid mongoDB/node.js foundation that it relies on, and the coding flexibility that it offers; Meteor makes it easy to build robust, secure real-time web applications, handling everything from the browser app to the server or database.</p>
+
+<p><img src="http://www.toptal.com/uploads/blog/image/963/toptal-blog-image-1427278264611.jpg" alt=""></p>
+
+<p>This article will walk you through making a basic web application in Meteor - a simple catalog that lets users login and manage a list of books.</p>
+
+<p>Why use Meteor? The short answer is, &#x201C;because Meteor is fun&#x201D;. It makes developing web applications simple. It is easy to learn, and it lets you focus more on the functionality of your application than the basics of syncing data and serving pages.</p>
+
+<p>It also has lots of behaviors conveniently built in. Meteor automatically performs live updates, so data changes show up immediately in your browser window, and even code changes to the application itself are pushed to all browsers and devices in &#x201C;real-time&#x201D;. Meteor has built-in latency compensation, is easy to deploy, and has easy-to-install &#x201C;packages&#x201D; that handle all sorts of functionality.</p>
+
+<p>Even though it&#x2019;s a relatively new framework, lots of startups are already building applications with Meteor, including relatively large-scale services like <a href="https://respond.ly/">Respondly</a> and <a href="http://www.telesc.pe/showcase">Telescope</a>.</p>
+
+<h2 id="installation-and-scaffolding">Installation and Scaffolding</h2>
+
+<p>Installing Meteor on *nix systems is a one-liner: </p>
+
+<pre><code>curl https://install.meteor.com/ | sh
+</code></pre>
+
+<p>Although there is still no official support, their preview for Windows is coming along nicely. Rumors are that Windows support will ship with 1.1, due out in April or May of 2015.
+As you may expect from a smart framework like Meteor, bootstrapping an application requires a single line of command to be invoked:</p>
+
+<pre><code>meteor create book-list
+</code></pre>
+
+<p>This will create a directory named &#x201C;book-list&#x201D;, and populate it with some boilerplate and dependent code. To run the application, enter the newly created directory and execute:</p>
+
+<pre><code>meteor
+</code></pre>
+
+<p>Open <a href="http://localhost:3000">http://localhost:3000</a> in your web browser, and you&#x2019;ll see the following:</p>
+
+<p><img src="http://www.toptal.com/uploads/blog/image/965/toptal-blog-image-1427278540137.jpg" alt=""></p>
+
+<p>You can also check out the &#x201C;version 0&#x201D; of our application on MeteorPad, a site that&#x2019;s like JSFiddle for Meteor: <a href="http://meteorpad.com/pad/J9d3qr28NgQSDCP27/Book-List:%20Default%20App">Book List: Default App</a></p>
+
+<p>Meteor stores its views in HTML files. If we open &#x201C;book-list.html&#x201D;, we will see:</p>
+
+<pre><code class="language-html">&lt;head&gt;
+ &lt;title&gt;book-list&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+ &lt;h1&gt;Welcome to Meteor!&lt;/h1&gt;
+
+ {{&gt; hello}}
+&lt;/body&gt;
+
+&lt;template name="hello"&gt;
+ &lt;button&gt;Click Me&lt;/button&gt;
+ &lt;p&gt;You've pressed the button {{counter}} times.&lt;/p&gt;
+&lt;/template&gt;
+</code></pre>
+
+<p>Meteor uses &#x201C;Blaze&#x201D;, a templating engine, to render responses from these HTML files. The double braces should be familiar to anyone who has used Handlebars.js (or other similar templating engines), and they serve a similar function here. Blaze examines the expressions inside each pair of double braces and replaces each one with the value that these expressions yield.</p>
+
+<p>This simple example program has just two double-braced expressions:</p>
+
+<ul>
+ <li>
+ <p>The first, &#x201C;{{&gt; hello}}&#x201D;, tells Blaze to include a template called &#x201C;hello&#x201D;. That template is defined at the bottom of the file, in the &lt;template name=&#x201D;hello&#x201D;&gt; section.</p>
+ </li>
+ <li>
+ <p>The second, &#x201C;{{counter}}&#x201D;, is a little more complicated. To see where this &#x201C;counter&#x201D; value is coming from we need to open &#x201C;book-list.js&#x201D;:</p>
+ </li>
+</ul>
+
+<pre><code class="language-js">if (Meteor.isClient) {
+ // counter starts at 0
+ Session.setDefault('counter', 0);
+
+ Template.hello.helpers({
+ counter: function () {
+ return Session.get('counter');
+ }
+ });
+
+ Template.hello.events({
+ 'click button': function () {
+ // increment the counter when button is clicked
+ Session.set('counter', Session.get('counter') + 1);
+ }
+ });
+}
+
+if (Meteor.isServer) {
+ Meteor.startup(function () {
+ // code to run on server at startup
+ });
+}
+</code></pre>
+
+<p>Some things require explaining here. First, the split into &#x201C;if (Meteor.isClient)&#x201D; and &#x201C;if (Meteor.isServer)&#x201D;. Recall that meteor is a full-stack framework, so the code that you write is run on both the server and the client. These conditionals allow us to limit that: the first block runs only on the client, and the second one runs only on the server.</p>
+
+<p>Second, there&#x2019;s the &#x201C;Session.setDefault&#x201D; call - this initializes a session variable called &#x201C;counter&#x201D; in the browser. Session variables act a bit like globals in Meteor (for good and for ill). However, that session variable is not showing up directly in &#x201C;{{counter}}&#x201D;. Instead, that &#x201C;counter&#x201D; expression is a &#x201C;helper&#x201D;, one that&#x2019;s defined in the &#x201C;Template.hello.helpers&#x201D; section. This helper simply grabs the session variable&#x2019;s value and returns it.</p>
+
+<p>Note that the helper is &#x201C;reactive&#x201D;. This means that any time the session variable changes, Meteor automatically re-runs this helper function that&#x2019;s referencing it, and Blaze automatically updates the browser with the new content.</p>
+
+<p>The client code also monitors events, via &#x201C;Template.hello.events&#x201D;. We identify the event by event type and selector (in this case, &#x201C;click button&#x201D;), and then tell Meteor what that event should do. In this case, the session variable is incremented, which re-runs the helper function and in turn re-renders the content.</p>
+
+<h2 id="displaying-static-data">Displaying Static Data</h2>
+
+<p>All of this is well and good, but it&#x2019;s not the application we want.</p>
+
+<p>Let&#x2019;s start tweaking this application - we&#x2019;ll display a static, hard-coded list of books. For now, we&#x2019;ll stash the list of books in a <a href="http://www.profoundlogic.com/rpgsp_software_doc/SessionVariables.htm">session variable</a>. In the &#x201C;isClient&#x201D; code, we&#x2019;ll use &#x201C;Template.hello.rendered&#x201D; to set the session variable as soon as the bookList template is rendered:</p>
+
+<pre><code class="language-js"> Template.hello.rendered = function() {
+ Session.setDefault('books', [
+ {title: "To Kill a Mockingbird", author: "Harper Lee"},
+ {title: "1984", author: "George Orwell"},
+ {title: "The Lord of the Rings", author: "J. R. R. Tolkien"},
+ {title: "The Catcher in the Rye", author: "J. D. Salinger"},
+ {title: "The Great Gatsby", author: "F. Scott Fitzgerald"}
+ ]);
+ };
+</code></pre>
+
+<p>Then, we return that session variable with a new helper in the &#x201C;hello&#x201D; template:</p>
+
+<pre><code class="language-js"> Template.hello.helpers({
+ books: function () {
+ return Session.get('books');
+ }
+ });
+</code></pre>
+
+<p>And display it on screen via variable interpolation in the &#x201C;hello&#x201D; template:</p>
+
+<pre><code class="language-html">&lt;template name="hello"&gt;
+ &lt;h3&gt;Here are your books:&lt;/h3&gt;
+ {{ books }}
+&lt;/template&gt;
+</code></pre>
+
+<p>You can check out this code in action on Meteorpad: <a href="http://meteorpad.com/pad/5bSXEpfZYLPvwi83f/Book-List:%20Show%20Session%20Variable">Book-List: Show Session Variable</a></p>
+
+<p>The first thing to notice is that the Meteor server automatically detected the changes to our codebase, pushed the new code to the clients, and prompted the client to reload. Even after we&#x2019;ve deployed an application, we can deploy changes and automatically update our clients via hot-code pushes.</p>
+
+<p><img src="http://www.toptal.com/uploads/blog/image/969/toptal-blog-image-1427279102040.jpg" alt=""></p>
+
+<p>So far, this is what we get:</p>
+
+<p><img src="http://www.toptal.com/uploads/blog/image/966/toptal-blog-image-1427278583771.jpg" alt=""></p>
+
+<p>Oops, we&#x2019;re displaying the data wrong. Blaze gets points for accuracy here (why yes, it is an array of objects), but we&#x2019;re going to have to be a bit more clever if we want to display our list of books in a useful way. Fortunately, Blaze makes it very easy to work with arrays of data using the &#x201C;#each&#x201D; directive:</p>
+
+<pre><code class="language-html"> &lt;h3&gt;Here are your books:&lt;/h3&gt;
+ &lt;UL&gt;
+ {{#each books}}
+ &lt;LI&gt;&lt;i&gt;{{title}}&lt;/i&gt; by {{author}}&lt;/LI&gt;
+ {{/each}}
+ &lt;/UL&gt;
+</code></pre>
+
+<p>In Blaze, &#x201C;#each&#x201D; works a bit like Angular&#x2019;s &#x201C;ng-repeat&#x201D; directive - it iterates through the array structure, setting the current context to the current object in the array, and repeatedly displaying the HTML inside the &#x201C;{{#each &#x2026;}}&#x201D;. This is what our list of books look like now:</p>
+
+<p><img src="http://www.toptal.com/uploads/blog/image/967/toptal-blog-image-1427278676706.jpg" alt=""></p>
+
+<p>On MeteorPad: <a href="http://meteorpad.com/pad/j9Y9ZhJvyDHfAFxJe/Book-List:%20Show%20Session%20Variable%20Properly">Show Session Variable Properly</a></p>
+
+<h2 id="some-cleaning-up">Some Cleaning Up</h2>
+
+<p>Before going any further, let&#x2019;s clean up our code a little.</p>
+
+<p>Meteor allows tremendous leeway in how you organize your codebase. As you will see, there are only a few hard-and-fast rules: wherever you put your HTML and JavaScript, Meteor will find it. This flexibility is nice, but it does mean it&#x2019;s more incumbent on you to organize your code in a way that makes sense, so you&#x2019;re not stuck maintaining a giant disordered mess.</p>
+
+<p>First, let us rename this &#x201C;hello&#x201D; template to something meaningful, like &#x201C;bookList&#x201D;, and replace the boilerplate HTML with this:</p>
+
+<pre><code class="language-html">&lt;head&gt;
+ &lt;title&gt;book-list&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+ {{&gt; bookList}}
+&lt;/body&gt;
+
+&lt;template name="bookList"&gt;
+ &lt;h3&gt;Here are some books:&lt;/h3&gt;
+ &lt;UL&gt;
+ {{#each books}}
+ &lt;LI&gt;&lt;i&gt;{{title}}&lt;/i&gt; by {{author}}&lt;/LI&gt;
+ {{/each}}
+ &lt;/UL&gt;
+&lt;/template&gt;
+</code></pre>
+
+<p>Second, let us split up the &#x201C;client&#x201D; and &#x201C;server&#x201D; parts into separate files. In our application directory, we&#x2019;ll set up a &#x201C;client&#x201D; subdirectory and a &#x201C;server&#x201D; subdirectory - Meteor will know automatically to run the &#x201C;/client/&#x201D; files on the client, and run the &#x201C;/server/&#x201D; files on the server. It&#x2019;s a good convention to put template code in a JavaScript file named after the template, so let&#x2019;s put our client code into &#x201C;client/bookList.js&#x201D;. We can put our currently empty server-startup code in &#x201C;server/startup.js&#x201D;. Finally, let&#x2019;s move out the &#x201C;<template name="bookList">&#x201D; template code to &#x201C;client/bookList.html&#x201D;.</template></p>
+
+<p>Note that even after all this switching around, Meteor will still automatically find all of our HTML and JavaScript files. So long as a file is <em>somewhere</em> in &#x201C;/client/&#x201D;, Meteor will know to run it on the client. So long as a file is <em>somewhere</em> in &#x201C;/server/&#x201D;, meteor will know to run it on the server. Again, it is up to the developer to keep things organized.</p>
+
+<p>So now our code should look like this:</p>
+
+<h4 id="book-listhtml">book-list.html:</h4>
+
+<pre><code class="language-html">&lt;head&gt;
+ &lt;title&gt;book-list&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+ {{&gt; bookList}}
+&lt;/body&gt;
+</code></pre>
+
+<h4 id="clientbooklisthtml">client/bookList.html:</h4>
+
+<pre><code class="language-html">&lt;template name="bookList"&gt;
+ &lt;h3&gt;Here are some books:&lt;/h3&gt;
+ &lt;UL&gt;
+ {{#each books}}
+ &lt;LI&gt;&lt;i&gt;{{title}}&lt;/i&gt; by {{author}}&lt;/LI&gt;
+ {{/each}}
+ &lt;/UL&gt;
+&lt;/template&gt;
+</code></pre>
+
+<h4 id="clientbooklistjs">client/bookList.js:</h4>
+
+<pre><code class="language-js">Template.bookList.rendered = function() {
+ Session.setDefault('books', [
+ {title: "To Kill a Mockingbird", author: "Harper Lee"},
+ {title: "1984", author: "George Orwell"},
+ {title: "The Lord of the Rings", author: "J. R. R. Tolkien"},
+ {title: "The Catcher in the Rye", author: "J. D. Salinger"},
+ {title: "The Great Gatsby", author: "F. Scott Fitzgerald"}
+ ]);
+};
+
+Template.bookList.helpers({
+ books: function () {
+ return Session.get('books');
+ }
+});
+</code></pre>
+
+<h4 id="serverstartupjs">server/startup.js:</h4>
+
+<pre><code class="language-js">Meteor.startup(function () {
+ // code to run on server at startup
+});
+ ~~~
+
+Check it out on MeteorPad: [Initial Code Cleanup](http://meteorpad.com/pad/MwvMcsBAzfbWwEXp3/Book-List:%20Initial%20Code%20Cleanup)
+
+Verify that everything's running correctly by checking the browser window and then we're good to move on to the next step.
+
+## Using the Database
+
+The Meteor server runs on top of a MongoDB database. In this section, we will move the static list of books out of the session variable and into that database.
+
+First, delete the Template.bookList.rendered code, so that we're no longer putting stuff into that session variable. Next, we should add that list of books to the database as fixture data when the server initializes. As you'd expect for MongoDB, Meteor stores data in "collections". So, we'll create a new collection for our books. To keep things simple we will name it "books". It turns out that both the client and the server will want to know about this collection, so we'll put this code in a new subfolder: "/lib/". Meteor knows automatically that files in "/lib/" run on the client and the server.
+
+We'll create a file called "lib/collections/books.js", and give it just one line of code:
+
+~~~ js
+Books = new Meteor.Collection("books");
+</code></pre>
+
+<p>Within the browser window pointed at <a href="http://localhost:3000">http://localhost:3000</a>, go to the developer console and check the value of &#x201C;Books&#x201D;. It should now be a Mongo collection! Try running &#x201C;Books.find().fetch()&#x201D;, and you&#x2019;ll get an empty array &#x2013; which makes sense, since we haven&#x2019;t added any books to it yet. We can try adding items to it in the console:</p>
+
+<pre><code class="language-js">Books.insert({title: "To Kill a Mockingbird", author: "Harper Lee"})
+</code></pre>
+
+<p>Adding things in the console is rather tedious. Instead, we&#x2019;ll set things up so that when the server starts up we automatically insert fixture data into the database.
+So let&#x2019;s go back to &#x201C;server/startup.js&#x201D;, and add this:</p>
+
+<pre><code class="language-js">Meteor.startup(function () {
+ if (!Books.findOne()) {
+ Books.insert({title: "To Kill a Mockingbird", author: "Harper Lee"});
+ Books.insert({title: "1984", author: "George Orwell"});
+ Books.insert({title: "The Lord of the Rings", author: "J. R. R. Tolkien"});
+ Books.insert({title: "The Catcher in the Rye", author: "J. D. Salinger"});
+ Books.insert({title: "The Great Gatsby", author: "F. Scott Fitzgerald"});
+ }
+});
+</code></pre>
+
+<p>Now, when the server starts up, if there&#x2019;s no data present we&#x2019;ll add the fixture data. We can verify this by going back to our terminal, stopping the meteor server, and running this command:</p>
+
+<pre><code>meteor reset
+</code></pre>
+
+<p>Note: you will <em>rarely</em> need this command, because it resets - i.e., <em>clears</em> - the database Meteor is using. If your Meteor application has any user data in the database, you shouldn&#x2019;t run this command. But in this case, we&#x2019;ll just clear out whatever test data we have.</p>
+
+<p>Now we&#x2019;ll start the server again:</p>
+
+<pre><code>meteor
+</code></pre>
+
+<p>On startup, Meteor will run the startup routine, see that the database is empty, and add the fixture data. At this point, if we go to the console and type &#x201C;Books.find().fetch()&#x201D;, we get the five books we had before.</p>
+
+<p>All that&#x2019;s left for this step is to display the books on screen. Fortunately, that is as simple as replacing &#x201C;return Session.get(&#x2018;books&#x2019;);&#x201D; with the following in &#x201C;books&#x201D; helper:</p>
+
+<pre><code class="language-js">return Books.find();
+</code></pre>
+
+<p>And we&#x2019;re back in business! The application is now displaying data from a database cursor, instead of from the session variable.</p>
+
+<p>Check it out on MeteorPad: Moving to the Database</p>
+
+<h2 id="security-concerns">Security Concerns</h2>
+
+<p>I&#x2019;ll preface this by saying: &#x201C;don&#x2019;t do this&#x201D;.</p>
+
+<p>What do you think would happen if somebody fired up this app in their browser, went to the console, and typed in &#x201C;Books.remove({})&#x201D;?</p>
+
+<p>The answer is: they&#x2019;d wipe out the collection.</p>
+
+<p>So, that&#x2019;s a pretty large security problem - our users have <em>too much</em> access to our database. Any client can access the whole database. Not only that, any client can make <em>any change</em> to the whole database, including that &#x201C;.remove({})&#x201D; data wipeout.</p>
+
+<p>This is not good, so let&#x2019;s fix it.</p>
+
+<p>Meteor uses so-called &#x201C;packages&#x201D; for adding functionality. What modules are to Node.js, and gems are to Ruby, packages are a bundled goodness of functionality for Meteor. There are packages for all sorts of things. To browse through what&#x2019;s available, <a href="http://atmospherejs.com/">check out atmosphere.js</a>.</p>
+
+<p>The default meteor app that we made with &#x201C;meteor create&#x201D; includes two packages called &#x201C;autopublish&#x201D; and &#x201C;insecure&#x201D;. The first package makes it so that clients have automatic access to the whole database, and the second makes it so that users can perform any actions on that database.</p>
+
+<p>Let&#x2019;s remove those. We can do that by running the following from the app directory:</p>
+
+<pre><code>meteor remove autopublish insecure
+</code></pre>
+
+<p>When that&#x2019;s done, you&#x2019;ll see the book-list data disappear from the screen (since you no longer have access to it), and if you try a &#x201C;Books.insert&#x201D; call, you&#x2019;ll get the error: &#x201C;insert failed: Access denied&#x201D;. On MeteorPad: <a href="http://meteorpad.com/pad/Tk33DPiyXpTxJcCeD/Book-List:%20Security%20Overkill">Security Overkill</a></p>
+
+<p>If you take nothing else from this article, please remember this: when you&#x2019;re deploying a Meteor app, be sure you remove the packages autopublish and insecure. Meteor has many good security precautions, but all of them are for naught if you leave those two packages installed.</p>
+
+<p>So, why does Meteor automatically include these packages at all, if they&#x2019;re such a security hazard? The reason is that, especially for beginners, those two packages make it easier to get started - you can easily debug and tweak the database from a browser&#x2019;s console. But it&#x2019;s a good practice to ditch autopublish and insecure as soon as possible.</p>
+
+
+
+<p>So we fixed that gaping security hole, but we&#x2019;ve introduced two problems. First, we now have no access to the database. Second, we have no way of interacting with the database.</p>
+
+<p>Let&#x2019;s tackle the first problem here. Meteor provides secure access to a database by having the server &#x201C;publish&#x201D; a subset of the database, and having the client &#x201C;subscribe&#x201D; to that publication.</p>
+
+<p>First, let&#x2019;s create &#x201C;/server/publications.js&#x201D;:</p>
+
+<pre><code class="language-js">Meteor.publish('books', function() {
+ return Books.find({});
+});
+</code></pre>
+
+<p>And we&#x2019;ll create &#x201C;/client/subscriptions.js&#x201D;:</p>
+
+<pre><code class="language-js">Meteor.subscribe('books');
+</code></pre>
+
+<p>Check it out on MeteorPad: <a href="http://meteorpad.com/pad/zzwtccTMNj9pjk9an/Book-List:%20Publish%20and%20Subscribe">Publish and Subscribe</a></p>
+
+<p>The server &#x201C;publishes&#x201D; a cursor that has access to all the data, and the client &#x201C;subscribes&#x201D; to it on the other end. The client uses this subscription to populate a mirrored copy of the database with all of the cursor&#x2019;s data. When we access &#x201C;Books.find().fetch()&#x201D;, we see all five objects, and we see them displayed on screen as before.</p>
+
+<p>The difference now is that it&#x2019;s really easy to limit what the clients can access. Try switching the publication &#x201C;find()&#x201D; to a subset of the data:</p>
+
+<pre><code class="language-js">Meteor.publish('books', function() {
+ return Books.find({}, {limit:3});
+});
+</code></pre>
+
+<p>Now the client only ever sees three of the five books, and there&#x2019;s no way to get to the rest. Not only is this a great boon for security (I don&#x2019;t get to see everybody else&#x2019;s bank accounts), but you can use it to parcel out data and avoid overloading a client.</p>
+
+<h2 id="adding-new-books">Adding New Books</h2>
+
+<p>We&#x2019;ve seen how to give clients read-access to the database in a limited, secure way. Now, let&#x2019;s look at the second problem: how do we let users alter the database without allowing them to do anything they want? Getting rid of the package insecure made it so clients have no access at all - let&#x2019;s try allowing the addition of books again.
+In meteor, we do this by adding a &#x201C;method&#x201D; to the server. Let&#x2019;s add a method, one that adds a new book, to &#x201C;/lib/collections/books.js&#x201D;:</p>
+
+<pre><code class="language-js">Meteor.methods({
+ addBook: function(bookData) {
+ var bookID = Books.insert(bookData);
+ return bookID;
+ }
+});
+</code></pre>
+
+<p>As you can see, this takes in &#x201C;bookData&#x201D; - in this case, that&#x2019;s an object with &#x201C;title&#x201D; and &#x201C;author&#x201D; fields - and adds it to the database. Once your client reloads, we can then call this method from the client. You can go to the console and enter something like this:</p>
+
+<pre><code class="language-js">Meteor.call('addBook', {title: "A Tale of Two Cities", author: "Charles Dickens"})
+</code></pre>
+
+<p>And presto! You get another book on the list of books.
+Using the console is intolerably clunky, so let&#x2019;s go ahead and add a simple form to the end of the &#x201C;bookList&#x201D; template that will let us add new books:</p>
+
+<pre><code class="language-html">&lt;form class="add-book"&gt;
+	Title:&lt;br&gt;
+	&lt;input type="text" name="title"&gt;
+	&lt;br&gt;
+	Author:&lt;br&gt;
+	&lt;input type="text" name="author"&gt;
+	&lt;input type="submit" value="Add Book"&gt;
+&lt;/form&gt;
+</code></pre>
+
+<p>And we can hook that up to JavaScript using an event case, like we had in the original test application:</p>
+
+<pre><code class="language-js">Template.bookList.events({
+ "submit .add-book": function(event) {
+ event.preventDefault(); // this prevents built-in form submission
+ Meteor.call('addBook', {title: event.target.title.value, author: event.target.author.value})
+ }
+});
+</code></pre>
+
+<p>You can see this in action on MeteorPad: <a href="http://meteorpad.com/pad/wNHJ4N47rsk36cb5x/Book-List:%20Methods">Methods</a></p>
+
+<p>When we had insecure and autopublish in place, clients could access and alter the whole database. Now with insecure and autopublish gone, but with publications, subscriptions, and methods, clients can access the database and interact with it in a controlled manner.</p>
+
+<p>On a side note: you can also address security issues in Meteor by using &#x201C;allow and deny rules&#x201D;. You can find out more about those and some reasons I prefer the above approach instead at <a href="https://www.discovermeteor.com/blog/meteor-methods-client-side-operations/">discovermeteor.com</a>.</p>
+
+<h2 id="user-authentication">User Authentication</h2>
+
+<p>It may look like we&#x2019;ve just circled back around to where we started, but there&#x2019;s one important difference: it&#x2019;s really easy for us to now limit access to the database. To see how this works, let&#x2019;s try adding users to this app. We&#x2019;ll add a login system to our app, and then instead of having all clients work with one system-wide list of books, we&#x2019;ll make it so each user can only add to or read their own list of books.</p>
+
+<p>Go to the app directory, and install two packages:</p>
+
+<pre><code>meteor add accounts-ui accounts-password
+</code></pre>
+
+<p>There. You&#x2019;ve just added a login system to the app.
+Now we just need to add the login UI to book-list.html. Put this single line at the top of the body:</p>
+
+<pre><code class="language-html">{{&gt; loginButtons}}
+</code></pre>
+
+<p>You should see a login prompt at the top of the screen:</p>
+
+<p><img src="http://www.toptal.com/uploads/blog/image/968/toptal-blog-image-1427278756405.jpg" alt=""></p>
+
+<p>Notice that if you click the login link, it&#x2019;ll ask for an email address and password. We can switch that to simple username/password login system by creating &#x201C;/client/config.js&#x201D; with the following in it:</p>
+
+<pre><code class="language-js">Accounts.ui.config({
+ passwordSignupFields: "USERNAME_ONLY"
+});
+</code></pre>
+
+<p>At this point, you can type &#x201C;Meteor.userId()&#x201D; in the console, and it will return &#x201C;null&#x201D;. You can try clicking the link to create an account. Calling &#x201C;Meteor.userId()&#x201D; should now return an ID string. The server has access to this same piece of information (as &#x201C;this.userId&#x201D;), so it&#x2019;s trivial to make the &#x201C;add books&#x201D; method force the user to be logged in and include a userID field:</p>
+
+<pre><code class="language-js">Meteor.methods({
+ addBook: function(bookData) {
+ if (this.userId) {
+ bookData.userID = this.userId;
+ var bookID = Books.insert(bookData);
+ return bookID;
+ }
+ }
+});
+</code></pre>
+
+<p>All that remains now is to limit the client, showing only the books that this user has added. We use the publication&#x2019;s ability to narrow down what the client has access to:</p>
+
+<pre><code class="language-js">Meteor.publish('books', function() {
+ return Books.find({userID: this.userId});
+});
+</code></pre>
+
+<p>Now, the publication only finds books from this particular user.
+We can even access the userId from Blaze expressions as &#x201C;{{currentUser}}&#x201D;; and we can use this, with an &#x201C;{{#if}}&#x201D; directive (which does exactly what you think it does), to only show data when the user is logged in:</p>
+
+<pre><code class="language-html">&lt;template name="bookList"&gt;
+ {{#if currentUser}}
+ &lt;h3&gt;Here are your books:&lt;/h3&gt;
+ &lt;UL&gt;
+ {{#each books}}
+ &lt;LI&gt;&lt;i&gt;{{title}}&lt;/i&gt; by {{author}}&lt;/LI&gt;
+ {{/each}}
+ &lt;/UL&gt;
+ &lt;form class="add-book"&gt;
+ 	Title:&lt;br&gt;
+ 	&lt;input type="text" name="title"&gt;
+ 	&lt;br&gt;
+ 	Author:&lt;br&gt;
+ 	&lt;input type="text" name="author"&gt;
+ 	&lt;input type="submit" value="Add Book"&gt;
+ &lt;/form&gt;
+ {{else}}
+ &lt;h3&gt;Please log in to see your books&lt;/h3&gt;
+ {{/if}}
+&lt;/template&gt;
+</code></pre>
+
+<p>Check out the final result on MeteorPad: Users</p>
+
+<h2 id="deployment">Deployment</h2>
+
+<p>Now we can deploy this application to the Internet. We do this by going to the application directory on a terminal and executing:</p>
+
+<pre><code>meteor deploy &lt;your app's name&gt;.meteor.com
+</code></pre>
+
+<p>Make sure you replace &#x201C;&lt;your app&#x2019;s name&gt;&#x201D; with an actual, short name for the application instance. Running this command will prompt you to set up an account with Meteor, and then it will put your new application on Meteor&#x2019;s test servers so that you can try it out on the Internet.</p>
+
+<p>For a quick demo, this meteor.com solution is all you need. The Meteor team hasn&#x2019;t announced any explicit limits to storage or bandwidth on their servers. The only notable limitation is that if your app goes unused for a long time, the site <a href="https://groups.google.com/forum/#!topic/meteor-talk/0LcW-dzJtzU">takes a few seconds to spin up for the next user</a>.</p>
+
+<p>That said, meteor.com is not intended for commercial use. But when you go to production, there are platform-as-a-service companies like <a href="http://help.modulus.io/customer/portal/articles/1647770-using-meteor-with-modulus">Modulus</a> and <a href="https://www.digitalocean.com/community/questions/deploying-a-meteor-js-app-to-digital-ocean-servers">Digital Ocean</a> that make deploying Meteor apps easy. Should you want to deploy a meteor app to your own server, &#x201C;meteor up&#x201D; makes that process straightforward, too.</p>
+
+<h2 id="next-steps">Next Steps</h2>
+
+<p>Congratulations! You&#x2019;ve now made and deployed a very simple real-time Meteor web application.
+Obviously, this is just a tiny first step into a whole universe of features and functionality. If you like what you&#x2019;ve seen so far, I highly recommend <a href="http://amazon.com/dp/B00MA8KVAY">Your First Meteor Application by David Turnbull</a>, which walks readers through creating a more complicated application, with more information about meteor features along the way. It&#x2019;s available as a Kindle book for a small price, and as a free PDF on Turnbull&#x2019;s web site.</p>
+
+<p>You&#x2019;ll also want to explore the packages that are available for Meteor. Nine times out of ten, the answer to &#x201C;how do I do &lt;x&gt; in Meteor?&#x201D; is &#x201C;there&#x2019;s a package for that&#x201D;. &#x201C;How do I add routing to my application?&#x201D; You use <a href="http://meteortips.com/tutorial/iron-router-part-1/">Iron Router</a>. &#x201C;How do I provide a RESTful API?&#x201D; You use <a href="http://github.com/kahmali/meteor-restivus">RESTivus</a>. &#x201C;How do I include unit testing?&#x201D; You use <a href="http://velocity.meteor.com">Velocity</a>. &#x201C;How do I add schema validations?&#x201D; You use <a href="http://github.com/aldeed/meteor-collection2">Collection2</a>. You can easily get lost on <a href="http://atmospherejs.com">Atmosphere.js</a> looking at all the available packages.</p>
+
+<h2 id="why-not-use-meteor">Why Not Use Meteor?</h2>
+
+<p>As you can see, Meteor is simple and fun to write applications on, but I&#x2019;d be remiss if I didn&#x2019;t mention the drawbacks.</p>
+
+<p>Meteor is still relatively immature. It hit 1.0 this past October, and that leads to some problems. If you&#x2019;re looking to do something obscure, it&#x2019;s possible nobody&#x2019;s written a package for that functionality yet. The packages that do exist are more likely to have bugs, simply because they haven&#x2019;t been around long enough to suss out all of the problems.</p>
+
+<p>Scaling can also be somewhat unknown with Meteor. There are plenty of Meteor sites that scale up to reasonable amounts of users, but few very large sites - nothing on the order of Facebook or LinkedIn, with tens or hundreds of millions of users.</p>
+
+<p>However, for most applications Meteor is a perfect choice, as it is a chance to cut down on development time and to participate in the start of something great.</p>
+
+</div></div>
+</body></html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html><html><head><title>A Quick Introduction to Consul - Scott's Weblog - The weblog of an IT pro specializing in virtualization, networking, open source, and cloud computing</title></head><body>
+<h1>A Quick Introduction to Consul - Scott's Weblog - The weblog of an IT pro specializing in virtualization, networking, open source, and cloud computing</h1><p><a href="http://blog.scottlowe.org/2015/02/06/quick-intro-to-consul/" target="_new">Original URL</a></p>
+<p><blockquote>6 February 2015 For reasons that (hopefully) will become clear in the relatively near future, I decided I needed to take a look at Consul, a distributed service discovery tool and key value store. I&hellip;</blockquote></p>
+<div><div class="post">
+ 
+ <span class="post-date">6 February 2015</span>
+ <p>For reasons that (hopefully) will become clear in the relatively near future, I decided I needed to take a look at <a href="https://www.consul.io">Consul</a>, a distributed service discovery tool and key value store. I know Consul&#x2019;s description sounds like a mouthful of buzzwords, but it&#x2019;s pretty accurate. This post provides a quick introduction to Consul, in which I&#x2019;ll break down what Consul does and how it works (at a high level). I&#x2019;ll then build on this introduction in later posts.</p>
+
+<p>There&#x2019;s a lot to Consul, so let&#x2019;s start by breaking down the description of Consul, which I provided as &#x201C;a distributed service discovery tool and key value store&#x201D;. What does this mean, exactly?</p>
+
+<ul>
+ <li>Consul is <em>distributed</em>. This means it runs as a cluster of systems so that there is no single point of failure. Consul uses a gossip protocol (known as <a href="https://www.serfdom.io">Serf</a>) to manage cluster membership, failure detection, and general orchestration. Managing cluster state via Serf is only part of the picture, though; the cluster must also manage consistency via a consensus protocol known as Raft. (Raft is the same consensus protocol used by <a href="https://github.com/coreos/etcd/">etcd</a>, for example.)</li>
+ <li>Consul is also <em>a service discovery tool</em>. Applications can register with Consul to provide a service, such as HTTP or MySQL. Other systems can then use Consul, either via HTTP or via DNS, to discover the providers of a given service. Part of this service discovery functionality includes some health checking functionality, to ensure that the provider of a service is actually working as expected.</li>
+ <li>Finally, Consul is a <em>key/value store</em>. In this respect, you could make a comparison between Consul and etcd, the distributed key/value store bundled with <a href="http://coreos.com/">CoreOS Linux</a>. Both Consul and etcd provide HTTP APIs to both store and retrieve key/value data in their distributed key/value store. (If you&#x2019;re unfamiliar with etcd, have a look at <a href="http://blog.scottlowe.org/2014/08/18/coreos-continued-etcd/">this article I wrote</a>.)</li>
+</ul>
+
+<h2 id="installing-consul">Installing Consul</h2>
+
+<p>Installing Consul is pretty easy, actually:</p>
+
+<ol>
+ <li>
+ <p>Download the Consul software (binaries are provided for 32-bit Linux, 64-bit Linux, Mac OS X, and Windows).</p>
+ </li>
+ <li>
+ <p>Unzip the downloaded file and save to a location of your choice.</p>
+ </li>
+</ol>
+
+<p>That&#x2019;s it.</p>
+
+<h2 id="running-consul">Running Consul</h2>
+
+<p><em>Running</em> Consul, on the other hand, is a bit more challenging. This is not a reflection on Consul, but rather a reflection of the complexity that is inherent in distributed systems. The single Consul binary you downloaded above can run either as a server (which actively participates in the consensus protocol) or as a client (which forwards requests to a server). If you are running Consul as a server, you&#x2019;ll need to follow a set of instructions to bring up the Consul servers as a functioning cluster (<a href="https://www.consul.io/intro/getting-started/join.html">see the Consul docs</a> for an explanation of how this is done).</p>
+
+<p>If, on the other hand, you&#x2019;re running Consul as a client to connect to an existing Consul cluster, not too much additional is required:</p>
+
+<ul>
+ <li>If you&#x2019;re running Consul (as a client) on a system where Consul is already running (as a server/daemon), you can just run <code>consul</code> directly. For example, if you wanted to see a list of the members of the Consul cluster, you could just run <code>consul members</code>.</li>
+ <li>If you running Consul (as a client) on a system that is <em>not</em> part of the Consul cluster, then you&#x2019;ll need to tell Consul where to find the cluster by adding the <code>-rpc-addr</code> parameter. For example, if a host with IP address 10.10.10.10 was part of the Consul cluster, you&#x2019;d run <code>consul members -rpc-addr=10.10.10.10:8400</code> (8400 is the default port for Consul to listen for RPCs) to see a list of the members in the cluster.</li>
+</ul>
+
+<h2 id="interacting-with-consul">Interacting with Consul</h2>
+
+<p>The <code>consul</code> command is really only for interacting with the cluster itself, such as to execute a command on the Consul cluster nodes, or to reload a Consul node&#x2019;s configuration. Applications would interact with Consul either via service definition files, via the HTTP API, or via DNS.</p>
+
+<ul>
+ <li><em>Service definition files</em> are JSON files that tell Consul what services are available and where. (Not familiar with JSON? See <a href="http://blog.scottlowe.org/2013/11/08/a-non-programmers-introduction-to-json/">here</a>.)</li>
+ <li>The HTTP API allows applications to register themselves, or to query Consul for information about a service (or for a list of services). For example, if you want to get a list of all the services about which Consul was aware, you&#x2019;d just run <code>curl http://&lt;IP address of Consul cluster node&gt;:8500/v1/catalog/services</code> (obviously substituting a valid IP address in that command). Optionally, you might want to pipe it through <code>python -m json.tool</code> to &#x201C;prettify&#x201D; the output. From that list of services, you could then get more information by running <code>curl http://&lt;IP address of Consul cluster node&gt;:8500/v1/catalog/service/&lt;service name&gt;</code>. The HTTP API is pretty well-documented <a href="https://www.consul.io/docs/agent/http.html">here</a>.</li>
+ <li>Users and applications can also use DNS to discover services. To see this in action for yourself, just run <code>dig @&lt;IP address of Consul cluster node&gt; &lt;service name&gt;.service.consul</code> and Consul will happily return DNS information about the hosts/nodes that provide that service. This includes support for DNS SRV records as well, which means Consul can report on the port being used by a particular instance of a service (which might be handy in environments where ports are dynamically assigned&#x2026;like say environments running Docker containers).</li>
+</ul>
+
+<p>&lt;aside&gt;In my opinion, the DNS support is <strong>huge.</strong> To make it even more powerful, you can configure your DNS servers to forward requests to Consul to make service discovery even more seamless.&lt;/aside&gt;</p>
+
+<p>Now, if you&#x2019;re wondering how you might put this to use in your environment, I&#x2019;ll simply provide one word: <em>Docker</em>. In a distributed micro-service architecture, services may pop up on any node on a dynamically assigned port. Using Consul, you could provide a mechanism for discovering these distributed service instances, and you could provide it over DNS, a service <em>that most applications are using today anyway.</em> That&#x2019;s pretty powerful, and that&#x2019;s even before we get into stuff like Consul&#x2019;s health checks and such.</p>
+
+<p>So that&#x2019;s a quick introduction to Consul. Have I whetted your appetite for more? I hope so, because I&#x2019;ll be building on this introduction soon. Stay tuned.</p>
+
+
+ <span class="post-date">Tags:
+ 
+ 
+
+
+ <a href="http://blog.scottlowe.org/tags/#CLI">CLI</a>
+ 
+ &#xB7;
+ 
+
+ <a href="http://blog.scottlowe.org/tags/#Linux">Linux</a>
+ 
+
+
+
+ </span>
+ 
+ <span class="post-date">
+ <i class="fa fa-arrow-circle-left"></i> Previous Post: <a href="http://blog.scottlowe.org/2015/02/05/vagrant-coreos-etcd-fleet-docker/">Using Vagrant with CoreOS, etcd, fleet, and Docker</a></span>
+ 
+ 
+ <span class="post-date">
+ Next Post: <a href="http://blog.scottlowe.org/2015/02/10/technology-short-take-48/">Technology Short Take #48</a> <i class="fa fa-arrow-circle-right"></i></span>
+ 
+
+ <div class="post-sharing"><p>Be social and share this post!<br>
+
+<a href="https://www.facebook.com/sharer/sharer.php?u=http://blog.scottlowe.org/2015/02/06/quick-intro-to-consul/" title="Share on Facebook"><i class="fa fa-facebook-square fa-2x"></i></a> 
+<a href="https://twitter.com/intent/tweet?url=http://blog.scottlowe.org/2015/02/06/quick-intro-to-consul/&amp;text=A%20Quick%20Introduction%20to%20Consul" title="Share on Twitter"><i class="fa fa-twitter-square fa-2x"></i></a> 
+<a href="https://plus.google.com/share?url=http://blog.scottlowe.org/2015/02/06/quick-intro-to-consul/" title="Share on Google Plus"><i class="fa fa-google-plus-square fa-2x"></i></a></p></div>
+</div>
+
+</div>
+</body></html>

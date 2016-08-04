@@ -1,0 +1,206 @@
+<!DOCTYPE html><html><head><title>HTTP Security Best Practice</title></head><body>
+<h1>HTTP Security Best Practice</h1><p><a href="https://httpsecurityreport.com/best_practice.html" target="_new">Original URL</a></p>
+<p><blockquote>SSL/TLS Transport Layer Security (TLS) and its predecessor Secure Sockets Layer (SSL), facilitates confidential communications on the web by providing end-to-end encryption between browsers and web&hellip;</blockquote></p>
+<div><div class="container">
+			<a name="https"></a><h3>SSL/TLS</h3>
+			<p>Transport Layer Security (TLS) and its predecessor Secure Sockets Layer (SSL), facilitates confidential communications on the web by providing end-to-end encryption between browsers and web servers. Without TLS, other security measures are fragile or ineffective. TLS is the cornerstone of HTTP security.</p>
+			<p>TLS implementation is not straight-forward. Protocol versions and cipher choice need to be carefully chosen and configured. X509 certificates by valid authorities need provisioning and cryptographic keys have to be securely managed. The excellent <a href="https://www.ssllabs.com/ssltest/">Qualys SSL Labs</a> tool helps with fine tuning implementation details.
+
+			</p><h4>Recommendation</h4>
+			<p>Properly configure and use TLS for <i>all</i> local and linked resources.</p>
+			
+			
+
+			<a name="hsts"></a><a name="hstsMaxage"></a><h3>HTTP Strict Transport Security (HSTS)</h3>
+			<p>Instructs the browser to connect exclusively to the target server using HTTPS (SSL/TLS). This defends against a range of potential man-in-the-middle attacks, including SSL stripping, session cookie theft (if not <a href="https://httpsecurityreport.com/best_practice.html#cookies">properly protected</a>). It also prevents the browser from connecting to a website if any certificate-related errors are encountered. HSTS is activated when a browser visits a HTTPS website which sets the corresponding HTTP header.</p>
+			<p>HSTS has a set duration, controlled by the <i>max-age</i> field value. This value can either be static or relative to a specific date in the future, perhaps to coincide with the expiration of a SSL certificate.</p>
+			<p>HSTS preference can be hard-coded in browsers by submitting domains to <a href="https://hstspreload.appspot.com/">Chromium&#x2019;s HSTS preload list</a> which all browsers implementing HSTS use.</p>
+			<p>Note that HSTS does have it&#x2019;s pitfalls. It has a provision to include subdomains, which may prove too broad in practise. Also, client errors can have grave consequences - an incorrect clock on the client causing it to consider the server&#x2019;s SSL certificate as not yet valid or expired, or a missing root CA certificate - will no longer cause a certificate error in the browser. The browser will completely refuse to access the page, and probably display an error totally incomprehensible to everyone except security professionals.</p>
+
+			<h4>Recommendation</h4>
+			<p>Set the HSTS header with a long lifetime, preferably half a year or longer.</p>
+			<code>Strict-Transport-Security: max-age=31536000</code>
+
+			<h4>Further reading</h4>
+			<a href="http://blog.nvisium.com/2014/04/is-your-site-hsts-enabled.html">nVisium: Is Your Site HSTS Enabled?</a>
+			
+			
+
+			<a name="publicKeyPins"></a><h3>Public Key Pins</h3>
+			<p>HTTP Public-Key Pinning (HPKP) instructs browsers to only connect to the host if it can present a known SSL/TLS public key - or a certificate signed by a known key. In other words, browsers won&#x2019;t connect to hosts if the SSL/TLS key has changed in an unexpected way. This mainly guards against fraudulent certificates issued by trusted certificate authorities (CAs) or rogue CA certificates which a user might have been tricked to install.</p>
+			<p>As an example, a browser connects to https://example.com which presents this header. The header tells the browser to only connect again in the future if the certificate key matches, or if a key in the issuing certificate chain matches. Other combinations of instructions are possible. They all greatly reduce the possibilities for attackers to impersonate the host or intercept communications between the client and the legitimate host.</p>
+			<p>Like <a href="https://httpsecurityreport.com/best_practice.html">HSTS</a>, HPKP requires careful thought and planning before implementing. Mistakes can lock users out of your site, with no easy way to fix.</p>
+
+			<h4>Recommendation</h4>
+			<p>Determine if public-key pinning is needed for your site. If so, start with a short lifetime and increase it if no problems are encountered after a while. Establish a backup plan if the SSL/TLS key needs renewing. Preferebly create a backup key and store offline.<br>Example HTTP header:</p>
+			<code>Public-Key-Pins: max-age=5184000; pin-sha256="+oZq/vo3Kcv0CQPjpdwyInqVXmLiobmUJ3FaDpD/U6c="; pin-sha256="47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="</code>
+
+			<h4>Further reading</h4>
+			<a href="https://developer.mozilla.org/en-US/docs/Web/Security/Public_Key_Pinning">MDN Public Key Pinning.</a> Includes example server configurations.<br>
+			<a href="https://timtaubert.de/blog/2014/10/http-public-key-pinning-explained/">HTTP Public-Key-Pinning Explained.</a>
+			<a href="http://blog.rlove.org/2015/01/public-key-pinning-hpkp.html">Everything you Need to Know about HTTP Public Key Pinning.</a><br>
+			<a href="https://report-uri.io/">Report-URI as-a-service.</a> Excellent tool which takes care of collecting CSP and HPKP violations.
+
+			
+
+			<a name="insecureReferences"></a><h3>Mixed HTTPS and HTTP Content</h3>
+			<p>The main website is served securely over HTTPS but loads some files (images, js, css) over HTTP. This is a huge security hole and undermines the security provided by HTTPS. Affected sites could be leaking session cookies or user behavior information. They could also be vulnerable to injection and other MITM attacks, which HTTPS normally prevents.</p>
+
+			<h4>Recommendation</h4>
+			<p>If HTTPS is deployed for the main website, use it everywhere and for all content.</p>
+
+			<h4>Further reading</h4>
+			<a href="https://developer.mozilla.org/en-US/docs/Security/MixedContent">Mixed Content - Mozilla Developer Network</a>
+		</div>
+
+		<div class="container">
+			<a name="contentSecurityPolicy"></a><h3>Content Security Policy</h3>
+			<p>Provides browsers with clear instructions on type and behavior of content on the website. A good content security policy (CSP) hardens security and can help defend against attacks like cross-site-scripting (XSS) and other injection attacks. <a href="http://caniuse.com/#feat=contentsecuritypolicy">CSP is supported by all major browsers</a>, although only partially in IE 11 and earlier.</p>
+			<p>A good CSP is based on a white-listing approach, disallowing everything except explicitly allowed content. It also restricts javascript origin and allowed operations.</p>
+			<p>CSP can be hard to enable for legacy codebases. To ease implementation, CSP provides a &#x201C;report-only" mode where CSP violations in browsers are sent to a website endpoint, but the policy is not otherwise enforced.<br>New projects should use CSP from the start.</p>
+
+			<h4>Recommendation</h4>
+			<p>Start with a restrictive policy and relax where necessary and appropriate. Example disallowing everything:</p>
+			<code>Content-Security-Policy: default-src 'none';</code>					
+			<p>Now let's allow self hosted scripts, images, CSS, fonts and AJAX, along with Google CDN hosted scripts and Google Analytics:</p>
+			<code>Content-Security-Policy: default-src 'none'; script-src 'self' https://ajax.googleapis.com https://www.google-analytics.com; img-src 'self' https://www.google-analytics.com; connect-src 'self'; font-src 'self'; style-src 'self';</code>
+			<p>Be warned that disallowing everything might break your site, e.g. if you use the <code>child-src</code> directive and a browser doesn't support it. A less restrictive policy might start with the following:</p>
+			<code>Content-Security-Policy: default-src 'self';</code>
+			<p>A even less restrictive policy could even use <code>default-src '*'</code> and then add restrictions. I recommend against this, <strong>unless</strong> you understand the implications fully. Otherwise you might be relying on a CSP which is only providing you with a false sense of security.</p>
+
+			<h4>Further reading</h4>
+			<a href="https://developer.mozilla.org/en-US/docs/Web/Security/CSP">CSP at Mozilla Developer Network</a><br>
+			<a href="https://report-uri.io/">Report-URI as-a-service.</a> Excellent tool which takes care of collecting CSP and HPKP violations.
+			
+			
+
+			<a name="frameOptions"></a><h3>Frame Options</h3>
+			<p>Controls whether the site can be placed in an <code>&lt;iframe&gt;</code>, <code>&lt;frame&gt;</code> or <code>&lt;object&gt;</code> tag. Disallowing framing can prevent clickjacking attacks, amongst others. For example, <a href="http://thehackernews.com/2015/02/internet-explorer-xss.html">Internet Explorer&#x2019;s universal cross-site-scripting bug</a> from February 2015 was mitigated by this header.</p>
+			<p>The <i>X-Frame-Options</i> is a non-standard header, superseded by the <i>frame ancestor</i> directive in Content Security Policy level 2. However, <i>frame ancestors</i> is not universally supported yet, while <i>X-Frame-Options</i> is widely supported.</p>
+
+			<h4>Recommendation</h4>
+			<p>Determine if your website needs to be allow being rendered in a frame. Disallow entirely by setting the option to <i>deny</i> or allow same-origin framing by <i>sameorigin</i>. Avoid the <i>allow-from</i> option because of limited or buggy browser support. Example HTTP header:</p>
+			<code>X-Frame-Options: deny</code>
+
+			<h4>Further reading</h4>
+			<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/X-Frame-Options">X-Frame-Options at Mozilla Developer Network</a><br><a href="https://www.owasp.org/index.php/Clickjacking_Defense_Cheat_Sheet">OWASP Clickjacking Cheat Sheet</a>
+
+			
+
+			<a name="xssProtection"></a><h3>XSS Protection</h3>
+			<p>Cross-site scripting (XSS or CSS) protection is built into most popular browsers, with the notable exception of Firefox. This protection is user configurable and can be turned off. Therefore, it's a good idea to explicitly request for the browser to employ its XSS filter on your website.</p>
+
+			<p>Conversely, websites can request for the XSS protection to be disabled on a page-by-page basis. This is definitely not a good idea.</p>
+
+			<h4>Recommendation</h4>
+			<p>Use the following HTTP header:</p><code>X-Xss-Protection: 1; block</code>
+
+			<h4>Further reading</h4>
+			<a href="https://www.veracode.com/blog/2014/03/guidelines-for-setting-security-headers">Guidelines for setting security headers</a>
+			
+			
+
+			<a name="cacheControl"></a><h3>Cache Control</h3>
+			<p>Indicates the preferences for caching the page output. The appropriate value varies with the nature of the website data, but including a preference is strongly recommended. Otherwise, it's up to the browsers and proxies to choose whether to cache the content. An inappropriate choice can cause performance problems, security issues, or both.</p>
+
+			<h4>Recommendation</h4>
+			<p>Develop a caching strategy and then include the cache preference as a HTTP header.</p>
+			<code>Cache-Control: public<sup>*</sup></code>
+			<p><sup>*</sup>One of <i>public</i>, <i>private</i>, <i>no-cache</i> or <i>no-store</i>. If caching is to be allowed, a <i>max-age</i> value should be included for <b>Cache-Control</b> as well as a <b>Etag</b> header to allow for cache validation by clients.
+
+			</p><h4>Further reading</h4>
+			<a href="https://developers.google.com/web/fundamentals/performance/optimizing-content-efficiency/http-caching">HTTP Caching Guide from Google Developers</a>
+
+			
+
+			<a name="contentTypeOptions"></a><h3>Content Type Options</h3>
+			<p>MIME sniffing is when browsers treat files from server in a different way than the server instructs. This can be dangerous when a website is hosting untrusted (e.g. user-provided) content. Lets say the server allows image uploads from users. Should a user upload a HTML document instead, a browser might render it as a web execute the scriptpage even though the server clearly says it is sending an image. The non-standard header <code>X-Content-Type-Options</code> instructs browsers not do any MIME sniffing away from the specified type.</p>
+
+			<h4>Recommendation</h4>
+			<p>Always set the header:</p>
+			<code>X-Content-Type-Options: nosniff</code>
+
+			<h4>Further reading</h4>
+			<a href="http://blogs.msdn.com/b/ie/archive/2008/09/02/ie8-security-part-vi-beta-2-update.aspx">IE8 Security Part VI (see section on MIME-Handling)</a>
+			
+			
+			
+			<a name="subResourceIntegrity"></a><h3>Subresource Integrity</h3>
+			<p>Browsers typically load a host of resources, javascripts and stylesheets, from external domains. Content delivery networks are often used. Should the external resource be compromised, the security of the dependant site can be as well. Subresource integrity allows the browser to verify the javascript or stylesheet has not been unexpectedly modified.</p>
+
+			<h4>Recommendation</h4>
+			<p>Set the <code>integrity</code> attribute for external javascripts and stylesheets.</p>
+			<code>&lt;script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js" <b>integrity="sha384-6ePHh72Rl3hKio4HiJ841psfsRJveeS+aLoaEf3BWfS+gTF0XdAqku2ka8VddikM"</b>&gt;&lt;/script&gt;</code>
+			
+			<h4>Note</h4>
+			<p>You should always provide local copies of the external script and implement a way to fall back to loading them in case the external load fails the integrity check. Otherwise your site might break. Example:</p>
+			<code>&lt;script&gt;window.jQuery || document.write('&lt;script src="/jquery.min.js"&gt;&lt;\/script&gt;')&lt;/script&gt;
+</code>
+
+			<h4>Further reading</h4>
+			<a href="https://frederik-braun.com/using-subresource-integrity.html">A CDN that can not XSS you: Using Subresource Integrity</a>
+
+			
+			
+			<a name="iframeSandbox"></a><h3>Iframe Sandbox</h3>
+			<p>Iframes are everywhere on the WWW. The average website <a href="http://www.debug.is/2015/04/15/youve-been-framed">has 5.1 iframes</a>, mostly for loading third-party content. These iframes have many ways to harm the hosting websites, including running scripts and plugins and redirecting visitors. The <code>sandbox</code> attribute enables restrictions to be placed on what can be done inside the iframe.</p>			
+
+			<h4>Recommendation</h4>
+			<p>Set the <code>sandbox</code> attribute for iframes and then add the required permissions.</p>
+			<code>&lt;iframe src="https://example.com" <b>sandbox="allow-same-origin allow-scripts"</b>&gt;&lt;/script&gt;</code>
+
+			<h4>Further reading</h4>
+			<a href="http://www.html5rocks.com/en/tutorials/security/sandboxed-iframes/">HTML5 Rocks - Play safely in sandboxed IFrames</a><br>
+			<a href="http://www.debug.is/2015/04/15/youve-been-framed/">You've Been Framed!</a> - A survey of iframes and the sandbox attribute.
+
+			
+
+			<a name="accurateClock"></a><h3>Server Clock</h3>
+			<p>Servers include a timestamp in all responses. An inaccurate clock doesn&#x2019;t cause problems for the client browser. However, issues can arise when interfacing with other systems or services.</p>
+
+			<h4>Recommendation</h4>
+			<p>Use the network time protocol (NTP) to keep server clocks accurate.</p>
+
+			<h4>Further reading</h4>
+			<a href="http://www.ntp.org/ntpfaq/NTP-s-def.htm">What is NTP?</a>
+		</div>
+			
+		<div class="container">
+			<a name="server"></a><h3>Server Banner</h3>
+			<p>Most web servers set headers to identify themselves and their version number. This serves only informational purpose and practical uses are very limited. Removing the entire header, while perfectly acceptable, is usually not necessary. However, it is recommended to remove the version numbers from the header. In the case that bugs exist for a specific web server version, including the version number can act as an invitation for script kiddies to try exploits against the server.</p>
+
+			<h4>Recommendation</h4>
+			<p>Include the server name but remove the version number.</p>
+			<code>Server: nginx</code>
+
+			<h4>Further reading</h4>
+			<a href="http://www.acunetix.com/blog/articles/configure-web-server-disclose-identity/">How to configure your web server to not disclose it's identity</a>
+
+			
+
+			<a name="poweredBy"></a><a name="runtime"></a><h3>Web Framework Information</h3>
+			<p>Many web frameworks set HTTP headers identifying the framework and/or version number. This serves little purpose except for satisfying the curiosity of users and mainly acts as an advertisement for the technology stack. These headers are non-standard and have no effect on how browsers render the site.</p>
+			<p>While they have little practical use, these headers can prove invaluable to robots or spiders searching for websites running outdated versions of software which may contain security vulnerabilities. These headers can make easy targets out of websites if they aren&#x2019;t regularly updated.</p>
+
+			<h4>Recommendation</h4>
+			<p>Remove these headers from the server responses: <code>X-Powered-By</code>, <code>X-Runtime</code>, <code>X-Version</code> and <code>X-AspNet-Version</code> </p>
+
+			<h4>Further reading</h4>
+			<a href="http://www.troyhunt.com/2012/02/shhh-dont-let-your-response-headers.html">Shhh&#x2026; don&#x2019;t let your response headers talk too loudly</a>
+		</div>
+
+		<div class="container">
+			<a name="cookiesHttpOnly"></a><a name="cookiesSecure"></a><h3>Cookie Security</h3>
+			<p>Cookies containing sensitive information, especially session IDs, need to be marked as <i>secure</i>, assuming the website is server over HTTPS. This stops the cookies from being sent clear-text over HTTP. The only other way for a website to prevent non-secure cookies from being transferred over HTTP is through <a href="https://httpsecurityreport.com/best_practice.html">HSTS</a>. Using both secure cookies and HSTS is recommended.</p>
+			<p>Session cookies should be marked with the <i>HttpOnly</i> value to prevent them from being accessible from javascript. This prevents attackers from leveraging XSS to steal session cookies, amongst other things. Other cookies might not strictly need to be marked this way. But unless there&#x2019;s a clear need to access their values from javascript, it&#x2019;s best to stay on the safe side and mark all cookies as <i>HttpOnly</i></p>
+
+			<h4>Recommendation</h4>
+			<p>Mark all cookies <i>secure</i> and <i>HttpOnly</i>.</p>
+			<code>Set-Cookie: Key=Value; path=/; secure; HttpOnly, Key2=Value2; secure; HttpOnly</code>
+
+			<h4>Further reading</h4>
+			<a href="https://www.owasp.org/index.php/Session_Management_Cheat_Sheet#Cookies">OWASP Session Management Cheat Sheet - Cookies</a>
+		</div>
+
+ </div>
+</body></html>

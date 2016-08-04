@@ -1,0 +1,114 @@
+<!DOCTYPE html><html><head><title>Running a Meteor App on Dokku</title></head><body>
+<h1>Running a Meteor App on Dokku</h1><p><a href="http://blog.iansinnott.com/running-a-meteor-app-on-dokku/" target="_new">Original URL</a></p>
+<p><blockquote>22 Nov 2014 This is a quick overview of how to get a Meteor app set up on Dokku. It&#x2019;s actually not difficult, but it doesn&#x2019;t seem to have been well documented anywhere yet. Let&#x2019;s&hellip;</blockquote></p>
+<div><div class="post">
+ 
+ <span class="post-date">22 Nov 2014</span>
+ <p>This is a quick overview of how to get a Meteor app set up on Dokku. It&#x2019;s actually not difficult, but it doesn&#x2019;t seem to have been well documented anywhere yet. Let&#x2019;s get started.</p>
+
+<h2 id="what-you-need">What you need</h2>
+
+<p>Obviously, you will need a server running Dokku. I used the Digital Ocean Dokku droplet, which uses the following versions:</p>
+
+<ul>
+ <li>Ubuntu 14.04</li>
+ <li>Docker 1.1.2</li>
+ <li>Dokku 0.2.3</li>
+</ul>
+
+<p>If you have a different setup your results may vary, but I&#x2019;m guessing this guide will generally work for you as long as you have Dokku v0.2.3 setup.</p>
+
+<p>You also need a meteor app. If you are reading this just out of curiosity and don&#x2019;t have an app feel free to use one of the example apps. You can generate them easily through the CLI. Example:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ meteor create --example todos
+</code></pre>
+</div>
+
+<h2 id="dokku-configuration">Dokku Configuration</h2>
+
+<p>First of all, the default buildpack that Dokku will use if it detects a Meteor app is the <a href="https://github.com/oortcloud/heroku-buildpack-meteorite">Heroku Buildpack</a>, which is not yet compatible with Meteor 1.0 and still uses Meteorite. That&#x2019;s no good, so you will need to specify a custom buildpack for Dokku. The buildpack I&#x2019;ve used successfully with Meteor 1.0 is <a href="https://github.com/AdmitHub/meteor-buildpack-horse">Meteor Buildpack Horse</a>. As of this writing (11/22/14) the documentation still doesn&#x2019;t reflect that it&#x2019;s compatible with 1.0, but it&#x2019;s worked so far so don&#x2019;t worry about that.</p>
+
+<p>To specify a custom buildpack, just create a file in your project root named <code class="highlighter-rouge">.env</code> and within that file export the buildpack URL like so:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>export BUILDPACK_URL='https://github.com/AdmitHub/meteor-buildpack-horse.git'
+</code></pre>
+</div>
+
+<p>Make sure you <code class="highlighter-rouge">git add</code> your new <code class="highlighter-rouge">.env</code> file with and commit it.</p>
+
+<h2 id="adding-mongo">Adding Mongo</h2>
+
+<p>Now you need to add the <a href="https://github.com/jeffutter/dokku-mongodb-plugin">Dokku MongoDB Plugin</a> to Dokku. Make sure you&#x2019;ve SSHed into your server, then run the following commands:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ git clone https://github.com/jeffutter/dokku-mongodb-plugin.git /var/lib/dokku/plugins/mongodb
+$ dokku plugins-install
+</code></pre>
+</div>
+
+<p>This may take a few minutes since it will need to install <code class="highlighter-rouge">mongodb-server</code> on the remote machine, unless you&#x2019;ve already installed Mongo in which case it should be quick. Once it&#x2019;s done, start Mongo and link it to your app:</p>
+
+<p><strong>Note:</strong> In the following snippet replace <code class="highlighter-rouge">&lt;app&gt;</code> with the name of your application, assuming you&#x2019;ve already pushed it to Dokku. If not, push your app up first and then run these commands. Your app name is what you specify in the git remote URL that points to Dokku. It looks like <code class="highlighter-rouge"><a class="__cf_email__" href="http://blog.iansinnott.com/cdn-cgi/l/email-protection">[email&#xA0;protected]</a>:&lt;app&gt;</code>.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ mongodb:start
+$ mongodb:create &lt;app&gt;
+</code></pre>
+</div>
+
+<h2 id="final-configuration">Final Configuration</h2>
+
+<p>If you haven&#x2019;t yet, deploy your app to Dokku. It will most likely crash (i.e. You get an Nginx error when you hit your URL), but that&#x2019;s fine as it is still missing one last piece.</p>
+
+<p>The final step is to set the <code class="highlighter-rouge">ROOT_URL</code> environment variable in your app container. You need to have pushed your app at least once for the app container to exist. Replace <code class="highlighter-rouge">&lt;url&gt;</code> with the URL you intend to use for your app. If you haven&#x2019;t yet purchased a domain name, you can set this variable to your IP address and it should still run just fine. Don&#x2019;t forget the leading <code class="highlighter-rouge">http://</code> (ex: <code class="highlighter-rouge">http://example.com</code> or <code class="highlighter-rouge">http://0.0.0.0</code>):</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ dokku config:set &lt;app&gt; ROOT_URL=&lt;url&gt;
+</code></pre>
+</div>
+
+<p>Setting the environment variable will trigger Dokku to restart your app. Once it does you should be able to view the app at the URL you provided in<code class="highlighter-rouge">&lt;url&gt;</code>.</p>
+
+<h2 id="success">Success!</h2>
+
+<p>That&#x2019;s it. Hopefully this helps as you deploy your meteor apps quickly using Dokku. If you want to create another meteor app you will just need to run through the above steps again, with the exception of adding the MongoDB plugin.</p>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<p>If you had trouble with anything above there are a couple ways you can troubleshoot Dokku and it&#x2019;s containers:</p>
+
+<ol>
+ <li>Inspect the apps logs. This is likely the most useful troubleshooting technique, and will likely reveal the problem. Run <code class="highlighter-rouge">dokku logs &lt;app&gt;</code>.</li>
+ <li>If the logs don&#x2019;t reveal the issue, put Dokku into debug mode and re-deploy. To do this you need to create a new Dokku config file at <code class="highlighter-rouge">/home/dokku/dokkurc</code>. Add a single line to the file: <code class="highlighter-rouge">export DOKKU_TRACE=1</code>. Now when you deploy, Dokku will send back <em>a lot</em> more information.</li>
+</ol>
+
+<h2 id="useful-resources">Useful Resources</h2>
+
+
+
+<p>That last link is <em>not</em> specific to Dokku or even Docker, but it gives good insight into what is required to set up a production Meteor server.</p>
+
+<p>Feel free to leave comments if you still have questions.</p>
+
+</div>
+
+<div class="about">
+ <p class="overlap-top"><span>About Me</span></p>
+ <div class="about-me">
+ <img src="" alt="Ian Sinnott">
+ <div class="inner">
+ <h3>Hi, I'm Ian</h3>
+ <p>I write code, travel and sometimes write about the experience. If you ever want to talk about tech, travel, remote working or anything in between feel free to get in touch:</p>
+ <a class="contact" href="https://twitter.com/ian_sinn">Say Hello <i class="fa fa-envelope-o"></i></a>
+ </div>
+ </div>
+ 
+
+</div>
+
+
+ 
+ 
+
+
+
+ 
+ </div>
+</body></html>

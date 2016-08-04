@@ -1,0 +1,396 @@
+<!DOCTYPE html><html><head><title>Let’s Make a Bubble Map</title></head><body>
+<h1>Let’s Make a Bubble Map</h1><p><a href="https://bost.ocks.org/mike/bubble-map/" target="_new">Original URL</a></p>
+<p><blockquote>My previous Let&#x2019;s Make a Map tutorial describes how to make a basic map with D3 and TopoJSON; now it&#x2019;s time to cover thematic mapping in the form of a graduated symbol map. The simplest&hellip;</blockquote></p>
+<div><body>
+
+<p>My previous <a href="https://bost.ocks.org/mike/map/">Let&#x2019;s Make a Map</a> tutorial describes how to make a basic map with <a href="http://d3js.org">D3</a> and <a href="https://github.com/mbostock/topojson">TopoJSON</a>; now it&#x2019;s time to cover thematic mapping in the form of a <a href="http://indiemapper.com/app/learnmore.php?l=proportional_symbols">graduated symbol map</a>. The simplest graduated symbol is a circle, or <i>bubble</i>, whose size is proportional to the associated data. In this tutorial, we&#x2019;ll make a bubble map of <a href="http://xkcd.com/1138/">population</a> by U.S. county.
+
+</p><p>Source: American Community Survey, 2012 5-Year Estimate
+
+</p><p>This tutorial necessarily covers a lot of ground. The main tasks are for any visualization are:
+
+</p><ul>
+<li><b>acquiring</b> data from primary sources,
+</li><li><b>transforming</b> data into a display-appropriate representation, and
+</li><li><b>displaying</b> data in a suitable visual encoding.
+</li></ul>
+
+<p>There are many different ways to perform these tasks, but this tutorial will focus on my <a href="https://bost.ocks.org/mike/bubble-map/#initializing">preferred workflow</a>. After acquiring <a href="https://bost.ocks.org/mike/bubble-map/#finding-boundaries">cartographic boundaries</a> and <a href="https://bost.ocks.org/mike/bubble-map/#finding-data">population estimates</a> from the U.S. Census Bureau, we&#x2019;ll <a href="https://bost.ocks.org/mike/bubble-map/#merging-data">transform</a> this data to TopoJSON and <a href="https://bost.ocks.org/mike/bubble-map/#displaying-data">display</a> it using D3. Lastly, I&#x2019;ll briefly comment on effective design for <a href="https://bost.ocks.org/mike/bubble-map/#communicating">visual communication</a>.
+
+</p><h2><a href="https://bost.ocks.org/mike/bubble-map/#initializing" name="initializing">#</a>Initializing</h2>
+
+<p>At a minimum, you&#x2019;ll need <a href="http://nodejs.org">Node</a> and a <a href="https://github.com/nodeapps/http-server">basic web server</a> for making maps. I covered this <a href="https://bost.ocks.org/mike/block/#setup">previously</a>, so I won&#x2019;t repeat myself here.
+
+</p><p>Although not essential, I also recommend <a href="http://git-scm.com/">Git</a> to keep a history of your changes, allowing you to revert mistakes (such as accidentally deleting hours of work). Create a new folder for this project, go to that folder in the terminal, and run the following command:
+
+</p><pre><code>git init</code></pre>
+
+<p>I use <a href="https://www.npmjs.org">NPM</a> to define local dependencies. The benefit of this approach is that you can have multiple versions of software packages installed simultaneously, and you don&#x2019;t have to worry about things breaking when you upgrade because each project is isolated. A minimal package definition is:
+
+</p><pre><code class="javascript">{
+ "name": "anonymous",
+ "private": true,
+ "version": "0.0.1",
+ "dependencies": {
+ "topojson": "1"
+ }
+}</code></pre>
+
+<p>Save this to a file called <code>package.json</code>, and run:
+
+</p><pre><code>npm install</code></pre>
+
+<p>You should now see a <code>node_modules</code> folder, containing the installed <code>topojson</code> package.
+
+</p><p>If you&#x2019;re using Git, you should also create a <a href="https://help.github.com/articles/ignoring-files">local <code>.gitignore</code> file</a> so that you don&#x2019;t accidentally check-in generated files to the repository. It should look something like this:
+
+</p><pre><code>.DS_Store
+build
+node_modules</code></pre>
+
+<p>The <code>build</code> directory is where we&#x2019;ll store our generated files. Because those files are generated, they don&#x2019;t need to be saved in the Git repository &#x2014;&#xA0;they can be rebuilt at any time.
+
+</p><h2><a href="https://bost.ocks.org/mike/bubble-map/#finding-boundaries" name="finding-boundaries">#</a>Finding Boundaries</h2>
+
+<p>The U.S. Census Bureau publishes <a href="https://www.census.gov/geo/maps-data/data/cbf/cbf_counties.html">simplified cartographic boundaries</a> as shapefiles for thematic mapping. The Census Bureau also publishes <a href="https://www.census.gov/geo/maps-data/data/tiger-line.html">TIGER/Line</a> shapefiles that are higher resolution and more up-to-date; however, for the small scale map we are making, that extra resolution is not needed. County boundaries also don&#x2019;t change very frequently, so it&#x2019;s usually acceptable to use the decennial census rather than the most recent release.
+
+</p><p>We&#x2019;ll be using the lowest-resolution shapefile, at &#x201C;20m&#x201D; or 1:20,000,000 scale. Rather than download the file and check it in to our git repo, we&#x2019;ll use <a href="http://www.gnu.org/software/make/manual/">Make</a> to document where this file is located and download it. Create a <code>Makefile</code> with the following contents:
+
+<aside>Here <code>$@</code> is the path to the target file, <code>$(dir $@)</code> is the directory containing the target file, and <code>$(notdir $@)</code> is the target file name. These abbreviations are faster to read and help avoid typos, but use long names if you find them too cryptic.</aside>
+
+</p><pre><code>build/gz_2010_us_050_00_20m.zip:
+	mkdir -p $(dir $@)
+	curl -o $@ http://www2.census.gov/geo/tiger/GENZ2010/$(notdir $@)</code></pre>
+
+<p>Next, run:
+
+</p><pre><code>make build/gz_2010_us_050_00_20m.zip</code></pre>
+
+<p>This will download the zipfile from the Census Bureau and save it in the build directory.
+
+</p><h2><a href="https://bost.ocks.org/mike/bubble-map/#converting-boundaries" name="converting-boundaries">#</a>Converting Boundaries</h2>
+
+<p>The zipfile by itself isn&#x2019;t very useful. We need to unzip its contents and convert the contained shapefile into TopoJSON for web delivery. We could do this by hand, but we&#x2019;ll again use Make so that our process is <a href="https://bost.ocks.org/mike/make/">documented and repeatable</a>. Add the following to the Makefile:
+
+</p><pre><code>build/gz_2010_us_050_00_20m.shp: build/gz_2010_us_050_00_20m.zip
+	unzip -od $(dir $@) $</code></pre>
+
+<p>This rule unzips the previously-downloaded file, giving us shapefiles. But don&#x2019;t run it yet &#x2014; we can combine it with another rule to convert the shapefiles to TopoJSON:
+
+<aside>For details on the meaning of these arguments, the see <a href="https://github.com/mbostock/topojson/wiki/Command-Line-Reference">TopoJSON command-line reference</a>.<p>The abbreviation <code>$ is shorthand for the first prerequisite of this rule:&#xA0;the shapefile. We disable filtering so that all small counties are retained after simplifying.</code></p></aside>
+
+</p><pre><code>build/counties.json: build/gz_2010_us_050_00_20m.shp
+	node_modules/.bin/topojson \
+		-o $@ \
+		--projection='width = 960, height = 600, d3.geo.albersUsa() \
+			.scale(1280) \
+			.translate([width / 2, height / 2])' \
+		--simplify=.5 \
+		-- counties=$</code></pre>
+
+<p>Now run this new command:
+
+</p><pre><code>make build/counties.json</code></pre>
+
+<p>In fact, this is not just converting the shapefile to TopoJSON, but also quantizing, projecting to the <a href="https://github.com/mbostock/d3/wiki/Geo-Projections#albersUsa">Albers USA projection</a> and simplifying. Together, these changes save quite a bit of space! The resulting file is 496KB, while the original shapefile was 1.7MB.
+
+</p><h2><a href="https://bost.ocks.org/mike/bubble-map/#displaying-boundaries" name="displaying-boundaries">#</a>Displaying Boundaries</h2>
+
+<p>Enough terminal. Time to get something on the screen. Create an <code>index.html</code>:
+
+</p><pre><code class="html">&lt;!DOCTYPE html&gt;
+&lt;meta charset="utf-8"&gt;
+&lt;style&gt;
+
+path {
+ fill: none;
+ stroke: #000;
+ stroke-linejoin: round;
+ stroke-linecap: round;
+}
+
+&lt;/style&gt;
+&lt;body&gt;
+&lt;script src="//d3js.org/d3.v3.min.js" charset="utf-8"&gt;&lt;/script&gt;
+&lt;script src="//d3js.org/topojson.v1.min.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+
+var width = 960,
+ height = 600;
+
+var path = d3.geo.path()
+ .projection(null);
+
+var svg = d3.select("body").append("svg")
+ .attr("width", width)
+ .attr("height", height);
+
+d3.json("build/counties.json", function(error, us) {
+ if (error) return console.error(error);
+
+ svg.append("path")
+ .datum(topojson.mesh(us))
+ .attr("d", path);
+});
+
+&lt;/script&gt;</code></pre>
+
+<p>Launch your local web server, and then visit your page. It should look something like this:
+
+</p><p>Two things to note at this stage. First, the <a href="https://github.com/mbostock/d3/wiki/Geo-Paths#path">d3.geo.path</a> instance has a null projection; that&#x2019;s because our TopoJSON is <a href="https://bl.ocks.org/mbostock/5557726">already projected</a>, so we can display it as-is. This greatly improves rendering performance. Second, we&#x2019;re just displaying the county boundaries so far (using <a href="https://github.com/mbostock/topojson/wiki/API-Reference#mesh">topojson.mesh</a>). We still have a bit of work to do before we can draw population bubbles.
+
+</p><h2><a href="https://bost.ocks.org/mike/bubble-map/#finding-data" name="finding-data">#</a>Finding Data</h2>
+
+<p>The next task is to fetch the data we want to visualize: population estimates by county. Sometimes you may find that data conveniently baked into your shapefile, but here we&#x2019;ll need to return to the U.S. Census Bureau and gather the requisite table from the American Community Survey (ACS) using the <a href="http://factfinder2.census.gov/">American FactFinder</a>.
+
+<aside>The ACS publishes 1-year, 3-year and 5-year estimates. The 5-year estimates are the most accurate, and are available in smaller geographic subdivisions such as census tracts. If you care more about recency than accuracy, use the 3- or 1-year estimates instead.</aside>
+
+</p><p>Here are the approximately twenty steps required to download a CSV:
+
+</p><ol>
+<li>Go to <a href="http://factfinder2.census.gov/">factfinder2.census.gov</a>.
+</li><li>Find where it says &#x201C;American Community Survey&#x201D; and click &#x201C;get data &#xBB;&#x201D;.
+</li><li>Click the blue &#x201C;Geographies&#x201D; button on the left.
+</li><li>In the pop-up, select &#x201C;..... County - 050&#x201D; in the &#x201C;geographic type&#x201D; menu.
+</li><li>Select &#x201C;All Counties within United States&#x201D; in the &#x201C;geographic areas&#x201D; box.
+</li><li>Click the &#x201C;ADD TO YOUR SELECTIONS&#x201D; button.
+</li><li>Click &#x201C;CLOSE&#x201D; to dismiss the pop-up.
+</li><li>Click the blue &#x201C;Topics&#x201D; button on the left.
+</li><li>In the pop-up, expand the &#x201C;People&#x201D; submenu.
+</li><li>Expand the &#x201C;Basic Count/Estimate&#x201D; submenu.
+</li><li>Click &#x201C;Population Total&#x201D;.
+</li><li>Click &#x201C;CLOSE&#x201D; to dismiss the pop-up.
+</li><li>In the table, click on the most recent ACS 5-year estimate named &#x201C;TOTAL POPULATION&#x201D;.
+</li><li>On the next page, click the &#x201C;Download&#x201D; link under &#x201C;Actions&#x201D;.
+</li><li>In the pop-up, click &#x201C;OK&#x201D;.
+</li><li>Wait for it to &#x201C;build&#x201D; your file.
+</li><li>When it&#x2019;s ready, click &#x201C;DOWNLOAD&#x201D;.
+</li><li>Finally, expand the downloaded zip file (ACS_12_5YR_B01003.zip).
+</li></ol>
+
+<aside>Did you know? The American FactFinder2 cost <a href="http://www.theatlantic.com/technology/archive/2012/07/us-census-bureaus-hated-american-factfinder-tool-cost-333-million-to-build/259698/">$33.3 million</a> and was built by IBM U.S. Federal.</aside>
+
+<p>If you would prefer this as a two-minute instructional video:
+
+</p><p><iframe width="720" height="405" src="https://www.youtube.com/embed/ndZmak1U6-U"></iframe>
+
+<aside>I recently learned that the Census Bureau has <a href="http://www.census.gov/developers/">an API</a>. However, it requires an API key, so I haven&#x2019;t tried it yet. The API supports stateless GET requests, so it should be easy to incorporate into the Makefile. If you&#x2019;ve tried it, <a href="https://twitter.com/mbostock">let me know</a> how it worked out.</aside>
+
+</p><p>An eminently more usable alternative to FactFinder is <a href="http://censusreporter.org/">censusreporter.org</a>, a Knight News Challenge-funder project with a convenient autocomplete interface and a robust API. Here is a direct link to download the latest ACS <a href="http://api.censusreporter.org/1.0/data/download/latest?table_ids=B01003&amp;geo_ids=050%7C01000US&amp;format=csv">total population estimate by county</a>. Note, however, that the column headers for this CSV are slightly different than the ones from FactFinder: <i>you must either edit the file or the Makefile rules accordingly</i>.
+
+</p><p>If you want to experience the FactFinder vicariously, you may also instead download <a href="https://gist.githubusercontent.com/mbostock/9943478/raw/ACS_12_5YR_B01003_with_ann.csv">my copy</a>. However, I recommend that you prefer data from primary sources whenever possible, as this ensures the data&#x2019;s accuracy.
+
+</p><h2><a href="https://bost.ocks.org/mike/bubble-map/#merging-data" name="merging-data">#</a>Merging Data</h2>
+
+<p>The downloaded <code>ACS_12_5YR_B01003_with_ann.csv</code> is slightly unusual in that it contains two header lines. Normally, a <a href="http://tools.ietf.org/html/rfc4180">CSV</a> file only contains at most one header line defining the names of the columns; this is the format that <a href="https://github.com/mbostock/d3/wiki/CSV">d3.csv</a> (and TopoJSON) expects. Open the downloaded CSV in your text editor and delete the first of the two header lines. The first few lines should look like this:
+
+</p><pre>Id,Id2,Geography,Estimate; Total,Margin of Error; Total
+0500000US01001,01001,"Autauga County, Alabama",54590,*****
+0500000US01003,01003,"Baldwin County, Alabama",183226,*****
+0500000US01005,01005,"Barbour County, Alabama",27469,*****</pre>
+
+<p>Now we can use TopoJSON&#x2019;s <code>--external-properties</code> feature to join the shapefile of counties with the CSV of population estimates, making additional properties available in the output TopoJSON. This flag works similar to a join in a relational database. Using the ID property as a primary key, we assign each row in the CSV file to the corresponding feature in the shapefile.
+
+</p><p>One frequent complication is that the external properties do not use the same ID property name as the shapefile. Here the CSV file uses the name <code>Id2</code>, while the shapefile uses <code>STATE</code> and <code>COUNTY</code>. (We could use the longer <code>Id</code> and <code>GEO_ID</code> properties, but we&#x2019;d prefer to use the shorter identifier here, without the redundant leading <code class="text">0500000US</code>.)
+
+</p><p>To address these inconsistencies, the <code>--id-property</code> argument accepts a comma-separated list of JavaScript expressions to specify how the ID property should be computed. For the shapefile, we&#x2019;ll use the expression <code>STATE+COUNTY</code> to concatenate those two properties, while for the CSV, we&#x2019;ll use <code>Id2</code>.
+
+</p><p>We can also use JavaScript expressions to define the properties we want to include in the generated TopoJSON. Here we&#x2019;ll map the <code>Geography</code> column from the CSV to the <code>name</code> property, and the <code>Estimate; Total</code> column to the <code>population</code> property. The latter requires special syntax because the column name isn&#x2019;t a valid JavaScript identifier. Also, we want it to be a number.
+
+</p><p>Modifying our Makefile slightly:
+
+</p><pre><code>build/counties.json: build/gz_2010_us_050_00_20m.shp ACS_12_5YR_B01003_with_ann.csv
+	node_modules/.bin/topojson \
+		-o $@ \
+		--id-property='STATE+COUNTY,Id2' \
+		--external-properties=ACS_12_5YR_B01003_with_ann.csv \
+		--properties='name=Geography' \
+		--properties='population=+d.properties["Estimate; Total"]' \
+		--projection='width = 960, height = 600, d3.geo.albersUsa() \
+			.scale(1280) \
+			.translate([width / 2, height / 2])' \
+		--simplify=.5 \
+		-- counties=$</code></pre>
+
+<h2><a href="https://bost.ocks.org/mike/bubble-map/#merging-boundaries" name="merging-boundaries">#</a>Merging Boundaries</h2>
+
+<p>One subtle detail you may not have noticed in the final bubble map is that it displays state boundaries rather than county boundaries. This reduces visual noise; each county has a corresponding bubble, while the state boundary lines provide additional geographic context.
+
+</p><p>We can compute the state boundaries without downloading another shapefile because TopoJSON is a <a href="http://en.wikipedia.org/wiki/Geospatial_topology">topological format</a>. The following rule merges (or &#x201C;dissolves&#x201D;) counties within the same state, producing a new <code>states</code> layer in the output TopoJSON file:
+
+</p><pre><code>build/states.json: build/counties.json
+	node_modules/.bin/topojson-merge \
+		-o $@ \
+		--in-object=counties \
+		--out-object=states \
+		--key='d.id.substring(0, 2)' \
+		-- $</code></pre>
+
+<p>The resulting state mesh:
+
+</p><p>A similar rule can compute the national boundary by merging states:
+
+</p><pre><code>us.json: build/states.json
+	node_modules/.bin/topojson-merge \
+		-o $@ \
+		--in-object=states \
+		--out-object=nation \
+		-- $</code></pre>
+
+<p>To run these new rules:
+
+</p><pre><code>make us.json</code></pre>
+
+<p>The <a href="https://github.com/mbostock/topojson/wiki/API-Reference#client-api">topojson.merge</a> function is part of the client API, so we could do this step in the client rather than baking it into the TopoJSON file. However, it&#x2019;s slightly faster to precompute the merged areas, and sometimes it&#x2019;s nice to have fewer moving parts.
+
+</p><p>Don&#x2019;t forget to load the new file in <code>index.html</code>, replacing the old counties-only file:
+
+</p><pre><code>d3.json("us.json", function(error, us) {
+ if (error) return console.error(error);
+
+ // Append to svg here.
+});</code></pre>
+
+<h2><a href="https://bost.ocks.org/mike/bubble-map/#displaying-data" name="displaying-data">#</a>Displaying Data</h2>
+
+<p>First, let&#x2019;s finish the base map that will appear underneath the bubbles.
+
+</p><p class="map" id="map--base">
+
+<aside>View <a href="https://bost.ocks.org/mike/bubble-map/base.html">base.html</a> for the full source of the base map.</aside>
+
+</p><p>The relevant code for the base map is:
+
+</p><pre><code>svg.append("path")
+ .datum(topojson.feature(us, us.objects.nation))
+ .attr("class", "land")
+ .attr("d", path);
+
+svg.append("path")
+ .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+ .attr("class", "border border--state")
+ .attr("d", path);</code></pre>
+
+<p>The land is drawn as a single feature, with the state borders drawn as white lines on top. The filter function passed to topojson.mesh specifies that only internal state borders should be drawn; the coastlines are not stroked so as to retain detail around small islands and inlets.
+
+</p><p>We&#x2019;ll need these new styles, as well, replacing the old ones:
+
+</p><pre><code class="css">.land {
+ fill: #ddd;
+}
+
+.border {
+ fill: none;
+ stroke: #fff;
+ stroke-linejoin: round;
+ stroke-linecap: round;
+}</code></pre>
+
+<p>Now to place bubbles at each county centroid:
+
+</p><pre><code>svg.append("g")
+ .attr("class", "bubble")
+ .selectAll("circle")
+ .data(topojson.feature(us, us.objects.counties).features)
+ .enter().append("circle")
+ .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+ .attr("r", 1.5);</code></pre>
+
+<aside>Arguably it would be better to use the <a href="https://www.census.gov/geo/reference/centersofpop.html">center of population</a> for each county rather than the area centroid.</aside>
+
+<p>To size the bubbles, create a <a href="https://github.com/mbostock/d3/wiki/Quantitative-Scales#sqrt">d3.scale.sqrt</a> so that the area of the circle is proportional to the associated population; the radius of the circle is proportional to the square root of the population. (Alternatively, you could use <a href="https://github.com/mbostock/d3/wiki/SVG-Shapes#symbol">d3.svg.symbol</a> for other proportional symbols.) We could compute the domain of the scale from the data, but since we know the approximate distribution of the data beforehand, we can simply hard-code reasonable values:
+
+<aside>To avoid distortion, make sure that the minimum domain and range values are both zero!</aside>
+
+</p><pre><code>var radius = d3.scale.sqrt()
+ .domain([0, 1e6])
+ .range([0, 15]);</code></pre>
+
+<p class="map" id="map--basic">
+
+<aside>View <a href="https://bost.ocks.org/mike/bubble-map/basic.html">basic.html</a> for the full source of this map.</aside>
+
+</p><p>This version of the map suffers greatly from <i>occlusion</i>: larger circles, such as Cook County in Illinois and Los Angeles County in California, obscure smaller bubbles underneath. Occlusion can be mitigated by making the bubbles smaller, but this makes it harder to see less-populated counties and emphasizes dense urban areas.
+
+</p><p>Another way to reduce occlusion is to sort bubbles by descending size, so that smaller bubbles are drawn on top of larger bubbles. The bubbles still overlap, but the smaller bubbles are now visible.
+
+</p><pre><code>svg.append("g")
+ .attr("class", "bubble")
+ .selectAll("circle")
+ .data(topojson.feature(us, us.objects.counties).features
+ .sort(function(a, b) { return b.properties.population - a.properties.population; }))
+ .enter().append("circle")
+ .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+ .attr("r", function(d) { return radius(d.properties.population); });</code></pre>
+
+<p>A bit of transparency and thin white stroke also helps.
+
+</p><pre><code>.bubble {
+ fill-opacity: .5;
+ stroke: #fff;
+ stroke-width: .5px;
+}</code></pre>
+
+<p class="map" id="map--sorted">
+
+<aside>View <a href="https://bost.ocks.org/mike/bubble-map/sorted.html">sorted.html</a> for the full source of this map.</aside>
+
+</p><p>Boom! A bubble map. But now that our map is legible, it&#x2019;s a good time to consider its validity: <i>often our source data is not as clean and regular as we expect</i>, and data-cleanliness issues may not be apparent in the visualization. It&#x2019;s critical to spot-check data and verify that it&#x2019;s correct. You should run sanity checks on the data,&#xA0;such as whether any counties are duplicated or missing data.
+
+<aside>The <a href="https://github.com/mbostock/d3/wiki/Arrays#d3_nest">d3.nest</a> operator is useful for checking uniqueness.</aside>
+
+</p><p>For example, an earlier version of this tutorial used county boundaries from a <a href="http://www.nationalatlas.gov/mld/1cntyp.html">different source</a>, and the shapefile specified separate features for each of a county&#x2019;s discontiguous areas. (Honolulu County in Hawaii consists not only of Oahu, but the tiny Ford and Sand islands as well.) To avoid duplicate bubbles and misleading readers, you would need to <a href="https://github.com/mbostock/topojson/blob/master/bin/topojson-group">group</a> features by county! The shapefile from the U.S. Census Bureau is already grouped, so we could skip this step.
+
+</p><h2><a href="https://bost.ocks.org/mike/bubble-map/#communicating" name="communicating">#</a>Communicating</h2>
+
+<p>To make this map <i>communicate</i> rather than simply look pretty, we need a few administrative touches. Adding a basic tooltip using SVG&#x2019;s <a href="http://www.w3.org/TR/SVG11/struct.html#DescriptionAndTitleElements">title element</a> is a reasonable improvement, but we really need a legend to make the meaning of the area encoding is apparent. Here is a basic legend that displays three circles and their associated population sizes:
+
+</p><pre><code>var legend = svg.append("g")
+ .attr("class", "legend")
+ .attr("transform", "translate(" + (width - 50) + "," + (height - 20) + ")")
+ .selectAll("g")
+ .data([1e6, 3e6, 6e6])
+ .enter().append("g");
+
+legend.append("circle")
+ .attr("cy", function(d) { return -radius(d); })
+ .attr("r", radius);
+
+legend.append("text")
+ .attr("y", function(d) { return -2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii radius(d); })
+ .attr("dy", "1.3em")
+ .text(d3.format(".1s"));</code></pre>
+
+<aside>View <a href="https://bl.ocks.org/mbostock/9943478">bl.ocks.org/9943478</a> for the full source of the final map, including the Makefile.</aside>
+
+<p>And the corresponding styles:
+
+</p><pre><code class="css">.legend circle {
+ fill: none;
+ stroke: #ccc;
+}
+
+.legend text {
+ fill: #777;
+ font: 10px sans-serif;
+ text-anchor: middle;
+}</code></pre>
+
+<p>An alternative to the explicit legend is to annotate a few circles with their exact value &#x2014; say, Los Angeles, Miami-Dade, and Cook. These values can then serve as comparison points for the other value, rather than needing additional visual elements.
+
+</p><p>Lastly, a wide variety of interactive improvements could be made, such as custom tooltip that displays additional information and the county outline, or <a href="https://bl.ocks.org/mbostock/9656675">panning and zooming</a> to allow the viewer to dive in for more detail. You might also consider a <a href="https://bl.ocks.org/mbostock/8033015">Voronoi overlay</a> to make the counties with small populations easier to hover. This tutorial merely provides a basic starting point for an interactive graduated symbol map.
+
+<footer>
+ <aside>May 6, 2014</aside>
+ <a href="https://bost.ocks.org/mike/" rel="author">Mike Bostock</a>
+</footer>
+
+
+
+
+
+
+
+
+</p></body></div>
+</body></html>

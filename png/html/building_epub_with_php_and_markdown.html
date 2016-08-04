@@ -1,0 +1,303 @@
+<!DOCTYPE html><html><head><title>Building ePub with PHP and Markdown</title></head><body>
+<h1>Building ePub with PHP and Markdown</h1><p><a href="http://www.sitepoint.com/building-epub-with-php-and-markdown/" target="_new">Original URL</a></p>
+<p><blockquote>The ePub format is a publishing standard built on top of XHTML, CSS, XML and more. And since PHP is well suited for working with HTML and friends, why not use it to build ebooks? In this article&hellip;</blockquote></p>
+<div><section class="article_body"><p>The ePub format is a publishing standard built on top of XHTML, CSS, XML and more. And since PHP is well suited for working with HTML and friends, why not use it to build ebooks? In this article we&#x2019;ll see what goes into building a tool for creating ePub packages starting from a set of content files. Maybe it&#x2019;s your next best selling cyber-sci-fi novel or documentation for your latest code project&#x2026; because we all write good documentation for our projects, don&#x2019;t we?</p>
+<p>In order to make things easy on the writers, our tool will be able to parse the Markdown syntax and the resulting markup will be placed into HTML templates using the <a href="http://www.raintpl.com/" title="RainTPL - easy php templating engine" target="_blank">RainTPL library</a>.</p>
+<p>The sample tool I wrote for this article is named md2epub and has become a real <a href="https://github.com/vtardia/md2epub" title="vtardia/md2epub - GitHub" target="_blank">open source project on Github</a>. It&#x2019;s far from perfect at the moment, but feel free to fork and improve it!</p>
+<h2>Quick Start ePub Theory</h2>
+<p>The specifications for the ePub format are detailed by the <a href="http://idpf.org/epub" title="EPUB | International Digital Publishing Forum" target="_blank">IDPF (International Digital Publishing Forum)</a>, and we&#x2019;ll refer to version 2.0.1 of the specs which is the most widely used today. Other useful resources are the <a href="http://en.wikipedia.org/wiki/EPUB" title="EPUB - Wikipedia, the free encyclopedia" target="_blank">Wikipedia ePub Page</a> and the <a href="http://www.hxa.name/articles/content/epub-guide_hxa7241_2007.html" title="Epub Format Construction Guide - HXA7241 - 2007" target="_blank">Epub Format Construction Guide</a> by <a href="http://www.hxa.name/" title="HXA7241" target="_blank">Harrison Ainsworth</a>. </p>
+<p>Basically, an ePub book is a zipped archive with a well defined structure. The contents includes XHTML documents, CSS stylesheets, images (GIFs, JPEGs, PNGs, and SVGs), and Open Type fonts. There are other specific files used to describe the content of the book; these are the package and container files:</p>
+<pre>myBook/
+ META-INF/
+ container.xml
+ mimetype
+ content.opf
+ toc.ncx
+ Stylesheet.css
+ BookCover.jpg
+ HomePage.xhtml
+ Chapter1.xhtml
+ ...
+ ChapterN.xhtml
+ Index.xhtml</pre>
+<p>The first four files are specific for the ePub package, the others are our content. The <code>mimetype</code> file must contain <em>application/epub+zip</em> in ASCII without an end-of-line character. It must be the first file included in the archive and must not be compressed; we cannot do this with PHP, but I&#x2019;ll show you a work-around for this later.</p>
+<p>The file <code>META-INF/container.xml</code> is fixed in name and location. The scope of this file is to tell where the OPF file (usually <code>content.opf</code>) is located relative to the ebook&#x2019;s root directory.</p>
+<p><code>content.opf</code> is an XML file that contains the book&#x2019;s meta data, the references to all the content resources, and the the order in which the contents must be loaded by the reader application.</p>
+<p>The <code>toc.ncx</code> file is an optional but recommended XML navigation map of the ebook.</p>
+<p>There are also other optional files that are not taken in consideration for now. And I won&#x2019;t tell you how to add DRM, sorry.</p>
+<h2>Our First eBook</h2>
+<p>So how do we prepare our content for ePub-lishing? I&#x2019;ve set up a test book directory like this:</p>
+<pre>mybook/
+ 01-first-chapter.md
+ 02-second-chapter.md
+ book.json
+ cover.jpg
+ coverpage.md
+ index.md
+ style.css
+ titlepage.md
+ media/
+ *.jpg</pre>
+<p>Most of the files are content files for the publication, markdown text and images. We then have a <code>style.css</code> file (the name and position should be fixed for now). Keep in mind that the ePub format understands only a subset of the CSS 2.1 specs.</p>
+<p>At last we have a special file called <code>book.json</code>. This file contains all the data that our <code>md2epub</code> tool will need to generate the standard package files. Most of the keys in this file have a direct match with the OPF and NCX files. The JSON file is structured like this:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">{
+ "id": "com.acme.books.MyUniqueBookID",
+ "title": "Sample eBook Title",
+ "language": "en",
+
+ "authors": [
+ { "name": "John Smith", "role": "aut"},
+ { "name": "Jane Appleseed", "role": "dsr"}
+ ],
+
+ "description": "Brief description of the book",
+ "subject": "List of keywords, pertinent to content, separated by commas",
+ "publisher": "ACME Publishing Inc.",
+ "rights": "Copyright (c) 2013, Someone",
+ "date": "2013-02-27",
+ "relation": "http://www.acme.com/books/MyUniqueBookIDWebEdition/",
+
+ "files": {
+ "coverpage": "coverpage.md",
+ "title-page": "titlepage.md",
+ "include": [
+ { "id":"ncx", "path":"toc.ncx" },
+ "cover.jpg",
+ "style.css",
+ "*.md",
+ "media/*"
+ ],
+ "index": "index.md",
+ "exclude": []
+ },
+
+ "spine": {
+ "toc": "ncx",
+ "items": [
+ "coverpage",
+ "title-page",
+ "copyright",
+ "foreword",
+ "|^c\d{1,2}-.*$|",
+ "index"
+ ]
+ }
+}</pre>
+<p>The first three groups of keys from <code>id</code> to <code>relation</code> maps to the <code>&lt;metadata&gt;</code> section of the OPF file. They contain information about the book, the author, the publisher, and so on. The keys <code>id</code>, <code>title</code>, and <code>language</code> are required. All the others are optional and their meaning is self-explanatory, except maybe for <code>relation</code> which is used to link to another publication using an ISBN format or a site URL. The value of <code>id</code> must be unique, and I&#x2019;ve chosen the reverse domain format <em>com.publisher.series.BookID</em> although you can use whatever format you like.</p>
+<p>The <code>files</code> key of the JSON maps to the &lt;manifest&gt; section of the OPF. This section contains references to every file used in the book, including fonts, stylesheets, images, and special files. Every item in this section needs a unique id, path to the resource (href), and its mimetype. <code>md2epub</code> will take care of the media type and will generate a suitable ID if it&#x2019;s not provided.</p>
+<p>I also wanted it to be able to specify bulk file inclusions using wildcards such as <em>*.md</em> and <em>media/*</em>, although the exclude list is not parsed at the moment either.</p>
+<p>The spine JSON key maps to <code>&lt;spine&gt;</code> in the OPF, it describes the order in which the various chapters should appear in the book.</p>
+<p>Starting with these data our <code>md2epub</code> will:</p>
+<ul><li>create a well organized temporary book directory</li>
+<li>copy all the referenced files</li>
+<li>convert and copy all the markdown file to XHTML</li>
+<li>generate the ePub required files</li>
+<li>create the zip/epub archive and cleanup</li>
+</ul><p>The final file can (and should) be validated by the <a href="http://validator.idpf.org/" title="EPUB Valiator (beta)" target="_blank">official EPUB Validator</a> which you can also download and run locally as a Java console application.</p>
+<h2>Md2Epub &#x2013; The Making of</h2>
+<p>In order to stay on topic in this article, I&#x2019;ll discuss only the most epub-specific code and leave the &#x201C;utility code&#x201D; for you to explore.</p>
+<p>The complete program consists of a console PHP script <code>md2epub.php</code> that collects the user&#x2019;s input, creates the working directory, and passes all of the data to the <code>EBook</code> class. The <code>md2epub</code> file is a shell wrapper.</p>
+<p>The <code>EBook</code> class performs all of the operations and checks. It uses the RainTPL library for template parsing and the <a href="http://michelf.ca/projects/php-markdown/extra/" title="Michel Fortin - PHP Markdown Extra" target="_blank">PHP Markdown Extra library</a> as a content filter. An interesting thing about this last component is that the <code>Markdown()</code> function is provided to the <code>EBook</code> class as an external filter to be applied to <code>*.md</code> files. In this way we can inject any other text filters such as Textile or a wiki syntax parser.</p>
+<p>The share directory contains common files, in particular the XHTML and XML template files; you can edit the markup of these files to customize your specific book type. The <code>mimetype.zip</code> file is part of the work-around I&#x2019;ve mentioned earlier &#x2013; since the PHP Zip library does not allow us to specify a compression level when creating an archive, I&#x2019;ve created this archive stub using the command line zip program:</p>
+<pre>zip -0 -D -X mimetype.zip mimetype</pre>
+<p>PHP will copy this basic archive and add the other files in sequence.</p>
+<h2>Exploring the EBook Object</h2>
+<p>The constructor of the <code>EBook</code> class takes two arguments: the source directory of the book and an optional array of parameters. The parameters specify the name of the JSON file to parse (which defaults to <code>book.json</code>) and the directory that will contain the content files of the compiled book. I chose <code>OEBPS</code>, which stands for Open eBook Publication Structure, as it&#x2019;s a convention used by many of the ebooks I&#x2019;ve explored. </p>
+<p>The role of the <code>parseFiles()</code> method is to normalize the files section loaded from the JSON. The wildcard paths are expanded using <code>glob()</code> and the IDs and media types are generated. At the end, it gives us an associative array where each file is represented in this way:</p>
+<pre>'cover' =&gt; Array (
+ 'path' =&gt; 'cover.jpg',
+ 'type' =&gt; 'image/jpeg'
+)</pre>
+<p>Each file must not be listed more than once. The path is relative to the content directory, the directory that will contain the OPF file. Markdown files are of type text/plain in this step and they will be converted later.</p>
+<p>The <code>parseSpine()</code> method does a similar job. It sets a NCX/TOC file and compiles a list of declared IDs. The IDs can be regular expressions. For example, I&#x2019;ve specified the pattern <code>^cd{1,2}-.*$</code> that matches the IDs for the chapters (<em>c01-first-chapter</em>, <em>c02-second-chapter</em>, etc). The beginning &#x201C;c&#x201D; is important since XML <code>id</code> attributes cannot start with a number.</p>
+<p>The powerful <code>makeEpub()</code> method then starts the transformation process for our ebook. The data needed is:</p>
+<ul><li>the target .epub file path</li>
+<li>the temporary directory in which compile and copy all the resources</li>
+<li>the source directory for template files</li>
+<li>the optional content filters, in this case Markdown linked to the md extension</li>
+</ul><p>It first checks the input parameters to be sure it has the right filesystem permissions, and then calls four helper methods in sequence, corresponding to the required steps:</p>
+<ul><li>create the META-INF directory and data</li>
+<li>export all the content files, compile templates and apply filters</li>
+<li>create the OPF manifest file</li>
+<li>create the NCX navigation file (if needed)</li>
+<li>create the compressed epub archive</li>
+</ul><p>The <code>createMetaInf()</code> method is the simplest and helps us to understand the template logic behind the others:</p>
+<pre class="brush: php; title: ; notranslate" title="">&lt;?php
+protected function createMetaInf($workDir)
+{
+ // create destination directory
+ if (!mkdir("$workDir/META-INF")) {
+ throw new Exception('Unable to create content META-INF directory');
+ }
+
+ // compile file
+ $tpl = $this-&gt;initTemplateEngine(
+ array(
+ 'tpl_dir' =&gt; "{$this-&gt;params['templates_dir']}/",
+ 'tpl_ext' =&gt; 'xml',
+ 'cache_dir' =&gt; sys_get_temp_dir() . '/'
+ )
+ );
+ $tpl-&gt;assign('ContentDirectory', $this-&gt;params['content_dir']);
+ $container = $tpl-&gt;draw('book/META-INF/container', true);
+
+ // write compiled file to destination
+ if (file_put_contents("$workDir/META-INF/container.xml", $container) === false) {
+ throw new Exception("Unable to create content META-INF/container.xml");
+ }
+}</pre>
+<p>The <code>container.xml</code> template has only one variable to set which is the path of the <code>content.opf</code> file relative to the base directory of the ebook. The syntax is <code>{$VariableName}</code>.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;?xml version="1.0"?&gt;
+&lt;container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"&gt;
+ &lt;rootfiles&gt;
+ &lt;rootfile full-path="{$ContentDirectory}/content.opf"
+ media-type="application/oebps-package+xml"/&gt;
+ &lt;/rootfiles&gt;
+&lt;/container&gt;</pre>
+<p>First the RainTPL library is initialized with the templates directory, the extension of the template files, and a temporary cache directory. Then the template variable is assigned (<code>$tpl-&gt;assign()</code>) and the <code>draw()</code> method parses the provided template file. Its second parameter tells <code>draw()</code> whether to return the result. The compiled file is then saved to the destination path.</p>
+<p>The <code>createOpf()</code> method has the same logic and some more variables to assign. I chose the pattern <code>Book&lt;Varname&gt;</code> so the optional meta data is assigned in the loop:</p>
+<pre class="brush: php; title: ; notranslate" title="">&lt;?php
+$optParams = array(
+ 'authors',
+ 'date',
+ 'description',
+ 'publisher',
+ 'relation',
+ 'rights',
+ 'subject'
+);
+
+foreach ($optParams as $p) {
+ if (isset($this-&gt;$p)) {
+ $tpl-&gt;assign('Book' . ucfirst($p), $this-&gt;$p);
+ }
+}</pre>
+<p>And they are inserted in the template with a conditional syntax:</p>
+<pre class="brush: xml; title: ; notranslate" title="">{if="$BookDescription"}&lt;dc:description&gt;{$BookDescription}&lt;/dc:description&gt;{/if}</pre>
+<p>The files and spine variables are formatted in the method and are inserted in the template with a loop:</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;manifest&gt;
+ {loop="$BookFiles"}&lt;item id="{$key}" href="{$value.path}" media-type="{$value.type}"/&gt;
+ {/loop}
+&lt;/manifest&gt;</pre>
+<p>The <code>processBookFiles()</code> is called before the <code>createOpf()</code> and runs a big loop with all the referenced resources (<code>$this-&gt;files</code>). For each resource it can choose between two actions:</p>
+<ul><li>process and filter the file</li>
+<li>copy the file path &#x201C;as is&#x201D; in the destination directory</li>
+</ul><p>The filter applied to a file must be a callable PHP function or class method that takes one parameter: the content. The file content is loaded from the original source using <code>file_get_contents()</code> and the filter is applied using the native <code>call_user_func()</code>:</p>
+<pre class="brush: php; title: ; notranslate" title="">&lt;?php
+$content = call_user_func($filters[$ext], $content);</pre>
+<p>The processed content is then injected in an XHTML template, similar to the previous methods. In this case there is also the possibility to use a custom template. If there is a file named <code>.xhtml</code> in the <code>templates</code> directory, that file will be used overriding the default <code>page.xhtml</code>. Also, if a <code>style.css</code> file is present then the <code>{$BookStyle}</code> template variable is set and the CSS is linked to the page.</p>
+<p>The resulting file is then written to the destination directory and the manifest entry for that file is updated with the new path and media type, ready for <code>createOpf()</code>.</p>
+<p>The <code>createNcx()</code> is a little tricky because it has to look into the items of the spine section and extract the content of the H1 and H2 tags. The <code>toc.ncx</code> file has this structure, first a standardized header:</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"&gt;
+ &lt;head&gt;
+ &lt;meta name="dtb:uid" content="{$BookID}"/&gt;
+
+ &lt;!-- 1 = chapters only, 2 = subchapters, 3 = third level section --&gt;
+ &lt;meta name="dtb:depth" content="2"/&gt;
+
+ &lt;!-- Both required but unused, can be 0 --&gt;
+ &lt;meta name="dtb:totalPageCount" content="0"/&gt;
+ &lt;meta name="dtb:maxPageNumber" content="0"/&gt;
+ &lt;/head&gt;
+
+ &lt;docTitle&gt;
+ &lt;text&gt;{$BookTitle}&lt;/text&gt;
+ &lt;/docTitle&gt;</pre>
+<p>The customized <code>dtb:uid</code> meta indicates our book ID, and the <code>dtb:depth</code> meta tag says how deep our navigation is. I choose a fixed value of 2 here so in the parsing code I have to extract the first two level headers.</p>
+<p>After the header there&#x2019;s the <code>&lt;navMap&gt;</code> that is generated using a template loop.</p>
+<pre class="brush: xml; title: ; notranslate" title="">
+{$playOrder=1}
+{loop="$BookChapters"}
+ &lt;navPoint id="{$key}" playOrder="{$playOrder++}"&gt;
+ &lt;navLabel&gt;
+ &lt;text&gt;{$value.title}&lt;/text&gt;
+ &lt;/navLabel&gt;
+ &lt;content src="{$value.path}"/&gt;
+ {if="isset($value.sections)"}{loop="$value.sections"}
+ &lt;navPoint id="{$key}" playOrder="{$playOrder++}"&gt;
+ &lt;navLabel&gt;
+ &lt;text&gt;{$value.title}&lt;/text&gt;
+ &lt;/navLabel&gt;
+ &lt;content src="{$value.path}"/&gt;
+ &lt;/navPoint&gt;
+ {/loop}{/if}
+ &lt;/navPoint&gt;
+{/loop}</pre>
+<p>Each H1 becomes a <code>&lt;navPoint&gt;</code>, the <code>id</code> is the corresponding resource ID (ex <em>c01-first-chapter</em>, etc), the H1 content becomes the label, and the <code>playOrder</code> attribute indicates the global reading order. In our example, each nav point can have nested nav points for H2 subtitles.</p>
+<p>In the method, a double loop generates an array structured like this:</p>
+<pre class="brush: php; title: ; notranslate" title="">$chapters['c01-first-chapter'] = array(
+ 'title' =&gt; 'Title for chapter 1',
+ 'path' =&gt; '01-first-chapter.xhtml',
+ 'sections' =&gt; array(
+ 'section-1-1' =&gt; array(
+ 'title' =&gt; 'Title for subsection 1.1',
+ 'path' =&gt; '01-first-chapter.xhtml#section-1-1',
+ )
+ )
+)</pre>
+<p>In the external loop, each item is loaded as a <code>SimpleXML</code> object:</p>
+<pre class="brush: php; title: ; notranslate" title="">&lt;?php
+$doc = simplexml_load_file("$workDir/{$this-&gt;params['content_dir']}/{$this-&gt;files[$item]['path']}");
+if ($doc &amp;&amp; isset($doc-&gt;body-&gt;h1)) {
+ // chapter title
+ $chapters[$item] = array(
+ 'title' =&gt; $doc-&gt;body-&gt;h1,
+ 'path' =&gt; $this-&gt;files[$item]['path']
+ );
+
+ // subchapter title
+ foreach ($doc-&gt;body-&gt;h2 as $section) {
+ if (!empty($section['id'])) {
+ $section_id = (string) $section['id'];
+ $chapters[$item]['sections'][$section_id] = array(
+ 'title' =&gt; $section,
+ 'path' =&gt; $this-&gt;files[$item]['path'] . '#' . $section['id']
+ );
+ }
+ }
+}</pre>
+<p>If the document has a H1 header, a first level item is inserted into the <code>$chapters</code> array. Then the second level headers are queried, each header that has a non-empty <code>id</code> attribute is included in the sections for each chapter. The <code>$chapters</code> array becomes <code>{$BookChapters}</code> in the template. The template is then rendered and saved to its destination.</p>
+<p>Now we have a destination working directory somewhere at <code>/tmp/path/com.publisher.BookID</code> that can be packed by the final step <code>createArchive()</code>: </p>
+<pre class="brush: php; title: ; notranslate" title="">&lt;?php
+protected function createArchive($workDir, $epubFile)
+{
+ $excludes = array('.DS_Store', 'mimetype');
+
+ $mimeZip = "{$this-&gt;params['templates_dir']}/mimetype.zip";
+ $zipFile = sys_get_temp_dir() . '/book.zip';
+
+ if (!copy($mimeZip, $zipFile)) {
+ throw new Exception("Unable to copy temporary archive file");
+ }
+
+ $zip = new ZipArchive();
+ if ($zip-&gt;open($zipFile, ZipArchive::CREATE) != true) {
+ throw new Exception("Unable open archive '$zipFile'");
+ }
+
+ $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($workDir), RecursiveIteratorIterator::SELF_FIRST);
+ foreach ($files as $file) {
+ if (in_array(basename($file), $excludes)) {
+ continue;
+ }
+ if (is_dir($file)) {
+ $zip-&gt;addEmptyDir(str_replace("$workDir/", '', "$file/"));
+ } elseif (is_file($file)) {
+ $zip-&gt;addFromString(
+ str_replace("$workDir/", '', $file),
+ file_get_contents($file)
+ );
+ }
+ }
+ $zip-&gt;close();
+
+ rename($zipFile, $epubFile);
+}</pre>
+<p>The <code>$excludes</code> array contains special and system files that we don&#x2019;t want in the archive. A temporary path for an empty <code>$zipFile</code> is created, and then the <code>$zipFile</code> path is filled with a copy of our basic <code>mimetype.zip</code> that is loaded in a <code>ZipArchive</code> object. At this point the content of the working directory is recursively loaded into the <code>$files</code> array using the <code>RecursiveIteratorIterator</code> and <code>RecursiveDirectoryIterator</code> objects. In the following loop the structure of the working directory is replicated in the zip archive. As a finishing touch, the archive is moved to the destination path indicated by the caller.</p>
+<h2>Summary</h2>
+<p>When all is said and done, we have our shiny new eBook. We have a good chance that it will be validated by the EpubCheck app and, most importantly, we have another useful tool to add to our PHP-super-hero belt! And this is only a starting point, you can play with the code to add filters, features, themes and styles and more if you like. Keep calm, have fun, and write those eBooks!</p>
+<p><small>Image via <a title="Royalty Free Stock Photos at Fotolia.com" href="http://us.fotolia.com/?utm_source=sitepoint&amp;utm_medium=website_link&amp;utm=campaign=sitepoint" target="_blank">Fotolia</a></small></p>
+
+ </section></div>
+</body></html>

@@ -1,0 +1,512 @@
+<!DOCTYPE html><html><head><title>Introduction to Monte Carlo Tree Search</title></head><body>
+<h1>Introduction to Monte Carlo Tree Search</h1><p><a href="http://jeffbradberry.com/posts/2015/09/intro-to-monte-carlo-tree-search/" target="_new">Original URL</a></p>
+<p><blockquote>The subject of game AI generally begins with so-called perfect information games. These are turn-based games where the players have no information hidden from each other and there is no element of&hellip;</blockquote></p>
+<div><div class="content">
+ <p>The subject of game AI generally begins with so-called <em>perfect
+information</em> games. These are turn-based games where the players have
+no information hidden from each other and there is no element of
+chance in the game mechanics (such as by rolling dice or drawing cards
+from a shuffled deck). Tic Tac Toe, Connect 4, Checkers, Reversi,
+Chess, and Go are all games of this type. Because everything in this
+type of game is fully determined, a tree can, in theory, be
+constructed that contains all possible outcomes, and a value assigned
+corresponding to a win or a loss for one of the players. Finding the
+best possible play, then, is a matter of doing a search on the tree,
+with the method of choice at each level alternating between picking
+the maximum value and picking the minimum value, matching the
+different players' conflicting goals, as the search proceeds down the
+tree. This algorithm is called <a class="reference external" href="https://en.wikipedia.org/wiki/Minimax">Minimax</a>.</p>
+<p>The problem with Minimax, though, is that it can take an impractical
+amount of time to do a full search of the game tree. This is
+particularly true for games with a high <em>branching factor</em>, or high
+average number of available moves per turn. This is because the basic
+version of Minimax needs to search all of the nodes in the tree to
+find the optimal solution, and the number of nodes in the tree that
+must be checked grows exponentially with the branching factor. There
+are methods of mitigating this problem, such as searching only to a
+limited number of moves ahead (or <em>ply</em>) and then using an <em>evaluation
+function</em> to estimate the value of the position, or by <a class="reference external" href="https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning">pruning</a> branches
+to be searched if they are unlikely to be worthwhile. Many of these
+techniques, though, require encoding domain knowledge about the game,
+which may be difficult to gather or formulate. And while such methods
+have produced Chess programs capable of defeating grandmasters,
+similar success in Go has been elusive, particularly for programs
+playing on the full 19x19 board.</p>
+<p>However, there is a game AI technique that does do well for games with
+a high branching factor and has come to dominate the field of Go
+playing programs. It is easy to create a basic implementation of this
+algorithm that will give good results for games with a smaller
+branching factor, and relatively simple adaptations can build on it
+and improve it for games like Chess or Go. It can be configured to
+stop after any desired amount of time, with longer times resulting in
+stronger game play. Since it doesn't necessarily require
+game-specific knowledge, it can be used for <a class="reference external" href="https://en.wikipedia.org/wiki/General_game_playing">general game playing</a>. It may even
+be adaptable to games that incorporate randomness in the rules. This
+technique is called Monte Carlo Tree Search. In this article I will
+describe how <abbr title="Monte Carlo Tree Search">MCTS</abbr> works,
+specifically a variant called Upper Confidence bound applied to Trees
+(<abbr title="Upper Confidence bound applied to Trees">UCT</abbr>), and then will
+show you how to build a basic implementation in Python.</p>
+<p>Imagine, if you will, that you are faced with a row of slot machines,
+each with different payout probabilities and amounts. As a rational
+person (if you are going to play them at all), you would prefer to use
+a strategy that will allow you to maximize your net gain. But how can
+you do that? For whatever reason, there is no one nearby, so you
+can't watch someone else play for a while to gain information about
+which is the best machine. Clearly, your strategy is going to have to
+balance playing all of the machines to gather that information
+yourself, with concentrating your plays on the observed best machine.
+One strategy, called <abbr title="Upper Confidence Bound 1">UCB1</abbr>, does
+this by constructing statistical <em>confidence intervals</em> for each
+machine</p>
+<p class="math">
+\begin{equation*}
+\bar{x}_i \pm \sqrt{\frac{2 \ln n}{n_i}}
+\end{equation*}
+</p>
+<p>where:</p>
+<ul class="simple">
+<li><span class="math">\(\bar{x}_i\)</span>: the mean payout for machine <span class="math">\(i\)</span></li>
+<li><span class="math">\(n_i\)</span>: the number of plays of machine <span class="math">\(i\)</span></li>
+<li><span class="math">\(n\)</span>: the total number of plays</li>
+</ul>
+<p>Then, your strategy is to pick the machine with the highest upper
+bound each time. As you do so, the observed mean value for that
+machine will shift and its confidence interval will become narrower,
+but all of the other machines' intervals will widen. Eventually, one
+of the other machines will have an upper bound that exceeds that of
+your current one, and you will switch to that one. This strategy has
+the property that your <em>regret</em>, the difference between what you would
+have won by playing solely on the actual best slot machine and your
+expected winnings under the strategy that you do use, grows only as
+<span class="math">\(\mathcal{O}(\ln n)\)</span>. This is the same <a class="reference external" href="https://en.wikipedia.org/wiki/Big_O_notation">big-O</a> growth rate as the
+theoretical best for this problem (referred to as the <em>multi-armed
+bandit problem</em>), and has the additional benefit of being easy to
+calculate.</p>
+<p>And here's how Monte Carlo comes in. In a standard Monte Carlo
+process, a large number of random simulations are run, in this case,
+from the board position that you want to find the best move for.
+Statistics are kept for each possible move from this starting state,
+and then the move with the best overall results is returned. The
+downside to this method, though, is that for any given turn in the
+simulation, there may be many possible moves, but only one or two that
+are good. If a random move is chosen each turn, it becomes extremely
+unlikely that the simulation will hit upon the best path forward. So,
+UCT has been proposed as an enhancement. The idea is this: any given
+board position can be considered a multi-armed bandit problem, if
+statistics are available for all of the positions that are only one
+move away. So instead of doing many purely random simulations, UCT
+works by doing many multi-phase <em>playouts</em>.</p>
+<div class="figure align-left">
+<img alt="Selection" src="http://jeffbradberry.com/images/mcts_selection.png">
+<p class="caption">Selection</p>
+<p class="legend">
+Here the positions and moves selected by the UCB1 algorithm at each
+step are marked in bold. Note that a number of playouts have
+already been run to accumulate the statistics shown. Each circle
+contains the number of wins / number of times played.</p>
+</div>
+<p class="group">The first phase, <em>selection</em>, lasts while you have the statistics
+necessary to treat each position you reach as a multi-armed bandit
+problem. The move to use, then, would be chosen by the UCB1 algorithm
+instead of randomly, and applied to obtain the next position to be
+considered. Selection would then proceed until you reach a position
+where not all of the child positions have statistics recorded.</p>
+<div class="figure align-right">
+<img alt="Expansion" src="http://jeffbradberry.com/images/mcts_expansion.png">
+<p class="caption">Expansion</p>
+<p class="legend">
+The position marked 1/1 at the bottom of the tree has no further
+statistics records under it, so we choose a random move and add a
+new record for it (bold), initialized to 0/0.</p>
+</div>
+<p class="group">The second phase, <em>expansion</em>, occurs when you can no longer apply
+UCB1. An unvisited child position is randomly chosen, and a new
+record node is added to the tree of statistics.</p>
+<div class="figure align-left">
+<img alt="Simulation" src="http://jeffbradberry.com/images/mcts_simulation.png">
+<p class="caption">Simulation</p>
+<p class="legend">
+Once the new record is added, the Monte Carlo simulation begins,
+here depicted with a dashed arrow. Moves in the simulation may be
+completely random, or may use calculations to weight the randomness
+in favor of moves that may be better.</p>
+</div>
+<p class="group">After expansion occurs, the remainder of the playout is in phase 3,
+<em>simulation</em>. This is done as a typical Monte Carlo simulation,
+either purely random or with some simple weighting heuristics if a
+<em>light playout</em> is desired, or by using some computationally expensive
+heuristics and evaluations for a <em>heavy playout</em>. For games with a
+lower branching factor, a light playout can give good results.</p>
+<div class="group figure align-right">
+<img alt="Back-propagation" src="http://jeffbradberry.com/images/mcts_backprop.png">
+<p class="caption">Back-Propagation</p>
+<p class="legend">
+After the simulation reaches an end, all of the records in the path
+taken are updated. Each has its play count incremented by one, and
+each that matches the winner has its win count incremented by one,
+here shown by the bolded numbers.</p>
+</div>
+<p class="group">Finally, the fourth phase is the <em>update</em> or <em>back-propagation</em> phase.
+This occurs when the playout reaches the end of the game. All of the
+positions visited during this playout have their play count
+incremented, and if the player for that position won the playout, the
+win count is also incremented.</p>
+<p>This algorithm may be configured to stop after any desired length of
+time, or on some other condition. As more and more playouts are run,
+the tree of statistics grows in memory and the move that will finally
+be chosen will converge towards the actual optimal play, though that
+may take a very long time, depending on the game.</p>
+<p>For more details about the mathematics of UCB1 and UCT, see
+<a class="reference external" href="http://homes.di.unimi.it/~cesabian/Pubblicazioni/ml-02.pdf">Finite-time Analysis of the Multiarmed Bandit Problem</a> and
+<a class="reference external" href="https://www.lri.fr/~sebag/Examens_2008/UCT_ecml06.pdf">Bandit based Monte-Carlo Planning</a>.</p>
+<p>Now let's see some code. To separate concerns, we're going to need a
+<tt class="docutils literal">Board</tt> class, whose purpose is to encapsulate the rules of a game
+and which will care nothing about the AI, and a <tt class="docutils literal">MonteCarlo</tt> class,
+which will only care about the AI algorithm and will query into the
+<tt class="docutils literal">Board</tt> object in order to obtain information about the game. Let's
+assume a <tt class="docutils literal">Board</tt> class supporting this interface:</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">Board</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="c"># Returns a representation of the starting state of the game.</span>
+ <span class="k">pass</span>
+
+ <span class="k">def</span> <span class="nf">current_player</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+ <span class="c"># Takes the game state and returns the current player's</span>
+ <span class="c"># number.</span>
+ <span class="k">pass</span>
+
+ <span class="k">def</span> <span class="nf">next_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">play</span><span class="p">):</span>
+ <span class="c"># Takes the game state, and the move to be applied.</span>
+ <span class="c"># Returns the new game state.</span>
+ <span class="k">pass</span>
+
+ <span class="k">def</span> <span class="nf">legal_plays</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_history</span><span class="p">):</span>
+ <span class="c"># Takes a sequence of game states representing the full</span>
+ <span class="c"># game history, and returns the full list of moves that</span>
+ <span class="c"># are legal plays for the current player.</span>
+ <span class="k">pass</span>
+
+ <span class="k">def</span> <span class="nf">winner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_history</span><span class="p">):</span>
+ <span class="c"># Takes a sequence of game states representing the full</span>
+ <span class="c"># game history. If the game is now won, return the player</span>
+ <span class="c"># number. If the game is still ongoing, return zero. If</span>
+ <span class="c"># the game is tied, return a different distinct value, e.g. -1.</span>
+ <span class="k">pass</span>
+</pre></div>
+<p>For the purposes of this article I'm not going to flesh this part out
+any further, but for example code you can find one of my
+implementations on <a class="reference external" href="https://github.com/jbradberry/ultimate_tictactoe/blob/master/t3/board.py">github</a>.
+However, it is important to note that we will require that the
+<tt class="docutils literal">state</tt> data structure is hashable and equivalent states hash to the
+same value. I personally use flat tuples as my state data structures.</p>
+<p>The AI class we will be constructing will support this interface:</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">MonteCarlo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+ <span class="c"># Takes an instance of a Board and optionally some keyword</span>
+ <span class="c"># arguments. Initializes the list of game states and the</span>
+ <span class="c"># statistics tables.</span>
+ <span class="k">pass</span>
+
+ <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+ <span class="c"># Takes a game state, and appends it to the history.</span>
+ <span class="k">pass</span>
+
+ <span class="k">def</span> <span class="nf">get_play</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="c"># Causes the AI to calculate the best move from the</span>
+ <span class="c"># current game state and return it.</span>
+ <span class="k">pass</span>
+
+ <span class="k">def</span> <span class="nf">run_simulation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="c"># Plays out a "random" game from the current position,</span>
+ <span class="c"># then updates the statistics tables with the result.</span>
+ <span class="k">pass</span>
+</pre></div>
+<p>Let's begin with the initialization and bookkeeping. The <tt class="docutils literal">board</tt>
+object is what the AI will be using to obtain information about where
+the game is going and what the AI is allowed to do, so we need to
+store it. Additionally, we need to keep track of the state data as we
+get it.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">MonteCarlo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">board</span> <span class="o">=</span> <span class="n">board</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">states</span> <span class="o">=</span> <span class="p">[]</span>
+
+ <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+</pre></div>
+<p>The UCT algorithm relies on playing out multiple games from the
+current state, so let's add that next.</p>
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">datetime</span>
+
+<span class="k">class</span> <span class="nc">MonteCarlo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+ <span class="c"># ...</span>
+ <span class="n">seconds</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">'time'</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">calculation_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">seconds</span><span class="p">)</span>
+
+ <span class="c"># ...</span>
+
+ <span class="k">def</span> <span class="nf">get_play</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="n">begin</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+ <span class="k">while</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">-</span> <span class="n">begin</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculation_time</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">run_simulation</span><span class="p">()</span>
+</pre></div>
+<p>Here we've defined a configuration option for the amount of time to
+spend on a calculation, and <tt class="docutils literal">get_play</tt> will repeatedly call
+<tt class="docutils literal">run_simulation</tt> until that amount of time has passed. This code
+won't do anything particularly useful yet, because we still haven't
+defined <tt class="docutils literal">run_simulation</tt>, so let's do that now.</p>
+<div class="highlight"><pre><span class="c"># ...</span>
+<span class="kn">from</span> <span class="nn">random</span> <span class="kn">import</span> <span class="n">choice</span>
+
+<span class="k">class</span> <span class="nc">MonteCarlo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+ <span class="c"># ...</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">max_moves</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">'max_moves'</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+
+ <span class="c"># ...</span>
+
+ <span class="k">def</span> <span class="nf">run_simulation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="n">states_copy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="p">[:]</span>
+ <span class="n">state</span> <span class="o">=</span> <span class="n">states_copy</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+ <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_moves</span><span class="p">):</span>
+ <span class="n">legal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">legal_plays</span><span class="p">(</span><span class="n">states_copy</span><span class="p">)</span>
+
+ <span class="n">play</span> <span class="o">=</span> <span class="n">choice</span><span class="p">(</span><span class="n">legal</span><span class="p">)</span>
+ <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">next_state</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">play</span><span class="p">)</span>
+ <span class="n">states_copy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+ <span class="n">winner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">winner</span><span class="p">(</span><span class="n">states_copy</span><span class="p">)</span>
+ <span class="k">if</span> <span class="n">winner</span><span class="p">:</span>
+ <span class="k">break</span>
+</pre></div>
+<p>This adds the beginnings of the <tt class="docutils literal">run_simulation</tt> method, which
+either selects a move using UCB1 or chooses a random move from the set
+of legal moves each turn until the end of the game. We have also
+introduced a configuration option for limiting the number of moves
+forward that the AI will play.</p>
+<p>You may notice at this point that we are making a copy of
+<tt class="docutils literal">self.states</tt> and adding new states to it, instead of adding
+directly to <tt class="docutils literal">self.states</tt>. This is because <tt class="docutils literal">self.states</tt> is the
+authoritative record of what has happened so far in the game, and we
+don't want to mess it up with these speculative moves from the
+simulations.</p>
+<p>Now we need to start keeping statistics on the game states that the AI
+hits during each run of <tt class="docutils literal">run_simulation</tt>. The AI should pick the
+first unknown game state it reaches to add to the tables.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">MonteCarlo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+ <span class="c"># ...</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">wins</span> <span class="o">=</span> <span class="p">{}</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">plays</span> <span class="o">=</span> <span class="p">{}</span>
+
+ <span class="c"># ...</span>
+
+ <span class="k">def</span> <span class="nf">run_simulation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="n">visited_states</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+ <span class="n">states_copy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="p">[:]</span>
+ <span class="n">state</span> <span class="o">=</span> <span class="n">states_copy</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+ <span class="n">player</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">current_player</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+ <span class="n">expand</span> <span class="o">=</span> <span class="bp">True</span>
+ <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_moves</span><span class="p">):</span>
+ <span class="n">legal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">legal_plays</span><span class="p">(</span><span class="n">states_copy</span><span class="p">)</span>
+
+ <span class="n">play</span> <span class="o">=</span> <span class="n">choice</span><span class="p">(</span><span class="n">legal</span><span class="p">)</span>
+ <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">next_state</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">play</span><span class="p">)</span>
+ <span class="n">states_copy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+ <span class="c"># `player` here and below refers to the player</span>
+ <span class="c"># who moved into that particular state.</span>
+ <span class="k">if</span> <span class="n">expand</span> <span class="ow">and</span> <span class="p">(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="p">:</span>
+ <span class="n">expand</span> <span class="o">=</span> <span class="bp">False</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">wins</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
+
+ <span class="n">visited_states</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">))</span>
+
+ <span class="n">player</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">current_player</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+ <span class="n">winner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">winner</span><span class="p">(</span><span class="n">states_copy</span><span class="p">)</span>
+ <span class="k">if</span> <span class="n">winner</span><span class="p">:</span>
+ <span class="k">break</span>
+
+ <span class="k">for</span> <span class="n">player</span><span class="p">,</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">visited_states</span><span class="p">:</span>
+ <span class="k">if</span> <span class="p">(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="p">:</span>
+ <span class="k">continue</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span>
+ <span class="k">if</span> <span class="n">player</span> <span class="o">==</span> <span class="n">winner</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">wins</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span>
+</pre></div>
+<p>Here we've added two dictionaries to the AI, <tt class="docutils literal">wins</tt> and <tt class="docutils literal">plays</tt>,
+which will contain the counts for every game state that is being
+tracked. The <tt class="docutils literal">run_simulation</tt> method now checks to see if the
+current state is the first new one it has encountered this call, and,
+if not, adds the state to both <tt class="docutils literal">plays</tt> and <tt class="docutils literal">wins</tt>, setting both
+values to zero. This method also adds every game state that it goes
+through to a set, and at the end updates <tt class="docutils literal">plays</tt> and <tt class="docutils literal">wins</tt> with
+those states in the set that are in the <tt class="docutils literal">plays</tt> and <tt class="docutils literal">wins</tt> dicts.
+We are now ready to base the AI's final decision on these statistics.</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+<span class="c"># ...</span>
+
+<span class="k">class</span> <span class="nc">MonteCarlo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="c"># ...</span>
+
+ <span class="k">def</span> <span class="nf">get_play</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">max_depth</span> <span class="o">=</span> <span class="mi">0</span>
+ <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+ <span class="n">player</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">current_player</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+ <span class="n">legal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">legal_plays</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="p">[:])</span>
+
+ <span class="c"># Bail out early if there is no real choice to be made.</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="n">legal</span><span class="p">:</span>
+ <span class="k">return</span>
+ <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">legal</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+ <span class="k">return</span> <span class="n">legal</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+ <span class="n">games</span> <span class="o">=</span> <span class="mi">0</span>
+ <span class="n">begin</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+ <span class="k">while</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">-</span> <span class="n">begin</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculation_time</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">run_simulation</span><span class="p">()</span>
+ <span class="n">games</span> <span class="o">+=</span> <span class="mi">1</span>
+
+ <span class="n">moves_states</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">next_state</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">p</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">legal</span><span class="p">]</span>
+
+ <span class="c"># Display the number of calls of `run_simulation` and the</span>
+ <span class="c"># time elapsed.</span>
+ <span class="k">print</span> <span class="n">games</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">-</span> <span class="n">begin</span>
+
+ <span class="c"># Pick the move with the highest percentage of wins.</span>
+ <span class="n">percent_wins</span><span class="p">,</span> <span class="n">move</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+ <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">wins</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span> <span class="o">/</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span>
+ <span class="n">p</span><span class="p">)</span>
+ <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">S</span> <span class="ow">in</span> <span class="n">moves_states</span>
+ <span class="p">)</span>
+
+ <span class="c"># Display the stats for each possible play.</span>
+ <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span>
+ <span class="p">((</span><span class="mi">100</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">wins</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span> <span class="o">/</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">wins</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span> <span class="n">p</span><span class="p">)</span>
+ <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">S</span> <span class="ow">in</span> <span class="n">moves_states</span><span class="p">),</span>
+ <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span>
+ <span class="p">):</span>
+ <span class="k">print</span> <span class="s">"{3}: {0:.2f}% ({1} / {2})"</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">x</span><span class="p">)</span>
+
+ <span class="k">print</span> <span class="s">"Maximum depth searched:"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_depth</span>
+
+ <span class="k">return</span> <span class="n">move</span>
+</pre></div>
+<p>We have added three things in this step. First, we allow <tt class="docutils literal">get_play</tt>
+to return early if there are no choices or only one choice to make.
+Next, we've added output of some debugging information, including the
+statistics for the possible moves this turn and an attribute that
+will keep track of the maximum depth searched in the selection phase
+of the playouts. Finally, we've added code that picks out the move
+with the highest win percentage out of the possible moves, and returns
+it.</p>
+<p>But we are not quite finished yet. Currently, our AI is using pure
+randomness for its playouts. We need to implement UCB1 for positions
+where the legal plays are all in the stats tables, so the next trial
+play is based on that information.</p>
+<div class="highlight"><pre><span class="c"># ...</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="n">log</span><span class="p">,</span> <span class="n">sqrt</span>
+
+<span class="k">class</span> <span class="nc">MonteCarlo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+ <span class="c"># ...</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">'C'</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">)</span>
+
+ <span class="c"># ...</span>
+
+ <span class="k">def</span> <span class="nf">run_simulation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="c"># A bit of an optimization here, so we have a local</span>
+ <span class="c"># variable lookup instead of an attribute access each loop.</span>
+ <span class="n">plays</span><span class="p">,</span> <span class="n">wins</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plays</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">wins</span>
+
+ <span class="n">visited_states</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+ <span class="n">states_copy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="p">[:]</span>
+ <span class="n">state</span> <span class="o">=</span> <span class="n">states_copy</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+ <span class="n">player</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">current_player</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+ <span class="n">expand</span> <span class="o">=</span> <span class="bp">True</span>
+ <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_moves</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+ <span class="n">legal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">legal_plays</span><span class="p">(</span><span class="n">states_copy</span><span class="p">)</span>
+ <span class="n">moves_states</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">next_state</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">p</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">legal</span><span class="p">]</span>
+
+ <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">plays</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">S</span> <span class="ow">in</span> <span class="n">moves_states</span><span class="p">):</span>
+ <span class="c"># If we have stats on all of the legal moves here, use them.</span>
+ <span class="n">log_total</span> <span class="o">=</span> <span class="n">log</span><span class="p">(</span>
+ <span class="nb">sum</span><span class="p">(</span><span class="n">plays</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">)]</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">S</span> <span class="ow">in</span> <span class="n">moves_states</span><span class="p">))</span>
+ <span class="n">value</span><span class="p">,</span> <span class="n">move</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+ <span class="p">((</span><span class="n">wins</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">)]</span> <span class="o">/</span> <span class="n">plays</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">)])</span> <span class="o">+</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">*</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">log_total</span> <span class="o">/</span> <span class="n">plays</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">S</span><span class="p">)]),</span> <span class="n">p</span><span class="p">,</span> <span class="n">S</span><span class="p">)</span>
+ <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">S</span> <span class="ow">in</span> <span class="n">moves_states</span>
+ <span class="p">)</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="c"># Otherwise, just make an arbitrary decision.</span>
+ <span class="n">move</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">choice</span><span class="p">(</span><span class="n">moves_states</span><span class="p">)</span>
+
+ <span class="n">states_copy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+ <span class="c"># `player` here and below refers to the player</span>
+ <span class="c"># who moved into that particular state.</span>
+ <span class="k">if</span> <span class="n">expand</span> <span class="ow">and</span> <span class="p">(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">plays</span><span class="p">:</span>
+ <span class="n">expand</span> <span class="o">=</span> <span class="bp">False</span>
+ <span class="n">plays</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
+ <span class="n">wins</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
+ <span class="k">if</span> <span class="n">t</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_depth</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">max_depth</span> <span class="o">=</span> <span class="n">t</span>
+
+ <span class="n">visited_states</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">))</span>
+
+ <span class="n">player</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">current_player</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+ <span class="n">winner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="o">.</span><span class="n">winner</span><span class="p">(</span><span class="n">states_copy</span><span class="p">)</span>
+ <span class="k">if</span> <span class="n">winner</span><span class="p">:</span>
+ <span class="k">break</span>
+
+ <span class="k">for</span> <span class="n">player</span><span class="p">,</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">visited_states</span><span class="p">:</span>
+ <span class="k">if</span> <span class="p">(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">plays</span><span class="p">:</span>
+ <span class="k">continue</span>
+ <span class="n">plays</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span>
+ <span class="k">if</span> <span class="n">player</span> <span class="o">==</span> <span class="n">winner</span><span class="p">:</span>
+ <span class="n">wins</span><span class="p">[(</span><span class="n">player</span><span class="p">,</span> <span class="n">state</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span>
+</pre></div>
+<p>The main addition here is the check to see if all of the results of
+the legal moves are in the <tt class="docutils literal">plays</tt> dictionary. If they aren't
+available, it defaults to the original random choice. But if the
+statistics are all available, the move with the highest value
+according to the confidence interval formula is chosen. This formula
+adds together two parts. The first part is just the win ratio, but
+the second part is a term that grows slowly as a particular move
+remains neglected. Eventually, if a node with a poor win rate is
+neglected long enough, it will begin to be chosen again. This term
+can be tweaked using the configuration parameter <tt class="docutils literal">C</tt> added to
+<tt class="docutils literal">__init__</tt> above. Larger values of <tt class="docutils literal">C</tt> will encourage more
+exploration of the possibilities, and smaller values will cause the AI
+to prefer concentrating on known good moves. Also note that the
+<tt class="docutils literal">self.max_depth</tt> attribute from the previous code block is now
+updated when a new node is added and its depth exceeds the previous
+<tt class="docutils literal">self.max_depth</tt>.</p>
+<p>So there we have it. If there are no mistakes, you should now have an
+AI that will make reasonable decisions for a variety of board games.
+I've left a suitable implementation of <tt class="docutils literal">Board</tt> as an exercise for
+the reader, but one thing I've left out here is a way of actually
+allowing a user to play against the AI. A toy framework for this can
+be found at <a class="reference external" href="https://github.com/jbradberry/boardgame-socketserver">jbradberry/boardgame-socketserver</a> and
+<a class="reference external" href="https://github.com/jbradberry/boardgame-socketplayer">jbradberry/boardgame-socketplayer</a>.</p>
+<p>This version that we've just built uses light playouts. Next time,
+we'll explore improving our AI by using heavy playouts, by training
+some evaluation functions using machine learning techniques and
+hooking in the results.</p>
+<p><strong>UPDATE:</strong> The diagrams have been corrected to more accurately
+reflect the possible node values.</p>
+
+ </div>
+
+</div>
+</body></html>

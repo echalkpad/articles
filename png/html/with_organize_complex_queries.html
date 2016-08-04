@@ -1,0 +1,49 @@
+<!DOCTYPE html><html><head><title>with — Organize Complex Queries</title></head><body>
+<h1>with — Organize Complex Queries</h1><p><a href="https://modern-sql.com/feature/with" target="_new">Original URL</a></p>
+<p><blockquote>In imperative programming it is common practice to group instructions in small and easily comprehensible units&#x2014;namely functions or methods. Often to enable code reuse but also to improve&hellip;</blockquote></p>
+<div><div class="content">
+<p>In imperative programming it is common practice to group instructions in small and easily comprehensible units&#x2014;namely functions or methods. Often to enable code reuse but also to improve readability.</p>
+<p>Even though SQL has functions and procedures too, they are not the primary tool to make complex SQL queries comprehensible or to enable code reuse. In SQL neither functions nor procedures are <a href="https://en.wikipedia.org/wiki/First-class_citizen">first-class citizens</a> they way sub-queries are<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-0">0</a>.</p>
+<p>In SQL the building block of programs are queries&#x2014;not instructions. Consequently, SQL has views to store queries natively so they can be reused.</p>
+<p>In addition, SQL:1999 introduced the <code class="command">with</code> clause to define &#x201C;views&#x201D; within queries. These <code class="command">with</code>-queries are only visible in a single statement and can thus be used to improve the structure of this statement without polluting the global namespace.</p>
+<p>The <code class="command">with</code> feature is also known as <em>common table expression (CTE)</em> and <em>sub-query factoring</em>. Note that the <code class="command">recursive</code> from of the <code class="command">with</code> clause is covered in <a href="https://modern-sql.com/coming-up#feature-with-recursive">another article</a>.</p>
+<h2>Syntax</h2>
+<p><code class="command">with</code> is a prefix to the <code class="command">select</code> keyword<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-1">1</a>:</p>
+<pre><code>WITH query_name (column_name1, ...) AS
+ (SELECT ...)
+ 
+SELECT ...</code></pre>
+<p>The syntax following <code class="command">with</code> is the same as for <code class="command">create view</code>: it starts with the <em>query name</em> and optionally<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-2">2</a> in parenthesis the name of the columns it returns. The <code class="command">as</code> keyword finally introduces the definition itself (the query)&#x2014;again in parentheses.</p>
+<p><code class="command">With</code> is not a stand alone command like <code class="command">create view</code> is: it must be followed by <code class="command">select</code>. This query (and sub-queries it contains) can refer to the just defined query name in their <code class="command">from</code> clause.</p>
+<p>A single <code class="command">with</code> clause can introduce multiple query names by separating them with a comma (the <code class="command">with</code> keyword itself is not repeated). Each of these queries can refer to the query names previously defined within the same <code class="command">with</code> clause<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-3">3</a> (but see <a href="https://modern-sql.com/feature/with#feature-with-compatibility">Compatibility</a>):</p>
+<pre><code>WITH query_name1 AS (
+ SELECT ...
+ )
+<em> , query_name2 AS (
+ SELECT ...
+ FROM query_name1
+ ...
+ )</em>
+SELECT ...</code></pre>
+<p>Query names defined using <code class="command">with</code> mask existing tables or views with the same name<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-4">4</a>.</p>
+
+<p>Normally, databases handle <code class="command">with</code>-queries like they handle views: they substitute the reference to the query by its definition and then optimize and execute the overall query.</p>
+<p>The PostgreSQL database is different in this regard (as of 9.5<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-5">5</a>): it treads the <code class="command">with</code> clause as <a href="http://blog.2ndquadrant.com/postgresql-ctes-are-optimization-fences/">optimization fence</a>. The queries inside the <code class="command">with</code> clause are optimized (planned) in isolation. This can have a significant performance impact as compared to sub-queries directly written into the <code class="command">from</code> clause.</p>
+<p>The SQL standard does not define how to optimize querys&#x2014;both approaches are conforming.</p>
+<h2>Use Cases</h2>
+
+<h2 id="feature-with-compatibility">Compatibility</h2>
+<p>The <code class="command">with</code> clause was introduced with <a href="https://modern-sql.com/standard">SQL:1999</a> as a set of <a href="https://modern-sql.com/standard/levels">optional features</a>. Leaving the <code class="command"><a href="https://modern-sql.com/coming-up#feature-with-recursive">recursive</a></code> variant aside, the features are T121 for top-level <code class="command">with</code> clauses and T122 for <code class="command">with</code> clauses in sub-queries.</p>
+<p>The basic functionality of <code class="command">with</code> is well-supported. The single area where products behave differently is name resolution. It is especially notable that <code class="command">with</code> is often treated like <a href="https://modern-sql.com/coming-up#feature-with-recursive"><code class="command">with recursive</code></a><a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-6">6</a>. The more subtle incompatibilities are related to qualified table names (<code>schema.table</code> cannot refer to a <code class="command">with</code> query<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-7">7</a>) and views used in the scope of <code class="command">with</code>-queries (the query inside the view does not &#x201C;see&#x201D; the outer <code class="command">with</code> clause<a class="footnote-ref" href="https://modern-sql.com/feature/with#footnote-8">8</a>).</p>
+
+
+<p>Some use cases can be implemented using views. However, this can quickly lead to an unreasonable number of views (&#x201C;namespace pollution&#x201D;). In those cases sub-queries are often the better option.</p>
+<h2>Proprietary Extensions</h2>
+<h3>PostgreSQL: Writeable CTEs</h3>
+<p>Starting with 9.1 the PostgreSQL database supports DML statements (<code class="command">insert</code>, <code class="command">update</code>, <code class="command">delete</code>) within the body of <code class="command">with</code>-queries (<a href="http://www.postgresql.org/docs/9.5/static/queries-with.html#QUERIES-WITH-MODIFYING">docs</a>). When using the (also proprietary) <code class="command">returning</code> clause of the DML statement, the <code class="command">with</code>-query actually returns data (e.g, the just inserted rows).</p>
+<h3>Oracle: Functions in <code class="command">with</code></h3>
+<p>The Oracle Database support function and procedure declarations within the <code class="command">with</code> clause since version 12cR1 (<a href="http://docs.oracle.com/database/121/SQLRF/statements_10002.htm#i2066378">docs</a>).</p>
+
+</div>
+</div>
+</body></html>

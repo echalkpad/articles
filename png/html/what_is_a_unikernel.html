@@ -1,0 +1,90 @@
+<!DOCTYPE html><html><head><title>What is a 'unikernel'?</title></head><body>
+<h1>What is a 'unikernel'?</h1><p><a href="https://ma.ttias.be/what-is-a-unikernel/" target="_new">Original URL</a></p>
+<p><blockquote>If you've been following the Devops Weekly newsletter, DevOps-like conferences or if you're just really interested in technology, you've probably heard of unikernels being mentioned a few times. In&hellip;</blockquote></p>
+<div><div class="post-single-content box mark-links">
+															
+									<p>If you've been following the <a href="http://www.devopsweekly.com/">Devops Weekly</a> newsletter, DevOps-like conferences or if you're just really interested in technology, you've probably heard of <em>unikernels</em> being mentioned a few times. In the last few months, its popularity has greatly increased.</p>
+<p>But, <strong>what are these 'unikernels' really? And, is it something for me?</strong></p>
+<p>I struggled with that question. Both defining a unikernel and answering the question 'who are they for'?</p>
+<h2>What are unikernels</h2>
+<p>The single source of truth is <a href="https://en.wikipedia.org/wiki/Unikernel">Wikipedia</a> with a cryptic explanation, but let's start there.</p>
+<blockquote><p>Unikernels are specialised, single address space machine images constructed by using library operating systems. A developer selects, from a modular stack, the minimal set of libraries which correspond to the OS constructs required for their application to run.</p>
+<p>These libraries are then compiled with the application and configuration code to build sealed, fixed-purpose images (unikernels) which run directly on a hypervisor or hardware without an intervening OS such as Linux or Windows.</p>
+<p><cite><a href="https://en.wikipedia.org/wiki/Unikernel">Wikipedia: Unikernel</a></cite>
+</p></blockquote>
+<p>All clear, right?</p>
+<p>Well, if you're like me, that may not tell you much. So here's my explanation of <strong>unikernels</strong>.</p>
+<p>Let's step back a little first and follow this example. Let's say you're a developer writing a PHP application. When you run your PHP (or Ruby, or Node, or Perl, or ...) application, you're essentially running:</p>
+<ul>
+<li>Your language interpreter: PHP, Perl, Ruby, ...</li>
+<li>Which calls system level APIs of your operating system</li>
+<li>Some of these API calls require other level privileges, forcing context switches for your application ... (user space vs. kernel space)</li>
+<li>Which is all running on an operating system like CentOS, Debian, Ubuntu, ...</li>
+<li>Which is probably a Virtual Machine on VMware, Xen, KVM, ...</li>
+<li>Which is run by its own virtualisation operating system (ESXi, Xen Hypervisor) ...</li>
+<li>Which in turn is running on hardware</li>
+<li>Which is bootstrapped by a BIOS or UEFI</li>
+</ul>
+<p>Honestly, if you're thinking about all the levels an application is built upon, it's a miracle things even work.</p>
+<p>But they do. And they work pretty well and with reasonable performance. But you have to admit, there are a lot of layers between the hardware that's supposed to be powering your application and the application itself. </p>
+<p><strong>That's what unikernels as a concept try to solve: remove the bloat that separates hardware from application. Have "just enough" of the Operating System to run your code, nothing more.</strong></p>
+<p>There's a <a href="http://www.fixup.fi/misc/usenix-login-2015/login_oct15_02_kantee.pdf">great paper</a> that sums it up nicely:</p>
+<blockquote><p>The idea [of a unikernel] is that you look at cloud guests just like you would look at single-application hardware.<br>
+<cite><a href="http://www.fixup.fi/misc/usenix-login-2015/login_oct15_02_kantee.pdf">The Rise and Fall of the Operating System</a></cite>
+</p></blockquote>
+<p>A unikernel tries to remove some of complexities that modern operating systems bring. Because they are "general purpose" operating systems (like just about any Linux or Windows distribution), they also come with drivers, packages, services, ... that may not apply to your application, but are <em>generally considered</em> OK to have on every OS install.</p>
+<p>Even core modules in the Linux kernel don't apply to every installation. Things like USB drivers are useless in a virtualised "cloud" environment, but are still included in the kernel.</p>
+<p>Compared to containers and virtualisation, the excellent <a href="http://roadtounikernels.myriabit.com/">road to unikernels presentation</a> pictures it like this:</p>
+<p><img src="https://ma.ttias.be/wp-content/uploads/2015/11/road_to_unikernels.png" alt="road_to_unikernels" width="800" class="alignnone size-full wp-image-7209"></p>
+<p><em>(Source: <a href="http://roadtounikernels.myriabit.com/">road to unikernels</a>)</em></p>
+<p>Unikernels have a couple of advantages over general purpose operating systems like Linux;</p>
+<ul>
+<li>Improved security: only the core of the OS is implemented, no video or USB drivers that aren't needed and could be a source of intrusion.</li>
+<li>Very small footprint: imagine being able to remove 95% of the kernel size, simply because your application doesn't need it.</li>
+<li>Specialised implementations: you know your application and you can tweak and run your kernel exactly the way you want it.</li>
+<li>Quick enough to be "<a href="http://www.skjegstad.com/blog/2015/08/17/jitsu-v02/">Just in time</a>" to summon a unikernel live (similar to live spawning Docker instances), with boot times less than 1 second.</li>
+</ul>
+<p>This very nature makes unikernels an excellent candidate for microservices.</p>
+<h2>Removing layers of complexity with unikernels</h2>
+<p>If what you're after is an application that runs with as little overhead as possible, you may want to consider writing it as a unikernel.</p>
+<p>To do so, you use a <strong>library operating system</strong>. A library OS gives you the tools to create your own unikernel. The most noticeable ones are <a href="https://mirage.io/">MirageOS</a> (<em>which actually coined the term "unikernel"</em>) and <a href="http://rumpkernel.org/">Rump Kernels</a>. They are both essentially a set of standardised drivers and libraries so you don't have to reinvent things like a TCP stack, a persistent storage layer, ...</p>
+<blockquote><p>Unikernels are specialized OS kernels that are written in a high-level language and act as individual software components. A full application (or appliance) consists of a set of running unikernels working together as a distributed system.</p>
+<p>MirageOS is based on the <a href="http://ocaml.org">OCaml</a> language and emits unikernels that run on the Xen hypervisor.</p>
+<p><cite>queue.acm.org: <a href="http://queue.acm.org/detail.cfm?id=2566628">Unikernels: Rise of the Virtual Library Operating System</a></cite>
+</p></blockquote>
+<p>The most popular languages nowadays to write a unikernel seem to be:</p>
+<ul>
+<li><a href="https://www.rust-lang.org/">Rust</a></li>
+<li><a href="https://golang.org/">Go (or 'golang')</a></li>
+<li><a href="https://ocaml.org/">OCaml</a></li>
+<li><a href="https://www.haskell.org/">Haskell</a></li>
+</ul>
+<p>These aren't new programming languages. With the exception of Go and Rust, they've been around for more than 15 years.</p>
+<p>In order to make the OS and the application run as smoothly as possible, these unikernel libraries need a kernel footprint that is as small as possible.</p>
+<p>Today, that's possible <em>because of</em> virtualisation. Because an Operating System like Xen or VMware can do the work of translating the different hardware models into a defined set of <em>virtualised hardware</em>, a unikernel can be optimised for <em>just that specific set of virtual hardware</em>.</p>
+<p><strong>Unikernels leverage the advantages of virtualisation to create an operating system that's as specialised and optimised as possible.</strong></p>
+<p>The result of an application written in OCaml with the MirageOS set of libraries to form a "unikernel" can be summarised like this:</p>
+<blockquote><p>The compiler can then output a full stand-alone kernel instead of just a Unix executable. These unikernels are single-purpose libOS VMs that perform only the task defined in their application source and configuration files, and they depend on the hypervisor to provide resource multiplexing and isolation.<br>
+<cite>queue.acm.org: <a href="http://queue.acm.org/detail.cfm?id=2566628">Unikernels: Rise of the Virtual Library Operating System</a></cite>
+</p></blockquote>
+<p>The result is that you run a unikernel, a small but dedicated operating system, to run (parts of) your application. If an update to your application or configuration is needed, you compile a new version of your source code to a new unikernel and you deploy that new version. A new security release? Re-compile and deploy. </p>
+<p>This makes coordination and orchestration of deploys harder at the benefit of running a more efficient application.</p>
+<p>This essential creates the concept of <strong>immutable servers</strong>: an application server no longer stores state and can be thrown away and rebuilt at your convenience.</p>
+<p>One approach may be to start running <a href="http://unikernel.org/blog/2015/unikernels-meet-docker/">unikernels in docker containers</a>, but aren't we adding another layer of complexity that we should try to avoid? On the other hand, Docker adds ease of use and deployments to the mix that may make the trade-off worthwhile.</p>
+<h2>Who should run unikernels?</h2>
+<p>To be perfectly honest, the answer to me isn't exactly clear yet. I think it's fair to say that if you're currently deploying web applications built on WordPress, unikernels may be a bridge too far.</p>
+<p>On the other hand, the benefits of unikernels are evident but require a completely different mindset to managing your infrastructure, a different skillset in creating these kind of applications and kernels and require a very deep understanding of concepts that are mostly foreign to us now: immutable infrastructure.</p>
+<p>Maybe in 2, 5 or 10 years we'll deploy unikernels like they're the new normal. Right now, I think it's for a very select niche set of users that are looking for highly specialised and secure applications. For the most common use cases, either a Virtual Machine (or, if you're already on the bandwagon: docker containers) are probably what you'll be focussing on.</p>
+<h2>More reading material on Unikernels</h2>
+<p>If you're interested in the subject, here are some other links I can recommend you spend your time on:</p>
+
+
+<aside class="mashsb-container"><div class="mashsb_above_buttons">
+<p>If you like this content, you can help me spread awareness by sharing it on your social network of choice. Thanks!</p></div>
+ </aside>
+ 																																							
+																			 
+																		
+								</div>
+							</div>
+</body></html>

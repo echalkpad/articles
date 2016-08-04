@@ -1,0 +1,285 @@
+<!DOCTYPE html><html><head><title>Let’s Build A Simple Interpreter. Part 6.</title></head><body>
+<h1>Let’s Build A Simple Interpreter. Part 6.</h1><p><a href="http://ruslanspivak.com/lsbasi-part6/" target="_new">Original URL</a></p>
+<p><blockquote>Date Mon, November 02, 2015 Today is the day :) &#x201C;Why?&#x201D; you might ask. The reason is that today we&#x2019;re wrapping up our discussion of arithmetic expressions (well, almost) by adding&hellip;</blockquote></p>
+<div><div class="entry-content">
+ <div class="panel">
+ <p class="panel-body">
+<footer class="post-info">
+ <span class="label label-default">Date</span>
+ <span class="published">
+ <i class="fa fa-calendar"></i><time datetime="2015-11-02T07:00:00-05:00"> Mon, November 02, 2015</time>
+ </span>
+
+
+
+ 
+</footer> </p>
+ </div>
+ <p>Today is <em>the</em> day :) &#x201C;Why?&#x201D; you might ask. The reason is that today we&#x2019;re wrapping up our discussion of arithmetic expressions (well, almost) by adding parenthesized expressions to our grammar and implementing an interpreter that will be able to evaluate parenthesized expressions with arbitrarily deep nesting, like the expression 7 + 3 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (10 / (12 / (3 + 1) -&#xA0;1)).</p>
+<p>Let&#x2019;s get started, shall&#xA0;we?</p>
+<p>First, let&#x2019;s modify the grammar to support expressions inside parentheses. As you remember from <a href="http://ruslanspivak.com/lsbasi-part5/" title="Part 5">Part 5</a>, the <em>factor</em> rule is used for basic units in expressions. In that article, the only basic unit we had was an integer. Today we&#x2019;re adding another basic unit - a parenthesized expression. Let&#x2019;s do&#xA0;it.</p>
+<p>Here is our updated&#xA0;grammar:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part6/lsbasi_part6_grammar.png"></p>
+<p>The <em>expr</em> and the <em>term</em> productions are exactly the same as in <a href="http://ruslanspivak.com/lsbasi-part5/" title="Part 5">Part 5</a> and the only change is in the <em>factor</em> production where the terminal <span class="caps">LPAREN</span> represents a left parenthesis &#x2018;(&#x2018;, the terminal <span class="caps">RPAREN</span> represents a right parenthesis &#x2018;)&#x2019;, and the non-terminal <em>expr</em> between the parentheses refers to the <em>expr</em>&#xA0;rule.</p>
+<p>Here is the updated syntax diagram for the <em>factor</em>, which now includes&#xA0;alternatives:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part6/lsbasi_part6_factor_diagram.png"></p>
+<p>Because the grammar rules for the <em>expr</em> and the <em>term</em> haven&#x2019;t changed, their syntax diagrams look the same as in <a href="http://ruslanspivak.com/lsbasi-part5/" title="Part 5">Part 5</a>:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part6/lsbasi_part6_expr_term_diagram.png"></p>
+<p>Here is an interesting feature of our new grammar - it is recursive. If you try to derive the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (7 + 3), you will start with the <em>expr</em> start symbol and eventually you will get to a point where you will recursively use the <em>expr</em> rule again to derive the (7 + 3) portion of the original arithmetic&#xA0;expression.</p>
+<p>Let&#x2019;s decompose the expression 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (7 + 3) according to the grammar and see how it&#xA0;looks:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part6/lsbasi_part6_decomposition.png"></p>
+<p>A little aside: if you need a refresher on recursion, take a look at Daniel P. Friedman and Matthias Felleisen&#x2019;s <a rel="nofollow" href="http://www.amazon.com/gp/product/0262560992/ref=as_li_tl?ie=UTF8&amp;camp=1789&amp;creative=9325&amp;creativeASIN=0262560992&amp;linkCode=as2&amp;tag=russblo0b-20&amp;linkId=IM7CT7RLWNGJ7J54">The Little Schemer</a> book - it&#x2019;s really&#xA0;good.</p>
+<p>Okay, let&#x2019;s get moving and translate our new updated grammar to&#xA0;code.</p>
+<p>The following are the main changes to the code from the previous&#xA0;article:</p>
+<ol>
+<li>The <em>Lexer</em> has been modified to return two more tokens: <span class="caps">LPAREN</span> for a left parenthesis and <span class="caps">RPAREN</span> for a right&#xA0;parenthesis.</li>
+<li>The <em>Interpreter</em>&#x2018;s <em>factor</em> method has been slightly updated to parse parenthesized expressions in addition to&#xA0;integers.</li>
+</ol>
+<p>Here is the complete code of a calculator that can evaluate arithmetic expressions containing integers; any number of addition, subtraction, multiplication and division operators; and parenthesized expressions with arbitrarily deep&#xA0;nesting:</p>
+<div class="highlight"><pre><span class="c"># Token types</span>
+<span class="c">#</span>
+<span class="c"># EOF (end-of-file) token is used to indicate that</span>
+<span class="c"># there is no more input left for lexical analysis</span>
+<span class="n">INTEGER</span><span class="p">,</span> <span class="n">PLUS</span><span class="p">,</span> <span class="n">MINUS</span><span class="p">,</span> <span class="n">MUL</span><span class="p">,</span> <span class="n">DIV</span><span class="p">,</span> <span class="n">LPAREN</span><span class="p">,</span> <span class="n">RPAREN</span><span class="p">,</span> <span class="n">EOF</span> <span class="o">=</span> <span class="p">(</span>
+ <span class="s">'INTEGER'</span><span class="p">,</span> <span class="s">'PLUS'</span><span class="p">,</span> <span class="s">'MINUS'</span><span class="p">,</span> <span class="s">'MUL'</span><span class="p">,</span> <span class="s">'DIV'</span><span class="p">,</span> <span class="s">'('</span><span class="p">,</span> <span class="s">')'</span><span class="p">,</span> <span class="s">'EOF'</span>
+<span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">Token</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">=</span> <span class="nb">type</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+
+ <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""String representation of the class instance.</span>
+
+<span class="sd"> Examples:</span>
+<span class="sd"> Token(INTEGER, 3)</span>
+<span class="sd"> Token(PLUS, '+')</span>
+<span class="sd"> Token(MUL, '*')</span>
+<span class="sd"> """</span>
+ <span class="k">return</span> <span class="s">'Token({type}, {value})'</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+ <span class="nb">type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
+ <span class="n">value</span><span class="o">=</span><span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+ <span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__str__</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">Lexer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+ <span class="c"># client string input, e.g. "4 + 2 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 3 - 6 / 2"</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="n">text</span>
+ <span class="c"># self.pos is an index into self.text</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">pos</span><span class="p">]</span>
+
+ <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">'Invalid character'</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">advance</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""Advance the `pos` pointer and set the `current_char` variable."""</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">pos</span> <span class="o">+=</span> <span class="mi">1</span>
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># Indicates end of input</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">pos</span><span class="p">]</span>
+
+ <span class="k">def</span> <span class="nf">skip_whitespace</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isspace</span><span class="p">():</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">integer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""Return a (multidigit) integer consumed from the input."""</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="s">''</span>
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+ <span class="n">result</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">get_next_token</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""Lexical analyzer (also known as scanner or tokenizer)</span>
+
+<span class="sd"> This method is responsible for breaking a sentence</span>
+<span class="sd"> apart into tokens. One token at a time.</span>
+<span class="sd"> """</span>
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isspace</span><span class="p">():</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">skip_whitespace</span><span class="p">()</span>
+ <span class="k">continue</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">integer</span><span class="p">())</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'+'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">PLUS</span><span class="p">,</span> <span class="s">'+'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'-'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">MINUS</span><span class="p">,</span> <span class="s">'-'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'*'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">MUL</span><span class="p">,</span> <span class="s">'*'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'/'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">DIV</span><span class="p">,</span> <span class="s">'/'</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">'('</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">LPAREN</span><span class="p">,</span> <span class="s">'('</span><span class="p">)</span>
+
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_char</span> <span class="o">==</span> <span class="s">')'</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">advance</span><span class="p">()</span>
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">RPAREN</span><span class="p">,</span> <span class="s">')'</span><span class="p">)</span>
+
+ <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">()</span>
+
+ <span class="k">return</span> <span class="n">Token</span><span class="p">(</span><span class="n">EOF</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">Interpreter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lexer</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span> <span class="o">=</span> <span class="n">lexer</span>
+ <span class="c"># set current token to the first token taken from the input</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span><span class="o">.</span><span class="n">get_next_token</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">'Invalid syntax'</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">eat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token_type</span><span class="p">):</span>
+ <span class="c"># compare the current token type with the passed token</span>
+ <span class="c"># type and if they match then "eat" the current token</span>
+ <span class="c"># and assign the next token to the self.current_token,</span>
+ <span class="c"># otherwise raise an exception.</span>
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">token_type</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lexer</span><span class="o">.</span><span class="n">get_next_token</span><span class="p">()</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">()</span>
+
+ <span class="k">def</span> <span class="nf">factor</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""factor : INTEGER | LPAREN expr RPAREN"""</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">INTEGER</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">INTEGER</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">token</span><span class="o">.</span><span class="n">value</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">LPAREN</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">LPAREN</span><span class="p">)</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">()</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">RPAREN</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">result</span>
+
+ <span class="k">def</span> <span class="nf">term</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""term : factor ((MUL | DIV) factor)*"""</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="p">()</span>
+
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">MUL</span><span class="p">,</span> <span class="n">DIV</span><span class="p">):</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MUL</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">MUL</span><span class="p">)</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="n">result</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="p">()</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DIV</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">DIV</span><span class="p">)</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="n">result</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="p">()</span>
+
+ <span class="k">return</span> <span class="n">result</span>
+
+ <span class="k">def</span> <span class="nf">expr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="sd">"""Arithmetic expression parser / interpreter.</span>
+
+<span class="sd"> calc&gt; 7 + 3 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (10 / (12 / (3 + 1) - 1))</span>
+<span class="sd"> 22</span>
+
+<span class="sd"> expr : term ((PLUS | MINUS) term)*</span>
+<span class="sd"> term : factor ((MUL | DIV) factor)*</span>
+<span class="sd"> factor : INTEGER | LPAREN expr RPAREN</span>
+<span class="sd"> """</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">term</span><span class="p">()</span>
+
+ <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">PLUS</span><span class="p">,</span> <span class="n">MINUS</span><span class="p">):</span>
+ <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_token</span>
+ <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">PLUS</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">PLUS</span><span class="p">)</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="n">result</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">term</span><span class="p">()</span>
+ <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">MINUS</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">MINUS</span><span class="p">)</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="n">result</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">term</span><span class="p">()</span>
+
+ <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+ <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+ <span class="k">try</span><span class="p">:</span>
+ <span class="c"># To run under Python3 replace 'raw_input' call</span>
+ <span class="c"># with 'input'</span>
+ <span class="n">text</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="s">'calc&gt; '</span><span class="p">)</span>
+ <span class="k">except</span> <span class="ne">EOFError</span><span class="p">:</span>
+ <span class="k">break</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="p">:</span>
+ <span class="k">continue</span>
+ <span class="n">lexer</span> <span class="o">=</span> <span class="n">Lexer</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+ <span class="n">interpreter</span> <span class="o">=</span> <span class="n">Interpreter</span><span class="p">(</span><span class="n">lexer</span><span class="p">)</span>
+ <span class="n">result</span> <span class="o">=</span> <span class="n">interpreter</span><span class="o">.</span><span class="n">expr</span><span class="p">()</span>
+ <span class="k">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">'__main__'</span><span class="p">:</span>
+ <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+
+<p>Save the above code into the <a href="https://github.com/rspivak/lsbasi/blob/master/part6/calc6.py">calc6.py</a> file, try it out and see for yourself that your new interpreter properly evaluates arithmetic expressions that have different operators and&#xA0;parentheses.</p>
+<p>Here is a sample&#xA0;session:</p>
+<div class="highlight"><pre><span class="nv">$ </span>python calc6.py
+calc&gt; 3
+3
+calc&gt; <span class="m">2</span> + <span class="m">7</span> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 4
+30
+calc&gt; <span class="m">7</span> - <span class="m">8</span> / 4
+5
+calc&gt; <span class="m">14</span> + <span class="m">2</span> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii <span class="m">3</span> - <span class="m">6</span> / 2
+17
+calc&gt; <span class="m">7</span> + <span class="m">3</span> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii <span class="o">(</span><span class="m">10</span> / <span class="o">(</span><span class="m">12</span> / <span class="o">(</span><span class="m">3</span> + 1<span class="o">)</span> - 1<span class="o">))</span>
+22
+calc&gt; <span class="m">7</span> + <span class="m">3</span> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii <span class="o">(</span><span class="m">10</span> / <span class="o">(</span><span class="m">12</span> / <span class="o">(</span><span class="m">3</span> + 1<span class="o">)</span> - 1<span class="o">))</span> / <span class="o">(</span><span class="m">2</span> + 3<span class="o">)</span> - <span class="m">5</span> - <span class="m">3</span> + <span class="o">(</span>8<span class="o">)</span>
+10
+calc&gt; <span class="m">7</span> + <span class="o">(((</span><span class="m">3</span> + 2<span class="o">)))</span>
+12
+</pre></div>
+
+
+<p><br>
+And here is a new exercise for you for&#xA0;today:</p>
+<p><img alt="" src="http://ruslanspivak.com/lsbasi-part6/lsbasi_part6_exercises.png"></p>
+<ul>
+<li>Write your own version of the interpreter of arithmetic expressions as described in this article. Remember: repetition is the mother of all&#xA0;learning.</li>
+</ul>
+<p><br>
+Hey, you read all the way to the end! Congratulations, you&#x2019;ve just learned how to create (and if you&#x2019;ve done the exercise - you&#x2019;ve actually written) a basic <em>recursive-descent parser / interpreter</em> that can evaluate pretty complex arithmetic&#xA0;expressions.</p>
+<p>In the next article I will talk in a lot more detail about <em>recursive-descent parsers</em>. I will also introduce an important and widely used data structure in interpreter and compiler construction that we&#x2019;ll use throughout the&#xA0;series.</p>
+<p>Stay tuned and see you soon. Until then, keep working on your interpreter and most importantly: have fun and enjoy the&#xA0;process!</p>
+<p><br>
+Here is a list of books I recommend that will help you in your study of interpreters and&#xA0;compilers:</p>
+
+<p><br>
+By the way, I&#x2019;m writing a book <strong>&#x201C;Let&#x2019;s Build A Web Server: First Steps&#x201D;</strong> that explains how to write a basic web server from scratch. You can get a feel for the book <a href="http://ruslanspivak.com/lsbaws-part1/" title="Part 1">here</a>, <a href="http://ruslanspivak.com/lsbaws-part2/" title="Part 2">here</a>, and <a href="http://ruslanspivak.com/lsbaws-part3/" title="Part 3">here</a>. Subscribe to the mailing list to get the latest updates about the book and the release&#xA0;date.</p>
+<div id="mc_embed_signup">
+ 
+ 
+ 
+</div>
+
+
+
+<p><br>
+<strong>All articles in this&#xA0;series:</strong></p>
+
+ </div>
+ 
+ </div>
+</body></html>

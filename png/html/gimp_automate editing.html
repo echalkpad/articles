@@ -1,0 +1,530 @@
+<!DOCTYPE html><html><head><title>GIMP - Automate Editing</title></head><body>
+<h1>GIMP - Automate Editing</h1><p><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/" target="_new">Original URL</a></p>
+<p><blockquote>GIMP Tutorial - Automate Editing by Stephen Kiel is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License. The code sources in this tutorial are licensed by Stephen Kiel under&hellip;</blockquote></p>
+<div><div class="column full">
+ <p><small>
+<a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US">
+<img class="cc-badge" src="http://i.creativecommons.org/l/by-sa/3.0/80x15.png" alt="Creative Commons By Share Alike">
+</a>
+<span><span class="caps">GIMP</span> Tutorial - Automate Editing</span> by <a rel="cc:attributionURL">Stephen Kiel</a> is licensed under a <a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US">Creative Commons Attribution-ShareAlike 3.0 Unported License</a>. The code sources in this tutorial are licensed by Stephen Kiel under the conditions of the <a href="https://www.gnu.org/copyleft/gpl.html"><span class="caps">GNU</span> Public License <span class="caps">GPL</span> V3</a>.
+</small></p>
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#table-of-contents" title="Permanent link">&#xB6;</a></h2>
+
+
+
+
+
+<h2 id="motivation">Motivation<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#motivation" title="Permanent link">&#xB6;</a></h2>
+<p>This tutorial will describe and provide examples for two types of automation functions. The first function is a tool to capture and execute &#x201C;Macro&#x201D; commands. The second function is a set of Automation Tools to capture and run a &#x201C;Flow&#x201D; or &#x201C;Process&#x201D;. The code for this tutorial is written using Gimp-Python and should be platform portable &#x2013; able to run on either Linux or Windows operating systems. <sup>*</sup></p>
+<p>The goal of these functions is to provide tools that speed up the editing process, make the editing process more repeatable, and reduce the amount of button pushing the user has to do. Taking over the button pushing and book-keeping chores allows the user to focus on the more creative part of the editing&#xA0;process.</p>
+<p>These automation tools are examples so please modify them to suit your needs. The goal of the tutorial is to provide and explain a working example. If the coding style seems a bit rough, I apologize, I am not a&#xA0;programmer.</p>
+<p>The main body of this tutorial will be discussing the ideas behind automating the editing process. Hopefully we can keep the focus on the concept without getting lost in the details of the included example. The details of how to setup and run the example code and what the automation example is supposed to accomplish will be covered in appendices to the tutorial. We are not going to cover python programing as it is already well&#xA0;documented.</p>
+<p>This tutorial will use some of the concepts covered in an earlier tutorial &#x201C;<a href="https://www.gimp.org/tutorials/AutomatedJpgToXcf/">Automated Jpg to Xcf</a>&#x201D;. It would probably be helpful to read through the earlier tutorial for introductory&#xA0;example.</p>
+<p><sup>*</sup> Hopefully it is easy to adapt it to Apple <span class="caps">OS</span> as&#xA0;well.</p>
+<h2 id="an-introduction-to-macros">An introduction to Macros<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#an-introduction-to-macros" title="Permanent link">&#xB6;</a></h2>
+<p>Before we dive into a description of the code, let&#x2019;s take a brief walk through the process of capturing and running a&#xA0;&#x201C;Macro&#x201D;.</p>
+<p>Suppose we wanted to set up the grid spacing so that it is centered on the image, is a square grid, is scaled so there are 24 grid blocks in the &#x2018;long&#x2019; dimension, and is an on-off dash pattern. We could enter the following code fragment in the Gimp &#x201C;Python Console&#x201D; (under the &#x201C;Filters&#x201D; pull down menu) to set the grid&#xA0;up.</p>
+<p><em>Example - <span class="caps">GIMP</span>-Python Code&#xA0;Fragment</em></p>
+<div class="codehilite"><pre><span class="o">&gt;&gt;&gt;</span> <span class="n">theImage</span> <span class="o">=</span> <span class="n">gimp</span><span class="o">.</span><span class="n">image_list</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">centerX</span> <span class="o">=</span> <span class="n">theImage</span><span class="o">.</span><span class="n">width</span><span class="o">/</span><span class="mi">2</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">centerY</span> <span class="o">=</span> <span class="n">theImage</span><span class="o">.</span><span class="n">height</span><span class="o">/</span><span class="mi">2</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">gridSpacing</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">theImage</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="n">theImage</span><span class="o">.</span><span class="n">height</span><span class="p">)</span><span class="o">/</span><span class="mi">24</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">pdb</span><span class="o">.</span><span class="n">gimp_image_grid_set_offset</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">centerX</span><span class="p">,</span> <span class="n">centerY</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">pdb</span><span class="o">.</span><span class="n">gimp_image_grid_set_spacing</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">gridSpacing</span><span class="p">,</span> <span class="n">gridSpacing</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">pdb</span><span class="o">.</span><span class="n">gimp_image_grid_set_style</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">GRID_ON_OFF_DASH</span><span class="p">)</span>
+</pre></div>
+
+
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/CommandsPythonConsole.jpg" alt="CommandsPythonConsole.jpg">
+<figcaption> 
+Commands in the Python Console
+</figcaption> 
+</figure>
+
+<p>If you watch the image as you enter the commands and have the Grid turned &#x201C;<span class="caps">ON</span>&#x201D; you will see the grid spacing on the active image change as we execute these&#xA0;commands.</p>
+<p>The tool we are writing in this tutorial will allow us to copy this code fragment into a text file, add a name and optional comments, and access it through a menu widget so we can rerun this code fragment on other images. The tool will access the &#x201C;macro&#x201D; code fragment using the name we assigned through a pull down&#xA0;menu.</p>
+<p>The ability to save the macro code fragments allows us to build up a library of editing shortcuts that will not only save time, but do the job better than you could be simply pushing the buttons. In this case we made the grid spacing based on a percentage of the image size rather than a fixed size in either inches, pixels, or&#xA0;cm.</p>
+<h2 id="macro-implementation-in-broad-strokes">Macro Implementation &#x2013; in Broad Strokes<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#macro-implementation-in-broad-strokes" title="Permanent link">&#xB6;</a></h2>
+<p>Let&#x2019;s touch upon the main ideas that we are going to use to implement the macro recording and execution scheme that we can use to capture and run a set of&#xA0;commands.</p>
+<ol>
+<li>The command set will be read and parsed into a data structure. Each command set block will have a name and consist of commands and&#xA0;comments.</li>
+<li>The data structure will be read for a list of macro names. This list will be used to populate a <span class="caps">GUI</span> widget so we can select a macro by&#xA0;name.</li>
+<li>From the named Macro, the data structure will return a list of&#xA0;commands.</li>
+<li>The list of commands will be run in an &#x2018;exec&#x2019;&#xA0;loop:</li>
+</ol>
+<p>Example &#x201C;Exec&#x201D;&#xA0;Loop:</p>
+<div class="codehilite"><pre><span class="k">for</span> <span class="n">Cmd</span> <span class="n">in</span> <span class="n">commandList</span><span class="p">:</span>
+ <span class="n">exec</span><span class="p">(</span><span class="n">Cmd</span><span class="p">)</span>
+</pre></div>
+
+
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/CommanderMacroSubMenu.jpg" alt="CommanderMacroSubMenu.jpg">
+<figcaption> 
+Commander Macro Sub-Menu
+</figcaption> 
+</figure>
+
+<h3 id="architecture">Architecture<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#architecture" title="Permanent link">&#xB6;</a></h3>
+<p>When you want to write a script to provide a single function, the common and obvious approach is to write a single in-line program, register the program, and provide a user interface if it is called for. Our Automation Example is multi-functional &#x2013; more like a system, and we want to leave some of the functionality somewhat fluid. If we consider the system (data and code) and make good architectural choices we can accomplish our goal without making the code overly&#xA0;complex.</p>
+<h3 id="execution-model">Execution Model<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#execution-model" title="Permanent link">&#xB6;</a></h3>
+<p>We will be breaking the execution of our automation functions into three different&#xA0;categories:</p>
+<ol>
+<li>User Interface&#xA0;Functions</li>
+<li>Base Class and&#xA0;Functions</li>
+<li>Pseudo&#xA0;Code</li>
+</ol>
+<p>Let&#x2019;s examine these categories&#xA0;briefly:</p>
+<p>The <u><strong>User Interface Functions</strong></u> are the top level function that are activated from the menus. They are the &#x2018;main&#x2019; function, the Registration Block, and the function that is registered in the Registration Block. We will be deliberately keeping the User Interface Function code sparse. While the <span class="caps">UI</span> Functions afford lot of functionality, they are rather fragile and difficult to debug. The approach we will use is to get the <span class="caps">UI</span> running and call a function that can be written and debugged independently minimizing the edits to the User&#xA0;Interface.</p>
+<p>The <u><strong>Base Class and Functions</strong></u> are just normal python classes and functions that can be run from a shell. These functions do not depend upon the gimpfu library could be run in any python shell (including the Gimp-Python&#xA0;Shell).</p>
+<ul>
+<li>If you make a syntax error in the course of an edit, you want to be able to quickly isolate it to a particular line in a particular function. This is easier to do from the shell than when running the program from a <span class="caps">GUI</span>.</li>
+<li>Keeping the generic python code separate from the code that depends upon the gimpfu library minimizes the impact that future releases of gimp will have on the scripts. Because the gimp procedure calls are handled by Pseudo Code rather than the Base Class and Functions we have less risk of compatibility from future releases of Gimp within the Base Class and&#xA0;Function.</li>
+</ul>
+<p>The <strong><u>Pseudo Code</u></strong> is the portion of the overall system functionality that we want to deliberately leave fluid. The functionality of the Pseudo Code is intended to be simple editing steps (which should cover a pretty wide range of&#xA0;edits).</p>
+<ul>
+<li>The types of things that you might do in Pseudo Code could include: copy layers, name layers, run filters, set layer modes, set layer opacity, merge layers, and run <span class="caps">PDB</span> functions. The pseudo code can access basic image characteristics and perform operations with&#xA0;them.</li>
+<li>Pseudo Code is simple Gimp-Python code fragments. Because there is no support for indenting, a simple test for how complex your Pseudo Code can become is whether you need to indent or not (note that you can write a simple &#x2018;if&#x2019; statement on one line). In spite of this restriction we will show with some examples that you can accomplish quite a bit of editing with&#xA0;macros.</li>
+</ul>
+<p>A final thing that we need to talk about that is not a &#x2018;category&#x2019; of execution but is something that is an important part of our Execution Model is <strong><u>Scope</u></strong>. We are only going to touch on a couple of points that affect when lists are defined for dynamic User Interface&#xA0;selection.</p>
+<ul>
+<li>The Gimp User interface widgets allow you to select items from a&#xA0;list.</li>
+<li>You can specify the list within the widget, or pass the widget a list by name <strong><u><span class="caps">IF</span></u></strong> you define the list outside of the function being called. The list must be defined at the level of the function&#xA0;main().</li>
+<li>By keeping the scope of the User Interface lists at the top level, we are able to use the list name in <strong><u>both the user interface and in the function being called</u></strong>. In this way we can use the actual argument being selected rather than its index position in a&#xA0;list.</li>
+<li>An architectural advantage is we create this list with a function that reads a configuration file. We only have to define and maintain this configuration list in one place within our system and use the resulting list in as many places as we want by calling a reading function. This is how we will get new macros to show up in the menus when we add&#xA0;them.</li>
+<li>The following skeletal code fragments illustrate defining a list &#x2018;cmdList&#x2019; at the top level &#x2013; &#x2018;main&#x2019;, and using it within the registration block and function. Because it is defined at the &#x2018;main&#x2019; level, we can reference it within the function and registration block. We can recover the argument from the index (passed by the widget) because we are using the same list in both&#xA0;places:</li>
+</ul>
+<p><span>Example - Lists and Scope in&#xA0;Functions</span></p>
+<div class="codehilite"><pre><span class="n">cmdList</span> <span class="p">=</span> <span class="n">cmdrReadObj</span><span class="p">.</span><span class="n">CommanderMacros</span><span class="p">()</span>
+#
+<span class="n">def</span> <span class="n">autoCommander</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">cmdListIndex</span><span class="p">):</span>
+ <span class="p">...</span>
+ <span class="n">commanderName</span> <span class="p">=</span> <span class="n">cmdList</span><span class="p">[</span><span class="n">cmdListIndex</span><span class="p">]</span>
+ <span class="p">...</span> 
+#
+<span class="n">register</span> <span class="p">(</span>
+ "<span class="n">autoCommander</span>"<span class="p">,</span> # <span class="n">Name</span> <span class="n">registered</span> <span class="n">in</span> <span class="n">Procedure</span> <span class="n">Browser</span>
+ <span class="p">...</span>
+ <span class="p">[</span>
+ <span class="p">...</span>
+ <span class="p">(</span> <span class="n">PF_OPTION</span><span class="p">,</span> "<span class="n">cmdSet</span>"<span class="p">,</span> "<span class="n">Select</span> <span class="n">a</span> <span class="n">command</span>"<span class="p">,</span> 0<span class="p">,</span> <span class="n">cmdList</span> <span class="p">),</span>
+ <span class="p">],</span>
+<span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+
+<h3 id="data-model">Data Model<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#data-model" title="Permanent link">&#xB6;</a></h3>
+<p>We now need to talk about the form and organization of the data that we intend to use. The way that we choose to organize our data can have a dramatic impact on the complexity of the functions that we need to write. In our case we can take advantage of a couple of somewhat more sophisticated data models to make the actual functions fairly straightforward. We will be using &#x201C;trees&#x201D; (Python ElementTree) and <span class="caps">XML</span>&#xA0;data.</p>
+<h3 id="trees-and-xml-data">Trees and <span class="caps">XML</span> Data<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#trees-and-xml-data" title="Permanent link">&#xB6;</a></h3>
+<p>Python has several built in data structures such as dictionaries, lists to name a couple. A very powerful library structure that is well suited to our particular needs is a &#x201C;tree&#x201D;. A couple of the key features that make them well suited for our application&#xA0;are:</p>
+<ol>
+<li>Trees have a natural &#x2018;hierarchical&#x2019; feel to them, kind of like a directory structure or the &#x2018;folders&#x2019; of an operating system. The levels of hierarchy can be thought of as &#x2018;containing&#x2019; the contents in the lower&#xA0;level.</li>
+<li>A branch can hold an indefinite number of elements, and those elements can be either a leaf with attributes or a sub-branch to another level. This lends a lot of flexibility with the way we structure of the&#xA0;data.</li>
+<li>The input / output format is <span class="caps">XML</span>, which is not only hierarchical, but it is text so it is human readable and portable to any platform (computer / <span class="caps">OS</span>).</li>
+</ol>
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/XmlHierarchyContainers.jpg" alt="XmlHierarchyContainers.jpg">
+<figcaption> 
+<span class="caps">XML</span> Hierarchy - Containers
+</figcaption> 
+</figure>
+
+<p>The examples use ElementTree to read and write the data between trees and <span class="caps">XML</span>. ElementTree is included with Python and described in the Python documentation, so we will not go into detail about the mechanics of tree structures&#xA0;here.</p>
+<p>You might be wondering at this point where these <span class="caps">XML</span> file will be located. The functions that read and write the <span class="caps">XML</span> files are expecting to find the <span class="caps">XML</span> under a directory named &#x2018;myXml&#x2019; which you will have to create under you user gimp directory. If you are using Linux and your home directory is &#x2018;stephen&#x2019; the path would look something&#xA0;like:</p>
+<div class="codehilite"><pre><span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">stephen</span><span class="o">/</span><span class="p">.</span><span class="n">gimp</span><span class="o">-</span>2<span class="p">.</span>8<span class="o">/</span><span class="n">myXml</span>
+</pre></div>
+
+
+<p>If you are using Windows the path would look something&#xA0;like:</p>
+<div class="codehilite"><pre><span class="n">C</span><span class="p">:</span><span class="o">\</span><span class="n">Users</span><span class="o">\</span><span class="n">stephen</span><span class="o">\</span><span class="p">.</span><span class="n">gimp</span><span class="o">-</span>2<span class="p">.</span>8<span class="o">\</span><span class="n">myXml</span>
+</pre></div>
+
+
+<p>We will be dealing with a couple of types of pseudo code and xml files, and those will be keep in separate directories under myXml, but we will get to that in a&#xA0;bit.</p>
+<h2 id="macro-implementation-revisited">Macro Implementation &#x2013; Revisited<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#macro-implementation-revisited" title="Permanent link">&#xB6;</a></h2>
+<p>Now that we have talked about the execution model and data model, we can revisit the &#x201C;Implementation &#x2013; In Broad Strokes&#x201D; and tie the steps to the code that is handling&#xA0;them.</p>
+<h3 id="pseudo-code-to-xml">Pseudo Code to <span class="caps">XML</span><a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#pseudo-code-to-xml" title="Permanent link">&#xB6;</a></h3>
+<p>Our first item was to <strong><u>read the pseudo code and parse it into a data structure</u></strong>. That data structure is going to be a&#xA0;Tree.</p>
+<p>We can begin writing a pseudo code file by copying and pasting a set of commands from the gimp python console into a text file whose name ends in &#x201C;.def&#x201D;. The &#x201C;&gt;&gt;&gt;&#x201D; preceding each command will be the &#x201C;keyword&#x201D; to indicate a&#xA0;command.</p>
+<p>The pseudo code will be in a file, in this example it is named NormalGridCanvas.def. Each line begins with a keyword. Keyword choices are: &#x201C;commander&gt;&#x201D;, &#x201C;macro&gt;&#x201D;, &#x201C;comment&gt;&#x201D;, or&#xA0;&#x201C;&gt;&gt;&gt;&#x201D;.</p>
+<p>The class XmlGenerator() in autoBase.py contains a function GenCommanderXml() which reads all of the *.def files in ~/.gimp-2.8/myXml/commander, inserts the lines into a tree (after removing the keyword), and then writes the tree out to a file named&#xA0;combinedCommander.xml.</p>
+<p>The keyword will determine both the &#x201C;tag&#x201D; associated with the line of pseudo code, and whether it is a &#x201C;branch&#x201D; element (macro name) or a &#x201C;leaf&#x201D; element (command or comment). We are assigning both a definition and a level in the hierarchy for each line of pseudo code text as we read it into the&#xA0;tree.</p>
+<p><em>Example - Pseudo Code Example -&#xA0;NormalGridCanvas.def</em></p>
+<div class="codehilite"><pre><span class="n">commander</span><span class="o">&gt;</span><span class="n">Normal</span> <span class="n">Grid</span> <span class="n">and</span> <span class="n">Canvas</span>
+ <span class="n">macro</span><span class="o">&gt;</span>
+ <span class="n">comment</span><span class="o">&gt;</span><span class="n">Shrink</span> <span class="n">the</span> <span class="n">Canvas</span> <span class="n">back</span> <span class="n">to</span> <span class="n">fit</span> <span class="n">the</span> <span class="n">layer</span>
+ <span class="o">&gt;&gt;&gt;</span><span class="n">theImage</span><span class="p">.</span><span class="n">resize_to_layers</span><span class="p">()</span>
+ <span class="n">comment</span><span class="o">&gt;</span><span class="n">Set</span> <span class="n">grid</span> <span class="n">to</span> <span class="n">origin</span> <span class="n">and</span> <span class="nb">size</span> <span class="p">=</span> <span class="n">image</span>
+ <span class="o">&gt;&gt;&gt;</span><span class="n">pdb</span><span class="p">.</span><span class="n">gimp_image_grid_set_offset</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> 0<span class="p">,</span> 0<span class="p">)</span>
+ <span class="o">&gt;&gt;&gt;</span><span class="n">pdb</span><span class="p">.</span><span class="n">gimp_image_grid_set_spacing</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">theImage</span><span class="p">.</span><span class="n">width</span><span class="p">,</span> <span class="n">theImage</span><span class="p">.</span><span class="n">height</span><span class="p">)</span>
+</pre></div>
+
+
+<p>After all of the *.def files are read into the tree and written back out in the form of an <span class="caps">XML</span> file, the formatting is done. Writing out a tree automatically generates all of the containing enclosures, essentially making properly formatting the <span class="caps">XML</span> a trivial task. The fragment from combinedCommander.xml illustrates the <span class="caps">XML</span> from the pseudo code in&#xA0;NormalGridCanvas.def.</p>
+<p><span>Example - combinedCommander.xml&#xA0;(fragment)</span></p>
+<div class="codehilite"><pre><span class="nt">&lt;combined&gt;</span>
+ Definition
+ ...
+ <span class="nt">&lt;commander&gt;</span>
+ Normal Grid and Canvas
+ <span class="nt">&lt;comment&gt;</span>
+ Shrink the Canvas back to fit the layer
+ <span class="nt">&lt;/comment&gt;</span>
+ <span class="nt">&lt;command&gt;</span>
+ theImage.resize_to_layers()
+ <span class="nt">&lt;/command&gt;</span>
+ <span class="nt">&lt;comment&gt;</span>
+ Set grid to origin and size = image
+ <span class="nt">&lt;/comment&gt;</span>
+ <span class="nt">&lt;command&gt;</span>
+ pdb.gimp_image_grid_set_offset(theImage, 0, 0)
+ <span class="nt">&lt;/command&gt;</span>
+ <span class="nt">&lt;command&gt;</span>
+ pdb.gimp_image_grid_set_spacing(theImage, theImage.width, theImage.height)
+ <span class="nt">&lt;/command&gt;</span>
+ <span class="nt">&lt;/commander&gt;</span>
+ ...
+<span class="nt">&lt;/combined&gt;</span>
+</pre></div>
+
+
+<p><em>* The <span class="caps">XML</span> above was run through an online <span class="caps">XML</span> pretty printer for readability. The <span class="caps">XML</span> from ElementTree is functional, but hard to&#xA0;read.</em></p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/PseudoCodetoXmlFunction.jpg" alt="PseudoCodetoXmlFunction.jpg">
+<figcaption>
+Creating <span class="caps">XML</span> from *.def files
+</figcaption></figure>
+<p>The Xml generator can be called from a <span class="caps">GUI</span>&#xA0;menu.</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/PseudoCodeImported.jpg" alt="PseudoCodeImported.jpg">
+<figcaption> 
+Xml files built
+</figcaption> 
+</figure>
+
+
+<p>In our discussion of Scope in the Section &#x201C;Execution Model&#x201D;, we showed an example code fragment where we created a list &#x201C;cmdList&#x201D;. The code was from the example autoCommander.py and uses a class BaseXmlReader and the function CommanderMacros() which resides in&#xA0;autoBase.py.</p>
+<ul>
+<li>The list of Macro Command Names is created by loading the <span class="caps">XML</span> file combinedCommander.xml into an&#xA0;ElementTree.</li>
+<li>The tree is traversed at the branch level (the tag <commander>), and the branches text which are the names of the macros are built into a list. The list is essentially built with a &#x201C;for&#xA0;loop&#x201D;.</commander></li>
+<li>The list is passed to the widget and used to select the macro you want to&#xA0;use.</li>
+</ul>
+<h3 id="running-a-specific-macro">Running a Specific Macro<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#running-a-specific-macro" title="Permanent link">&#xB6;</a></h3>
+<p>The final point to expand upon is how we fetch and run the specific set of commands for a selected&#xA0;Macro.</p>
+<ul>
+<li>We can derive the name of the Macro by way of the menu selection (registration block of&#xA0;autoCommander.py).</li>
+<li>We will again use the BaseXmlReader class, but this time we will utilize the CommanderExtract function passing the Macro name as an argument. The CommanderExtract function traverses the tree branch by branch as before when we were gathering the names of the Macros, except it is comparing the names against the passed argument as we go. When the CommanderExtract function finds a branch matching the argument, it drops down a level to read the leaf elements under that&#xA0;branch.</li>
+<li>The leaf arguments whose tags are set to &#x201C;command&#x201D; are appended to the list that will be returned for processing. The leafs whose tags are &#x201C;comment&#x201D; will be&#xA0;ignored.</li>
+<li>The newly created returned list will be run through in a &#x201C;for loop&#x201D; which will process each line as a separate command using the python &#x201C;exec&#x201D;&#xA0;function.</li>
+</ul>
+<p>The variable &#x2018;theImage&#x2019; is defined with the autoCommander function and can be used as a handle to access information about the active image by the Macro&#xA0;commands.</p>
+
+<p>The discussion above has described how we can generate a macro by running a set of commands in the Python Console, paste those commands into a text file adding a name and comments, and then making it available for&#xA0;use.</p>
+<p>The code for transforming the pseudo code into a macro is in autoWriteXml.py. The code to display the menu of Macros you have written and execute them is in autoCommander.py. The Classes referenced by these two scripts are in&#xA0;autoBase.py.</p>
+<p>The text files that you write for your macro definition need to be put in a directory ~/.gimp-2.x/myXml/commander and have an extension of &#x2018;.def&#x2019;. Create a separate *.def file for each&#xA0;macro.</p>
+<h2 id="an-introduction-to-automated-editing">An Introduction to Automated Editing<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#an-introduction-to-automated-editing" title="Permanent link">&#xB6;</a></h2>
+<p>Macros are a terrific way to make the editing process faster and more repeatable, they do though have some&#xA0;limitations.</p>
+<ol>
+<li>There are times when the order of the editing steps are&#xA0;important.</li>
+<li>They have to be applied one at a&#xA0;time.</li>
+<li>You have to keep track of what has already been done and what yet still&#xA0;remains.</li>
+</ol>
+<p>A Workflow, or a Process, or a Recipe, what ever you may be used to calling it (I prefer Workflow) can be viewed as a set of ordered steps. These steps would usually correspond to the actions that you would typically code up in a set of Macros. We will automate a Workflow that runs the right steps at the right time and records the editing progress on each of the&#xA0;images.</p>
+<p>Let&#x2019;s quickly go over how how capturing and running a &#x201C;Workflow&#x201D; is going to work before we dive in. We capture the code fragments that describe the editing process in the same way that we did for the macros. We can either copy and paste from the python console to generate a series of commands, or we could copy them from a working&#xA0;macro.</p>
+<p>The steps in a workflow aren&#x2019;t in fact very different than the Commander Macros that we described in the earlier part of this tutorial, the only real difference is they are an ordered set to be&#xA0;followed.</p>
+<p>The way that we are going to use the automation tools is a bit different than using macros. When we want to use a macro we are running it on the image that is open in editor window. The automation tools on the other hand run on a directory of images, so we run it without an image being open in the editor&#xA0;window.</p>
+<p>We mark the images that are ready to move to the next step of the workflow and then run the automation tools. The automated update looks at each image in the work directory, if it is marked for update, it gets updated to the next step, if it is not marked for update it is left&#xA0;alone.</p>
+<p>The automated update will move the marked images to the next step of their assigned workflow essentially keeping track of the &#x2018;book-keeping&#x2019; for us. A time management benefit is if there are several images requiring a filter that takes a bit of time to run, you can go do something else while they are&#xA0;running.</p>
+<h2 id="automation-tool-implementation-in-broad-strokes">Automation Tool Implementation &#x2013; In Broad Strokes<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#automation-tool-implementation-in-broad-strokes" title="Permanent link">&#xB6;</a></h2>
+<p>Let&#x2019;s touch upon the main ideas that we are going to use to implement the automated workflow recording and execution tasks that we are talking about&#xA0;above.</p>
+<ol>
+<li>The pseudo code will be read and parsed into a data structure. Each pseudo code block (or step) will have a name and consist of commands and comments. Each workflow will have a name and will contain an ordered set of steps or pseudo code&#xA0;blocks.</li>
+<li>The automation flow will generate a list of images in a given directory. It will then step through that list checking whether an image is marked for update or&#xA0;not.</li>
+<li>If an image is marked for update, the automation flow will determine the name of the workflow and the name next step to perform on the image. The name of the &#x2018;workflow&#x2019; and the &#x2018;next step&#x2019; will be used to select a list of&#xA0;commands.</li>
+<li>The list of commands will be run in an &#x2018;exec&#x2019;&#xA0;loop:</li>
+<li>The &#x2018;current step&#x2019; and &#x2018;next step&#x2019; for the image will be incremented and then saved with the&#xA0;image.</li>
+</ol>
+<h3 id="architecture_1">Architecture<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#architecture_1" title="Permanent link">&#xB6;</a></h3>
+<p>We commented in the section on macros that good architectural choices can accomplish our goal without making the code overly complex. This argument is as compelling for automated updating of our images. The Architecture and Code for our automated updating tools will be very similar to the ones used for capturing and running the &#x201C;Commander&#x201D;&#xA0;macros.</p>
+<h3 id="execution-model_1">Execution Model<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#execution-model_1" title="Permanent link">&#xB6;</a></h3>
+<p>As in our discussion of the Macros, we will be breaking the execution of our Automation Functions into three different&#xA0;categories:</p>
+<ol>
+<li>User Interface&#xA0;Functions</li>
+<li>Base Class and&#xA0;Functions</li>
+<li>Pseudo&#xA0;Code</li>
+</ol>
+<p>We won&#x2019;t rehash these topics but instead comment on the difference, which is the structure of the pseudo code. The organization of workflows as a set of steps where each step is a set of commands prompts us to organize the pseudo code in a similar manner, where we think of steps containing a sequence of commands, and workflows containing a sequence of steps. In order to reflect this additional level of hierarchy or containment, we will use an additional keyword in the workflow pseudo&#xA0;code.</p>
+<h3 id="data-model_1">Data Model<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#data-model_1" title="Permanent link">&#xB6;</a></h3>
+<p>There are two special types of data for the automated&#xA0;flow:</p>
+<ol>
+<li>Trees and <span class="caps">XML</span> data are similar to the &#x201C;Commander&#xA0;Macros&#x201D;.</li>
+<li>Parasite (or Property) data to keep track of the particular workflow that is being used to edit an image, the next step that is to be used, and whether an image is ready to be incremented to the next&#xA0;step.</li>
+</ol>
+<h3 id="the-image-and-parasites-or-property-data">The Image and Parasites (or Property) Data<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#the-image-and-parasites-or-property-data" title="Permanent link">&#xB6;</a></h3>
+<p>The Image type that we will be using for all of our work is the native Gimp *.xcf format. This image format saves all of the layers and modes that we might set while editing and also saves a type of data called Parasites, which are similar to Properties on many other&#xA0;systems.</p>
+<p>Parasites are like variable can be referenced by name in order to access their value. Like variables they can be assigned and read. Unlike variables, parasites are persistent, very persistent. A parasite, when assigned to an image, becomes part of the image and is saved with the image file. A parasite that is assigned and saved with an image can be read after gimp is closed and reopened, it is just like any other file data in that&#xA0;respect.</p>
+<p>Parasites are also very portable, you can read and write parasites using either the scheme based or python based scripts. They are also independent of the operating system, so you can write a parasite to an image on your Linux Desktop machine, and read it a week later on your windows based laptop assuming that you saved the images in the native gimp *.xcf file format. Parasites can also be written to specific layers, but for our present needs, the image parasites are all we are&#xA0;using.</p>
+<p>Because the parasite is associated with the image, and it is persistent until it is overwritten or removed, it is an ideal tool for keeping track of the state of the image&#x2019;s progress in the editing process. Beyond being able to just take notes, the values of the parasites can be used like a property to make decisions and influence the execution of the script that has read the parasite&#xA0;data.</p>
+<p>If for example we opened an image that had two parasites (properties), named &#x2018;UpdateFlag&#x2019; and &#x2018;Flow&#x2019;, we could use the values from those parasites to make&#xA0;decisions:</p>
+<p><em>Example &#x2013; Decisions based on Parasite / Property&#xA0;Values</em></p>
+<div class="codehilite"><pre><span class="n">UpdateFlag</span> <span class="p">=</span> <span class="n">str</span><span class="p">(</span><span class="n">theImage</span><span class="p">.</span><span class="n">parasite_find</span><span class="p">(</span><span class="s">'UpdateFlag'</span><span class="p">))</span>
+<span class="n">Flow</span> <span class="p">=</span> <span class="n">str</span><span class="p">(</span><span class="n">theImage</span><span class="p">.</span><span class="n">parasite_find</span><span class="p">(</span><span class="s">'Flow'</span><span class="p">))</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">UpdateFlag</span> <span class="o">==</span> <span class="s">'YES'</span><span class="p">):</span>
+ <span class="k">if</span> <span class="p">(</span><span class="n">Flow</span> <span class="o">==</span> <span class="s">'Standard'</span><span class="p">):</span>
+ <span class="p">{</span> <span class="n">run</span> <span class="n">commands</span> <span class="k">for</span> <span class="n">Standard</span> <span class="n">flow</span> <span class="p">}</span>
+ <span class="n">elif</span> <span class="p">(</span><span class="n">Flow</span> <span class="o">==</span> <span class="s">'SemiAuto'</span><span class="p">):</span>
+ <span class="p">{</span> <span class="n">run</span> <span class="n">commands</span> <span class="k">for</span> <span class="n">SemiAuto</span> <span class="n">Flow</span> <span class="p">}</span>
+<span class="n">elif</span> <span class="p">(</span><span class="n">UpdateFlag</span> <span class="o">==</span> <span class="s">'NO'</span><span class="p">):</span>
+ <span class="p">{</span> <span class="n">do</span> <span class="n">nothing</span> <span class="p">}</span>
+</pre></div>
+
+
+<p>Reading and writing parasites to an image does have one idiosyncrasy worth comment on which is the format of the data being written. You must express the parasite as an ordered set of &#x2018;Name&#x2019;, &#x2018;Index&#x2019;, and &#x2018;Value&#x2019;. Name and Value are both strings, and the Index is a small integer, (stay between 1 and 254). If you have not used parasites before you might be wondering how you determine a &#x2018;correct&#x2019; value for the index. You&#xA0;may:</p>
+<ol>
+<li>Throw a dart at a dartboard and use the result (assuming you hit the&#xA0;board).</li>
+<li>Or, feel free to use my personal favorite&#xA0;&#x2018;5&#x2019;.</li>
+</ol>
+<p>As long as you pick a number and preferably stick with it, everything will be fine. When you read the parasite value, the functions in the Scheme scripting interface will give you the &#x2018;Name&#x2019;, &#x2018;Index&#x2019;, and &#x2018;Value&#x2019;; the functions in the Python scripting interface will only return the &#x2018;Name&#x2019; and&#xA0;&#x2018;Value&#x2019;.</p>
+<p>Writing the parasite is called &#x2018;attaching&#x2019; and reading the value back is called either &#x2018;get&#x2019; or &#x2018;find&#x2019; depending on the method you choose to use. You can read and write parasites from within scripts or from either of the python or scheme&#xA0;consoles.</p>
+
+<p>Our final topic about an Automated Workflow in our &#x201C;Broad Strokes&#x201D; is how to setup and run the Workflow on a set of images. We are running on a set of images rather than just one so we open up gimp without an image in the editor window. The tools will open up, work on, save, and close the images one by&#xA0;one.</p>
+<p>In an earlier tutorial &#x201C;<a href="https://www.gimp.org/tutorials/AutomatedJpgToXcf/">Automated Jpg to Xcf</a>&#x201D; we outlined how to import a directory containing jpeg images into a directory with gimp xcf images. The automation tool implementation modifies the import function to add the assignments of parasites to the images. The images are assigned to a particular flow as they are imported, and the initial set of flow control properties are written and saved as part of the import process. The jpeg-to-xcf function also runs the Automation Process (Auto Update Image) one time to put all of the images on the first step of the assigned flow, so they are ready for their first manual adjustment right after they are&#xA0;imported.</p>
+<p>After opening and (optionally) adjusting an image you mark the image as ready for the next step by setting the &#x201C;UpdateFlag&#x201D; parasite to a value of &#x201C;<span class="caps">YES</span>&#x201D;. This is accomplished with a function that is available from the menu: &#x201C;Automation &#x2192; A2 Mark for AutoUpdate (File)&#x201D;. (Note: Since you will be doing this a lot, it is very convenient to use a keyboard shortcut to run this&#xA0;function).</p>
+<p>Images are moved to the next step in their flow by running the &#x201C;Auto Update Images (Directory)&#x201D; function from the menu. This will increment all of the images whose UpdateFlags are set to <span class="caps">YES</span> to the next step in their flow. Note that since each image has a record of its own next step and flow, there is no requirement for the images in a directory to be on the same step or even using the same&#xA0;workflow.</p>
+<p>The mechanics for creating <span class="caps">XML</span> from pseudo code for the workflows, properties, and commander macros is to run the function Pseudocode to <span class="caps">XML</span> from the menu (Automation &#x2192; Utilities &#x2192; Pseudocode to <span class="caps">XML</span>).</p>
+<p>The export <span class="caps">XCF</span> to <span class="caps">JPG</span> function in the &#x201C;Automation&#x201D; menu opens each xcf file in the source / work directory and looks at the properties of the image. If the image is &#x201C;Finished&#x201D;, at the end of the flow, it is exported. The images that are still being work on are left&#xA0;alone.</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/RunningAutoUpdate.jpg" alt="RunningAutoUpdate.jpg">
+<figcaption>
+Running AutoUpdate
+</figcaption>
+</figure>
+
+<h2 id="automation-tool-implementation-details">Automation Tool Implementation &#x2013; Details<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#automation-tool-implementation-details" title="Permanent link">&#xB6;</a></h2>
+<h3 id="pseudo-code">Pseudo Code<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#pseudo-code" title="Permanent link">&#xB6;</a></h3>
+<h4 id="workflow-pseudo-code">Workflow Pseudo Code<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#workflow-pseudo-code" title="Permanent link">&#xB6;</a></h4>
+<p>You can generate the list of commands that we wish to perform on an image in the python console and when you have it working just right for the step you would like to perform you can copy and paste them into a pseudo code text file. The &#x201C;Pseudocode to <span class="caps">XML</span>&#x201D; function will be looking for files that have the file extension &#x201C;.def&#x201D; so it will convert all of the *.def files in the flow directory into <span class="caps">XML</span>.</p>
+<p>As in the case of the macros, you can put in comment lines beginning with &#x201C;comment&gt;&#x201D; and blank lines to make the code fragments more readable and easier to understand when you come back to make enhancements in a couple of&#xA0;months.</p>
+<p>Each set of commands is contained by a &#x201C;Step&#x201D; which uses the key &#x201C;step&gt;&#x201D;. The top level container is the Workflow which uses the key &#x201C;flow&gt;&#x201D;. Each workflow can be specified in its own &#x201C;.def&#x201D; file. The &#x201C;Pseudocode to <span class="caps">XML</span>&#x201D; function will read all of the *.def files and create a single <span class="caps">XML</span> file named combinedFlow.xml in the myXml/flow&#xA0;directory.</p>
+<h4 id="property-parasite-pseudo-code">Property / Parasite Pseudo Code<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#property-parasite-pseudo-code" title="Permanent link">&#xB6;</a></h4>
+<p>The other type of pseudo code that we need to talk about is the code for properties. The pseudo code for properties is contained in the &#x201C;myXml/property&#x201D; directory. The file flagProperties.xml is created by the &#x201C;Pseudocode to <span class="caps">XML</span>&#x201D; function from the flagProperties.def file. In the case of properties it only really makes sense to have one set of properties for all flows. The properties defined in the flagProperties.xml file will be the &#x201C;flag&#x201D; properties. You can set the property name, comments, the option values, and the default value (initial setting). The &#x201C;property&gt;&#x201D; key sets the property name and contains the other property values within the <span class="caps">XML</span>. The other keys are &#x201C;comment&gt;&#x201D;, &#x201C;default&gt;&#x201D;, and &#x201C;options&gt;&#x201D;. The key &#x201C;flags&gt;&#x201D; with the name Control Properties is used at the beginning of the file to define the top level&#xA0;container.</p>
+<p>There are three properties that are assigned by the automation scripts and are not normally edited by the user or defined in the &#x201C;.def&#x201D; file. They are created, read and modified by the scripts. These are the flow control properties, &#x201C;Flow&#x201D;, &#x201C;CurrentStep&#x201D;,&#xA0;&#x201C;NextStep&#x201D;.</p>
+<p>You can see all of the properties and current assigned values for a particular image using the menu function &#x201C;Automation&#x201D; -&gt; &#x201C;A1) Display Assigned Parasites&#xA0;(File)&#x201D;.</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/ParasitesImage.jpg" alt="ParasitesImage.jpg">
+<figcaption>
+Assigned Parasites
+</figcaption>
+</figure>
+
+<h3 id="properties-and-image-state-flow-control-parasites">Properties and Image State &#x2013; Flow Control Parasites<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#properties-and-image-state-flow-control-parasites" title="Permanent link">&#xB6;</a></h3>
+<p>One way to think of a workflow is as a series of states. These states are what we have been referring to as steps. As the image evolves it transitions from one state to another it moves through the workflow from beginning to end, state by state (or step by&#xA0;step).</p>
+<p>The Flow Control Parasites provide a method to make each image &#x201C;self aware&#x201D; of its own state, which is its assigned &#x201C;Flow&#x201D; and &#x201C;CurrentStep&#x201D;. It is also aware of the next step to which it will proceed, which is determined by its assigned &#x201C;Flow&#x201D; and &#x201C;NextStep&#x201D;. The order for the steps is determined by the order they are listed in the pseudo code. When an image is updated the &#x201C;NextStep becomes the new &#x201C;CurrentStep&#x201D; and a new &#x201C;NextStep&#x201D; is looked up and written to the image as a&#xA0;parasite.</p>
+<p>Let&#x2019;s examine the steps of the &#x201C;Standard&#x201D; flow example that is included with this tutorial. The steps the image will go through&#xA0;are:</p>
+<p><span>Example &#x2013; States or Steps in the Standard Flow&#xA0;Example</span></p>
+
+
+<table>
+<tbody>
+<tr>
+<th></th>
+<td class="emphesize">CurrentStep</td>
+<td class="emphesize">NextStep</td>
+</tr>
+<tr>
+<th>1.</th>
+<td>First</td>
+<td>Alignment</td>
+</tr>
+<tr>
+<th>2.</th>
+<td>Alignment</td>
+<td>DynamicRange</td>
+</tr>
+<tr>
+<th>3.</th>
+<td>DynamicRange</td>
+<td>Retinex-Filter</td>
+</tr>
+<tr>
+<th>4.</th>
+<td>Retinex-Filter</td>
+<td>Sharpen</td>
+</tr>
+<tr>
+<th>5.</th>
+<td>Sharpen</td>
+<td>ColorAdjust</td>
+</tr>
+<tr>
+<th>6.</th>
+<td>ColorAdjust</td>
+<td><span class="caps">FINISHED</span></td>
+</tr>
+<tr>
+<th>7.</th>
+<td><span class="caps">FINISHED</span></td>
+<td><span class="caps">FINISHED</span></td>
+</tr>
+</tbody>
+</table>
+
+<p>The state &#x201C;First&#x201D; is assigned by the Jpeg to Xcf function. This step is assigned automatically regardless of the flow. The steps following the &#x201C;First&#x201D; step, &#x201C;Alignment&#x201D;, &#x201C;DynamicRange&#x201D;, &#x201C;Retinex-Filter&#x201D;, &#x201C;Sharpen&#x201D;, and &#x201C;ColorAdjust&#x201D; are assigned through the Xml representation of the flow. The Step &#x201C;<span class="caps">FINISHED</span>&#x201D; is assigned automatically when the end of the list of steps is&#xA0;reached.</p>
+<p>When the images are first imported, the autoUpdate function is run to move the images from the automatically assigned &#x201C;First&#x201D; step to executing the first real step of the flow. When the CurrentStep becomes &#x201C;<span class="caps">FINISHED</span>&#x201D;, the image is ready to be exported by the Xcf to Jpeg&#xA0;function.</p>
+<h3 id="status-flag-parasites">Status Flag Parasites<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#status-flag-parasites" title="Permanent link">&#xB6;</a></h3>
+<p>The Flag Parasites are for decision making. They will be assigned with a default value when the image is imported into a flow. The parasite whose function is flow control is the &#x201C;UpdateFlag&#x201D;. The value of the UpdateFlag is read to determine if an image is ready to be moved to the next&#xA0;state.</p>
+<p>Flag Parasites other than the UpdateFlag can be modified or eliminated to suit the needs of your pseudo code functions. You could for example add Flags with values that determine certain layer Opacity, or determine whether certain filters will be run. There are a lot of possibilities for this powerful&#xA0;capability.</p>
+
+<p>Running an Automated Workflow is almost trivially easy, once you have it set up to your liking. There is some work to be sure in setting up a workflow, but the reward is a consistent and apparent (obvious which steps have been run) workflow or&#xA0;process.</p>
+<p>There are several things you may need to set up Gimp Preferences in order to optimize the&#xA0;operation.</p>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#conclusion" title="Permanent link">&#xB6;</a></h2>
+<p>The combination of an available programming language, well suited data structures, the ability to affix properties to images, and a rich set of editing features offer powerful possibilities for automating the editing&#xA0;process.</p>
+<p>Using an automated workflow has changed the way that I use Gimp for editing my photos. I hope that you can leverage these examples to make working with Gimp more productive for yourself. Links to the example scripts and pseudo code are in the following&#xA0;appendices.</p>
+<h2 id="appendix-notes">Appendix &#x2013; Notes<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#appendix-notes" title="Permanent link">&#xB6;</a></h2>
+<p>The following Appendices contain notes which are more specific to setting up the example scripts, the example *.def files, and comments on&#xA0;debugging.</p>
+<h3 id="setting-up-the-example-scripts">Setting up the Example Scripts<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#setting-up-the-example-scripts" title="Permanent link">&#xB6;</a></h3>
+<p>All of the example scripts begin with &#x201C;auto&#x201D;, e.g. autoAutoUpdate.py, autoBase.py, &#x2026; If you try them but then decide you don&#x2019;t like them they should be pretty easy to find and remove. The following example scripts should be loaded into your gimp/plug-ins directory. Something like /home/stephen/.gimp-2.8/plug-ins if your user name is stephen and you were using gimp 2.8. Click on the filename to&#xA0;download.</p>
+<ol>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/plug-ins/autoAutoUpdate.py">autoAutoUpdate.py</a><br>
+ Runs the auto update function on a directory of&#xA0;images.</li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/plug-ins/autoBase.py">autoBase.py</a><br>
+ Contains the classes that read and write the <span class="caps">XML</span> files that affect how the update&#xA0;works.</li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/plug-ins/autoCommander.py">autoCommander.py</a><br>
+ Runs the &#x2018;Commander&#x2019;&#xA0;macros.</li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/plug-ins/autoJpegToXcf.py">autoJpegToXcf.py</a><br>
+ Imports the images into xcf format and assigns properties to&#xA0;image.</li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/plug-ins/autoRWparasites.py">autoRWparasites.py</a><br>
+ User Interface functions to read and write image parasites from the&#xA0;menu.</li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/plug-ins/autoWriteXml.py">autoWriteXml.py</a><br>
+ Reads *.def files and generates <span class="caps">XML</span> for commander macros, workflows, and&#xA0;properties.</li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/plug-ins/autoXcfToJpg.py">autoXcfToJpg.py</a><br>
+ Exports the finished images back to jpeg&#xA0;format.</li>
+</ol>
+<h3 id="setting-up-the-example-pseudo-code">Setting up the Example Pseudo Code<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#setting-up-the-example-pseudo-code" title="Permanent link">&#xB6;</a></h3>
+<p>Underneath your gimp directory (something like /home/stephen/.gimp-2.8) you need to create a directory named &#x2018;myXml&#x2019;. Don&#x2019;t get creative here, the scripts are looking for this specific directory. It will be in the same directory that contains your plug-ins directory. Underneath the myXml directory create three more directories, &#x2018;commander&#x2019;, &#x2018;flow&#x2019;, &#x2018;property&#x2019;. These will be where your pseudo code and three kinds of <span class="caps">XML</span> will be&#xA0;located.</p>
+<h4 id="pseudo-code-for-commander-macros">Pseudo Code for Commander Macros<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#pseudo-code-for-commander-macros" title="Permanent link">&#xB6;</a></h4>
+<p>Copy the following example *.def files into the &#x201C;commander&#x201D; directory (/home/stephen/.gimp-2.8/myXml/commander &#x2013; assuming a home directory of /user/stephen and a gimp version 2.8). They are example Commander Macros pseudo code files. Click on the filename to&#xA0;download.</p>
+
+<p>Hopefully with the comments and by running them, their function will be apparent. They should be enough to get you started writing some macros of your&#xA0;own.</p>
+<p>When you run the &#x201C;Pseudocode to <span class="caps">XML</span>&#x201D; Utility function, it will read all of the *.def files in this directory and write an <span class="caps">XML</span> file in this directory called &#x201C;combinedCommander.xml&#x201D;. &#x201C;combinedCommander.xml&#x201D; is the file that is accessed to list and run all of your&#xA0;macros.</p>
+<h4 id="pseudo-code-for-automation-workflows">Pseudo Code for Automation Workflows<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#pseudo-code-for-automation-workflows" title="Permanent link">&#xB6;</a></h4>
+<p>Copy the following *.def files into the &#x201C;flow&#x201D; directory (/home/stephen/.gimp-2.8/myXml/flow). They are example Workflow pseudo code&#xA0;files.</p>
+<ol>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/myXml/flow/fullauto.def">fullauto.def</a></li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/myXml/flow/semiauto.def">semiauto.def</a></li>
+<li><a href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/myXml/flow/standard.def">standard.def</a></li>
+</ol>
+<p>These three workflows all follow the same basicsteps of the standard workflow. The semiauto and fullauto workflows combine some of the steps. The idea is to give you a couple of different workflows to play with. The fullauto illustrates that you really can pack a lot of editing into a &#x201C;step&#x201D; but is probably too automatic to be of practical&#xA0;use.</p>
+<p>When you run the &#x201C;Pseudocode to <span class="caps">XML</span>&#x201D; Utility function, it will read all of the *.def files in this directory and write an <span class="caps">XML</span> file in this directory called&#xA0;&#x201C;combinedFlow.xml&#x201D;.</p>
+<h4 id="pseudo-code-for-properties">Pseudo Code for Properties<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#pseudo-code-for-properties" title="Permanent link">&#xB6;</a></h4>
+<p>Copy the following *.def file into the &#x201C;property&#x201D; directory (/home/stephen/.gimp-2.8/myXml/property). It is an example Property pseudo code file (for Flag Properties /&#xA0;Parasites).</p>
+
+<p>When you run the &#x201C;Pseudocode to <span class="caps">XML</span>&#x201D; Utility function, it will read *.def file in this directory and write an <span class="caps">XML</span> file in this directory called&#xA0;&#x201C;flagProperties.xml&#x201D;.</p>
+<h3 id="pseudo-code-syntax">Pseudo Code Syntax<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#pseudo-code-syntax" title="Permanent link">&#xB6;</a></h3>
+<h4 id="commander-pseudo-code">Commander Pseudo Code<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#commander-pseudo-code" title="Permanent link">&#xB6;</a></h4>
+<p>There are three keywords used for writing commander pseudo&#xA0;code:</p>
+<ol>
+<li><code>commander&gt;</code> - The text following this keyword is the Macro Name. This keyword must be the first keyword in the file. This is the &#x201C;container&#x201D; or the root of the tree for the following comments and&#xA0;commands.</li>
+<li><code>comment&gt;</code> - The text following this keyword is for descriptive comments. The comments will be represented in the pseudo code *.def file and in the resulting <span class="caps">XML</span>. When the <span class="caps">XML</span> is read for processing, comments will be&#xA0;ignored.</li>
+<li><code>&gt;&gt;&gt;</code> - The text following this keyword is taken as a python statement. Then the resulting <span class="caps">XML</span> is read, the command statements will be passed to the commander script to be processed in&#xA0;order.</li>
+</ol>
+<p>Note that lines beginning with &#x201C;#&#x201D; are ignored. You may indent if you like for readability. Leading white space is stripped&#xA0;off.</p>
+<p><em>Example - Commander Pseudo Code&#xA0;Example</em></p>
+<div class="codehilite"><pre><span class="n">commander</span><span class="o">&gt;</span><span class="n">Centered</span> <span class="n">Grid</span>
+ <span class="n">comment</span><span class="o">&gt;**</span> <span class="n">Set</span> <span class="n">up</span> <span class="n">the</span> <span class="n">grid</span> <span class="k">for</span> <span class="n">Rotate</span> <span class="n">and</span> <span class="n">or</span> <span class="n">Perspective</span> <span class="n">Transform</span>
+ <span class="n">comment</span><span class="o">&gt;*</span> <span class="n">Set</span> <span class="n">values</span> <span class="n">from</span> <span class="n">python</span><span class="o">-</span><span class="n">fu</span> <span class="n">image</span> <span class="n">object</span>
+ <span class="o">&gt;&gt;&gt;</span><span class="n">centerX</span> <span class="p">=</span> <span class="n">theImage</span><span class="p">.</span><span class="n">width</span><span class="o">/</span>2
+ <span class="o">&gt;&gt;&gt;</span><span class="n">centerY</span> <span class="p">=</span> <span class="n">theImage</span><span class="p">.</span><span class="n">height</span><span class="o">/</span>2
+ <span class="o">&gt;&gt;&gt;</span><span class="n">gridSpacing</span> <span class="p">=</span> <span class="n">max</span><span class="p">(</span><span class="n">theImage</span><span class="p">.</span><span class="n">width</span><span class="p">,</span> <span class="n">theImage</span><span class="p">.</span><span class="n">height</span><span class="p">)</span><span class="o">/</span>24
+ <span class="n">comment</span><span class="o">&gt;*</span> <span class="n">configure</span> <span class="n">grid</span> <span class="n">with</span> <span class="n">PDB</span> <span class="n">functions</span>
+ <span class="o">&gt;&gt;&gt;</span><span class="n">pdb</span><span class="p">.</span><span class="n">gimp_image_grid_set_offset</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">centerX</span><span class="p">,</span> <span class="n">centerY</span><span class="p">)</span>
+ <span class="o">&gt;&gt;&gt;</span><span class="n">pdb</span><span class="p">.</span><span class="n">gimp_image_grid_set_spacing</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">gridSpacing</span><span class="p">,</span> <span class="n">gridSpacing</span><span class="p">)</span>
+ <span class="o">&gt;&gt;&gt;</span><span class="n">pdb</span><span class="p">.</span><span class="n">gimp_image_grid_set_style</span><span class="p">(</span><span class="n">theImage</span><span class="p">,</span> <span class="n">GRID_ON_OFF_DASH</span><span class="p">)</span>
+</pre></div>
+
+
+<h4 id="property-pseudo-code">Property Pseudo Code<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#property-pseudo-code" title="Permanent link">&#xB6;</a></h4>
+<p>There are five keywords used for writing property pseudo&#xA0;code:</p>
+<ol>
+<li><strong>flags</strong> - The text following this keyword is the top level container, or in other words, the root of the&#xA0;tree.</li>
+<li><strong>property</strong> - The text following the keyword is the name of the property / parasite. This is a second level container or a branch of the tree. It will contain all of the following leaf keywords (comment, default, and option) until the next property&#xA0;statement.</li>
+<li><strong>comment</strong> - The text following this keyword is for descriptive comments. The comments will be represented in the pseudo code *.def file and in the resulting <span class="caps">XML</span>. When the <span class="caps">XML</span> is read for processing, comments will be ignored. The comments are leafs of the&#xA0;tree.</li>
+<li><strong>default</strong> - The text following this keyword is the default property value. The default value is a leaf of the&#xA0;tree.</li>
+<li><strong>option</strong> - The text following this keyword is one of the possible property values. There can be several option values for any given property. The option values are leafs of the&#xA0;tree.</li>
+</ol>
+<p><em>Example - Property Pseudo Code&#xA0;Example</em></p>
+<div class="codehilite"><pre><span class="n">flags</span><span class="o">&gt;</span><span class="n">Control</span> <span class="n">Properties</span>
+<span class="n">property</span><span class="o">&gt;</span><span class="n">UpdateFlag</span>
+ <span class="n">comment</span><span class="o">&gt;</span><span class="n">Initial</span> <span class="n">value</span> <span class="n">set</span> <span class="n">on</span> <span class="n">import</span> <span class="n">to</span> <span class="n">Xcf</span>
+ <span class="n">comment</span><span class="o">&gt;</span><span class="n">Set</span> <span class="n">by</span> <span class="n">user</span> <span class="n">on</span> <span class="n">Image</span> <span class="n">from</span> <span class="n">Automation</span> <span class="n">Menu</span>
+ <span class="n">comment</span><span class="o">&gt;</span><span class="n">Read</span> <span class="n">by</span> <span class="n">autoAutoUpdate</span> <span class="p">(</span><span class="n">updateImage</span> <span class="k">function</span><span class="p">)</span>
+ <span class="n">comment</span><span class="o">&gt;</span><span class="n">Updates</span> <span class="n">Image</span> <span class="p">(</span><span class="n">executes</span> <span class="n">Next</span> <span class="n">Step</span> <span class="n">in</span> <span class="n">Flow</span><span class="p">)</span> <span class="k">if</span> <span class="n">YES</span>
+ <span class="n">comment</span><span class="o">&gt;</span><span class="n">Reset</span> <span class="n">to</span> <span class="n">NO</span> <span class="n">by</span> <span class="n">updateImage</span>
+ <span class="n">default</span><span class="o">&gt;</span><span class="n">YES</span>
+ <span class="n">option</span><span class="o">&gt;</span><span class="n">NO</span>
+ <span class="n">option</span><span class="o">&gt;</span><span class="n">YES</span>
+
+<span class="n">property</span><span class="o">&gt;</span><span class="n">EnhanceColorLevel</span>
+ <span class="n">default</span><span class="o">&gt;</span><span class="n">NORMAL</span>
+ <span class="n">option</span><span class="o">&gt;</span><span class="n">EXTRA</span>
+ <span class="n">option</span><span class="o">&gt;</span><span class="n">NORMAL</span>
+ <span class="n">option</span><span class="o">&gt;</span><span class="n">MID</span>
+ <span class="n">option</span><span class="o">&gt;</span><span class="n">NONE</span>
+</pre></div>
+
+
+<h4 id="flow-pseudo-code">Flow Pseudo Code<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#flow-pseudo-code" title="Permanent link">&#xB6;</a></h4>
+<p>There are four keywords used for writing flow pseudo&#xA0;code:</p>
+<ol>
+<li><code>flow</code> The text following this keyword is the top level container, or in other words, the root of the tree. This is the name of the&#xA0;flow.</li>
+<li><code>step</code> The text following this keyword is the first level branch from the root. The step contains comments and commands. The steps select groups of commands for&#xA0;execution.</li>
+<li><code>comment</code> Comments are leafs of the&#xA0;tree.</li>
+<li><code>&gt;&gt;&gt;</code> Commands are leafs of the tree. When the Xml is read the commands will be processed in the order in which they appear in the&#xA0;step.</li>
+</ol>
+<p>Lines beginning with a &#x201C;#&#x201D; are ignored. Leading white space before the keywords is stripped out. White space after the keyword is stripped&#xA0;out.</p>
+<h3 id="running-code-in-the-gimp-python-console">Running code in the Gimp Python Console<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#running-code-in-the-gimp-python-console" title="Permanent link">&#xB6;</a></h3>
+<p>The Python-Fu console is a python shell in which you can run not only the gimp pdb functions, but your own python functions as&#xA0;well.</p>
+<p>First, set up and verify Python Path to include your user plug-ins&#xA0;directory:</p>
+<p><em>Example &#x2013; Setting the Python path in the Python-Fu&#xA0;Console</em></p>
+<div class="codehilite"><pre><span class="o">&gt;&gt;&gt;</span> <span class="n">import</span> <span class="n">sys</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">sys</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="s">'/home/stephen/.gimp-2.8/plug-ins/'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">sys</span><span class="p">.</span><span class="n">path</span>
+</pre></div>
+
+
+<p><em>echos back a list of paths that include path added&#xA0;above</em></p>
+<p>Next, run your python functions in the Gimp Python-Console . This example uses the &#x2018;TestBench&#x2019; class to run functions in the other classes in the autoBase.py module. Object instances of the TestBench class echo back results to the&#xA0;screen.</p>
+<ol>
+<li>Set the working directory to the user plug-ins&#xA0;directory</li>
+<li>Import the autoBase module&#xA0;functions</li>
+<li>Create and instance of the TestBench&#xA0;class</li>
+<li>Run the TestXmlGen and TestXmlRead&#xA0;functions</li>
+</ol>
+<p><em>Example &#x2013; Running your own Functions in the Python-Fu&#xA0;Console</em></p>
+<div class="codehilite"><pre><span class="o">&gt;&gt;&gt;</span> <span class="n">import</span> <span class="n">os</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">os</span><span class="p">.</span><span class="n">chdir</span><span class="p">(</span><span class="s">'/home/stephen/.gimp-2.8/plug-ins'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">from</span> <span class="n">autoBase</span> <span class="n">import</span> <span class="o">*</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">testola</span> <span class="p">=</span> <span class="n">TestBench</span><span class="p">()</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">testola</span><span class="p">.</span><span class="n">TestXmlGen</span><span class="p">()</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">testola</span><span class="p">.</span><span class="n">TestXmlRead</span><span class="p">()</span>
+</pre></div>
+
+
+<p>The screen shot below illustrates the process on the Windows version of Gimp / Python Console (TestXmlGen is pictured, TestXmlRead produces several pages of&#xA0;output):</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/Appendix-testing-in-python-console.JPG" alt="Appendix-testing-in-python-console.JPG">
+<figcaption>
+Image - Running your code in the Gimp Python Console
+</figcaption>
+</figure>
+
+<h2 id="further-reading">Further Reading<a class="headerlink" href="https://www.gimp.org/tutorials/Automate_Editing_in_GIMP/#further-reading" title="Permanent link">&#xB6;</a></h2>
+
+<p><a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US">
+<img class="cc-badge" src="http://i.creativecommons.org/l/by-sa/3.0/80x15.png" alt="Creative Commons By Share Alike">
+</a>
+<br><span><span class="caps">GIMP</span> Tutorial - Automate Editing</span> by <a rel="cc:attributionURL">Stephen Kiel</a> is licensed under a <a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US" rel="license">Creative Commons Attribution-ShareAlike 3.0 Unported License</a>. The code sources in this tutorial are licensed by Stephen Kiel under the conditions of the <a href="https://www.gnu.org/copyleft/gpl.html"><span class="caps">GNU</span> Public License <span class="caps">GPL</span> V3</a>.</p>
+ </div>
+ </div>
+</body></html>

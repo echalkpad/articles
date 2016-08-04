@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><head><title>You Are Most Likely Misusing Docker</title></head><body>
+<h1>You Are Most Likely Misusing Docker</h1><p><a href="http://www.mpscholten.de/docker/2016/01/27/you-are-most-likely-misusing-docker.html" target="_new">Original URL</a></p>
+<p><blockquote>Docker started as a tool to enable easier scaling of your applications. It was built to support the needs of a platform as a service provider[0]. Today docker is usually used to distribute&hellip;</blockquote></p>
+<div><article class="post-content">
+ <p>Docker started as a tool to enable easier scaling of your applications. It was built to support the needs of a platform as a service provider<a href="http://www.mpscholten.de/docker/2016/01/27/you-are-most-likely-misusing-docker.html#note-0">[0]</a>.</p>
+
+<p>Today docker is usually used to distribute applications instead of just for easier scaling. If you&#x2019;re using docker for your development environment you&#x2019;re probably not using docker for scaling, you&#x2019;re using it to get a reproducable development environment.</p>
+
+<h2 id="distributing-software-sucks">Distributing Software Sucks</h2>
+<p>Docker is used for distributing applications because distributing software sucks. Just look at how many different package managers there are: yum, apt-get, npm, composer, gem, cabal etc. Each language ecosystem now has it&#x2019;s own package manager. Basically each of these package managers are doing the same tasks: Ensuring that a dependency is available to a given application. Sometimes this means downloading binaries and putting them into the <code>PATH</code>, sometimes this means downloading javascript source code and making it available to the runtime environment.</p>
+
+<p>Many binary package managers are storing the installed packages in a global mutable package directory, e.g. <code>/usr/local/bin</code>. Let&#x2019;s say we have an application <code>A</code>, depending on ruby 1.8.1 which is installed in <code>/usr/local/bin</code> and available in the <code>PATH</code>. Now we want to install a different application <code>B</code> which requires ruby 2.2.1, thus we&#x2019;re going to upgrade ruby. Now <code>A</code> is broken because <code>A</code> is not compatible with the new ruby version. So by installing <code>B</code> we&#x2019;ve broken <code>A</code>. In other words: installing a package has side effects. This is because of the global mutable package directory.</p>
+
+<p>Because of these side effects you cannot <em>just install something</em>. You always have to worry about breaking your existing setup. This is why containers are awesome: You can play around and later just restart the container. You avoid the side effects of package managers by just shipping the final cake instead of the recipe to make it. It also means that the thing we want to run will just work. There are no errors because of missing dependencies.</p>
+
+<p>The down side is that the container will be huge in size. This means slow deployments and slower tools. The containers also usually contain an entire operating system. Think about it: You&#x2019;re running an operating system just to run containers with their own operating systems. This kind of feels dirty. But having side effects is also not very nice.</p>
+
+<p>So we&#x2019;re using containers to get reproducible builds and the magical &#x201C;it just works&#x201D; feeling. We&#x2019;re using containers to avoid the downsides of bad package managers.</p>
+
+<h2 id="welcome-to-the-future-nix">Welcome to the future: Nix</h2>
+
+<p>Nix is a package manager which breaks with the dogma of having a global mutable package directory. To cite the nix website:</p>
+
+<blockquote>
+ <p>Nix&#x2019;s purely functional approach ensures that installing or upgrading one package cannot break other packages. This is because it won&#x2019;t overwrite dependencies with newer versions that might cause breakage elsewhere. It allows you to roll back to previous versions, and ensures that no package is in an inconsistent state during an upgrade.</p>
+</blockquote>
+
+<p>Let us get back to the example applications <code>A</code> and <code>B</code>. With nix we can just say &#x201C;A needs ruby 1.8.1&#x201D; and &#x201C;B needs ruby 2.2.1&#x201D;. <a href="https://nixos.org/nix/manual/#sec-nix-shell">Nix can now run the applications with specific environments for each of the applications</a>. <code>A</code> has ruby 1.8.1 in it&#x2019;s <code>PATH</code> and <code>B</code> has ruby 2.2.1 in it&#x2019;s <code>PATH</code>.</p>
+
+<p>In the background nix is managing a <a href="https://nixos.org/nix/about.html">side effect free package store</a>. Two different ruby versions can live there because there is no global environment in the sense of typical package managers. A typical package manager is adding more and more stuff to the global <code>PATH</code>. Nix however is not adding stuff to the <code>PATH</code><a href="http://www.mpscholten.de/docker/2016/01/27/you-are-most-likely-misusing-docker.html#note-1">[1]</a>. To use a package you have to tell nix explicitly otherwise the package is not available to you.</p>
+
+<p>Because nix is side effect free you don not need containers to get reproducible builds. Nix removes the downsides of package management and thus replaces an integral part of what docker is used for today. You don&#x2019;t need to ship a second operating system with your containers when you can replace the whole container stuff with nix.</p>
+
+<p>There are some cases where containers makes sense. As already said scaling software with containers is easy. But most docker users are not having these kind of problems. They&#x2019;re into docker for the &#x201C;it just works&#x201D; feeling.</p>
+
+<p>Docker and nix are not even contrary. You can use nix to build your docker images. Now your developers can run your software without using docker because they can get the same setup as in the container running on their native machine while the production setup is using docker for easier scaling.</p>
+
+<h2 id="takeaways">Takeaways</h2>
+
+<p>Docker is for scaling, but is misused to distribute reproducible builds. The reason: Package management sucks and is unpredictable because of mutable global state which leads to side effects. Use a good package manager like nix for reproducible builds of your software and you most likely don&#x2019;t need docker anymore. A good package manager allows you to play around without breaking your environment, just like containers do.</p>
+
+<p><em><a href="https://nixos.org/nix/about.html">Learn more about nix here. You will not regret it.)</a></em></p>
+
+<p><em>Thanks for reading :) <a href="https://twitter.com/_marcscholten">Follow me on twitter</a> if you&#x2019;re interested in more of this stuff!</em></p>
+
+
+
+
+<p>[0] Initial docker was part of dotCloud, a platform-as-a-service company.</p>
+
+
+<p>[1] Except when using <a href="https://nixos.org/nix/manual/#sec-nix-env">nix-env</a>. But this is for users (e.g. you, when using the shell) and not applications.</p>
+
+</article>
+
+<p>
+ Hey! I&#x2019;m Marc, an eighteen years old software engineer located in Germany. <a href="http://www.mpscholten.de/about/">Learn more about me</a>.
+</p>
+</div>
+</body></html>

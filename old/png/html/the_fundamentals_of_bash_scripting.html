@@ -1,0 +1,291 @@
+<!DOCTYPE html><html><head><title>The Fundamentals of Bash Scripting</title></head><body>
+<h1>The Fundamentals of Bash Scripting</h1><p><a href="http://code.tutsplus.com/tutorials/the-fundamentals-of-bash-scripting--net-32093" target="_new">Original URL</a></p>
+<p><blockquote>Shell scripts are widely used in the UNIX world. They're excellent for speeding up repetitive tasks and simplifying complex execution logic. They can be as simple as a set of commands, or they can&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>Shell scripts are widely used in the UNIX world. They're excellent for speeding up repetitive tasks and simplifying complex execution logic. They can be as simple as a set of commands, or they can orchestrate complex tasks. In this tutorial, we'll learn more about the Bash scripting language by writing an example script step-by-step.</p>
+
+
+<h2>The Fizz-Buzz Problem</h2>
+<p>One of the best way to learn about a new language is by example. Let's start with one.</p>
+<p>The Fizz-Buzz problem is a very simple one. It became famous after a programmer, named Imran, used it as an interview test. It turns out that 90-99.5% of the candidates for a programming job are simply unable to write the simplest program. Imran took this simple Fizz-Buzz game and asked the candidates to solve it. Many followed Imran's example, and, today, it is one of the most asked frequently asked questions for a programming job. If you're hiring, and need a way to filter through 90% of the candidates, this is a great problem to present.</p>
+<p>Here are the rules:</p>
+<ul>
+<li>Take and print the numbers between 1 and 100.</li>
+<li>When a number is divisible by 3, print "Fizz" instead of the number.</li>
+<li>When it is divisible by 5, print "Buzz" instead.</li>
+<li>When it is divisible both by 3 and 5, print "FizzBuzz".</li>
+</ul>
+<p>That's all there is to it. I'm sure most of you can already visualize the two or three <code>if</code> statements to solve this. Let's work through this using the Bash scripting language.</p>
+
+<h2>Shebang</h2>
+<p>A shebang refers to the combination of the hash and exclamation mark characters: <code>&amp;num;!</code>. The program loader will look for a shebang on the first line of the script, and use the interpreter specified in it. A shebang consists of the following syntax: <code>&amp;num;!interpreter [parameters]</code>. The interpreter is the program that is used to interpret our language. For bash scripting, that would be <code>/bin/bash</code>. For example, if you want to create a script in PHP and run it in console, you'd probably want to use <code>/usr/bin/php</code> (or the path to the PHP executable on your machine) as the interpreter.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/usr/bin/php
+&lt;?php
+phpinfo();</pre>
+<p>Yes, that will actually work! Isn't it simple? Just be sure to make your file executable first. Once you do, this script will output your PHP information as you would expect.</p>
+<div class="tip-shortcode">
+<p><strong>Tip:</strong> To ensure that your script will work on as many systems as possible, you can use <code>/bin/env</code> in the shebang. As such, instead of <code>/bin/bash</code>, you could use <code>/bin/env bash</code>, which will work on systems where the bash executable is not within <code>/bin</code>.</p>
+</div>
+
+<h2>Outputting Text</h2>
+<p>The output of a script will be equal to, as you might expect, whatever is outputted from your command. However, if we explicitly want to write something to the screen, we can use <code>echo</code>.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+echo "Hello World"</pre>
+<p>Running this script will print "Hello World" in the console.</p>
+<pre class="brush: bash noskimlinks noskimwords">csaba@csaba ~ $ ./helloWorld.sh
+Hello World
+csaba@csaba ~ $</pre>
+
+<h2>Introducing Variables</h2>
+<p>As with any programming language, when writing shell scripts, you can use variables.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+message="Hello World"
+echo $message</pre>
+<p>This code produces exactly the same "Hello World" message. As you can see, to assign a value to a variable, simply write its name - exclude the dollar sign in front of it. Also, be careful with spaces; there can't be any spaces between the variable name and the equal sign. So <code>message="Hello"</code> instead of <code>message = 'Hello'</code></p>
+<p>When you wish to use a variable, you can take the value from it just as we did in the <code>echo</code> command. Prepending a <code>$</code> to the variable's name will return its value.</p>
+<div class="tip-shortcode">
+<p><strong>Tip:</strong> Semicolons aren't required in bash scripting. You can use them in most cases, but be careful: they may have a different meaning than what you expect.</p>
+</div>
+
+<h2>Printing the Numbers Between 1 and 100</h2>
+<p>Continuing on with our demo project, we need to cycle through all numbers between 1 and 100. For this, we'll need to use a <code>for</code> loop.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+for number in {1..100}; do
+ echo $number
+done</pre>
+<p>There are several new things worth noting in this example - which by the way, prints all the numbers from 1 to 100, one number at a time.</p>
+<ul>
+<li>The <code>for</code> syntax in Bash is: <code>for VARIABLE in RANGE; do COMMAND done</code>.</li>
+<li>The curly braces will transform <code>1..100</code> into a range in our example. They're used in other contexts as well, which we'll review shortly.</li>
+<li>
+<code>do</code> and <code>for</code> are actually two separate commands. If you want to place two commands on a single line, you'll need to separate them somehow. One way is to use semicolon. Alternatively you could write the code without a semicolon by moving <code>do</code> to the following line.</li>
+</ul>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+for number in {1..100}
+do
+ echo $number
+done</pre>
+
+<h2>The First Decision</h2>
+<p>Now that we know how to print all the numbers between 1 and 100, it's time to make our first decision.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+for number in {1..100}; do
+ if [ $((number%3)) -eq 0 ]; then
+ echo "Fizz"
+ else
+ echo $number
+ fi
+done</pre>
+<p>This example will output "Fizz" for numbers divisible by 3. Again, we have to deal with a bit of new syntax. Let's take them one by one.</p>
+<ul>
+<li>
+<code>if..then..else..fi</code> - this is the classic syntax for an <code>if</code> statement in Bash. Of course, the <code>else</code> part is optional - but required for our logic in this case.</li>
+<li>
+<code>if COMMAND-RETURN-VALUE; then...</code> - <code>if</code> will execute if the return value of the command is zero. Yes, logic in Bash is zero based, meaning that commands that execute successfully exit with a code of 0. If something goes wrong, on the other hand, a positive integer will be returned. To simplify things: anything other than 0 is considered <code>false</code>.</li>
+<li>Mathematical expressions in Bash are specified by double parentheses. <code>$((number%3))</code> will return the remaining value of dividing the variable, <code>number</code>, by 3. Please note that we did not use <code>$</code> inside the parenthesis - only in front of them.</li>
+</ul>
+<p>You might be wondering where the command is in our example. Isn't there just a bracket with an odd expression in it? Well, it turns out that <code>[</code> is actually an executable command. To play around with this, try out the following commands in your console.</p>
+<pre class="brush: bash noskimlinks noskimwords">csaba@csaba ~ $ which [
+/usr/bin/[
+csaba@csaba ~ $ [ 0 -eq 1 ]
+csaba@csaba ~ $ echo $?
+1
+csaba@csaba ~ $ [ 0 -eq 0 ]
+csaba@csaba ~ $ echo $?
+0</pre>
+<blockquote>
+<p><strong>Tip:</strong> A command's exit value is always returned into the variable, <code>?</code> (question mark). It is overwritten after each new command's execution.</p>
+</blockquote>
+
+<h2>Checking for Buzz</h2>
+<p>We're doing well so far. We have "Fizz"; now let's do the "Buzz" part.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+for number in {1..100}; do
+ if [ $((number%3)) -eq 0 ]; then
+ echo "Fizz"
+ elif [ $((number%5)) -eq 0 ]; then
+ echo "Buzz"
+ else
+ echo $number
+ fi
+done</pre>
+<p>Above, we've introduced another condition for divisibility by 5: the <code>elif</code> statement. This, of course, translates to <em>else if</em>, and will be executed if the command following it returns <code>true</code> (or <code>0</code>). As you can observe, the conditional statements within <code>[]</code> are usually evaluated with the help of parameters, such as <code>-eq</code>, which stands for "equals." </p>
+<blockquote>
+<p>For the syntax, <code>arg1 OP arg2</code>, <code>OP</code> is one of <code>-eq</code>, <code>-ne</code>, <code>-lt</code>, <code>-le</code>, <code>-gt</code>, or <code>-ge</code>. These arithmetic binary operators return <code>true</code> if <code>arg1</code> is equal to, not equal to, less than, less than or equal to, greater than, or greater than or equal to <code>arg2</code>, respectively.<code>arg1</code> and <code>arg2</code> may be positive or negative integers. - <em>Bash Manual</em></p>
+</blockquote>
+<p>When you're attempting to compare strings, you may use the well-known <code>==</code> sign, or even a single equal sign will do. <code>!=</code> returns <code>true</code> when the strings are different.</p>
+
+<h2>But the Code isn't Quite Correct</h2>
+<p>So far, the code runs, but the logic is not correct. When the number is divisible by both 3 and 5, our logic will echo only "Fizz." Let's modify our Code to satisfy the last requirement of FizzBuzz.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+for number in {1..100}; do
+ output=""
+ if [ $((number%3)) -eq 0 ]; then
+ output="Fizz"
+ fi
+ if [ $((number%5)) -eq 0 ]; then
+ output="${output}Buzz"
+ fi
+ if [ -z $output ]; then
+ echo $number
+ else
+ echo $output;
+ fi
+done</pre>
+<p>Again, we've had to make a handful of changes. The most notable one is the introduction of a variable, and then the concatenation of "Buzz" to it, if necessary. Strings in bash are typically defined between double quotes ("). Single quotes are usable as well, but for easier concatenation, doubles are the better choice. Within these double quotes, you can reference variables: <code>some text $variable some other text</code>" will replace <code>$variable</code> with its contents. When you want to concatenate variables with strings without spaces between them, you may prefer to put the variable's name within curly braces. In most cases, like PHP, you're not required to do so, but it helps a lot when it comes to the code's readability.</p>
+<div class="tip-shortcode">
+<p><strong>Tip:</strong> You can't compare empty strings. That would return a missing parameter.</p>
+</div>
+<p>Because arguments inside <code>[ ]</code> are treated as parameters, for <code>"["</code>, they must be different from an empty string. So this expression, even though logical, will output an error: <code>[ $output != "" ]</code>. That's why we've used <code>[ -z $output ]</code>, which returns <code>true</code> if the string has a length of zero. </p>
+
+<h2>Extract Method for Logical Expression</h2>
+<p>One way to improve our example is to extract into functions the mathematical expression from the <code>if</code> statements, like so:</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+function isDivisibleBy {
+ return $(($1%$2))
+}
+
+for number in {1..100}; do
+ output=""
+ if isDivisibleBy $number 3; then
+ output="Fizz"
+ fi
+ if isDivisibleBy $number 5; then
+ output="${output}Buzz"
+ fi
+ if [ -z $output ]; then
+ echo $number
+ else
+ echo $output;
+ fi
+done</pre>
+<p>We took the expressions comparing the rest with zero, and moved them into a function. Even more, we eliminated the comparison with zero, because zero means true for us. We only have to return the value from the mathematical expression - very simple!</p>
+<div class="tip-shortcode">
+<p><strong>Tip:</strong> A function's definition must precede its call.</p>
+</div>
+<p>In Bash, you can define a method as <code>function func_name { commands; }</code>. Optionally, there is a second syntax for declaring functions: <code>func_name () { commands; }</code>. So, we can drop the string, <code>function</code> and add <code>"()"</code> after its name. I personally prefer this option, as exemplified in the example above. It's more explicit and resembles traditional programming languages.</p>
+<p>You do not need to specify the parameters for a function in Bash. Sending parameters to a function is accomplished by simply enumerating over them after the function call separated by white spaces. Do not place commas or parenthesis in the function call - it won't work.</p>
+<p>Received parameters are automatically assigned to variables by number. The first parameter goes to <code>$1</code>, the second to <code>$2</code>, and so on. The special variable, <code>$0</code> refers the current script's file name.</p>
+<h3>Let's Play with Parameters</h3>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+function exampleFunc {
+ echo $1
+ echo $0
+ IFS="X"
+ echo "$@"
+ echo "$*"
+}
+
+exampleFunc "one" "two" "three"</pre>
+<p>This code will produce the following output:</p>
+<pre class="brush: bash noskimlinks noskimwords">csaba@csaba ~ $ ./parametersExamples.sh
+one
+./parametersExamples.sh
+one two thre
+oneXtwoXthre</pre>
+<p>Let's analyze the source, line by line.</p>
+<ul>
+<li>The last line is the function call. We call it with three string parameters.</li>
+<li>The first line after the shebang is the function definition.</li>
+<li>The first line in the function outputs the first parameter: "one". So far so simple.</li>
+<li>The second line outputs current script's file name. Again, very simple.</li>
+<li>The third line changes the default character separator to the letter, "X". By default, this is " " (a space). That's how Bash knows how the parameters are separated.</li>
+<li>The fourth line outputs a special variable, <code>$@</code>. It represents all the parameters as a single word, exactly as specified in the function call.</li>
+<li>The final line outputs another special variable, <code>$*</code>. It represents all the parameters, taken one-by-one and concatenated with the first letter of the IFS variable. That's why the result is <code>oneXtwoXthre</code>.</li>
+</ul>
+
+<h2>Returning Strings From Functions</h2>
+<p>As I noted earlier, functions in Bash can return only integers. As such, writing <code>return "a string"</code> would be invalid code. Still, in many situations, you need more than just a zero or one. We can refactor our FizzBuzz example so that, in the <code>for</code> statement, we will just make a function call.</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+function isDivisibleBy {
+ return $(($1%$2))
+}
+
+function fizzOrBuzz {
+ output=""
+ if isDivisibleBy $1 3; then
+ output="Fizz"
+ fi
+ if isDivisibleBy $1 5; then
+ output="${output}Buzz"
+ fi
+ if [ -z $output ]; then
+ echo $1
+ else
+ echo $output;
+ fi
+}
+
+for number in {1..100}; do
+ fizzOrBuzz $number
+done</pre>
+<p>Well, this is the first step. We just extracted all the code into a function, called <code>fizzOrBuzz</code>, and then replaced <code>$number</code> with <code>$1</code>. However, all outputting occurs in the <code>fizzOrBuzz</code> function. We want to output from the <code>for</code> loop with an <code>echo</code> statement, so that we can prepend each line with another string. We have to capture the <code>fizzOrBuzz</code> function's output.</p>
+<pre class="brush: bash noskimlinks noskimwords">#[...]
+for number in {1..100}; do
+ echo "-`fizzOrBuzz $number`"
+ fizzBuzzer=$(fizzOrBuzz $number)
+ echo "-${fizzBuzzer}"
+done</pre>
+<p>We've updated our <code>for</code> loop just a bit (no other changes). We've now echoed everything twice in two different ways to exemplify the differences between the two solutions to the same problem.</p>
+<p>The first solution to capture the output of a function or another command is to use backticks. In 99% of the cases, this will work just fine. You can simply reference a variable within backticks by their names, as we did with <code>$number</code>. The first few lines of the output should now look like:</p>
+<pre class="brush: bash noskimlinks noskimwords">csaba@csaba ~/Personal/Programming/NetTuts/The Basics of BASH Scripting/Sources $ ./fizzBuzz.sh
+-1
+-1
+-2
+-2
+-Fizz
+-Fizz
+-4
+-4
+-Buzz
+-Buzz
+-Fizz
+-Fizz
+-7
+-7</pre>
+<p>As you can see, everything is duplicated. Same output.</p>
+<p>For the second solution, we've chosen to first assign the return value to a variable. In that assignment, we used <code>$()</code>, which, in this case, forks the script, executes the code, and returns its output.</p>
+
+<h2>&amp;semi;, &amp;&amp; and ||</h2>
+<p>Do you remember that we used semicolon here and there? They can be used to execute several commands written on the same line. If you separate them by semicolons, they will just simply be executed.</p>
+<p>A more sophisticated case is to use <code>&amp;&amp;</code> between two commands. Yes, that's a logical AND; it means that the second command will be executed only if the first one returns <code>true</code> (it exits with 0). This is helpful; we can simplify the <code>if</code> statements into these shorthands:</p>
+<pre class="brush: bash noskimlinks noskimwords">#!/bin/bash
+
+function isDivisibleBy {
+ return $(($1%$2))
+}
+
+function fizzOrBuzz {
+ output=""
+ isDivisibleBy $1 3 &amp;&amp; output="Fizz"
+ isDivisibleBy $1 5 &amp;&amp; output="${output}Buzz"
+ if [ -z $output ]; then
+ echo $1
+ else
+ echo $output;
+ fi
+}
+
+for number in {1..100}; do
+ echo "-`fizzOrBuzz $number`"
+done</pre>
+<p>As our function, <code>isDivisibleBy</code> returns a proper return value, we can then use <code>&amp;&amp;</code> to set the variable we want. What's after <code>&amp;&amp;</code> will be executed only if the condition is <code>true</code>. In the same manner, we can use <code>||</code> (double pipe character) as a logical OR. Here's a quick example below.</p>
+<pre class="brush: bash noskimlinks noskimwords">csaba@csaba ~ $ echo "bubu" || echo "bibi"
+bubu
+csaba@csaba ~ $ echo false || echo "bibi"
+false
+csaba@csaba ~ $</pre>
+
+<h2>Final Thoughts</h2>
+<p>So that does it for this tutorial! I hope that you've picked up a handful of new tips and techniques for writing your own Bash scripts. Thanks for reading, and stay tuned for more advanced articles on this subject.</p>
+</div></div>
+</body></html>

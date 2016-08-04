@@ -1,0 +1,532 @@
+<!DOCTYPE html><html><head><title>WebGL For All</title></head><body>
+<h1>WebGL For All</h1><p><a href="http://ipestov.com/webgl-for-all/" target="_new">Original URL</a></p>
+<p><blockquote>I decided to write this article after trying to get known of WebGL for a long time. It turned out that people which didn't have any deals with 3D graphics before don't know how it actually works.&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p><img src="http://ipestov.com/content/images/2016/02/triangle-power.jpg" alt="WebGL For All"></p>
+
+<p>I decided to write this article after trying to get known of WebGL for a long time. It turned out that people which didn't have any deals with 3D graphics before don't know how it actually works.</p>
+
+<p>WebGL, not as JavaScript, is not very popular now and there are not too many articles about it. Most of posts skip too much information and go to the special library they want to cover. We all know that big and powerful instruments are not always useful for our specific tasks or do them slow and something like it.</p>
+
+<p>This article will take you through the <strong>basics of WebGL</strong> and tell you the starting point of learning it.</p>
+
+
+
+<p>WebGL was developed to draw graphics right in the browser using the video card ant not processor of the computer. If you don't know what does it mean the I suggest you seeing <a href="https://www.youtube.com/watch?v=-P28LKWTzrI">this</a> short video.</p>
+
+<p><strong>WebGL is based on OpenGL ES 2.0</strong> which is a special version for mobile devices. WebGL specs were released in 2011, they are developed by non-commercial Kronos Group. It is known that a new specs 2.0 are now being developed.</p>
+
+<p><img src="http://ipestov.com/content/images/2016/02/5da2fd9ae87941619424d82e8a48836d.png" alt="List of supported browsers">
+<em>List of supported browsers from <a href="http://caniuse.com">caniuse.com</a>.</em></p>
+
+<p><strong>WebGL is supported by most of current browsers (about 83%)</strong>. The positive fact is that you will support only newest browsers and will forget about scary ECMAScript 3.</p>
+
+<p>If you think that WebGL is painting in 3D then you're wrong. <strong>WebGL knows nothing about 3D</strong>. It's something like low-level 2D API and it can draw triangles only. But he can do it a lot and very fast.</p>
+
+<p>Do you want to have a square? Now problems, just connect two triangles.</p>
+
+<h2 id="howtodrawatriangle">How to draw a triangle</h2>
+
+<p>Because all shapes in WebGL are based on triangles we will describe how to work with them.</p>
+
+<p>Unlike OpenGL, WebGL uses only shaders. Shaders are not connected with shades or shading (as you might thought). Probably they were thought to paint shades but currently they are just painting all around.</p>
+
+<p>Actually <strong>shader is a program which is executed on your video card</strong> and it is written in GLSL. This language is rather easy and learning it is not a problem.</p>
+
+<p>There are two types of shaders: <em>apical</em> and <em>fragmental</em>. Let's see them one by one.</p>
+
+<p>To understand the nub of how apical shader works we will forget about our current topic. Imagine that we're painting a cube or any other shape with a set of vertices. To do that we have to set its geometry and it is done in coordinates. It would be hard to always calculate the position of each vertex so we ask the video card to do it instead of processor, so we have apical shader for it.</p>
+
+<p>It receives all coordinates of vertices and position of local coordinate system which is used to define all these dots. This shader is called for each vertex and calculates their positions and passes them to a <strong>fragmental shader</strong> then.</p>
+
+<p><strong>Apical shader</strong> always calculates vertices positions but it can do more tasks at the same time: for example, it can think about the angle of the light fall. Some enthusiasts do incredible things using apical shaders. See <a href="https://www.chromeexperiments.com/webgl">the examples</a>.</p>
+
+<p>We can't paint a shape by it's position only. We should also know of how to paint it so for this reason <strong>fragmental shader</strong> was developed. It is called for each dot of the shape and tells in what color should it be painted.</p>
+
+<p><img src="http://ipestov.com/content/images/2016/02/89627b5df212491aa031e6b33a3a1847.png" alt="Apical and fragmental shaders"> </p>
+
+ 
+
+<p><em>The example of how two types of shaders work</em>.</p>
+
+<p>How it was said before, shaders are written in <strong>GLSL</strong>. Let's see an example of the code.</p>
+
+<p>Apical shader example:</p>
+
+<pre><code>attribute vec3 a_position; 
+attribute vec3 a_color; 
+uniform vec3 u_position; 
+varying vec3 v_color;
+
+void main(void) { 
+ v_color = a_color;
+ gl_Position = vec4(u_position + a_position, 1.0);
+}
+</code></pre>
+
+<p>Fragmental shader example: </p>
+
+<pre><code>precision mediump float; 
+varying vec3 v_&#x441;olor;
+
+void main(void) { 
+ gl_FragColor = vec4(v_color.rgb, 1.0);
+}
+</code></pre>
+
+<p>The code has variables and the main function, which returns the result of the shader's work: <strong>l_Position</strong> is responsible for coordinates and <strong>gl_FragColor</strong> tells the needed color.</p>
+
+<p>Shaders have three types of variables which are given by the main program:</p>
+
+<ol>
+<li><strong>attributes</strong> are available only for apical shaders and are different for each of the vertex. </li>
+<li><strong>uniforms</strong> are available for both shaders and they're same for all calls. </li>
+<li><strong>varying</strong> are used to retrieve information from apical to fragmental shader.</li>
+</ol>
+
+<p>When calling fragmental shader for specific dot, the value of <strong>varying</strong> are linearly interpolated between the vertices of the triangle, in which our dot lies.</p>
+
+<p><img src="http://ipestov.com/content/images/2016/02/ddc37d94ec0a407285bc917870c26100.png" alt="Varying is calculated from the vertices variyng value"> </p>
+
+ 
+
+<p><em><strong>varying</strong> value is done by the value of the same variable for all three vertices</em>.</p>
+
+<p>Now we're going to initialize those shaders. First of all, we will get the context of WebGL: </p>
+
+<pre><code>var gl = canvas.getContext(&#x2018;webgl&#x2019;); 
+</code></pre>
+
+<p>Shaders' codes are defined as a simple line and should be compiled: </p>
+
+<pre><code>var vertexShader = gl.createShader(gl.VERTEX_SHADER); 
+gl.shaderSource(vertexShader, document.getElementById('vertexShader').text); 
+gl.compileShader(vertexShader);
+
+var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER); 
+gl.shaderSource(fragmentShader, document.getElementById('fragmentShader').text); 
+gl.compileShader(fragmentShader); 
+</code></pre>
+
+<p>There is a special program which connects two types of shaders: </p>
+
+<pre><code>var program = gl.createProgram(); 
+gl.attachShader(program, vertexShader); 
+gl.attachShader(program, fragmentShader); 
+gl.linkProgram(program); 
+</code></pre>
+
+<p>If <strong>uniform</strong> variables are connected directly with JavaScript variables, then for attributes we should use one special thing - <strong>buffer</strong>. Buffer's data is stored in video card memory which incredibly improves the speed of rendering.</p>
+
+<p>In this case we need:</p>
+
+<ol>
+<li>Vertices buffer for storing information about our dots. </li>
+<li>Colors buffer containing the info about colors we use.</li>
+</ol>
+
+<p>Now we are going to define the first buffer:</p>
+
+<p><img src="http://ipestov.com/content/images/2016/02/7e82b81e52b548719407bb80dc46e0bd.png" alt="Vertices buffer"> </p>
+
+ 
+
+<p><em>Our triangle geometry.</em></p>
+
+<p>It has the following coordinates:</p>
+
+<ul>
+<li>(0, 0, 0).</li>
+<li>(0.5, 1, 0).</li>
+<li>(1, 0, 0).</li>
+</ul>
+
+<p>Keep in mind that there are some specialities when working with buffers:</p>
+
+<ol>
+<li>We provide data in one array without nesting so in case of our triangle it would look like this: [0, 0, 0, 0.5, 1, 0, 1, 0, 0]. </li>
+<li>Our input should only contain of <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays">typed arrays</a>. </li>
+<li>Before sending, your have to define the type of buffer which you're going to use with <code>gl.bindBuffer</code>.</li>
+</ol>
+
+<p>This is how it should look in your program: </p>
+
+<pre><code>var vertexBuffer = gl.createBuffer(); 
+var vertices = [0, 0, 0, 0.5, 1, 0, 1, 0, 0]; 
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer); 
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW); 
+</code></pre>
+
+<p>Now we will create the second buffer with colors using the same method. We need to define the color for each vertex in RGB format where each component is between 0 and 1: </p>
+
+<pre><code>var colorBuffer = gl.createBuffer(); 
+var colors = [1, 0, 0, 0, 1, 0, 0, 0, 1]; 
+gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); 
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW); 
+</code></pre>
+
+<p>Finally, we have to combine it with our shaders code and call the painting method: </p>
+
+<pre><code>// Get position of variables in shaders program
+var uPosition = gl.getUniformLocation(program, 'u_position'); 
+var aPosition = gl.getAttribLocation(program, 'a_position'); 
+var aColor = gl.getAttribLocation(program, 'a_color');
+
+// Set which shader program are we going to use
+gl.useProgram(program);
+
+// Give our uniform variable the coordinates
+gl.uniform3fv(uPosition, [0, 0, 0]);
+
+// Combine colors data
+gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); 
+gl.enableVertexAttribArray(aColor); 
+// The second argument to pass the dimension, RGB has 3 components
+gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+// And vertices
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer); 
+gl.enableVertexAttribArray(aPosition); 
+gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+
+// Paint all around in white
+gl.clearColor(1.0, 1.0, 1.0, 1.0); 
+gl.clear(gl.COLOR_BUFFER_BIT);
+
+// Paint the triangle
+// The third argument is a number of vertices
+gl.drawArrays(gl.TRIANGLES, 0, 3); 
+</code></pre>
+
+<p>So we're done: <br>
+<img src="http://ipestov.com/content/images/2016/02/bede8f313f2b43c2b271fb1d6531569f.png" alt="Our triangle"> </p>
+
+ 
+
+<p><em>You can see the full source <a href="https://jsfiddle.net/Trufi/c11xno8j/">here</a>.</em></p>
+
+<p>How I've said before, pixels colors inside the triangle linearly interpolated between the colored vertices. We've just painted the easiest shape using WebGL and found out what shaders are and how to work with buffers. Let's get further.</p>
+
+<h2 id="howtopaintacubeandmakeitrotating">How To Paint A Cube And Make It Rotating</h2>
+
+<p>Now let's make it harder and create a 3D cube. It will be made of six edges, each has two triangles.</p>
+
+<p><img src="http://ipestov.com/content/images/2016/02/15c2b5127ee94e4eb462032e3aa1387f.png" alt="A cube"></p>
+
+
+
+<p>We will have to define coordinates for each vertex of each triangle. There are easier ways to do that but we will do it simple first: </p>
+
+<pre><code>var vertexBuffer = gl.createBuffer(); 
+var vertices = [ 
+ // Front edge
+ -1, -1, -1,
+ 1, -1, -1,
+ -1, -1, 1,
+
+ 1, -1, 1,
+ -1, -1, 1,
+ 1, -1, -1,
+
+ // Back edge
+ -1, 1, -1,
+ -1, 1, 1,
+ 1, 1, -1,
+
+ 1, 1, 1,
+ 1, 1, -1,
+ -1, 1, 1,
+
+ // Lower edge
+ -1, -1, -1,
+ -1, 1, -1,
+ 1, -1, -1,
+
+ 1, 1, -1,
+ 1, -1, -1,
+ -1, 1, -1,
+
+ // Upper edge
+ -1, -1, 1,
+ 1, -1, 1,
+ -1, 1, 1,
+
+ 1, 1, 1,
+ -1, 1, 1,
+ 1, -1, 1,
+
+ // Left edge
+ -1, -1, -1,
+ -1, -1, 1,
+ -1, 1, -1,
+
+ -1, 1, 1,
+ -1, 1, -1,
+ -1, -1, 1,
+
+ // Right edge
+ 1, -1, -1,
+ 1, 1, -1,
+ 1, -1, 1,
+
+ 1, 1, 1,
+ 1, -1, 1,
+ 1, 1, -1
+];
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer); 
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW); 
+</code></pre>
+
+<p>And the colors buffer:</p>
+
+<ol>
+<li>(1, 0.5, 0.5). </li>
+<li>(0.5, 0.7, 1). </li>
+<li>(0.3, 1, 0.3).</li>
+</ol>
+
+<p>Another easy way to do it: </p>
+
+<pre><code>var colorBuffer = gl.createBuffer(); 
+var colors = [ 
+ // Front edge
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+
+ // Back edge
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+ 1, 0.5, 0.5,
+
+ // Lower edge
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+
+ // Upper edge
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+ 0.5, 0.7, 1,
+
+ // Left edge
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+
+ // Right edge
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3,
+ 0.3, 1, 0.3
+];
+gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); 
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW); 
+</code></pre>
+
+<p>The position of the triangle in space was set by the vector of third dimension. But the figure can not only change position, it can still be rotated and scaled. Therefore, in three-dimensional graphics is not used the vector, but the matrix.</p>
+
+<p>It is known that the rotation matrix in three-dimensional space is defined by using a <strong>3&#xD7;3 matrix</strong>. This position vector is added to the matrix, thus eventually uses <strong>4&#xD7;4 matrix</strong>.</p>
+
+<p><strong>WebGL does not help us to work with matrices</strong>, therefore, not to spend a lot of time on them, we will use a fairly well-known library <a href="http://glmatrix.net/">glMatrix</a>. Let's create with it an identity matrix:</p>
+
+<pre><code>var cubeMatrix = mat4.create(); 
+</code></pre>
+
+<p>To draw a 3D object, we need to introduce the concept of the camera. The camera, as well as any object has its own position in space. It also determines which objects are visible on the screen, and is responsible for the conversion of the figures so that on the screen we create the <strong>illusion of 3D</strong>.</p>
+
+<p><img src="http://ipestov.com/content/images/2016/02/dce43bf2775e45b59838f9fba410871e.png" alt="The prospect of the cube on the screen"></p>
+
+
+
+<p><em>The prospect of the cube on the screen.</em></p>
+
+<p>Perspective matrix is responsible during this transformation. With <strong>glMatrix</strong> it is created in two lines: </p>
+
+<pre><code>var cameraMatrix = mat4.create(); 
+mat4.perspective(cameraMatrix, 0.785, window.innerWidth / window.innerHeight, 0.1, 1000); 
+</code></pre>
+
+<p><code>mat4.perspective(matrix, fov, aspect, near, far)</code> takes 5 parameters:</p>
+
+<ul>
+<li><strong>matrix</strong> &#x2014; the matrix you want to edit.</li>
+<li><strong>fov</strong> &#x2014; viewing angle in radians.</li>
+<li><strong>aspect</strong> &#x2014; the proportion of the sides.</li>
+<li><strong>near</strong> &#x2014; minimum distance to the objects that will be visible.</li>
+<li><strong>far</strong> &#x2014; maximum distance to the objects that will be visible.</li>
+</ul>
+
+<p>To make cube image comes into the camera, move the camera on the Z axis: </p>
+
+<pre><code>mat4.translate(cameraMatrix, cameraMatrix, [0, 0, -5]); 
+</code></pre>
+
+<p>In contrast to the triangle in the cube are used shaders matrix position and camera matrix in addition:</p>
+
+<p>Vertex shader: </p>
+
+<pre><code>attribute vec3 a_position; 
+attribute vec3 a_color; 
+uniform mat4 u_cube; 
+uniform mat4 u_camera; 
+varying vec3 v_color; 
+void main(void) { 
+ v_color = a_color;
+ gl_Position = u_camera articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii u_cube articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii vec4(a_position, 1.0);
+}
+</code></pre>
+
+<p>Fragmental shader: </p>
+
+<pre><code>precision mediump float; 
+varying vec3 v_color; 
+void main(void) { 
+ gl_FragColor = vec4(v_color.rgb, 1.0);
+}
+</code></pre>
+
+<p>Shaders Initialization occurs just as in the case of a triangle: </p>
+
+<pre><code>var vertexShader = gl.createShader(gl.VERTEX_SHADER); 
+gl.shaderSource(vertexShader, document.getElementById('vertexShader').text); 
+gl.compileShader(vertexShader);
+
+var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER); 
+gl.shaderSource(fragmentShader, document.getElementById('fragmentShader').text); 
+gl.compileShader(fragmentShader);
+
+var program = gl.createProgram(); 
+gl.attachShader(program, vertexShader); 
+gl.attachShader(program, fragmentShader); 
+gl.linkProgram(program);
+
+var uCube = gl.getUniformLocation(program, 'u_cube'); 
+var uCamera = gl.getUniformLocation(program, 'u_camera'); 
+var aPosition = gl.getAttribLocation(program, 'a_position'); 
+var aColor = gl.getAttribLocation(program, 'a_color'); 
+</code></pre>
+
+<p>To cube is not standing still, and to make it rotated, it is necessary to constantly change its position and to update the frame. Updating occurs using <code>requestAnimationFrame</code> function.</p>
+
+<p>Unlike other similar methods, <code>requestAnimationFrame</code> calls the passed function only when the video card is free and ready for rendering the next frame.</p>
+
+<pre><code>// Create the identity matrix cube position
+var cubeMatrix = mat4.create();
+
+// Let us remember the last frame rendering
+var lastRenderTime = Date.now();
+
+function render() { 
+ // Requesting rendering the next frame
+ requestAnimationFrame(render);
+
+ // Get the time elapsed since the last frame
+ var time = Date.now();
+ var dt = lastRenderTime - time;
+
+ // Rotate the cube relative to the Y axis
+ mat4.rotateY(cubeMatrix, cubeMatrix, dt / 1000);
+ // Rotate the cube relative to the Z axis
+ mat4.rotateZ(cubeMatrix, cubeMatrix, dt / 1000);
+
+ // Paint all around in white
+ gl.clearColor(1.0, 1.0, 1.0, 1.0);
+ gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+ // Enable filter depth
+ gl.enable(gl.DEPTH_TEST);
+
+ gl.useProgram(program);
+
+ gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+ gl.enableVertexAttribArray(aPosition);
+ gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+
+ gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+ gl.enableVertexAttribArray(aColor);
+ gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+ gl.uniformMatrix4fv(uCube, false, cubeMatrix);
+ gl.uniformMatrix4fv(uCamera, false, cameraMatrix);
+
+ gl.drawArrays(gl.TRIANGLES, 0, 36);
+
+ lastRenderTime = time;
+}
+
+render(); 
+</code></pre>
+
+<p>Get a spinning cube: <br>
+<img src="http://ipestov.com/content/images/2016/02/18f45fe19dae45639cf96c63d0d2341c.png" alt="A spinning cube"></p>
+
+
+
+<p><em>You can see the full source code <a href="https://jsfiddle.net/Trufi/r36cw20t/">here</a>.</em></p>
+
+<p>We learned how to draw a simple cube, understood how to get it rotating and got acquainted with the concepts of the matrix and the position of the camera.</p>
+
+<h2 id="howtodebug">How To Debug</h2>
+
+<p>Since part of the program which works with WebGL is executed on the side of video card, the debugging process is much more complicated. <br>
+No familiar tools as <strong>DevTools</strong> and even <strong>console.log</strong>. <br>
+On the internet there are a lot of articles and papers, but here I give the basics.</p>
+
+<p>To understand that the shader code was written with an error, the following method can be used when compiling the shader: </p>
+
+<pre><code>if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) { 
+ console.log(gl.getShaderInfoLog(vertexShader));
+}
+
+if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) { 
+ console.log(gl.getShaderInfoLog(fragmentShader));
+}
+
+if (!gl.getProgramParameter(program, gl.LINK_STATUS)) { 
+ console.log('Could not initialize shaders');
+}
+</code></pre>
+
+<p>There is also a special extension for the browser <a href="https://benvanik.github.io/WebGL-Inspector/">WebGL-Inspector</a>. It allows you to keep track of loaded shaders, buffers, textures, graphics card and calls of WebGL methods.</p>
+
+<p>Still there is Shader Editor, in Firefox Dev Tools this functionality built already in and there is a Chrome <a href="https://github.com/spite/ShaderEditorExtension">extension</a> that allows you to edit shader code directly in the application.</p>
+
+<h2 id="wheretogo">Where To Go</h2>
+
+<p>In this article I have tried to highlight the main points which may cause difficulties while studying WebGL. Despite the fact that different vectors are used, projection and matrixes, to know how things work inside is optionally. WebGL is a great tool for a multitude of tasks, and you can use it not only in game development. Do not be afraid to try something new, to discover new technologies and experiment.</p>
+
+<p>Finally - a list of useful resources where you can continue to explore WebGL.</p>
+
+<ul>
+<li>The full source of <a href="https://jsfiddle.net/Trufi/c11xno8j/">triangle</a> and <a href="https://jsfiddle.net/Trufi/r36cw20t/">cube</a>.</li>
+<li>Summary of WebGL from Kronos Group website.</li>
+<li>For a more detailed study it is recommended to take a series of WebGL Learning lessons.</li>
+<li>Free course on the basics of 3D on <a href="https://www.udacity.com/course/interactive-3d-graphics--cs291">Udacity</a>. Although they use three.js library, it will be useful to all.</li>
+<li>Report by Vladimir Agafonkin about <a href="https://www.youtube.com/watch?v=yMmyzzApGy4">WebGL and Mapbox</a> at Frontend Dev Conf.</li>
+<li><a href="https://docs.google.com/presentation/d/12AGAUmElB0oOBgbEEBfhABkIMCL3CUX7kdAPLuwZ964/edit#slide=id.i8">Slides of the report</a> "Debugging and Optimizing WebGL Applications".</li>
+</ul>
+
+<p><strong>Original article was written by great 2Gis team on <a href="http://habrahabr.ru/company/2gis/blog/273735/">Habrahabr</a></strong>.</p>
+ </section>
+
+ 
+ </div>
+</body></html>

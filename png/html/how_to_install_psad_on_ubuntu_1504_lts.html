@@ -1,0 +1,173 @@
+<!DOCTYPE html><html><head><title>How to Install PSAD on Ubuntu 15.04 LTS</title></head><body>
+<h1>How to Install PSAD on Ubuntu 15.04 LTS</h1><p><a href="http://linoxide.com/ubuntu-how-to/install-psad-ubuntu-15-04-lts/" target="_new">Original URL</a></p>
+<p><blockquote>As name indicate, Port Scan Attack Detection (PSAD) tool is used to block port scanning on the server. Nmap, a well-known tool is mostly used for launching port scan to detect open/close ports. PSAD&hellip;</blockquote></p>
+<div><div class="entry">
+
+
+
+							
+
+
+
+							
+
+
+							
+
+
+							<p>As name indicate, Port Scan Attack Detection (PSAD) tool is used to block port scanning on the server. Nmap, a well-known tool is mostly used for launching port scan to detect open/close ports. PSAD tool continuously&#xA0; monitors&#xA0; firewall (iptables in case of linux platform) logs to determine port scan or any other attack occurred. In case of successful attack on the server, PSAD also takes action to deter the threat.</p>
+<p>In this article, we will install and configure PSAD on Ubuntu 15.04 VM. Currently we are running following services on&#xA0; VM.</p>
+<ol>
+<li>Web server (port 80)</li>
+<li>FTP server&#xA0; (port 21)</li>
+<li>ssh server (port 22)</li>
+</ol>
+<p>Netstat and telnet commands are used to check ports status against above mention services.</p>
+<p>Web service (Apache)</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/apache.png"><img class="aligncenter wp-image-13008" src="http://blog.linoxide.com/wp-content/uploads/2016/02/apache.png" alt="apache" width="525"></a></p>
+<p>Ftp service (vsftpd)</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/ftp.png"><img class="aligncenter wp-image-13009" src="http://blog.linoxide.com/wp-content/uploads/2016/02/ftp.png" alt="ftp" width="695"></a></p>
+<p>Ssh service (Secure shell)</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/sshd.png"><img class="aligncenter wp-image-13010" src="http://blog.linoxide.com/wp-content/uploads/2016/02/sshd.png" alt="sshd" width="643"></a></p>
+<h2>Installation</h2>
+<p>The detail of VM setting are given in figure 1 and the ip address is 192.168.1.111.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/vm-setting.png"><img class="aligncenter wp-image-13007" src="http://blog.linoxide.com/wp-content/uploads/2016/02/vm-setting.png" alt="vm setting" width="447"></a></p>
+<p>IPtables (known as linux firewall) package is pre-installed on all linux platforms. Therefore, install PSAD package on VM. It can be installed from source code or binary package. In this article, we will install PSAD package from Ubuntu repository. First of all, run package update command then install PSAD package&#xA0; using following command.</p>
+<blockquote><p>$sudo apt-get update</p></blockquote>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/apt-get-update.png"><img class="aligncenter wp-image-13011" src="http://blog.linoxide.com/wp-content/uploads/2016/02/apt-get-update.png" alt="apt-get update" width="502"></a></p>
+<blockquote><p>$sudo apt-get install psad</p></blockquote>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-instalation.png"><img class="aligncenter wp-image-13012" src="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-instalation.png" alt="psad instalation" width="683"></a></p>
+<p>PSAD package required many dependencies which are resolved automatically in case of installation from Ubuntu repository. However, PSAD installation from source cod required several perl packages.</p>
+<p>During installation of package, PSAD prompts for mail server configuration which is shown below. In this article, we have not setup any SMTP server for emails alert.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/email.png"><img class="aligncenter wp-image-13013" src="http://blog.linoxide.com/wp-content/uploads/2016/02/email.png" alt="email" width="447"></a></p>
+<h2>Configuration</h2>
+<p>PSAD&#xA0; uses firewall (iptables) logs to detect any malicious activity on the machine.&#xA0; Following commands will enable logging of packets on input &amp; forward chains of iptables.</p>
+<blockquote><p>$sudo iptables -A INPUT -j LOG</p>
+<p>$sudo iptables -A FORWARD -j LOG</p></blockquote>
+<p>After enabling logs for both chains, run following command to list the current configuration of iptables.</p>
+<blockquote><p>$sudo iptables -L</p></blockquote>
+<p>Output of the above command will be similar shown below.</p>
+<blockquote>
+<pre><em>Chain INPUT (policy ACCEPT)</em>
+<em>target&#xA0;&#xA0;&#xA0;&#xA0; prot opt source&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; destination</em>
+<em>LOG&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; all&#xA0; --&#xA0; anywhere&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; anywhere&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; LOG level warning</em>
+
+<em>Chain FORWARD (policy ACCEPT)</em>
+<em>target&#xA0;&#xA0;&#xA0;&#xA0; prot opt source&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; destination</em>
+<em>LOG&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; all&#xA0; --&#xA0; anywhere&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; anywhere&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; LOG level warning</em>
+<em>Chain OUTPUT (policy ACCEPT)</em>
+<em>target&#xA0;&#xA0;&#xA0;&#xA0; prot opt source&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; destination
+
+</em></pre>
+</blockquote>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/logs.png"><img class="aligncenter wp-image-13022" src="http://blog.linoxide.com/wp-content/uploads/2016/02/logs.png" alt="logs" width="514"></a></p>
+<p>PSAD configuration file, snort rules &amp; signatures are under <strong>/etc/psad</strong> directory on Ubuntu platform.&#xA0; PSAD configuration file is <strong>/etc/psad/psad.conf</strong>&#xA0; and it has many parameter to change while deploying on production server. However, in this article, we will change few settings of PSAD so that it detects iptables logs and takes necessary action to deter attack.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/configuration-psad.png"><img class="aligncenter wp-image-13023" src="http://blog.linoxide.com/wp-content/uploads/2016/02/configuration-psad.png" alt="configuration psad" width="637"></a></p>
+<blockquote><p><span>EMAIL_ADDRESSES&#xA0;&#xA0; root@localhost; ##change it to get psad alerts </span></p>
+<p><span>HOSTNAME&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; test-machine; #set host name</span></p>
+<p><span>HOME_NET&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 192.168.1.0/24; # Set LAN network </span></p>
+<p><span>EXTERNAL_NET&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; any; # Set Wan network </span></p>
+<p><span>ENABLE_SYSLOG_FILE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; Y; #by default set yes</span></p></blockquote>
+<p>One of the important configuration of PSAD is the setting&#xA0;<strong><code>IPT_SYSLOG_FILE</code></strong> parameter.By default,it search for logs in&#xA0; <strong>/var/log/messages.</strong> However, syslog on Ubuntu is <strong>/var/log/syslog</strong> therefore change path so that PSAD detects malicious activity .</p>
+<blockquote><p><span>IPT_SYSLOG_FILE&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; /var/log/syslog;</span></p></blockquote>
+<p>We are using PSAD as IDS/IPS therefore we have to enable&#xA0; <strong>ENABLE_AUTO_IDS&#xA0;<code></code></strong> parameter in <strong>psad.conf</strong> file.&#xA0; It will automatically change the iptables rules to block scan from attacker.</p>
+<blockquote><p><span>ENABLE_AUTO_IDS Y;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; # disable by default</span></p>
+<p><span>AUTO_IDS_DANGER_LEVEL 1;&#xA0; #By default level is 5</span></p></blockquote>
+<p>Basic setting of PSAD is complete, now update the signatures so that it can correctly recognize known attack types.</p>
+<blockquote><p><code>sudo psad --sig-update</code></p></blockquote>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-update.png"><img class="wp-image-13025 aligncenter" src="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-update.png" alt="psad update" width="722"></a></p>
+<p>Before starting PSAD on the machine, scan server using Nmap tool. Output of scanner shows following port are open on the machine.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/nmap-logs.png"><img class="aligncenter wp-image-13026" src="http://blog.linoxide.com/wp-content/uploads/2016/02/nmap-logs.png" alt="nmap logs" width="638"></a></p>
+<p>Now start PSAD tool using following command and also check status which is shown in following figure.</p>
+<blockquote><p># /etc/init.d/psad start</p>
+<p>#psad -S</p></blockquote>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-start.png"><img class="aligncenter wp-image-13027" src="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-start.png" alt="psad start" width="701"></a></p>
+<p>After enabling PSAD, no open port detected by Nmap scanner which is also shown in following figure.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/blocked-by-psad.png"><img class="aligncenter wp-image-13028" src="http://blog.linoxide.com/wp-content/uploads/2016/02/blocked-by-psad.png" alt="blocked by psad" width="535"></a></p>
+<p>Attacker&#xA0; (ip address is 192.168.1.102) is blocked by PSAD by adding drop rule in the iptables.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/no-more-pin.png"><img class="aligncenter size-full wp-image-13029" src="http://blog.linoxide.com/wp-content/uploads/2016/02/no-more-pin.png" alt="no more pin" width="457"></a></p>
+<p>Iptables rule against 192.168.1.102 address is shown in following figure.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/attacker-ip-blocked.png"><img class="aligncenter wp-image-13030" src="http://blog.linoxide.com/wp-content/uploads/2016/02/attacker-ip-blocked.png" alt="attacker ip blocked" width="699"></a></p>
+<p>Detailed output of PSAD is shown in following figures.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-1.png"><img class="aligncenter wp-image-13031" src="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-1.png" alt="psad-1" width="578"></a></p>
+<p>Port scan by the attacker is shown in PSAD output.</p>
+<p><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-2.png"><img class="aligncenter wp-image-13032" src="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-2.png" alt="psad-2" width="389"></a></p>
+<p>Attacker IP is shown in the following output of PSAD.</p>
+<h2><a href="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-3.png"><img class="aligncenter wp-image-13033" src="http://blog.linoxide.com/wp-content/uploads/2016/02/psad-3.png" alt="psad-3" width="566"></a></h2>
+<h2>Conclusion</h2>
+<p>In this article, we explored a well-known open source tool PSAD for blocking of port scan on servers. PSAD is complete IDS/IPS which automatically adds attacker ip address in the firewall rules. Attacker uses port scanner to get preliminary information about the server to launch further attacks therefore it is very important to block port scan automatically.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+							
+
+
+
+							
+
+
+							
+							<p class="cats"><strong>Category</strong>: <a href="http://linoxide.com/category/security/" rel="category tag">SECURITY</a>, <a href="http://linoxide.com/category/ubuntu-how-to/" rel="category tag">UBUNTU HOWTO</a></p>
+
+
+
+						</div>
+
+
+
+						
+
+
+						
+
+
+						
+
+
+
+
+
+	
+
+
+
+
+					</div>
+</body></html>

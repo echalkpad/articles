@@ -1,0 +1,235 @@
+<!DOCTYPE html><html><head><title>25 Useful IPtable Firewall Rules Every Linux Administrator Should Know</title></head><body>
+<h1>25 Useful IPtable Firewall Rules Every Linux Administrator Should Know</h1><p><a href="http://www.tecmint.com/linux-iptables-firewall-rules-examples-commands/" target="_new">Original URL</a></p>
+<p><blockquote>Managing network traffic is one of the toughest jobs a system administrators has to deal with. He must configure the firewall in such a way that it will meet the system and users requirements for&hellip;</blockquote></p>
+<div><div class="entry-inner">
+							<p><a href="http://www.tecmint.com/manage-and-limit-downloadupload-bandwidth-with-trickle-in-linux/" target="_blank">Managing network traffic</a> is one of the toughest jobs a system administrators has to deal with. He must <a href="http://www.tecmint.com/configure-iptables-firewall/" target="_blank">configure the firewall</a> in such a way that it will meet the system and users requirements for both incoming and outgoing connections, without leaving the system vulnerable to attacks.</p>
+<div id="attachment_19230" class="wp-caption aligncenter"><a href="http://www.tecmint.com/wp-content/uploads/2016/03/iptables-Firewall-Rules-for-Linux.png" rel="attachment wp-att-19230"><img class="size-full wp-image-19230" src="http://www.tecmint.com/wp-content/uploads/2016/03/iptables-Firewall-Rules-for-Linux.png" alt="25 IPtables Firewall Rules for Linux" width="720"></a><p class="wp-caption-text">25 IPtables Firewall Rules for Linux</p></div>
+<p>This is where <code>iptables</code> come in handy. <strong>Iptables</strong> is a Linux command line firewall that allows system administrators to manage incoming and outgoing traffic via a set of configurable table rules.</p>
+<p><strong>Iptables</strong> uses a set of tables which have chains that contain set of built-in or user defined rules.&#xA0;Thanks to them a system administrator can properly filter the network traffic of his system.</p>
+<p>Per iptables manual, there are currently 3 types of tables:</p>
+<ol>
+<ol>
+<li><code>FILTER</code>&#xA0;&#x2013; this is the default table, which contains the built in chains for:
+<ol>
+<li><strong>INPUT</strong> &#xA0;&#x2013; packages destined for local sockets</li>
+<li><strong>FORWARD</strong> &#x2013; packets routed through the system</li>
+<li><strong>OUTPUT</strong> &#x2013; packets generated locally</li>
+</ol>
+</li>
+<li><code>NAT</code> &#x2013; a table that is consulted when a packet tries to create a new connection. It has the following built-in:
+<ol>
+<li><strong>PREROUTING</strong> &#x2013; used for altering a packet as soon as it&#x2019;s received</li>
+<li><strong>OUTPUT</strong> &#x2013; used for altering locally generated packets</li>
+<li><strong>POSTROUTING</strong> &#x2013; used for altering packets as they are about to go out</li>
+</ol>
+</li>
+<li><code>MANGLE</code> &#x2013; this table is used for packet altering. Until kernel version <strong>2.4</strong> this table had only two chains, but they are now 5:
+<ol>
+<li><strong>PREROUTING</strong> &#x2013; for altering incoming connections</li>
+<li><strong>OUTPUT</strong> &#x2013; for altering locally generated &#xA0;packets</li>
+<li><strong>INPUT</strong> &#x2013; for incoming packets</li>
+<li><strong>POSTROUTING</strong> &#x2013; for altering packets as they are about to go out</li>
+<li><strong>FORWARD</strong> &#x2013; for packets routed through the box</li>
+</ol>
+</li>
+</ol>
+</ol>
+<ins class="adsbygoogle"></ins><p>In this article, you will see some useful commands that will help you manage your Linux box firewall through iptables. For the purpose of this article, I will start with simpler commands&#xA0;and go to more complex to the end.</p>
+<h3>1. Start/Stop/Restart Iptables Firewall</h3>
+<p>First, you should know how to manage iptables&#xA0;service in different&#xA0;Linux distributions. This is fairly easy:</p>
+<h4>On SystemD based Linux Distributions</h4>
+<pre>------------ <strong>On Cent/RHEL 7 and Fedora 22+</strong> ------------
+# systemctl start iptables
+# systemctl stop iptables
+# systemctl restart iptables
+</pre>
+<h4>On SysVinit based Linux Distributions</h4>
+<pre>------------ <strong>On Cent/RHEL 6/5 and Fedora</strong> ------------
+# /etc/init.d/iptables start 
+# /etc/init.d/iptables stop
+# /etc/init.d/iptables restart
+</pre>
+<h3>2. Check all IPtables Firewall Rules</h3>
+<p>If you want to check your existing rules, use the following command:</p>
+<pre># iptables -L -n -v
+</pre>
+<p>This should return output similar to the one below:</p>
+<pre>Chain INPUT (policy ACCEPT 1129K packets, 415M bytes)
+ pkts bytes target prot opt in out source destination 
+ 0 0 ACCEPT tcp -- lxcbr0 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii 0.0.0.0/0 0.0.0.0/0 tcp dpt:53
+ 0 0 ACCEPT udp -- lxcbr0 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii 0.0.0.0/0 0.0.0.0/0 udp dpt:53
+ 0 0 ACCEPT tcp -- lxcbr0 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii 0.0.0.0/0 0.0.0.0/0 tcp dpt:67
+ 0 0 ACCEPT udp -- lxcbr0 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii 0.0.0.0/0 0.0.0.0/0 udp dpt:67</pre>
+<pre>Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target prot opt in out source destination 
+ 0 0 ACCEPT all -- articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii lxcbr0 0.0.0.0/0 0.0.0.0/0 
+ 0 0 ACCEPT all -- lxcbr0 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii 0.0.0.0/0 0.0.0.0/0</pre>
+<pre>Chain OUTPUT (policy ACCEPT 354K packets, 185M bytes)
+ pkts bytes target prot opt in out source destination</pre>
+<p>If you prefer to check the rules for a specific table, you can use the <code>-t</code> option followed by the table which you want to check. For example, to check the rules in the <code>NAT</code> table, you can use:</p>
+<pre># iptables -t nat -L -v -n
+</pre>
+<h3>3. Block Specific IP Address in IPtables Firewall</h3>
+<p>If you find an unusual or abusive activity from an IP address you can block that IP address with the following rule:</p>
+<pre># iptables -A INPUT -s xxx.xxx.xxx.xxx -j DROP
+</pre>
+<p>Where you need to change <code>"xxx.xxx.xxx.xxx"</code> with the actual IP address. Be very careful when running this command as you can accidentally block your own IP address. The <code>-A</code> option appends the rule in the end of the selected chain.</p>
+<p>In case you only want to block <strong>TCP</strong> traffic from that IP address, you can use the <code>-p</code> option that specifies the protocol. That way the command will look like this:</p>
+<pre># iptables -A INPUT -p tcp -s xxx.xxx.xxx.xxx -j DROP
+</pre>
+<h3>4. Unblock IP Address in IPtables Firewall</h3>
+<p>If you have decided that you no longer want to block requests from specific IP address, you can delete the blocking rule with the following command:</p>
+<pre># iptables -D INPUT -s xxx.xxx.xxx.xxx -j DROP
+</pre>
+<p>The <code>-D</code> option deletes one or more rules from the selected chain. If you prefer to use the longer option you can use <code>--delete</code>.</p>
+<h3>5. Block Specific Port on IPtables Firewall</h3>
+<p>Sometimes you may want to block incoming or outgoing connections on a specific port. It&#x2019;s a good security measure and you should really think on that matter when setting up your firewall.</p>
+<p>To block outgoing connections on a specific port use:</p>
+<pre># iptables -A OUTPUT -p tcp --dport xxx -j DROP
+</pre>
+<p>To allow incoming connections use:</p>
+<pre># iptables -A INPUT -p tcp --dport xxx -j ACCEPT
+</pre>
+<p>In both examples change <code>"xxx"</code> with the actual port you wish to allow. If you want to block <strong>UDP</strong> traffic instead of <strong>TCP</strong>, simply change <code>"tcp"</code> with <code>"udp"</code> in the above iptables rule.</p>
+<h3>6. Allow Multiple Ports on IPtables using Multiport</h3>
+<p>You can allow multiple ports at once, by using <strong>multiport</strong>, below you can find such rule for both incoming and outgoing connections:</p>
+<pre># iptables -A INPUT -p tcp -m multiport --dports 22,80,443 -j ACCEPT
+# iptables -A OUTPUT -p tcp -m multiport --sports 22,80,443 -j ACCEPT
+</pre>
+<h3>7. Allow Specific Network Range on Particular Port on IPtables</h3>
+<p>You may want to limit certain connections on specific port to a given network. Let&#x2019;s say you want to allow outgoing connections on port <code>22</code> to network <code>192.168.100.0/24</code>.</p>
+<p>You can do it with this command:</p>
+<pre># iptables -A OUTPUT -p tcp -d 192.168.100.0/24 --dport 22 -j ACCEPT
+</pre>
+<h3>8. Block Facebook on IPtables Firewall</h3>
+<p>Some employers like to block access to <strong>Facebook</strong> to their employees. Below is an example how to block traffic to Facebook.</p>
+<p><strong>Note</strong>: If you are a system administrator and need to apply these rules, keep in mind that your colleagues may stop talking to you :)</p>
+<p>First find the IP addresses used by Facebook:</p>
+<pre># host facebook.com 
+facebook.com has address 66.220.156.68
+</pre>
+<pre># whois 66.220.156.68 | grep CIDR
+CIDR: 66.220.144.0/20
+</pre>
+<p>You can then block that Facebook network with:</p>
+<pre># iptables -A OUTPUT -p tcp -d 66.220.144.0/20 -j DROP
+</pre>
+<p>Keep in mind that the IP address range used by Facebook may vary in your country.</p>
+<h3>9. Setup Port Forwarding in IPtables</h3>
+<p>Sometimes you may want to forward one service&#x2019;s traffic to another port.&#xA0;You can achieve this with the following command:</p>
+<pre># iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 25 -j REDIRECT --to-port 2525
+</pre>
+<p>The above command forwards all incoming traffic on network interface <code>eth0</code>, from port <code>25</code> to port <code>2525</code>. You may change the ports with the ones you need.</p>
+<h3>10. Block Network Flood on Apache Port with IPtables</h3>
+<p>Sometimes IP addresses may requests too many connections towards web ports on your website. This can cause number of issues and to prevent such problems, you can use the following rule:</p>
+<pre># iptables -A INPUT -p tcp --dport 80 -m limit --limit 100/minute --limit-burst 200 -j ACCEPT
+</pre>
+<p>The above command limits the incoming connections from per minute to <code>100</code> and sets a limit burst to <code>200</code>. You can edit the limit and limit-burst to your own specific requirements.</p>
+<h3>11. Block Incoming Ping Requests on IPtables</h3>
+<p>Some system administrators like to block incoming ping requests due to security concerns. While the threat is not that big, it&#x2019;s good to know how to block such request:</p>
+<pre># iptables -A INPUT -p icmp -i eth0 -j DROP
+</pre>
+<h3>12. Allow loopback Access</h3>
+<p>Loopback access (access from <code>127.0.0.1</code>) is important and you should always leave it active:</p>
+<pre># iptables -A INPUT -i lo -j ACCEPT
+# iptables -A OUTPUT -o lo -j ACCEPT
+</pre>
+<h3>13. Keep a Log of Dropped Network Packets on IPtables</h3>
+<p>If you want to log the dropped packets on network interface <code>eth0</code>, you can use the following command:</p>
+<pre># iptables -A INPUT -i eth0&#xA0;-j LOG --log-prefix "IPtables dropped packets:"
+</pre>
+<p>You can change the value after <code>"--log-prefix"</code> with something by your choice. The messages are logged in <code>/var/log/messages</code> and you can search for them with:</p>
+<pre># grep "IPtables dropped packets:" /var/log/messages
+</pre>
+<h3>14. Block&#xA0;Access to Specific MAC Address on IPtables</h3>
+<p>You can block access to your system from specific MAC address by using:</p>
+<pre># iptables -A INPUT -m mac --mac-source 00:00:00:00:00:00 -j DROP
+</pre>
+<p>Of course, you will need to change <code>"00:00:00:00:00:00"</code> with the actual MAC address that you want to block.</p>
+<h3>15. Limit the Number of Concurrent Connections per IP Address</h3>
+<p>If you don&#x2019;t want to have too many concurrent connection established from single IP address on given port you can use the command below:</p>
+<pre># iptables -A INPUT -p tcp --syn --dport&#xA0;22&#xA0;-m connlimit --connlimit-above 3 -j REJECT
+</pre>
+<p>The above command allows no more than <code>3</code> connections per client. Of course, you can change the port number to match different service. Also the <code>--connlimit-above</code> should be changed to match your requirement.</p>
+<h3>16. Search within IPtables Rule</h3>
+<p>Once you have defined your iptables rules, you will want to search from time to time and&#xA0;may need to alter them. An easy way to search within your rules is to use:</p>
+<pre># iptables -L $table -v -n | grep $string
+</pre>
+<p>In the above example, you will need to change <code>$table</code> with the actual table within which you wish to search and <code>$string</code> with the actual string for which you are looking for.</p>
+<p>Here is an example:</p>
+<pre># iptables -L INPUT&#xA0;-v -n | grep 192.168.0.100
+</pre>
+<h3>17. Define New IPTables Chain</h3>
+<p>With iptables, you can define your own chain and store custom rules in it. To define a chain, use:</p>
+<pre># iptables -N custom-filter
+</pre>
+<p>Now you can check if your new filter is there:</p>
+<pre># iptables -L
+</pre>
+<h5>Sample Output</h5>
+<pre>Chain INPUT (policy ACCEPT)
+target prot opt source destination
+</pre>
+<pre>Chain FORWARD (policy ACCEPT)
+target prot opt source destination</pre>
+<pre>Chain OUTPUT (policy ACCEPT)
+target prot opt source destination</pre>
+<pre>Chain <strong>custom-filter</strong> (0 references)
+target prot opt source destination</pre>
+<h3>18.&#xA0;Flush IPtables Firewall Chains or Rules</h3>
+<p>If you want to flush your firewall chains, you can use:</p>
+<pre># iptables -F
+</pre>
+<p>You can flush chains from specific table with:</p>
+<pre># iptables -t nat -F
+</pre>
+<p>You can change <code>"nat"</code> with the actual table which chains you wish to flush.</p>
+<h3>19. Save IPtables Rules to a File</h3>
+<p>If you want to save your firewall rules, you can use the <code>iptables-save</code> command. You can use the following to save and store your rules in a file:</p>
+<pre># iptables-save &gt; ~/iptables.rules
+</pre>
+<p>It&#x2019;s up to you where will you store the file and how you will name it.</p>
+<h3>20. Restore IPtables Rules from a File</h3>
+<p>If you want to restore a list of iptables rules, you can use <code>iptables-restore</code>. The command looks like this:</p>
+<pre># iptables-restore &lt; ~/iptables.rules
+</pre>
+<p>Of course the path to your rules file might be different.</p>
+<h3>21. Setup IPtables Rules for PCI Compliance</h3>
+<p>Some system administrators might be required to configure their servers to be PCI compiliant. There are many requirements by different PCI compliance vendors, but there are few common ones.</p>
+<p>In many of the cases, you will need to have more than one IP address. You will need to apply the rules below for the site&#x2019;s IP address. Be extra careful when using the rules below and use them only if you are sure what you are doing:</p>
+<pre># iptables -I INPUT -d SITE -p tcp -m multiport --dports 21,25,110,143,465,587,993,995 -j DROP
+</pre>
+<p>If you use cPanel or similar control panel, you may need to block it&#x2019;s&#x2019; ports as well. Here is an example:</p>
+<pre># iptables -I in_sg -d DEDI_IP -p tcp -m multiport --dports 2082,2083,2095,2096,2525,2086,2087 -j DROP
+</pre>
+<p><strong>Note</strong>: To make sure you meet your PCI vendor&#x2019;s requirements, check their report carefully and apply the required rules. In some cases you may need to block UDP traffic on certain ports as well.</p>
+<h3>22. Allow Established and Related Connections</h3>
+<p>As the network traffic is separate on incoming and outgoing, you will want to allow established and related incoming traffic. For incoming connections do it with:</p>
+<pre># iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+</pre>
+<p>For outgoing use:</p>
+<pre># iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
+</pre>
+<h3>23. Drop Invalid Packets in IPtables</h3>
+<p>It&#x2019;s possible to have some network packets marked as invalid. Some people may prefer to log those packages, but others prefer to drop them. To drop invalid the packets, you can use:</p>
+<pre># iptables -A INPUT -m conntrack --ctstate INVALID -j DROP 
+</pre>
+<h3>24. Block Connection on Network Interface</h3>
+<p>Some systems may have more than one network interface. You can limit the access to that network interface or block connections from certain IP address.</p>
+<p>For example:</p>
+<pre># iptables -A INPUT -i eth0 -s xxx.xxx.xxx.xxx -j DROP
+</pre>
+<p>Change <strong>&#x201C;xxx.xxx.xxx.xxx&#x201D;</strong> with the actual IP address (or network) that you wish to block.</p>
+<h3>25. Disable Outgoing Mails through IPTables</h3>
+<p>If your system should not be sending any emails, you can block outgoing ports on SMTP ports. For example you can use this:</p>
+<pre># iptables -A OUTPUT -p tcp --dports 25,465,587 -j REJECT
+</pre>
+<h3>Conclusion</h3>
+<p><strong>Iptables</strong> is a powerful firewall that you can easily benefit from. It is vital for every system administrator to learn at least the <a href="http://www.tecmint.com/basic-guide-on-iptables-linux-firewall-tips-commands/" target="_blank">basics of iptables</a>. If you want to find more detailed information about iptables and its options it is highly recommend to read it&#x2019;s manual:</p>
+<pre># man iptables
+</pre>
+<p>If you think we should add more commands to this list, please share them with us, by submitting them in the comment section below.</p>
+							
+						</div>
+						</div>
+</body></html>

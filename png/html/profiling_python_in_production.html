@@ -1,0 +1,97 @@
+<!DOCTYPE html><html><head><title>Profiling Python in Production</title></head><body>
+<h1>Profiling Python in Production</h1><p><a href="https://nylas.com/blog/performance" target="_new">Original URL</a></p>
+<p><blockquote>How We Reduced CPU Usage by 80% through Python Profiling By: Eben Freeman We recently reduced CPU usage across our fleet by 80%. One key technique that made this possible was a lightweight profiling&hellip;</blockquote></p>
+<div><div class="text-center">
+ <img src="https://nylas.com/static/img/blog/performance/hero.png">
+ </div>
+
+ <div class=" col-md-offset-3 col-md-6">
+ 
+ 
+<p class="subhead">How We Reduced CPU Usage by 80% through Python Profiling</p>
+
+<p class="byline"><em>By: Eben Freeman</em></p>
+
+<p>We recently reduced CPU usage across our fleet by 80%. One key technique that made this possible was a lightweight profiling strategy that we could run in production. This post is about the ways we approached instrumentation, the tradeoffs involved, and some tools you can use to optimize your own apps (including code!).</p>
+<h2 id="background_3">Background</h2>
+<p>Nylas is a developer platform that provides APIs to integrate with email, contacts, and calendar. At the core of this is a technology we call the Sync Engine. It&#x2019;s a large Python application (~30k LOC) which handles syncing via IMAP, SMTP, ActiveSync, and other protocols. The code is <a href="https://github.com/nylas/sync-engine">open source</a> on GitHub with a solid community.</p>
+<p>We run this as managed infrastructure for developers and companies around the world. Their products depend on our uptime and responsiveness, so performance of the system is a huge priority.</p>
+<h2 id="if-you-cant-measure-it-you-cant-manage-it_3">If You Can&#x2019;t Measure It, You Can&#x2019;t Manage It</h2>
+<p>Optimization starts with measurement and instrumentation, but there&#x2019;s more than one way to profile. It&#x2019;s important to be able to profile both at small scale using test benchmarks, and at large scale in a live environment.</p>
+<p>For example, when a new mailbox is added to the Nylas platform, it&#x2019;s essential that messages are synced as quickly as possible. To optimize this, we need to understand how different sync strategies and optimizations affect the first few seconds of a sync.</p>
+<p>By setting up a local test and adding a bit of custom instrumentation, we can <a href="https://github.com/nylas/nylas-perftools/blob/master/py2devtools.py">build up a call graph</a> of the program. This is simply a matter of using <code>sys.setprofile()</code> to intercept function calls. To better see exactly what&#x2019;s happening, we can export this call graph to a specific JSON format, and then load this into the powerful visualizer built into the Chrome Developer Tools. This lets us inspect the precise timeline of execution:</p>
+<p><img alt="chrome developer tools profile" src="https://nylas.com/static/img/blog/performance/chrome_profile.png"></p>
+<h2 id="doing-it-live_3">Doing it live</h2>
+<p>This strategy works well for detailed benchmarking of specific parts of an application, but is poorly suited to analyzing the aggregate performance of a large-scale system. Function call instrumentation introduces significant slowdown and generates a huge amount of data, so we can&#x2019;t just directly run this profiler in production.</p>
+<p>However, it&#x2019;s difficult to accurately recreate production slowness in artificial benchmarks. The sync engine&#x2019;s workload is heterogeneous: we sync accounts that are large and small, with different levels of activity, using different strategies depending on mail provider. If the tests aren&#x2019;t actually representative of real-world workload, we&#x2019;ll end up with ineffective optimizations.</p>
+<p>Our answer to these shortcomings was to add lightweight instrumentation that we could continuously run in our full production cluster, and design a system to roll up the resulting data into a manageable format and size.</p>
+<p>At the heart of this strategy is a simple statistical profiler &#x2013; code that periodically samples the application call stack, and records what it&#x2019;s doing. This approach loses some granularity and is non-deterministic. But its overhead is low and controllable (just choose the sampling interval). Coarse sampling is fine, because we&#x2019;re trying to identify the biggest areas of slowness.</p>
+<p>A number of libraries implement variants of this, but in Python, we can write a stack sampler in less than 20 lines:</p>
+<div class="codehilite"><pre><span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">signal</span>
+
+<span class="k">class</span> <span class="nc">Sampler</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mf">0.001</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">stack_counts</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">defaultdict</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">interval</span> <span class="o">=</span> <span class="mf">0.001</span>
+
+ <span class="k">def</span> <span class="nf">_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signum</span><span class="p">,</span> <span class="n">frame</span><span class="p">):</span>
+ <span class="n">stack</span> <span class="o">=</span> <span class="p">[]</span>
+ <span class="k">while</span> <span class="n">frame</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+ <span class="n">formatted_frame</span> <span class="o">=</span> <span class="s1">'{}({})'</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">frame</span><span class="o">.</span><span class="n">f_code</span><span class="o">.</span><span class="n">co_name</span><span class="p">,</span>
+ <span class="n">frame</span><span class="o">.</span><span class="n">f_globals</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'__name__'</span><span class="p">))</span>
+ <span class="n">stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">formatted_frame</span><span class="p">)</span>
+ <span class="n">frame</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_back</span>
+
+ <span class="n">formatted_stack</span> <span class="o">=</span> <span class="s1">';'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="n">stack</span><span class="p">))</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">stack_counts</span><span class="p">[</span><span class="n">formatted_stack</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+ <span class="n">signal</span><span class="o">.</span><span class="n">setitimer</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">ITIMER_VIRTUAL</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">interval</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+ <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+ <span class="n">signal</span><span class="o">.</span><span class="n">signal</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">VTALRM</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample</span><span class="p">)</span>
+ <span class="n">signal</span><span class="o">.</span><span class="n">setitimer</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">ITIMER_VIRTUAL</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">interval</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</pre></div>
+
+
+<p>Calling <code>Sampler.start()</code> sets the Unix signal <code>ITIMER_VIRTUAL</code> to be sent after the number of seconds specified by <code>interval</code>. This essentially creates a repeating alarm that will run the <code>_sample</code> method.</p>
+<p>When the signal fires, this function saves the application&#x2019;s stack, and keeps track of how many times we&#x2019;ve sampled that same stack. Frequently sampled stacks correspond to code paths where the application is spending a lot of time.</p>
+<p>The memory overhead associated with maintaining these stack counts stays reasonable, since the application only executes so many different frames. It&#x2019;s also possible to bound the memory usage, if necessary, by periodically pruning infrequent stacks. In our application, the actual CPU overhead is demonstrably negligible:</p>
+<p><a href="https://nylas.com/static/img/blog/performance/instrumentation_overhead.png"><img alt="overhead of instrumentation" src="https://nylas.com/static/img/blog/performance/instrumentation_overhead.png"></a></p>
+<p>Now that we&#x2019;ve added instrumentation in the application, we have each worker process expose its profiling data via a simple HTTP interface (<a href="https://github.com/nylas/nylas-perftools/blob/master/stacksampler.py#L75">see&#xA0;code</a>). This lets us take a production worker process and generate a <a href="https://github.com/brendangregg/FlameGraph">flamegraph</a> that concisely illustrates where the worker is spending time:</p>
+<div class="codehilite"><pre>curl $host:$port | flamegraph.pl &gt; profile.svg
+</pre></div>
+
+
+<p><a href="https://nylas.com/static/img/blog/performance/single_worker_flamegraph_2.png"><img alt="single-worker flamegraph" src="https://nylas.com/static/img/blog/performance/single_worker_flamegraph_2.png"></a></p>
+<p>This visualization makes it easy to quickly spot where CPU time is being spent in the actual process. For example, around 15% of runtime is being spent in the <code>get()</code> method highlighted above, executing a database load that turns out to normally be unnecessary. This wasn&#x2019;t evident in local testing, but now it&#x2019;s easy to identify and fix.</p>
+<p>However, the load on any single worker process isn&#x2019;t necessarily representative of the aggregate workload across all processes and instances. We want to be able to aggregate stacktraces from multiple processes. We also need a way to save historical data, as the profiler only stores traces for the current lifetime of the process.</p>
+<p>To do this, we run a collector agent that periodically polls all sync engine processes (across multiple machines), and persists the aggregated profiling data to its own local store. Because we&#x2019;re vending data over HTTP, this is really straightforward; there&#x2019;s no need to tail and rotate any files on production instances.</p>
+<p>Finally, a lightweight web app can visualize this data on demand. Answering the question, &#x201C;Where is our application spending CPU time?&#x201D; is now as simple as visiting an internal URL:</p>
+<p><a href="https://nylas.com/static/img/blog/performance/webapp_flamegraph.png"><img alt="single-worker flamegraph" src="https://nylas.com/static/img/blog/performance/webapp_flamegraph.png"></a></p>
+<p>Because we can render profiles for any given time interval, it&#x2019;s easy to track down the cause of any regressions and the moment they were introduced.</p>
+<p>The code for all this is <a href="https://github.com/nylas/nylas-perftools">open source</a> on GitHub&#x2013; take a look and try it yourself!</p>
+<h3 id="results_3">Results</h3>
+<p>Having deployed this instrumentation, it was easy to identify slow parts of our managed sync engine and apply a variety of optimizations to speed things up. The net result was an 80% reduction in CPU load. The graph shows the effects after two successive sets of optimization patches were shipped.</p>
+<p><a href="https://nylas.com/static/img/blog/performance/speedup.png"><img alt="observed speedup" src="https://nylas.com/static/img/blog/performance/speedup.png"></a></p>
+<p>Being able to measure and introspect our services in a variety of ways is crucial to keeping them stable and performant. The simple tooling presented here is just one part of the larger monitoring infrastructure at Nylas. We hope to cover more of that in future posts.</p>
+ 
+ </div>
+ 
+
+
+ <p class=" col-md-offset-3 col-md-6 text-center">
+
+ <h2 id="signup-success">Join our newsletter</h2>
+ 
+
+ 
+ 
+ 
+ </p>
+
+ 
+
+ 
+
+ </div>
+</body></html>

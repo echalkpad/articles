@@ -1,0 +1,710 @@
+<!DOCTYPE html><html><head><title>SmartOS as a Virtualisation Platform</title></head><body>
+<h1>SmartOS as a Virtualisation Platform</h1><p><a href="http://www.procmind.com/blog/2016/01/31/smartos-as-a-virtualisation-platform/" target="_new">Original URL</a></p>
+<p><blockquote>Virtualisation platforms and technologies represent a big focal point of the technology scene these days. Recently I&#x2019;ve watched a dockercon 2015 presentation by Bryan Cantrill, CTO of Joyent,&hellip;</blockquote></p>
+<div><div class="entry-content clearfix"><p>Virtualisation platforms and technologies represent a big focal point of the technology scene these days.</p>
+
+<p>Recently I&#x2019;ve watched a dockercon 2015 presentation by Bryan Cantrill, CTO of Joyent, an OS kernel developer for 20 years and father of Dtrace as he calls himself [1], about how to debug docker containers gone bad in production. [2]</p>
+
+<p>I recommend to anyone working or thinking of working with linux containers and docker especially to watch this presentation !</p>
+
+<p>I have to say that this is one of the best presentations I&#x2019;ve seen when it comes to showing the full picture of the docker tooling, lifecycle and ecosystem.</p>
+
+
+
+
+<p>In his presentation, Bryan brings the operational point of view of running applications, in docker, in a production environment and how to deal with and debug failure when applications inside docker containers go wrong.</p>
+
+<p>It is very rare to see a good presentation on the failure modes of docker since most presentation and talks focus on why docker is amazing and it will solve all your problems.</p>
+
+<p>Irrespective of using docker or not, applications have bugs, they go wrong, it is very important to have adequate tooling and discipline to debug and improve them.</p>
+
+<p>Towards the end of his talk Bryan shows some amazing tools and services that the Joyent team has built since 2004 when they&#x2019;ve started their journey as a &#x201C;cloud platform&#x201D; company.</p>
+
+<p>All these tools are built upon their platform hypervisor called SmartOS. [3]</p>
+
+<p>The presentation plus the details I&#x2019;ve read about SmartOS intrigued me, and I gave SmartOS a spin in a KVM virtual machine to see what it can do.</p>
+
+<h2>What is SmartOS</h2>
+
+<p>Disclaimer: I&#x2019;m no authority on SmartOS, I&#x2019;m relaying to you what I&#x2019;ve found out about it until now.</p>
+
+<p>Go and search for yourself to find out more.</p>
+
+
+
+<p>Historically speaking SmartOS derives from the Solaris OS. [4]</p>
+
+<p>A fork of Solaris, called OpenSolaris, was created in 2004.</p>
+
+<p>After the Oracle aquisition of SUN Microsystems in 2010, a group of Solaris engineers created the illumos kernel [5] which was used subsequently to power OpenIndiana from which SmartOS sprang.</p>
+
+<p>The Solaris kernel developers have started working on OS virtualisation since 2005, it looks like they are 10 years or so ahead of the Linux containers and it shows. [6]</p>
+
+
+
+<p>SmartOS is not a general purpose OS, it appears to be designed from the ground up to run virtual workloads.</p>
+
+<p>It is effectively a Read-Only (almost full RO) platform hypervisor running in RAM and managing different kinds of virtual workloads.</p>
+
+<p>SmartOS can run these <strong>virtual workloads</strong> at the same time using the same tooling:</p>
+
+<ul>
+<li>fully emulated virtual hardware VMs, achieved by using the KVM hypervisor</li>
+<li>3 types of OS virtualisation, sharing one OS kernel between multiple partitioned zones ( called containers in Linux land ):
+
+<ul>
+<li>it can run SmartOS zones, called <strong>joyent brand</strong> zones</li>
+<li>it can run Linux zones, called <strong>lx brand</strong> zones. This allows a user to run a full Linux userland on the SmartOS UNIX kernel</li>
+<li>docker containers from the docker hub, still called <strong>lx brand</strong> zones and running on the same SmartOS UNIX kernel</li>
+</ul>
+</li>
+</ul>
+
+
+<p>Because SmartOS is built on the powerfull legacy of Solaris zones, it has a very useful and powerfull feature compared to Linux containers: complete zone isolation !</p>
+
+<p>From a security point of view SmartOS zones ( read containers ) are fully isolated, an attacker that has been able to gain root privileges in the zone cannot gain root access on the host hypervisor. [11]</p>
+
+<p>I&#x2019;ve heard that this is why the Joyent cloud runs containers on bare-metal, while other cloud providers like AWS or Google run containers in VMs.</p>
+
+<h2>Ramdisk is where SmartOS feels at home</h2>
+
+<p>General purpose OSes have to be installed on disk to function.</p>
+
+<p>SmartOS on the other hand boots of and ISO or USB stick or PXE booted and it runs entirely in RAM. It has no installation to disk option.</p>
+
+<p>Here are some arguments about why booting from RAM is a feature in SmartOS. [7]</p>
+
+<p>The SmartOS hypervisor/OS, or what is called the <strong>global zone</strong>, [10] is mostly Read-Only.</p>
+
+<p>I&#x2019;ve seen recently in the Linux world this kind of approach by the people behind CoreOS. Surely they can draw more inspiration from the SmartOS/OpenSolaris developers.</p>
+
+<h2>How can anyone test it ?</h2>
+
+<p>I&#x2019;ve tested it by using the SmartOS iso and booting it in a KVM VM.</p>
+
+<p>I could have achieved the same thing by booting of the SmartOS USB drive.</p>
+
+<p>If you have a type of virtualisation on your laptop/desktop ( KVM, Virtualbox, VMware &#x2026;) than you can give it a spin in a VM. [8]</p>
+
+<h2>What can a user run on SmartOS ?</h2>
+
+<p>A user can run KVM VMs and SmartOS OS virtualisation zones.</p>
+
+<p>Since I&#x2019;m running SmartOS in KVM, even if I have enabled KVM passthrough on my desktop, I haven&#x2019;t tried to run KVM VMs because the boot sequence of SmartOS says that KVM is not supported on my VM, therefore I&#x2019;ve only been able to run zones.</p>
+
+<h2>SmartOS hypervisor</h2>
+
+<p>After booting from the iso image or the USB image, you&#x2019;ll follow a few basic questions to setup networking and the ZFS pools in the global zone.</p>
+
+<figure class="code"><figcaption><span>SmartOS global zone </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line"><span class="o">[</span>root@smartos ~<span class="o">]</span><span class="c"># ifconfig -a</span>
+</span><span class="line">lo0: <span class="nv">flags</span><span class="o">=</span>2001000849&lt;UP,LOOPBACK,RUNNING,MULTICAST,IPv4,VIRTUAL&gt; mtu <span class="m">8232</span> index 1
+</span><span class="line"> inet 127.0.0.1 netmask ff000000
+</span><span class="line">rtls0: <span class="nv">flags</span><span class="o">=</span>1004943&lt;UP,BROADCAST,RUNNING,PROMISC,MULTICAST,DHCP,IPv4&gt; mtu <span class="m">1500</span> index 2
+</span><span class="line"> inet 10.110.110.131 netmask ffffff00 broadcast 10.110.110.255
+</span><span class="line"> ether 52:54:0:33:ea:3a
+</span><span class="line">lo0: <span class="nv">flags</span><span class="o">=</span>2002000849&lt;UP,LOOPBACK,RUNNING,MULTICAST,IPv6,VIRTUAL&gt; mtu <span class="m">8252</span> index 1
+</span><span class="line"> inet6 ::1/128
+</span><span class="line"><span class="o">[</span>root@smartos ~<span class="o">]</span><span class="c"># </span>
+</span><span class="line"><span class="o">[</span>root@smartos ~<span class="o">]</span><span class="c"># uname -a</span>
+</span><span class="line">SunOS smartos 5.11 joyent_20160121T174331Z i86pc i386 i86pc
+</span><span class="line"><span class="o">[</span>root@smartos ~<span class="o">]</span><span class="c"># zonename</span>
+</span><span class="line">global
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Once that is done you&#x2019;re all setup to start running virtual workloads.</p>
+
+<p>Another very useful feature of SmartOS is that SmartOS treats all 4 types of virtualisation described above as the same thing:</p>
+
+<ul>
+<li>a disk image of some type</li>
+<li>a bit of json metadata</li>
+<li>a virtualisation wrapper( KVM, zones) that starts using that disk image and the json metadata</li>
+</ul>
+
+
+<p>All 4 types of virtualisation are created, lifecycle managed, and destroyed using the exact same tools:</p>
+
+<ul>
+<li>disk image manager <code>imgadm</code></li>
+<li>virtual machine manager <code>vmadm</code></li>
+</ul>
+
+
+<p>That is it!</p>
+
+<p>No more running <code>docker ...</code> or <code>rkt ..</code> for a container workload, then <code>qemu-system-x86_64</code> or interfacing with libvirt for KVM VM, each coming with its own tool for creating, lifecycle managing and destroying the virtual workloads.</p>
+
+<p>Disclaimer: all zones that I&#x2019;ll show you how to start are started using the &#x201C;admin&#x201D; networking, which basically means they&#x2019;ll all be in bridged network mode and you&#x2019;ll be able to access them on your internal network as if they were other separate physical hardware.</p>
+
+<h2>SmartOS zone</h2>
+
+<p>Lets run another instance of SmartOS, as an isolated zone, lets say for SmartOS package building !</p>
+
+<ul>
+<li>find some SmartOS disk images provided by Joyent:</li>
+</ul>
+
+
+<figure class="code"><figcaption><span>find SmartOS datasets </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">imgadm avail <span class="p">|</span>grep base <span class="p">|</span> tail -n10
+</span><span class="line">3c0e76fe-0563-11e5-a0d7-9fe1e24b554c base-multiarch 15.1.1 smartos zone-dataset 2015-05-28
+</span><span class="line">2bd52afe-3474-11e5-b07d-c7fb14b2c9e8 base-32 15.2.0 smartos zone-dataset 2015-07-27
+</span><span class="line">5c7d0d24-3475-11e5-8e67-27953a8b237e base-64 15.2.0 smartos zone-dataset 2015-07-27
+</span><span class="line">9caff6c6-3476-11e5-9951-bf98c6cb8636 base-multiarch 15.2.0 smartos zone-dataset 2015-07-27
+</span><span class="line">7bcfc9c8-6e9a-11e5-8d57-73e262d7338e base-32 15.3.0 smartos zone-dataset 2015-10-09
+</span><span class="line">842e6fa6-6e9b-11e5-8402-1b490459e334 base-64 15.3.0 smartos zone-dataset 2015-10-09
+</span><span class="line">9250f5a8-6e9c-11e5-9cdb-67fab8707bfd base-multiarch 15.3.0 smartos zone-dataset 2015-10-09
+</span><span class="line">543ef738-beb5-11e5-bf3d-675487324488 base-32-lts 15.4.0 smartos zone-dataset 2016-01-19
+</span><span class="line">96bcddda-beb7-11e5-af20-a3fb54c8ae29 base-64-lts 15.4.0 smartos zone-dataset 2016-01-19
+</span><span class="line">f58ce4f2-beb9-11e5-bb02-e30246d71d58 base-multiarch-lts 15.4.0 smartos zone-dataset 2016-01-19
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>download the zfs volume into your local pool</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">imgadm import 96bcddda-beb7-11e5-af20-a3fb54c8ae29
+</span><span class="line">...
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>create a json description of the zone you&#x2019;d like to start</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line"><span class="o">{</span>
+</span><span class="line"> <span class="s2">"brand"</span>: <span class="s2">"joyent"</span>,
+</span><span class="line"> <span class="s2">"image_uuid"</span>: <span class="s2">"96bcddda-beb7-11e5-af20-a3fb54c8ae29"</span>,
+</span><span class="line"> <span class="s2">"alias"</span>: <span class="s2">"smartosz01"</span>,
+</span><span class="line"> <span class="s2">"hostname"</span>: <span class="s2">"smartosz01"</span>,
+</span><span class="line"> <span class="s2">"max_physical_memory"</span>: 512,
+</span><span class="line"> <span class="s2">"quota"</span>: 10,
+</span><span class="line"> <span class="s2">"resolvers"</span>: <span class="o">[</span><span class="s2">"8.8.8.8"</span>, <span class="s2">"208.67.220.220"</span><span class="o">]</span>,
+</span><span class="line"> <span class="s2">"nics"</span>: <span class="o">[</span>
+</span><span class="line"> <span class="o">{</span>
+</span><span class="line"> <span class="s2">"nic_tag"</span>: <span class="s2">"admin"</span>,
+</span><span class="line"> <span class="s2">"ip"</span>: <span class="s2">"10.110.110.142"</span>,
+</span><span class="line"> <span class="s2">"netmask"</span>: <span class="s2">"255.255.255.0"</span>,
+</span><span class="line"> <span class="s2">"gateway"</span>: <span class="s2">"10.110.110.1"</span>
+</span><span class="line"> <span class="o">}</span>
+</span><span class="line"> <span class="o">]</span>
+</span><span class="line"><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>start the SmartOS zone from the disk image downloaded and the json description</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">vmadm create -f smartos-zone.json
+</span><span class="line">Successfully created VM 16021e9e-7e2f-4294-f7db-86dea02198be
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>we can see the zone running by interogating the global zone stat tool ( equivalent to top )</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">prstat -Z
+</span><span class="line">...
+</span><span class="line"> <span class="m">2933</span> root 23M 15M sleep <span class="m">1</span> <span class="m">0</span> 0:00:00 0.0% fmd/28
+</span><span class="line"> <span class="m">7582</span> root 6992K 1128K sleep <span class="m">51</span> <span class="m">0</span> 0:00:00 0.0% sshd/1
+</span><span class="line"> <span class="m">168</span> root 4516K 2752K sleep <span class="m">29</span> <span class="m">0</span> 0:00:00 0.0% devfsadm/8
+</span><span class="line">ZONEID NPROC SWAP RSS MEMORY TIME CPU ZONE
+</span><span class="line"> <span class="m">6</span> <span class="m">15</span> 55M 33M 0.8% 0:00:02 1.4% 16021e9e-7e2f-4294-f7db-86d*
+</span><span class="line"> <span class="m">0</span> <span class="m">55</span> 322M 194M 4.7% 0:00:20 0.7% global
+</span><span class="line"> <span class="m">2</span> <span class="m">10</span> 251M 31M 0.7% 0:00:00 0.0% eb5b5aad-54c6-6915-c1c8-9cc*
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>either login in the zone from the SmartOS console via <code>zlogin</code> or simply ssh using the ip in the json description</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+<span class="line-number">21</span>
+<span class="line-number">22</span>
+<span class="line-number">23</span>
+<span class="line-number">24</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">zlogin 16021e9e-7e2f-4294-f7db-86dea02198be
+</span><span class="line">...
+</span><span class="line"><span class="o">[</span>Connected to zone <span class="s1">'16021e9e-7e2f-4294-f7db-86dea02198be'</span> pts/4<span class="o">]</span>
+</span><span class="line"> __ . .
+</span><span class="line"> _<span class="p">|</span> <span class="p">|</span>_ <span class="p">|</span> .-. . . .-. :--. <span class="p">|</span>-
+</span><span class="line"><span class="p">|</span>_ _<span class="p">|</span> <span class="p">;|</span> <span class="o">||</span> <span class="p">|</span><span class="o">(</span>.-<span class="s1">' | | |</span>
+</span><span class="line"><span class="s1"> |__| `--'</span> <span class="sb">`</span>-<span class="s1">' `;-| `-'</span> <span class="s1">' '</span> <span class="sb">`</span>-<span class="s1">'</span>
+</span><span class="line"><span class="s1"> / ; Instance (base-64-lts 15.4.0)</span>
+</span><span class="line"><span class="s1"> `-'</span> https://docs.joyent.com/images/smartos/base
+</span><span class="line"><span class="o">[</span>root@smartosz01 ~<span class="o">]</span><span class="c"># zonename</span>
+</span><span class="line">16021e9e-7e2f-4294-f7db-86dea02198be
+</span><span class="line"><span class="o">[</span>root@smartosz01 ~<span class="o">]</span><span class="c"># uname -a</span>
+</span><span class="line">SunOS smartosz01 5.11 joyent_20160121T174331Z i86pc i386 i86pc Solaris
+</span><span class="line"><span class="o">[</span>root@smartosz01 ~<span class="o">]</span><span class="c">#</span>
+</span><span class="line"><span class="o">[</span>root@smartosz01 ~<span class="o">]</span><span class="c"># psrinfo -v</span>
+</span><span class="line">Status of virtual processor <span class="m">0</span> as of: 01/31/2016 20:15:15
+</span><span class="line"> on-line since 01/31/2016 20:12:58.
+</span><span class="line"> The i386 processor operates at <span class="m">3600</span> MHz,
+</span><span class="line"> and has an i387 compatible floating point processor.
+</span><span class="line">Status of virtual processor <span class="m">1</span> as of: 01/31/2016 20:15:15
+</span><span class="line"> on-line since 01/31/2016 20:12:59.
+</span><span class="line"> The i386 processor operates at <span class="m">3600</span> MHz,
+</span><span class="line"> and has an i387 compatible floating point processor.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>install packages and start building</li>
+</ul>
+
+
+<h2>LX branded zone - full Linux userland</h2>
+
+<p>This type of virtualisation resembles to OpenVZ or LXC virtualisation in Linux, a full OS operating system running in a &#x201C;container&#x201D;</p>
+
+<p>This time we&#x2019;ll boot a full debian8 userland on the SmartOS kernel using the lx branded zone.</p>
+
+<p>We&#x2019;ll follow the same steps and use the same tools to boot into the debian8 zone as we did for the SmartOS zone.</p>
+
+<ul>
+<li>find some debian disk images provided by Joyent:</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">imgadm avail <span class="p">|</span>grep debian<span class="p">|</span>tail -n10
+</span><span class="line">a781a350-07f4-11e5-9372-5f2886027fbc lx-debian-7 <span class="m">20150601</span> linux lx-dataset 2015-06-01
+</span><span class="line">1187b54a-15ca-11e5-a80c-275e2f64f91e debian-7 <span class="m">20150618</span> linux lx-dataset 2015-06-18
+</span><span class="line">82d952c4-1b7b-11e5-a299-bb55cb08eab1 debian-7 <span class="m">20150625</span> linux lx-dataset 2015-06-25
+</span><span class="line">a00cef0e-1e73-11e5-b628-0f24cabf6a85 debian-7 <span class="m">20150629</span> linux lx-dataset 2015-06-29
+</span><span class="line">d8d81aee-20cf-11e5-8503-2bc101a1d577 debian-7 <span class="m">20150702</span> linux zvol 2015-07-02
+</span><span class="line">2f56d126-20d0-11e5-9e5b-5f3ef6688aba debian-8 <span class="m">20150702</span> linux zvol 2015-07-02
+</span><span class="line">380539c4-3198-11e5-82c8-bf9eeee6a395 debian-7 <span class="m">20150724</span> linux lx-dataset 2015-07-24
+</span><span class="line">7c815c22-4606-11e5-8bb5-9f853c19be54 debian-7 <span class="m">20150819</span> linux lx-dataset 2015-08-19
+</span><span class="line">5fb104e4-6af5-11e5-a952-ff6eb14ca518 debian-7 <span class="m">20151005</span> linux lx-dataset 2015-10-05
+</span><span class="line">1adf7176-8679-11e5-9ff7-3beedf8060b9 debian-8 <span class="m">20151109</span> linux lx-dataset 2015-11-09
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>download the <strong>lx-dataset</strong> zfs volume into your local pool, the <strong>zvol</strong> volume is for KVM VMs</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">imgadm import 1adf7176-8679-11e5-9ff7-3beedf8060b9
+</span><span class="line">....
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>get the kernel_version from the zfs volume metadata</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">imgadm show 1adf7176-8679-11e5-9ff7-3beedf8060b9 <span class="p">|</span>grep kern
+</span><span class="line"> <span class="s2">"kernel_version"</span>: <span class="s2">"3.16.0"</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>create a json description of the zone you&#x2019;d like to start</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line"><span class="o">{</span>
+</span><span class="line"> <span class="s2">"brand"</span>: <span class="s2">"lx"</span>,
+</span><span class="line"> <span class="s2">"image_uuid"</span>: <span class="s2">"1adf7176-8679-11e5-9ff7-3beedf8060b9"</span>,
+</span><span class="line"> <span class="s2">"alias"</span>: <span class="s2">"debianz01"</span>,
+</span><span class="line"> <span class="s2">"hostname"</span>: <span class="s2">"debianz01"</span>,
+</span><span class="line"> <span class="s2">"kernel_version"</span>: <span class="s2">"3.16.0"</span>,
+</span><span class="line"> <span class="s2">"max_physical_memory"</span>: 512,
+</span><span class="line"> <span class="s2">"quota"</span>: 10,
+</span><span class="line"> <span class="s2">"resolvers"</span>: <span class="o">[</span><span class="s2">"8.8.8.8"</span>, <span class="s2">"208.67.220.220"</span><span class="o">]</span>,
+</span><span class="line"> <span class="s2">"nics"</span>: <span class="o">[</span>
+</span><span class="line"> <span class="o">{</span>
+</span><span class="line"> <span class="s2">"nic_tag"</span>: <span class="s2">"admin"</span>,
+</span><span class="line"> <span class="s2">"ip"</span>: <span class="s2">"10.110.110.145"</span>,
+</span><span class="line"> <span class="s2">"netmask"</span>: <span class="s2">"255.255.255.0"</span>,
+</span><span class="line"> <span class="s2">"gateway"</span>: <span class="s2">"10.110.110.1"</span>
+</span><span class="line"> <span class="o">}</span>
+</span><span class="line"> <span class="o">]</span>
+</span><span class="line"><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>start the debian zone from the disk image downloaded and the json description</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">vmadm create &lt; /root/zones-specs/debian-lx-zone.json
+</span><span class="line">Successfully created VM 28bef743-dc95-c0c9-ed90-9c0bcf31bef8
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>either login in the zone from the SmartOS console via <code>zlogin</code> or simply ssh using the ip in the json description ( note the <strong>virtual linux</strong> in the output of <code>uname</code> )</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">zlogin 28bef743-dc95-c0c9-ed90-9c0bcf31bef8
+</span><span class="line"><span class="o">[</span>Connected to zone <span class="s1">'28bef743-dc95-c0c9-ed90-9c0bcf31bef8'</span> pts/11<span class="o">]</span>
+</span><span class="line">Linux 28bef743-dc95-c0c9-ed90-9c0bcf31bef8 3.16.0 BrandZ virtual linux x86_64
+</span><span class="line"> __ . .
+</span><span class="line"> _<span class="p">|</span> <span class="p">|</span>_ <span class="p">|</span> .-. . . .-. :--. <span class="p">|</span>-
+</span><span class="line"><span class="p">|</span>_ _<span class="p">|</span> <span class="p">;|</span> <span class="o">||</span> <span class="p">|</span><span class="o">(</span>.-<span class="s1">' | | |</span>
+</span><span class="line"><span class="s1"> |__| `--'</span> <span class="sb">`</span>-<span class="s1">' `;-| `-'</span> <span class="s1">' '</span> <span class="sb">`</span>-<span class="s1">'</span>
+</span><span class="line"><span class="s1"> / ; Instance (Debian 8.1 (jessie) 20151109)</span>
+</span><span class="line"><span class="s1"> `-'</span> https://docs.joyent.com/images/container-native-linux
+</span><span class="line">...
+</span><span class="line">apt --version
+</span><span class="line">apt 1.0.9.8.1 <span class="k">for</span> amd64 compiled on Jun <span class="m">10</span> <span class="m">2015</span> 09:42:07
+</span><span class="line">Usage: apt <span class="o">[</span>options<span class="o">]</span> <span class="nb">command</span>
+</span><span class="line">...
+</span><span class="line"> uname -a
+</span><span class="line">Linux eb5b5aad-54c6-6915-c1c8-9cca817b4b4b 3.16.0 BrandZ virtual linux x86_64 GNU/Linux
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>use the debian8 zone as you see fit</li>
+</ul>
+
+
+<h2>LX branded zone - docker container</h2>
+
+<p>This is still an LX branded zone ( Linux userland on SmartOS kernel ) but it will boot and run a docker disk container from docker hub. [9]</p>
+
+<p>The interesting part is that docker containers on smartOS appear on the network bridge like any other VMs if you launch them on the &#x201C;admin&#x201D; network.</p>
+
+<p>Lets launch a docker container in a SmartOS zone:</p>
+
+<ul>
+<li>add the docker hub source for <code>imgadm</code></li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">imgadm sources --add-docker-hub
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>import the disk image ( this import downloads from the docker hub, <em>not</em> from joyent )</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">imgadm import busybox
+</span><span class="line">Importing 0be24e0e-04e4-6110-9ea4-dd6264d65cb0 <span class="o">(</span>docker.io/busybox:latest<span class="o">)</span> from <span class="s2">"https://docker.io"</span>
+</span><span class="line">...
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>create the zone specification</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+<span class="line-number">21</span>
+<span class="line-number">22</span>
+<span class="line-number">23</span>
+<span class="line-number">24</span>
+<span class="line-number">25</span>
+<span class="line-number">26</span>
+<span class="line-number">27</span>
+<span class="line-number">28</span>
+<span class="line-number">29</span>
+<span class="line-number">30</span>
+<span class="line-number">31</span>
+<span class="line-number">32</span>
+<span class="line-number">33</span>
+<span class="line-number">34</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line"><span class="o">{</span>
+</span><span class="line"><span class="s2">"alias"</span>: <span class="s2">"busybox"</span>,
+</span><span class="line"><span class="s2">"image_uuid"</span>: <span class="s2">"0be24e0e-04e4-6110-9ea4-dd6264d65cb0"</span>,
+</span><span class="line"><span class="s2">"nics"</span>: <span class="o">[</span>
+</span><span class="line"> <span class="o">{</span>
+</span><span class="line"> <span class="s2">"interface"</span>: <span class="s2">"net0"</span>,
+</span><span class="line"> <span class="s2">"nic_tag"</span>: <span class="s2">"admin"</span>,
+</span><span class="line"> <span class="s2">"gateway"</span>: <span class="s2">"10.110.110.1"</span>,
+</span><span class="line"> <span class="s2">"netmask"</span>: <span class="s2">"255.255.255.0"</span>,
+</span><span class="line"> <span class="s2">"primary"</span>: <span class="nb">true</span>,
+</span><span class="line"> <span class="s2">"ip"</span>: <span class="s2">"10.110.110.146"</span>
+</span><span class="line"> <span class="o">}</span>
+</span><span class="line"><span class="o">]</span>,
+</span><span class="line"><span class="s2">"brand"</span>: <span class="s2">"lx"</span>,
+</span><span class="line"><span class="s2">"kernel_version"</span>: <span class="s2">"3.13.0"</span>,
+</span><span class="line"><span class="s2">"docker"</span>: <span class="nb">true</span>,
+</span><span class="line"><span class="s2">"cpu_shares"</span>: 1000,
+</span><span class="line"><span class="s2">"zfs_io_priority"</span>: 1000,
+</span><span class="line"><span class="s2">"max_lwps"</span>: 2000,
+</span><span class="line"><span class="s2">"max_physical_memory"</span>: 256,
+</span><span class="line"><span class="s2">"max_locked_memory"</span>: 256,
+</span><span class="line"><span class="s2">"max_swap"</span>: 1024,
+</span><span class="line"><span class="s2">"cpu_cap"</span>: 1000,
+</span><span class="line"><span class="s2">"tmpfs"</span>: 1024,
+</span><span class="line"><span class="s2">"maintain_resolvers"</span>: <span class="nb">true</span>,
+</span><span class="line"><span class="s2">"resolvers"</span>: <span class="o">[</span>
+</span><span class="line"> <span class="s2">"10.10.1.7"</span>,
+</span><span class="line"> <span class="s2">"8.8.8.8"</span>
+</span><span class="line"><span class="o">]</span>,
+</span><span class="line"><span class="s2">"internal_metadata"</span>: <span class="o">{</span>
+</span><span class="line"> <span class="s2">"docker:cmd"</span>: <span class="s2">"[\"/bin/sleep\", \"300\"]"</span>
+</span><span class="line"><span class="o">}</span>,
+</span><span class="line"><span class="s2">"quota"</span>: 7
+</span><span class="line"><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>start the docker container zone from the disk image downloaded and the json description</li>
+</ul>
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">vmadm create -f docker-busybox-lx-zone.json
+</span><span class="line">Successfully created VM e931e355-4b09-e248-b8fe-c538c279dfe3
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line"><span class="o">[</span>root@smartos ~<span class="o">]</span><span class="c"># vmadm list</span>
+</span><span class="line">UUID TYPE RAM STATE ALIAS
+</span><span class="line">e931e355-4b09-e248-b8fe-c538c279dfe3 LX <span class="m">256</span> stopped busybox
+</span><span class="line">16021e9e-7e2f-4294-f7db-86dea02198be OS <span class="m">512</span> running smartosz01
+</span><span class="line">eb5b5aad-54c6-6915-c1c8-9cca817b4b4b LX <span class="m">512</span> running debianz01
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>depending on what you&#x2019;re running in the docker container either login in the zone from the SmartOS console via <code>zlogin</code> ( same result as <code>docker exec</code> ), or simply ssh using the ip in the json description, or just access the application running in the docker container</li>
+</ul>
+
+
+<h2>Conclusions</h2>
+
+<p>SmartOS comes by default equiped with:</p>
+
+<ul>
+<li><code>ZFS</code> as the default filesystem, ZFS being the most advanced filesystem today</li>
+<li>illumos kernel and zones for OS virtualisation which can give you a better resource utilisation and it has security features built-in</li>
+<li><code>DTrace</code> which is the most advanced debugger to date</li>
+<li>KVM to be able to virtualise other operating systems other than SmartOS, running on SmartOS</li>
+</ul>
+
+
+<p>From the SmartOS wiki: [12]</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+</pre></td><td class="code"><pre><code class="bash"><span class="line">An important aspect of SmartOS is that both OS <span class="o">(</span>Zones<span class="o">)</span> and KVM virtual machines are both built on Zones technology.
+</span><span class="line">In the <span class="k">case</span> of OS virtualization, the guest virtual machine is provided with a <span class="nb">complete </span>userland environment on which to run applications directly.
+</span><span class="line">In the <span class="k">case</span> of KVM virtualization, the KVM qemu process will run within a stripped down Zone.
+</span><span class="line">This offers a variety of advantages <span class="k">for</span> administration, including a common method <span class="k">for</span> managing resource controls, network interfaces, and administration.
+</span><span class="line">It also provides KVM guests with an additional layer of security and isolation not offered by other KVM platforms.
+</span><span class="line">Finally, VM<span class="s1">'s are described in JSON. Both administrative tools, imgadm and vmadm, accept and return all data in JSON format.</span>
+</span><span class="line"><span class="s1">This provides a simple, consistent, and programmatic interface for creating and managing VM'</span>s.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>I&#x2019;m impressed by its virtualisation tooling consistency and by the OS feature set as a virtualisation platform !</p>
+
+<p>To me SmartOS looks like the perfect virtualisation platform, one of the most advanced platform hypervisors OSes if not the most advanced platform hypervisor OS these days.</p>
+
+<h2>Resources and inspiration</h2>
+
+<p>[1] - <a href="https://www.reddit.com/r/IAmA/comments/31ny87/i_am_the_cto_of_joyent_the_father_of_dtrace_and/">https://www.reddit.com/r/IAmA/comments/31ny87/i_am_the_cto_of_joyent_the_father_of_dtrace_and/</a></p>
+
+<p>[2] - <a href="https://www.youtube.com/watch?v=sYQ8j02wbCY">https://www.youtube.com/watch?v=sYQ8j02wbCY</a></p>
+
+<p>[3] - <a href="https://smartos.org/">https://smartos.org/</a></p>
+
+<p>[4] - <a href="http://docs.vrocket.io/pages/viewpage.action?pageId=557106">http://docs.vrocket.io/pages/viewpage.action?pageId=557106</a></p>
+
+<p>[5] - <a href="http://wiki.illumos.org/display/illumos/illumos+Home">http://wiki.illumos.org/display/illumos/illumos+Home</a></p>
+
+<p>[6] - <a href="https://en.wikipedia.org/wiki/Solaris_Containers">https://en.wikipedia.org/wiki/Solaris_Containers</a></p>
+
+<p>[7] - <a href="https://www.youtube.com/watch?v=ieGWbo94geE">https://www.youtube.com/watch?v=ieGWbo94geE</a></p>
+
+<p>[8] - <a href="https://wiki.smartos.org/display/DOC/Welcome+to+SmartOS">https://wiki.smartos.org/display/DOC/Welcome+to+SmartOS</a></p>
+
+<p>[9] - <a href="http://www.smllr.nl/2015/10/11/docker-on-smartos-a-retry/">http://www.smllr.nl/2015/10/11/docker-on-smartos-a-retry/</a></p>
+
+<p>[10] - <a href="http://www.perkin.org.uk/posts/smartos-and-the-global-zone.html">http://www.perkin.org.uk/posts/smartos-and-the-global-zone.html</a></p>
+
+<p>[11] - <a href="https://www.reddit.com/r/IAmA/comments/31ny87/i_am_the_cto_of_joyent_the_father_of_dtrace_and/cq41qa5">https://www.reddit.com/r/IAmA/comments/31ny87/i_am_the_cto_of_joyent_the_father_of_dtrace_and/cq41qa5</a></p>
+
+<p>[12] - <a href="https://wiki.smartos.org/display/DOC/Home">https://wiki.smartos.org/display/DOC/Home</a></p>
+</div>
+
+
+ </div>
+</body></html>

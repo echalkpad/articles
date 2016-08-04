@@ -1,0 +1,183 @@
+<!DOCTYPE html><html><head><title>How To Set Up Automatic Deployment with Git with a VPS</title></head><body>
+<h1>How To Set Up Automatic Deployment with Git with a VPS</h1><p><a href="https://www.digitalocean.com/community/tutorials/how-to-set-up-automatic-deployment-with-git-with-a-vps" target="_new">Original URL</a></p>
+<p><blockquote>For an introduction to Git and how to install, please refer to the introduction tutorial. This article will teach you how to use Git when you want to deploy your application. While there are many&hellip;</blockquote></p>
+<div><div>
+
+<p>For an introduction to Git and how to install, please refer to the <a href="https://www.digitalocean.com/community/articles/how-to-install-git-on-ubuntu-12-04" target="_blank">introduction tutorial</a>.</p>
+
+<p>This article will teach you how to use Git when you want to deploy your application. While there are many ways to use Git to deploy our application, this tutorial will focus on the one that is most straightforward. I assume you already know how to create and use a repository on your local machine. If not, please refer to <a href="https://www.digitalocean.com/community/articles/how-to-use-git-effectively" target="_blank">this tutorial</a>.</p>
+
+<p>When you use Git, the workflow generally is toward version control only. You have a local repository where you work and a remote repository where you keep everything in sync and can work with a team and different machines. But you can also use Git to move your application to production.</p>
+
+<h2>Server Setup</h2>
+
+<p>Our fictitious workspace:</p>
+
+<p>Your server live directory: <i>/var/www/<a href="http://domain.com" target="_blank">domain.com</a></i></p>
+ 
+<p>Your server repository: <i>/var/repo/site.git</i></p>
+
+<p>What should we do if we want to push to <i>site.git</i> and at the same time make all the content available at <i>/var/www/<a href="http://domain.com" target="_blank">domain.com</a></i>?</p>
+
+<h2>Creating Our Repository</h2>
+
+<p>Login to your VPS from command line and type the following:</p>
+
+<pre>
+cd /var
+mkdir repo &amp;&amp; cd repo
+mkdir site.git &amp;&amp; cd site.git
+git init --bare
+</pre>
+
+<p><code>--bare</code> means that our folder will have no source files, just the version control.</p>
+
+<h2>Hooks</h2>
+
+<p>Git repositories have a folder called <i>'hooks'</i>. This folder contains some sample files for possible actions that you can hook and perform custom actions set by you.</p>
+
+<p><a href="http://git-scm.com/book/en/Customizing-Git-Git-Hooks" target="_blank">Git documentation</a> define three possible server hooks: <i>'pre-receive'</i>, <i>'post-receive'</i> and <i>'update'</i>. <i>'Pre-receive'</i> is executed as soon as the server receives a <i>'push'</i>, <i>'update'</i> is similar but it executes once for each branch, and <i>'post-receive'</i> is executed when a <i>'push'</i> is completely finished and it's the one we are interested in.</p>
+
+<p>In our repository if you type:</p>
+
+<pre>ls</pre>
+
+<p>You will see a few files and folders, including the <i>'hooks'</i> folder. So let's go to <i>'hooks'</i> folder:</p>
+
+<pre>cd hooks</pre>
+
+<p>Now, create the file <i>'post-receive'</i> by typing:</p>
+
+<pre>cat &gt; post-receive</pre>
+
+<p>When you execute this command, you will have a blank line indicating that everything you type will be saved to this file. So let's type:</p>
+
+<pre>
+#!/bin/sh
+git --work-tree=/var/www/<a href="http://domain.com" target="_blank">domain.<wbr>com</wbr></a> --git-dir=/var/repo/site.git checkout -f
+</pre>
+
+<p>When you finish typing, press <i>'control-d'</i> to save.
+In order to execute the file, we need to set the proper permissions using:</p>
+
+<pre>chmod +x post-receive</pre>
+
+<p>You can see on the <a href="https://www.kernel.org/pub/software/scm/git/docs/" target="_blank">documentation</a> that <i>'git-dir'</i> is the path to the repository. With <i>'work-tree'</i>, you can define a different path to where your files will actually be transferred to.</p>
+
+<p>The <i>'post-receive'</i> file will be looked into every time a push is completed and it's saying that your files need to be in <i>/var/www/<a href="http://domain.com" target="_blank">domain.com</a>.</i></p>
+
+<h2>Local Machine</h2>
+
+<p>Let's create our local repository. You should change the path and name to whichever you choose. If you are on a VPS, just type:</p>
+
+<pre>exit</pre>
+
+<p>And create your repo:</p>
+
+<pre>
+cd /my/workspace
+mkdir project &amp;&amp; cd project
+git init
+</pre>
+
+<p>Then we need to configure the remote path of our repository. Tell Git to add a remote called <i>'live'</i>:</p>
+
+<pre>git remote add live ssh://<a href="http://user@mydomain.com/var/repo/site.git" target="_blank">user@mydomain.com/var/<wbr>repo/site.git</wbr></a></pre>
+
+<p>Here we should give the repository link and not the live folder.</p>
+
+<p>Let's assume that we have some great work ready in this folder. We should do the usual steps of adding the files and commit with a message:</p>
+
+<pre>
+git add .
+git commit -m "My project is ready"
+</pre>
+
+<p>Just to remember, the dot after <i>'git add'</i> means you are adding all files to stage. After <i>'git commit'</i> we have <i>'-m'</i> which means we will type a message. To complete, we just <i>'push'</i> everything to the server. We use the <i>'live'</i> alias that we used when setting the remote.</p>
+
+<pre>
+git push live master
+Counting objects: 7, done.Delta compression using up to 4 threads.Compressing objects: 100% (7/7), done.Writing objects: 100% (7/7), 10.56 KiB, done.Total 7 (delta 0), reused 0 (delta 0)To ssh://<a href="http://user@mydomain.com/var/repo/site.git" target="_blank">user@mydomain.com/var/<wbr>repo/site.git</wbr></a>* [new branch] master -&gt; master
+</pre>
+
+<p>Here we tell Git to push to the <i>'live'</i> remote on the <i>'master'</i> branch. To understand more about branches and how to use it you can read <a href="https://www.digitalocean.com/community/articles/how-to-use-git-branches" target="_blank">this tutorial</a>.</p>
+
+<h2>Beta</h2>
+
+<p>What if you don't want to deploy everything in one step? Maybe you want to test it first and have a beta directory.</p>
+
+<p>One of the ways to do that is create another repository. Let's log in again in our VPS and create our directory:</p>
+
+<pre>
+cd /var/www/
+mkdir beta
+</pre>
+
+<p>To create our repository:</p>
+
+<pre>
+cd /var/repo
+mkdir beta.git &amp;&amp; cd beta.git
+git init --bare
+</pre>
+
+<p>Again we should create the <i>'post-receive'</i> file because we want to see our project in the beta directory:</p>
+
+<pre>
+cd hooks
+cat &gt; post-receive
+</pre>
+
+<p>Type the content of the file:</p>
+
+<pre>
+#!/bin/sh
+git --work-tree=/var/www/beta --git-dir=/var/repo/beta.git checkout -f
+</pre>
+
+<p>Press <i>'control-d'</i> to save.</p>
+
+<p>Let's go back to our local repository:</p>
+
+<pre>
+exit
+cd /my/workspace/project
+</pre>
+
+<p>So now we can set another remote pointing to our beta repository:</p>
+
+<pre>git remote add beta ssh://<a href="http://user@mydomain.com/var/repo/beta.git" target="_blank">user@mydomain.com/var/<wbr>repo/beta.git</wbr></a></pre>
+
+<p>With this, we can have a two step process. First we push to beta and check, and if everything is fine we push to live:</p>
+
+<pre>
+git add .
+git commit -m "New version"
+git push beta master
+</pre>
+
+<p>And later:</p>
+
+<pre>git push live master</pre>
+
+<h2>Going Live From the Server</h2>
+
+<p>Maybe you have a team working in the same project and you want that others can also decide that it's time to go live. To do this, we can link the beta and live repository on the server. Log in to your VPS and type:</p>
+
+<pre>
+cd /var/repo/beta.git
+git remote add live ../site.git
+</pre>
+
+<p>So now you can push from beta to live on the server:</p>
+
+<pre>
+cd /var/repo/beta.git
+git push live master
+</pre>
+
+<p>Congratulations! Your VPS is now set to automatically deploy with Git!</p>
+
+</div>
+ </div>
+</body></html>

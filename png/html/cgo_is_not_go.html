@@ -1,0 +1,61 @@
+<!DOCTYPE html><html><head><title>cgo is not Go</title></head><body>
+<h1>cgo is not Go</h1><p><a href="http://dave.cheney.net/2016/01/18/cgo-is-not-go" target="_new">Original URL</a></p>
+<p><blockquote>To steal a quote from JWZ, Some people, when confronted with a problem, think &#x201C;I know, I&#x2019;ll use cgo.&#x201D; Now they have two problems. Recently the use of cgo came up on the&hellip;</blockquote></p>
+<div><div class="entry-content">
+			<p>To steal a quote from <a href="http://regex.info/blog/2006-09-15/247">JWZ</a>,</p>
+<blockquote><p>Some people, when confronted with a problem, think &#x201C;I know, I&#x2019;ll use cgo.&#x201D;<br>
+Now they have two problems.</p></blockquote>
+<p>Recently the use of cgo came up on the Gophers&#x2019; slack channel and I voiced my concerns that using cgo, especially on a project that is intended to showcase Go inside an&#xA0;organisation was a bad idea. I&#x2019;ve said this a number of times, and people are probably sick of hearing my&#xA0;spiel, so I figured that I&#x2019;d write it down&#xA0;and be done with it.</p>
+<p>cgo is an amazing technology which allows Go programs to interoperate with C libraries. It&#x2019;s a tremendously useful feature without which Go would not be in the position it is today. cgo is key to ability to run Go programs on Android and iOS.</p>
+<p>However, and to be clear these are my opinions, I am not speaking for anyone else, I think cgo is overused in Go projects. I believe that when faced with reimplementing a large piece of C code in Go, programmers choose instead to use cgo to wrap the library, believing that it is a more tractable problem. I believe this is a false economy.</p>
+<p>Obviously, there are some cases where cgo is unavoidable, most notably where you have to interoperate with a graphics driver or windowing system that is only available as a binary blob. But those cases where cgo&#x2019;s use justifies its trade-offs are fewer and further between than many are prepared to admit.</p>
+<p>Here is an incomplete list of trade-offs you make, possibly without realising them, when you base your Go project on a cgo library.</p>
+<h3>Slower build times</h3>
+<p>When you <code>import "C"</code> in your Go package, <code>go build</code> has to do a lot more work to build your code. Building your package is no longer simply passing a list of all the <code>.go</code> files in scope to a single invocation of <code>go tool compile</code>, instead:</p>
+<ul>
+<li>The cgo tool needs to be invoked to generate the C to Go and Go to C thunks and stubs.</li>
+<li>Your system C compiler has to be invoked for every C file in the package.</li>
+<li>The individual compilation units are combined together into a single .o file.</li>
+<li>The resulting .o file take a trip through the system linker for fix-ups against shared objects they reference.</li>
+</ul>
+<p>All this work happens every time you compile or test your package, which is constantly, if you&#x2019;re actively working in that package. The Go tool parallelises some of this work where possible, but your packages&#x2019; compile time just grew to include a full rebuild of all that C code.</p>
+<p>It&#x2019;s possible to work around this by pushing the cgo shims out into their own package, avoiding the compile time hit, but now you&#x2019;ve had to restructure your application to work around a problem that you didn&#x2019;t have before you started to use cgo.</p>
+<p>Oh, and you have to debug C compilation failures on the various platforms your package supports.</p>
+<h3>Complicated builds</h3>
+<p>One of the goals of Go was to produce a language who&#x2019;s build process was self describing; the source of your program contains enough information for a tool to build the project.&#xA0;This is not to say that using a <code>Makefile</code> to automate your build workflow is bad, but before cgo was introduced into a project, you may not have needed anything but the <code>go</code> tool to build and test. Afterwards, to set all the environment variables,&#xA0;keep track of shared objects and header files that may be installed in weird places, now you do.</p>
+<p>Keep in mind that Go supports platforms that don&#x2019;t ship with make out of the box, so you&#x2019;ll have to dedicate some time to coming up with a solution for your Windows users.</p>
+<p>Oh, and now your users have to have a C compiler installed, not just a Go compiler. They also have to install the C libraries your project depends on, so you&#x2019;ll be taking on that support cost as well.</p>
+<h3><del></del>Cross compilation goes out the window</h3>
+<p>Go&#x2019;s support for cross compilation is best in class. As of <a href="http://dave.cheney.net/2015/08/22/cross-compilation-with-go-1-5">Go 1.5 you can cross compile</a> from any supported platform to any other platform with the official installer available on the Go project website.</p>
+<p>By default cgo is disabled when cross compiling. Normally this isn&#x2019;t a problem if your project is pure Go. When you mix in dependencies on C libraries, you either have to give up the option to cross compile your product, or you have to invest time in finding and maintaining cross compilation C toolchains for all your targets.</p>
+<p>Maybe if you work on a product that only communicates with clients over TCP sockets and you intend to run it in a SaaS model it&#x2019;s reasonable to say that you don&#x2019;t care about cross compilation. However, if you&#x2019;re making a product which others will use, possibly integrated into their products, maybe it&#x2019;s a monitoring solution, maybe it&#x2019;s a client for your SaaS service, then you&#x2019;ve locked them out of being able to easily cross compile.</p>
+<p>The number of platforms that Go supports continues to grow. Go 1.5 added support for 64 bit ARM and PowerPC. Go 1.6 adds support for 64 bit MIPS, and IBM&#x2019;s s390 architecture is touted for Go 1.7. RISC-V is in the pipeline. If your product relies on a C library, not only do you have the all problems of cross compilation described above, you also have to make sure the C code you depend on works reliably on the new platforms Go is supporting &#x2014; and you have to do that with the limited&#xA0;debuggability&#xA0;a C/Go hybrid affords you. Which brings me to my next point.</p>
+<h3>You lose access to all your&#xA0;tools</h3>
+<p>Go has great tools; we have the race detector, pprof for profiling code, coverage, fuzz testing, and source code analysis tools. None of those work across the cgo blood/brain barrier.</p>
+<p>Conversely excellent tools like valgrind don&#x2019;t understand Go&#x2019;s calling conventions or stack layout. &#xA0;On that point, Ian Lance Taylor&#x2019;s work to integrate clang&#x2019;s memory sanitiser to debug dangling pointers on the C side will&#xA0;be of benefit for cgo users in Go 1.6.</p>
+<p>Combing Go code and C code results in the intersection of both worlds, not the union; the memory safety of C, and the debuggability of a Go program.</p>
+<h3>Performance will always be an issue</h3>
+<p>C code and Go code live in two different universes, cgo traverses the boundary between them. This transition is not free and depending on where it exists in your code, the cost could be inconsequential, or substantial.</p>
+<p>C doesn&#x2019;t know anything about Go&#x2019;s calling convention or growable stacks, so a call down to C code must record all the details of the goroutine stack, switch to the C stack, and run C code which has no knowledge of how it was invoked, or the larger Go runtime in charge of the program.</p>
+<p>To be fair, Go doesn&#x2019;t know anything about C&#x2019;s world either. This is why the rules for passing data between the two have become more onerous over time as the compiler becomes better at spotting stack data that is no longer considered live, and the garbage collector becomes better at doing the same for the heap.</p>
+<p>If there is a fault while in the C universe, the Go code has to recover enough state to at least print a stack trace and exit the program cleanly, rather than barfing up a core file.</p>
+<p>Managing this transition across call stacks, especially where signals, threads and callbacks are involved is non trivial, and again&#xA0;Ian Lance Taylor has done a huge amount of work in Go 1.6 to improve the interoperability of signal handling with&#xA0;C.</p>
+<p>The take away is that the transition between the C and Go world is non trivial, and it will never be free from overhead.</p>
+<h3>C calls the shots, not your code</h3>
+<p>It doesn&#x2019;t matter which language you&#x2019;re writing bindings or wrapping C code with;&#xA0;Python, Java with JNI, some language using libFFI, or Go via cgo; it&#x2019;s C&#x2019;s world, you&#x2019;re just living in it.</p>
+<p>Go code and C code have&#xA0;to agree on how resources like address space, signal handlers, and thread TLS slots are to be shared &#x2014; and when I say agree, I actually mean Go has to work around the C code&#x2019;s assumption.&#xA0;C code that can&#xA0;assume it always runs on one thread, or blithely be unprepared to work in a multi threaded environment at all.</p>
+<p>You&#x2019;re not writing a Go program that uses some logic from a C library, instead you&#x2019;re writing a Go program that has to coexist with a belligerent piece of C code that is hard to replace, has the upper hand negotiations, and&#xA0;doesn&#x2019;t care about your problems.</p>
+<h3>Deployment gets more complicated</h3>
+<p>Any presentation on Go to a general audience will contain at least one slide with these words:</p>
+<blockquote><p>Single, static binary</p></blockquote>
+<p>This is Go&#x2019;s ace in the hole that has lead it to become a poster child of the movement away from virtual machines and managed runtimes. Using cgo, you give that up.</p>
+<p>Depending on your environment, it&#x2019;s probably possible to build your Go project into a deb or rpm, and assuming your other dependencies are also packaged, add them as an install dependency and push the problem off the operating system&#x2019;s package manager. But that&#x2019;s several significant changes to a build and deploy process that was previously as straight forward as <code>go build &amp;&amp; scp</code>.</p>
+<p><a href="http://dominik.honnef.co/posts/2015/06/statically_compiled_go_programs__always__even_with_cgo__using_musl/">It <em>is</em> possible to compile a Go program entirely statically</a>, but it is by no means simple and shows&#xA0;that the ramifications of including cgo in your project will ripple through your&#xA0;entire build and deploy life cycle.</p>
+<h3>Choose wisely</h3>
+<p>To be clear, I am not saying that you should not use cgo. But before you make that&#xA0;Faustian bargain, please consider carefully the qualities of Go that you&#x2019;ll be giving up in return.</p>
+
+					</div>
+		
+		
+	</div>
+</body></html>

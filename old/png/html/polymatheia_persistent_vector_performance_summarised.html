@@ -1,0 +1,362 @@
+<!DOCTYPE html><html><head><title>polymatheia - Persistent Vector Performance Summarised</title></head><body>
+<h1>polymatheia - Persistent Vector Performance Summarised</h1><p><a href="http://hypirion.com/musings/persistent-vector-performance-summarised?hnrepost=true" target="_new">Original URL</a></p>
+<p><blockquote>Oh my, this is my last blogpost on the persistent vector! In the previous blogposts, we've looked at how to do efficient immutable updates on the vector, we've looked at indexing, how the tail works,&hellip;</blockquote></p>
+<div><div id="content"><br>
+
+<p>Oh my, this is my last blogpost on the <a href="http://hypirion.com/musings/understanding-persistent-vector-pt-1">persistent vector</a>! In the
+previous blogposts, we've looked at how to do
+<a href="http://hypirion.com/musings/understanding-persistent-vector-pt-1">efficient immutable updates</a> on the vector, we've looked at
+<a href="http://hypirion.com/musings/understanding-persistent-vector-pt-2">indexing</a>, how <a href="http://hypirion.com/musings/understanding-persistent-vector-pt-3">the tail</a> works, and how <a href="http://hypirion.com/musings/understanding-clojure-transients">transients</a> can be
+implemented. Now we're only left with two big questions: Why a branching factor
+of 32, and what is "effectively constant time"? We will also have a quick peek
+into its memory consumption.</p>
+
+<p>If you're very interested in all the small details related to this blogpost, you
+should have a look at my blogpost on
+<a href="http://hypirion.com/musings/persistent-vector-performance">Persistent Vector Performance</a>. It contains a lot of tips for
+practitioners on how to improve its performance as well.</p>
+
+<h2>Why 2<sup>5</sup>?</h2>
+
+<p>The <a href="http://en.wikipedia.org/wiki/B-tree" title="The Wikipedia Article on B-trees">B-tree</a> is a data structure which acts and behaves in very much the same
+way as a balanced binary tree: Assuming a lookup takes constant time, both have
+the same asymptotic running time. However, when used for storing data on disk,
+it becomes much more efficient than any binary tree. Why? Because reading from
+disk is slow, but once you start reading from it, it's very cheap to read
+"bulks" of data. The B-tree is designed with this in mind, and stores multiple
+children in a single node. In that way, you can do fewer reads per lookup.</p>
+
+<p><img src="http://hypirion.com/imgs/b-tree.png" alt="Visualisation of a B-tree" title="A B-tree">
+<em>A B-tree with 2-4 keys per node.</em></p>
+
+<p>The difference between the CPU caches and RAM is also quite noticable. RAM is
+also similar to reading from disk in that it's cheap to read a cache line (a
+"bulk"): Whenever you have to read data from RAM, the cache line in which the
+memory you refer to is stored in the cache &#x2013; making it super fast to access
+again later. Consequently, it's preferable to access data which is likely to be
+in the same cache line while you're still at it. In the last 2 decades, this has
+been more and more noticable, as
+<a href="http://gec.di.uminho.pt/discip/minf/ac0102/1000gap_proc-mem_speed.pdf">the gap betweeen CPU and DRAM speed has grown</a>. (This is also
+probably the reason why
+<a href="http://doc.rust-lang.org/std/collections/struct.BTreeMap.html">Rust has B-Trees in their standard library</a>.)</p>
+
+<p>In the same fashion as the B-Tree utilises disk reads, the persistent vector
+utilises cache lines: Most CPUs these days have 64 byte sized cache lines in all
+their caches. If we assume that a pointer takes 4-8 bytes, then any multiple of
+16/8 elements will fit exactly into some amount of cache lines. So if our
+branching factor is a multiple of 16 or 8, then a single node in the vector can
+fit exactly into some amount of cache lines!</p>
+
+<p>So for my master's thesis, I did some lightweight benchmarking on the branching
+factor in C, on powers of 2. If you assume you will lookup elements more
+frequently than updating them, 32 seems like a very good fit:</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/index-vs-update.png" alt="Graph of indexing times vs update times" title="Index vs. update"></p>
+
+<p>The idea of fitting a node into exactly one cache line sounds neat, but
+unfortunately it assumes we only have to store the pointers to our children. On
+the JDK, we simply cannot do that. Although there are no restrictions on how
+data is laid out, all the common implementations have some additional bytes in
+front of the object needed for polymorphism and GC. In addition, arrays need to
+store its length, and you need to store the transient ID somewhere as well. As a
+result, in OpenJDK 7, the best you can do is to store them as follows:</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/pvec-array-w-text.png" alt="Visualisation of a pvec node with compressed oops" title="Internal representation of a persistent vector node"></p>
+
+<p>However, even with this overhead, the branching factor on 32 still seems to give
+the best tradeoff for update vs. lookup times, and is still very good.</p>
+
+<h2>Memory</h2>
+
+<p>A good way to measure the memory consumption of a data structure is usually to
+take the memory <strong>not</strong> used on the data it stores, and divide it on the total
+memory used: We call this the memory overhead ratio. The lower memory overhead
+ratio, the better.</p>
+
+<p>For array lists that doubles their capacity when they go out of space, the
+overhead ratio is on average 25%: At most, it will be ~50% and at best, ~0%.
+However, the ArrayList in Java doesn't double its capacity, it increases it with
+1.5 instead (a 100 element long array will be grown to 150). As a result, the
+overhead ratio for the ArrayList is actually 12.5%.</p>
+
+<p>The average memory overhead for a persistent vector is a bit more difficult to
+compute. However, I did so in my <a href="http://hypirion.com/thesis" title="Improving RRB-trees through Transience">thesis</a>, and with the node layout shown in
+the previous section, we have on average 18.4% overhead. However, the overhead
+ratio is way more consistent, and will almost all the time be about 18.4%.</p>
+
+<p>It's worth pointing out that the overhead for both ArrayLists and the persistent
+vector is very good compared to other data structures in the standard Java
+library. For instance, the LinkedList implementation has 83.3% memory overhead
+(!), and the TreeMap has 80%. The lower amount of overhead also means that
+there's less data stored, which again means it's possible to store more "actual"
+data in the cache.</p>
+
+<h2>Benchmarks</h2>
+
+<p>But let's get to the more interesting stuff: Benchmarks. The benchmarks
+themselves and the persistent vector implementation used is stored in my GitHub
+repository <a href="https://github.com/hyPiRion/pvec-perf" title="Persistent vector performance measurements and analysis">pvec-perf</a>. The vector implementation is a bit more efficient than
+the Clojure implementation, but for the most part they have the same performance
+characteristics. You can go to the
+<a href="http://hypirion.com/musings/persistent-vector-performance">Persistent Vector Performance</a> blogpost
+if you're more interested in the differences.</p>
+
+<p>To measure it against something kind-of similar and familiar, we'll use the good
+old Java ArrayList (the same we just compared memory overhead ratio with &#x2013; what
+a coincidence!). We'll also add in transient vector benchmarks where it makes
+sense.</p>
+
+<p>Of course, take the benchmarks with a grain of salt: These benchmarks <strong>will</strong>
+utilise the cache differently than your program, and performance will therefore
+vary.</p>
+
+<p>With that in mind, let's have a look at the plots!</p>
+
+<h3>Lookups</h3>
+
+<p>Let's start with the obvious benchmark: Lookups. If we wanted to look up an
+element at a completely random index in a vector, how long would it take?</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/get-pvec.png" alt="Plot of running time for single lookup" title="Running time for single lookup"></p>
+
+<p>When we compare the results with the ArrayList, we see that the difference is
+very small, until the data structures start to contain over 1 million elements.
+The reason why they both increase their running time so drastically is because
+the cache isn't able to keep the entire data structure in memory. Therefore, the
+bigger the size, the more likely it is that we have to lookup data from RAM,
+which is expensive.</p>
+
+<p>The reason why the difference between the persistent vector and ArrayList
+increases from ~1 million to ~33 million is likely because a single lookup has
+to walk through several nodes. If multiple nodes aren't stored in the cache,
+running time naturally degrades more. However, it is still able to compete
+pretty well &#x2013; the running time isn't even doubled.</p>
+
+<h3>Updates</h3>
+
+<p>The next question we might want to ask is how fast random updates are. Since
+transients speed up update operations quite significantly, it makes sense to
+measure those as well.</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/update-pvec.png" alt="Plot of running time for single update" title="Running time for single update"></p>
+
+<p>As expected, the transient is much faster than the persistent variant. What is
+also interesting to see is that the transient is able to compete with the
+ArrayList to some extent, until both starts falling out of the cache.
+Presumably, this penalises the transient more heavily initially, as it both has
+to look up a pointer AND the transient ID. The transient ID might not be stored
+in the same cache line, which means that every node we access might require 2
+cache lines, not 1.</p>
+
+<p>However, once the initial "cache pain" is over, the transients seem to fare well
+and reduces the gap.</p>
+
+<h3>Appends</h3>
+
+<p>Now, let's have a look at more "complex" function: Append. We'd really like to
+measure the time taken to run a single append operation, but this is really hard
+to do right with a transient and an ArrayList: We'd have to create the transient
+and ArrayList all over again to get the same benchmark as if we had done a
+single append on the persistent variant. But at that point, you've changed the
+cache, and in the end it will be really hard to subtract the overhead from the
+two other runs. Simply put, this is a big no-no for benchmark analysis.</p>
+
+<p>So instead, why not measure how long time it takes to do <em>n</em> appends? We don't
+get the running time for a single append at a specific length, but at least we
+can compare persistent vectors, transient vectors and ArrayLists on even ground.
+So we will benchmark the following code:</p>
+
+<div class="highlight"><pre><span class="n">Coll</span> <span class="n">c</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Coll</span><span class="o">();</span>
+<span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="hlmi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">n</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+ <span class="n">c</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">someConstant</span><span class="o">);</span>
+<span class="o">}</span>
+<span class="k">return</span> <span class="n">c</span><span class="o">;</span>
+</pre></div>
+
+<p>And the results for the different data structures is as follows:</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/appends-pvec.png" alt="Plot of running time for repeated appends" title="Running time for repeated appends">
+(To make sense of the results, I've divided the total running time on the amount
+of elements.)</p>
+
+<p>There are a lot of interesting things in this benchmark, but perhaps the biggest
+one is the fact that the average time for a single append is more or less
+constant, up until you go out of space in the cache. So, in this benchmark,
+appends on a persistent vector takes roughly 7 times longer than appends on an
+ArrayList.</p>
+
+<p>The other interesting part here is the transient performance. As its persistent
+counterpart, the append time is constant per element. Compared to the ArrayList,
+it's roughly 1.4 times slower when you can put everything into the cache. But
+when you can't put everything into the cache, the transient actually beats the
+ArrayList!</p>
+
+<p>This doesn't necessarily mean that transients are faster in general though. I
+would guess transients being faster than ArrayLists in performance-tuned code
+will more or less never happen.</p>
+
+<h3>Pops</h3>
+
+<p>We have the same issue for popping as with appending, so we can't measure a
+single pop. So instead, we'll take a persistent version of the data structure
+and pop off all the elements on it. But, we can't really measure multiple pops
+on the ArrayList or transient if we do this, as we'd need to create the whole
+data structure again. So we're stuck with the same problem as with single
+appends.</p>
+
+<p>However, since we are going to do multiple pops, we can make a transient out of
+a persistent vector and use that &#x2013; which is what I have done in this benchmark.
+The ArrayLists are unfortunately not going to make it, because there is no way
+to convert an "immutable" ArrayList to a mutable one in a way that doesn't
+affect the benchmark significantly.</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/pops-pvec.png" alt="Plot of running time for repeated pops" title="Running time for repeated pops"></p>
+
+<p>In this plot, we can easily see that pops take more time with a bigger
+persistent vector. However, the transient popping seems to be constant &#x2013; at
+least the same kind of constant as ArrayList appends are. Although the
+difference is noticable, the running time is much smaller than for appends
+(almost 10 nsec faster).</p>
+
+<h3>Iteration</h3>
+
+<p>Doing random updates and lookups isn't that normal compared to doing a <code>reduce</code>
+or a <code>mapv</code>, walking the entire vector. That's important to realise, as
+iterating over the complete vector can be done in <em>O(n)</em> time, instead of
+na&#xEF;vely looking up each element in order, which would take <em>O(n log n)</em> time.</p>
+
+<p>This is also relatively easy to benchmark, we just have to make sure we actually
+look up the values. So the benchmark does more or less this (<code>iter</code>):</p>
+
+<div class="highlight"><pre><span class="c1">// preparation outside of the benchmark: Create the Coll c</span>
+<span class="kt">long</span> <span class="n">sum</span> <span class="o">=</span> <span class="hlmi">0</span><span class="o">;</span>
+<span class="k">for</span> <span class="o">(</span><span class="n">Integer</span> <span class="n">val</span> <span class="o">:</span> <span class="n">c</span><span class="o">)</span> <span class="o">{</span>
+ <span class="n">sum</span> <span class="o">+=</span> <span class="n">val</span><span class="o">;</span>
+<span class="o">}</span>
+<span class="k">return</span> <span class="n">sum</span><span class="o">;</span>
+</pre></div>
+
+<p>Just for fun, we can measure it against the na&#xEF;ve version (<code>get</code>):</p>
+
+<div class="highlight"><pre><span class="c1">// preparation outside of the benchmark: Create the Coll c</span>
+<span class="kt">long</span> <span class="n">sum</span> <span class="o">=</span> <span class="hlmi">0</span><span class="o">;</span>
+<span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="hlmi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">size</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+ <span class="n">sum</span> <span class="o">+=</span> <span class="n">c</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+<span class="o">}</span>
+<span class="k">return</span> <span class="n">sum</span><span class="o">;</span>
+</pre></div>
+
+<p>and the result we get when we do so is as follows:</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/iter-pvec.png" alt="Plot of running time for iteration" title="Running time for iteration"></p>
+
+<p>The first thing we can see is that doing the <em>O(n)</em> iteration technique does
+take constant time per element, in contrast to the <code>get</code> implementation which
+takes (a noticable) <em>O(log n)</em> time per element. Iteration also seems to take
+roughly 3 times longer per element, compared to the ArrayList.</p>
+
+<p>As a small note, it seems that doing repeated <code>get</code>s on an ArrayList is a tiny
+bit faster than doing iteration. However, the difference is so small that I
+don't think it's statistically significant.</p>
+
+<h3>"Full Run"</h3>
+
+<p>Before we wrap up, let's have a look at a small program using these data
+structures in the same way. We append a bunch of (equal) values onto the data
+structure, iterating (<code>reduce</code>) over it, then pop off all the values. The code
+looks something like this:</p>
+
+<div class="highlight"><pre><span class="n">Coll</span> <span class="n">c</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Coll</span><span class="o">();</span>
+<span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="hlmi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">size</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+ <span class="n">c</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="na">push</span><span class="o">(</span><span class="n">some_int_constant</span><span class="o">);</span>
+<span class="o">}</span>
+<span class="kt">long</span> <span class="n">sum</span> <span class="o">=</span> <span class="hlmi">0</span><span class="o">;</span>
+<span class="k">for</span> <span class="o">(</span><span class="n">Object</span> <span class="n">o</span> <span class="o">:</span> <span class="n">c</span><span class="o">)</span> <span class="o">{</span>
+<span class="c1">// or for (int i = 0; i &lt; size; i++)</span>
+<span class="c1">// depending on what's faster</span>
+ <span class="n">sum</span> <span class="o">+=</span> <span class="o">(</span><span class="n">Integer</span><span class="o">)</span> <span class="n">o</span><span class="o">;</span>
+<span class="o">}</span>
+<span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="hlmi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">size</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+ <span class="n">c</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="na">pop</span><span class="o">();</span>
+<span class="o">}</span>
+<span class="k">return</span> <span class="n">sum</span> <span class="o">+</span> <span class="n">c</span><span class="o">.</span><span class="na">size</span><span class="o">();</span>
+</pre></div>
+
+<p>It's not a sensible program by any means (why would you pop off all the
+elements?), but it's interesting to see how the data structures compare against
+each other in a slightly more realistic situation.</p>
+
+<p><img src="http://hypirion.com/imgs/pvec-perf/full-pvec.png" alt="Plot of running time for " title="Running time for 'full run'"></p>
+
+<p>It's clear that the transient version is very efficient, and can compete against
+the ArrayList very well. However, how well does the persistent variant keep up?</p>
+
+<p>It keeps up amazingly well. Although it seems to increase its running time with
+size, you must also realise that the same happens for the ArrayList. For the
+smaller sizes, the persistent vector uses 5-6 times more time. That improves to
+only 3.8 times slower for ~1 million elements, and 3.1 times slower for ~33
+million elements. If anything, it <em>seems</em> to handle growth and shrinkage way
+better than the ArrayList for larger sizes.</p>
+
+<p>Intuitively, this makes somewhat sense: The ArrayList has to copy all its
+content to another array when it has to grow. The vector implementation only has
+to allocate a new tail, and between 1-5 internal nodes.</p>
+
+<h2>Conclusion</h2>
+
+<p>We've seen the performance of the persistent vector compared to the mutable
+ArrayList, found in Java's standard library. We should take benchmarks with a
+grain of salt, but they say the following:</p>
+
+<ul>
+<li>The persistent vector's update performance is generally between 5-8x slower
+than an ArrayList.</li>
+<li>The transient vector's update performance is comparable to the ArrayList,
+usually less than 1.5 times slower.</li>
+<li>Iteration is about 3 times slower, and lookups take no more than 2 times more
+time (unless the vector contains less than 1000 elements, in which case it is
+about just as fast).</li>
+</ul>
+
+<p>Of course, your mileage <strong>will</strong> vary, but it's definitely not 20-50x slower,
+and you shouldn't have to worry about its performance when starting on a
+project<sup><a href="http://hypirion.com/musings/persistent-vector-performance-summarised?hnrepost=true#f1n">[1]</a></sup>. The persistent vector also has a very
+low memory overhead, only slightly higher than the average memory overhead of an
+ArrayList.</p>
+
+<p>Now, it's important to realise that we could specify the initial size of the
+ArrayList to improve its performance. That would make sense. But beating the
+ArrayList isn't the point here. The point is that appends and pops on an
+ArrayList takes amortised <em>O(1)</em> time, regardless of its initial size. And &#x2013; in
+most of the benchmarks &#x2013; you cannot see which data structure is using a <em>O(1)</em>
+algorithm, and which one is using a <em>O(log n)</em> algorithm. The only times where
+the vector implementation really struggles is when there is no spatial locality
+(randomly uniform lookups and updates).</p>
+
+<p>That the persistent vector is only a constant factor away while still using an
+<em>O(log n)</em> algorithm means that it's not unreasonable to call its running time
+<em>"effectively constant"</em>, <em>O(~1)</em>. The only case where this doesn't apply is
+when your program is doing lookups that has very weak spatial locality, or if
+you have to do very HPC-like stuff. There are probably other cases as well, but
+the point is that you probably know if this is an issue for you already before
+you read this blogpost.</p>
+
+<p>We've also looked into why the persistent vector has a branching factor of 32:
+It's simply because it (currently) gives the best tradeoffs between read times
+and update times!</p>
+
+
+
+<p>And with that, our adventure into the persistent vector internals ends. If
+you've read through all the blogposts in this series, you probably fully
+understand how the persistent vector works, how you can implement one (with
+optimisations), and how performant it is. Hurray!</p>
+
+
+
+
+
+<p><a name="f1n">[1]</a> Unless you already know that this might be a problem, of
+course.</p>
+<p>Tagged with: clojure, algdat.</p></div></div>
+</body></html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html><html><head><title>Using the Collection2 Package</title></head><body>
+<h1>Using the Collection2 Package</h1><p><a href="https://themeteorchef.com/snippets/using-the-collection2-package/" target="_new">Original URL</a></p>
+<p><blockquote>What we're going to learn Join The Meteor Chef on Slack If you get confused or stuck while reading&#x2014;or just want to talk about Meteor&#x2014;join us on Slack! Get an invite now. What is&hellip;</blockquote></p>
+<div><div id="snippet" class="tab-content active">
+ <h3>What we're going to learn</h3>
+ 
+ 
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/slack-logo.svg" alt="Slack">
+ <header>
+ <h4>Join The Meteor Chef on Slack</h4>
+ <p>If you get confused or stuck while reading&#x2014;or just want to talk about Meteor&#x2014;join us on Slack! <a href="http://slack.themeteorchef.com" target="_blank">Get an invite now</a>.</p>
+ </header>
+ </div>
+ <h3>What is collection2?</h3>
+
+<p><a href="https://atmospherejs.com/aldeed/collection2">Collection2</a> is a package that helps us to add schemas to our MongoDB collections. Schemas are best thought of as a set of rules that control how data is inserted and updated in our database. More specifically, schemas specify rules at the field or property level, meaning we can specify specifc rules about the data going into&#x2014;and being updated within&#x2014;our database.</p>
+
+<p>Most importantly, a schema helps us to stay consistent. As we&#x2019;ll see, when we define a schema, it allows us to ensure that all of the data being inserted into our database follows a <em>consistent pattern</em>. This means that all fields being inserted into a database must be uniform to and comply with the rules outlined in our schema.</p>
+
+<h3>Installation</h3>
+
+<p>To get started, we need to install Collection2 in our application. To get it, just pop open your terminal and run:</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add aldeed:collection2
+</code></pre>
+
+<p>When we install this, Collection2 will also pull in another package called <a href="https://atmospherejs.com/aldeed/simple-schema">SimpleSchema</a>. SimpleSchema is responsible for providing the syntax and options we&#x2019;ll use for defining schemas on our collections. The difference between Collection2 and SimpleSchema is that Collection2 works as a sort of wrapper around SimpleSchema, giving us some additional methods for adding and managing schema definitions.</p>
+
+<p>To get started, let&#x2019;s talk about where our schema definitions actually live.</p>
+
+<h3>Where to place definitions?</h3>
+
+<p>It&#x2019;s best to place your schema definitions right alongside your collection definitions. As we&#x2019;ll learn, schemas apply directly to collections, so it&#x2019;s helpful to keep them in the same place so it&#x2019;s clear when and how they apply rules <em>to</em> our collections. Ignoring the definition here, we want to get something like this:</p>
+
+<p class="block-header">/collections/example-collection.js</p>
+
+<pre><code class="language-javascript">Coffee = new Meteor.Collection( 'coffee' );
+
+CoffeeSchema = new SimpleSchema({
+ // Our schema rules will go here.
+});
+
+Coffee.attachSchema( CoffeeSchema ); 
+</code></pre>
+
+<p>Pretty simple. Notice that here we have our collection defined in a file located within a directory called <code>/collections</code>. This is purely by convention. The only thing to keep in mind is that you <em>do</em> want to keep your collection definitions in some sort of common directory (accessible by both the client and the server). Make sense? Okay, let&#x2019;s take a look at what it&#x2019;s like to actually define a schema for a collection.</p>
+
+<h3>Basic schema definitions</h3>
+
+<p>For our example purposes, let&#x2019;s take the Coffee concept from above and define a schema. Again, a schema defines how the documents being inserted into a collection should look. To clarify, let&#x2019;s create a basic document that we want to insert into our <code>Coffee</code> collection. We&#x2019;ll take this basic outline then, and define it as a schema.</p>
+
+<pre><code class="language-javascript">{
+ "name": "Tres Santos Colombia,
+ "farm": "Finca Salada Blanco, Finca Costa Rica",
+ "region": "Huila",
+ "country": "Colombia"
+}
+</code></pre>
+
+<p>Our goal is to ensure that each of the documents that are inserted into our <code>Coffee</code> collection look like this. We expect their <em>values</em> to be different, but each document should have these properties and use the same data types. Let&#x2019;s see how we turn this into a schema.</p>
+
+<p class="block-header">/collections/coffee.js</p>
+
+<pre><code class="language-javascript">Coffee = new Meteor.Collection( 'coffee' );
+
+CoffeeSchema = new SimpleSchema({
+ "name": {
+ type: String,
+ label: "Coffee Name"
+ },
+ "farm": {
+ type: String,
+ label: "Coffee Farm Name",
+ optional: true
+ },
+ "region": {
+ type: String,
+ label: "Coffee Origin Region"
+ },
+ "country": {
+ type: String,
+ label: "Coffee Origin Country"
+ }
+});
+
+Coffee.attachSchema( CoffeeSchema );
+</code></pre>
+
+<p>Cool! The basic idea here is that for each field in our object, we define a rule with a set of options that make up that rule. In our basic example above, we&#x2019;ve defined a schema where all of our fields are a string, each is given a label&#x2014;this is what Collection2 uses for errors and other messages&#x2014;and on our <code>farm</code> option, added an <code>optional: true</code> setting. Lastly, after our definition, we <em>attach it</em> to our collection using the <code>attachSchema()</code> method we get from Collection2, passing our <code>CoffeeSchema</code> object.</p>
+
+<p>So what does this accomplish? Now, whenever we attempt to insert a document into our <code>Coffee</code> collection, it must have all of these fields&#x2014;except for <code>farm</code> because we&#x2019;ve marked it optional&#x2014;and the data <em>in those fields</em> must all be of the type <code>String</code>. If for example we tried to insert a document like the following:</p>
+
+<pre><code class="language-javascript">{
+ "name": "Tres Santos Colombia,
+ "farm": "Finca Salada Blanco, Finca Costa Rica",
+ "region": "Huila",
+ "country": "Colombia",
+ "tacos": "Are Awesome"
+}
+</code></pre>
+
+<p>Our insert would fail. What this accomplishes, then, is the goal we outlined above: consistent data structures. Without this, we could insert both of our example documents without issue leading to unwanted errors and confusion later. To get a better idea for how this works, let&#x2019;s update our original document with some slightly more complex data to see how our schema will handle it.</p>
+
+<h3>Complex schema definitions</h3>
+
+<p>To get a better understanding of how a <em>complex</em> schema definition might work. Let&#x2019;s add a few fields to our example coffee object.</p>
+
+<pre><code class="language-javascript">{
+ "name": "Tres Santos Colombia,
+ "farm": "Finca Salada Blanco, Finca Costa Rica",
+ "region": "Huila",
+ "country": "Colombia"
+ "grindsAvailable": [ 'Whole Bean', 'Percolator', 'Chemex', 'French Press' ]
+ "options": [
+ { "weight": "12oz", "price": 1700 },
+ { "weight": "5lb", "price": 9300 }
+ ]
+}
+</code></pre>
+
+<p>Here, we&#x2019;ve added two fields: <code>grindsAvailable</code> equal to an array of strings and <code>options</code>, equal to an array of objects. Let&#x2019;s update our schema and then explain what&#x2019;s happening.</p>
+
+<p class="block-header">/collections/coffee.js</p>
+
+<pre><code class="language-javascript">[...]
+
+CoffeeSchema = new SimpleSchema({
+ "name": {
+ type: String,
+ label: "Coffee Name"
+ },
+ "farm": {
+ type: String,
+ label: "Coffee Farm Name",
+ optional: true
+ },
+ "region": {
+ type: String,
+ label: "Coffee Origin Region"
+ },
+ "country": {
+ type: String,
+ label: "Coffee Origin Country"
+ },
+ "grindsAvailable": {
+ type: [ String ],
+ label: "Grinds Available"
+ },
+ "options.$.weight": {
+ type: String,
+ label: "Size Option Weight"
+ },
+ "options.$.price": {
+ type: Number,
+ label: "Size Option Price"
+ }
+});
+
+[...]
+</code></pre>
+
+<p>Wait a minute! We added two fields but three schema rules! What gives? Let&#x2019;s look at each one and make some sense of it. First, we add a rule for <code>grindsAvailable</code>, setting the type equal to <code>[ String ]</code>. What is that? The syntax is a little weird, but this value being passed to <code>type</code> lets Collection2 know that we expect the value of this property to be an array of strings. For example, say we wanted to pass an array of numbers, we&#x2019;d update this to be <code>[ Number ]</code>.</p>
+
+<p>The next one is even weirder. In our object above, our <code>options</code> property is assigned to an array of objects, however, we&#x2019;re expecting that the items in that array are variable. Sometimes we&#x2019;ll have one object, another time we might have four. To account for this, we can pass the name of our property like this <code>options.$.</code> where the <code>$</code> symbol signifies a variable item.</p>
+
+<p>This means that when this schema is validated against, it will know to run each item in the <code>options</code> array against our two rules <code>weight</code> and <code>price</code>. Can you guess what happens? We may not care about how many items are in our array, but we do expect the objects <em>in that array</em> to be uniform. To enforce that uniformity, we simply pass the names of fields that we expect to be within an object and set our rules accordingly.</p>
+
+<p>The result, then, is that whenever an object is inserted into our <code>options</code> array, we expect it to have a <code>weight</code> value of a <code>String</code> type and a <code>price</code> value of a <code>Number</code> type. Pretty neat!</p>
+
+<h3>Setting values automatically</h3>
+
+<p>One neat trick that we can do with Collection2 is to automatically set values for a field when a document is inserted or updated using the <code>autoValue</code> option on a field. Let&#x2019;s take a look:</p>
+
+<pre><code class="language-javascript">[...]
+
+CoffeeSchema = new SimpleSchema({
+ "name": {
+ type: String,
+ label: "Coffee Name"
+ },
+ [...]
+ "created": {
+ type: Date,
+ label: "Date Coffee Added to System",
+ autoValue: function() {
+ if ( this.isInsert ) {
+ return new Date;
+ } 
+ }
+ },
+ "updated": {
+ type: Date,
+ label: "Date Coffee Updated in System",
+ autoValue: function() {
+ if ( this.isUpdate ) {
+ return new Date;
+ } 
+ }
+ }
+});
+
+[...]
+</code></pre>
+
+<p>How cool is that?! So, without any intervention on our behalf, whenever a new document is added, we can automatically add a <code>created</code> field to it. Conversely, whenever we <em>update</em> our document, we want to ensure that the <code>updated</code> field reflects the date when that update was made. Notice that to test this, we get access to a few different checks:</p>
+
+<table class="table responsive">
+ <tbody>
+ <tr>
+ <th>this.isInsert</th>
+ <td>Is the operation being performed an <code>insert</code>?</td>
+ </tr>
+ <tr>
+ <th>this.isUpdate</th>
+ <td>Is the operation being performed an <code>update</code>?</td>
+ </tr>
+ <tr>
+ <th>this.isUpsert</th>
+ <td>Is the operation being performed an <code>upsert</code>?</td>
+ </tr>
+ <tr>
+ <th>this.userId</th>
+ <td>Get access to the currently logged in user&#x2019;s ID. This is null if the action being performed originated from the server (e.g. we perform an update in a method).</td>
+ </tr>
+ <tr>
+ <th>this.isFromTrustedCode</th>
+ <td>Determines if the code performing this operation is running on the server (true) or the client (false).</td> 
+ </tr>
+ <tr>
+ <th>this.docId</th>
+ <td>The ID of the document being <code>updated</code> or <code>upsert</code>. Does not apply for <code>insert</code> operations. Only works if an <code>_id</code> was set in the selector or when an operation orginates from the client.</td> 
+ </tr>
+ </tbody>
+</table>
+
+<h3>Validating against schemas</h3>
+
+<p>Despite our validations on our collections being automatic, there may be situations where we want to manually validate against our schemas. Here are a few ways we can do that.</p>
+
+<h4>Using the check package</h4>
+
+<p>One situation where our schemas can really come in handy is when <a href="http://themeteorchef.com/snippets/using-the-check-package/">using the check package</a>. Instead of passing validations to our check call directly, we can do something like this:</p>
+
+<p class="block-header">Example Method</p>
+
+<pre><code class="language-javascript">Meteor.methods({
+ addCoffee: function( coffee ) {
+ check( coffee, Coffee.simpleSchema() );
+ // Handle our insert.
+ }
+});
+</code></pre>
+
+<p>Yep, that&#x2019;s it! Now when we go to insert a document, we&#x2019;ll check against the schema that we attached to our <code>Coffee</code> collection. What&#x2019;s unique about this method is that without this, if we attempted to insert a document where the schema didn&#x2019;t match, we may not get an error from Collection2. Having this ensures that our data is checked before it goes into the database and we can rely on the check package to throw an error no matter what if the data we pass doesn&#x2019;t match this schema. Super handy.</p>
+
+<h3>Validating without performing operations</h3>
+
+<p>Another way that we can make use of our schema is to validate our data <em>without</em> performing an insert (or using a <code>check()</code> inside a method). For example, say we had a plain server-side function that we wanted to call like <code>updateCoffee()</code> and wanted to validate the data it was returning? Let&#x2019;s take a peek.</p>
+
+<pre><code class="language-javascript">var updateCoffee = function() {
+ // A bunch of stuff happens here which produces this object:
+
+ var newCoffee = {
+ "name": "New Coffee Name",
+ "farm": "Some Farm Somewhere"
+ };
+ 
+ var isValid = Coffee.simpleSchema().namedContext().validate( newCoffee, { modifier: false } );
+ 
+ if ( isValid ) {
+ return newCoffee;
+ } else {
+ throw new Meteor.Error( "Data is not valid" );
+ }
+};
+</code></pre>
+
+<p>Pretty straightforward. Instead of automatically throwing an error for us, we can see that calling this string of methods simply returns us a <code>true</code> or <code>false</code> value. A few things to point out. First, or actual validation occurs at the end of that string of methods inside the <code>validate()</code> method. Here, we pass the data we want to validate and then an options object with a parameter <code>modifier</code> set to false. The basic idea here is that if <code>modifier</code> is set to <code>true</code>, then instead of a plain object with some values, SimpleSchema will expect our object to be a MongoDB modifier. For example, <code>{ $set: { "name": "New Coffee Name", "farm": "Some Farm Somewhere" } }</code>.</p>
+
+<p>Notice that when we called <code>nameContext()</code> here, we don&#x2019;t pass a value. If we did, this would allow us to&#x2014;optionally&#x2014;create a validation context that we can reference later. From the <a href="https://github.com/aldeed/meteor-simple-schema#named-validation-contexts">SimpleSchema docs</a>:</p>
+
+<blockquote>
+<p>A validation context provides reactive methods for validating and checking the validation status of a particular object.</p>
+</blockquote>
+
+<p>Kind of confusing, but the basic idea is that if we were working with some sort of reactive data source in the example above&#x2014;as opposed to a static object&#x2014;by giving our context a name, we could check it&#x2019;s validity elsewhere (as opposed to having to rely on a return value).</p>
+
+<h3>Skipping validation</h3>
+
+<p>Another nice feature that we get with Collection2 is the ability to <em>skip</em> validations. Remember that once we&#x2019;ve attached a schema to a collection, all insert and update calls on that collection are passed by our schema <em>first</em>. To turn this off, we can just call:</p>
+
+<pre><code class="language-javascript">var newCoffee = {
+ "name": "Tres Santos Colombia,
+ "farm": "Finca Salada Blanco, Finca Costa Rica",
+ "region": "Huila",
+ "country": "Colombia"
+ "grindsAvailable": [ 'Whole Bean', 'Percolator', 'Chemex', 'French Press' ]
+ "options": [
+ { "weight": "12oz", "price": 1700 },
+ { "weight": "5lb", "price": 9300 }
+ ]
+};
+
+Coffee.insert( newCoffee, { validate: false } );
+</code></pre>
+
+<p>It&#x2019;s quite simple, just that extra options object on the end of our <code>insert</code> or <code>update</code> method and Collection2/SimpleSchema will buzz off. Note: this is on a <em>per operation basis</em>. This only disables validation <em>on this operation</em>. All others will still validate against the schema as expected.</p>
+
+<h3>Deny inserts and updates on specific fields</h3>
+
+<p>In some situations, we may find ourself looking to insert or update only <em>some</em> fields in a document. When this is the case&#x2014;say, for example, our coffee had a created date that we didn&#x2019;t want to modify&#x2014;we can add an additional <code>denyInsert</code> or <code>denyUpdate</code> option to the fields we want to prevent inserts and/or updates on.</p>
+
+<pre><code class="language-javascript">[...]
+
+CoffeeSchema = new SimpleSchema({
+ "name": {
+ type: String,
+ label: "Coffee Name"
+ },
+ [...]
+ "created": {
+ type: Date,
+ label: "Date Coffee Added to System",
+ denyUpdate: true
+ }
+});
+
+[...]
+</code></pre>
+
+<p>Now, once our document is inserted and it&#x2019;s given a <code>created</code> date, we can never update that value. Nice!</p>
+
+<h3>The dreaded &#x201C;Maximum call stack size exceeded&#x201D; error</h3>
+
+<p>One thing to point out when working with Collection2 is that you may run into an error in your server console that reads <code>RangeError: Maximum call stack size exceeded</code>. Given the right circumstances, this error can send you into a fit of rage.</p>
+
+<p><img src="http://cl.ly/image/0E3g2X2m2k08/Image%202015-08-26%20at%204.24.41%20PM.png" alt="Maximum call stack size exceeded"></p>
+
+<p>When and if you see this, it&#x2019;s important to check that the data you&#x2019;re inserting or updating matches your schema identically. While we may expect to get an error like &#x201C;insert failed, doesn&#x2019;t match schema,&#x201D; we actually get this funky <code>RangeError</code> thing. I&#x2019;ve sunk far too many hours into debugging this only to find out I forgot to include a field in my document.</p>
+
+<h3>Takeaways</h3>
+
+<ul>
+<li>Schemas are awesome. Use them to help you keep your data consistent in your database.</li>
+<li>Schemas are a great way to validate data for accuracy. With Collection2 we can get this for free or do it manually.</li>
+<li>Be careful when inserting or updating data. You may run into the evil <code>RangeErrror</code> error and break a window or two in the process.</li>
+</ul>
+
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/watsi-logo.svg" alt="Watsi">
+ <header>
+ <h4>Enjoy this post?</h4>
+ <p>I'd really appreciate it if you showed your thanks by <a href="https://watsi.org/team/the-meteor-chef" target="_blank">joining Team Meteor Chef on Watsi</a> and donating healthcare to someone who needs it in exchange!</p>
+ </header>
+ </div>
+ <h3>Questions &amp; Comments</h3>
+ 
+
+
+
+ </div> 
+ </div>
+</body></html>

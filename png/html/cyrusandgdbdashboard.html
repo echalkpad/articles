@@ -1,0 +1,332 @@
+<!DOCTYPE html><html><head><title>cyrus-and/gdb-dashboard</title></head><body>
+<h1>cyrus-and/gdb-dashboard</h1><p><a href="https://github.com/cyrus-and/gdb-dashboard" target="_new">Original URL</a></p>
+<p><blockquote>Modular visual interface for GDB in Python. This comes as a standalone single-file .gdbinit which, among the other things, enables a configurable dashboard showing the most relevant information&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content">
+
+<p>Modular visual interface for GDB in Python.</p>
+
+<p>This comes as a standalone single-file <a href="https://raw.githubusercontent.com/cyrus-and/gdb-dashboard/master/.gdbinit"><code>.gdbinit</code></a> which, among the other
+things, enables a configurable dashboard showing the most relevant information
+during the program execution. Its main goal is to reduce the number of GDB
+commands issued to inspect the current program status allowing the programmer to
+focus on the control flow instead.</p>
+
+<h2><a id="user-content-installation" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#installation"></a>Installation</h2>
+
+<p>Just place <a href="https://raw.githubusercontent.com/cyrus-and/gdb-dashboard/master/.gdbinit"><code>.gdbinit</code></a> in your home directory, for example:</p>
+
+<pre><code>wget -P ~ git.io/.gdbinit
+</code></pre>
+
+<h2><a id="user-content-screenshot" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#screenshot"></a>Screenshot</h2>
+
+<p><a href="https://camo.githubusercontent.com/a45a4a05692295918e27689833d87c83b096f89f/687474703a2f2f692e696d6775722e636f6d2f4973587030524b2e706e67" target="_blank"><img src="https://camo.githubusercontent.com/a45a4a05692295918e27689833d87c83b096f89f/687474703a2f2f692e696d6775722e636f6d2f4973587030524b2e706e67" alt="Screenshot"></a></p>
+
+<h2><a id="user-content-features" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#features"></a>Features</h2>
+
+<ul>
+<li><p>Single GDB init file.</p></li>
+<li><p>Interaction with GDB using the native <a href="https://sourceware.org/gdb/onlinedocs/gdb/Python-API.html">Python API</a>.</p></li>
+<li><p>Several default modules are included to address the most basic
+needs: source code, assembly, registers, etc.).</p></li>
+<li><p>User-defined modules can be easily developed by extending a
+<a href="https://github.com/cyrus-and/gdb-dashboard#custom-modules">Python class</a>.</p></li>
+<li><p>Additional configuration files (both <a href="https://sourceware.org/gdb/onlinedocs/gdb/Command-Files.html">GDB</a> and Python) are read
+from <code>~/.gdbinit.d/</code>.</p></li>
+<li><p>Fully stylable user interface and dynamic command prompt.</p></li>
+<li><p>No GDB command has been redefined, instead all the
+features are available as subcommands of the main <code>dashboard</code> command.</p></li>
+</ul>
+
+<h2><a id="user-content-default-modules" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#default-modules"></a>Default modules</h2>
+
+<p>Follows the list of bundled default modules. Refer to the GDB help system for
+the full syntax.</p>
+
+<ul>
+<li><p><code>assembly</code> shows the disassembled code surrounding the program counter. The
+instructions constituting the current statement are marked, if available.</p></li>
+<li><p><code>history</code> lists the last entries of the GDB value history.</p></li>
+<li><p><code>memory</code> allows to inspect memory regions.</p></li>
+<li><p><code>registers</code> shows the CPU registers and their values.</p></li>
+<li><p><code>source</code> shows the program source code, if available.</p></li>
+<li><p><code>stack</code> shows the current stack trace including the function name and the
+file location, if available. Optionally list the frame arguments and locals
+too.</p></li>
+<li><p><code>threads</code> lists the currently available threads.</p></li>
+<li><p><code>expressions</code> watches user expressions.</p></li>
+</ul>
+
+<h2><a id="user-content-commands" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#commands"></a>Commands</h2>
+
+<p>The GDB documentation is available at <code>help dashboard</code>. Just like any GDB
+command, abbreviations are possible. Moreover, the alias <code>db</code> resolves to
+<code>dashboard</code>.</p>
+
+<h3><a id="user-content-dashboard" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#dashboard"></a>dashboard</h3>
+
+<p>This is the root command and it is used to manually redisplay the dashboard.</p>
+
+<h3><a id="user-content-dashboard--enabled-onoff" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#dashboard--enabled-onoff"></a>dashboard -enabled [on|off]</h3>
+
+<p>Enable or disable the automatic display of the dashboard whenever the target
+program stops. The dashboard is enabled by default and even when it is disabled,
+it can be manually displayed with <code>dashboard</code>.</p>
+
+<h3><a id="user-content-dashboard--layout-directive" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#dashboard--layout-directive"></a>dashboard -layout [<code>&lt;directive&gt;</code>...]</h3>
+
+<p>By default, all the modules are enabled and placed within the dashboard in
+alphabetical order. As the number of modules grows, it is important to decide
+which modules will be part of the dashboard, and where.</p>
+
+<p>Each directive is in the form <code>[!]&lt;module&gt;</code>, when the <code>!</code> is present then the
+corresponding module is disabled by default. The order of directives denotes the
+display order within the dashboard. For example:</p>
+
+<pre><code>dashboard -layout source !assembly stack
+</code></pre>
+
+<p>Modules which do not appear in the list are disabled and placed after the last
+element in alphabetical order.</p>
+
+<p>When executed without arguments, this command lists all the available modules.</p>
+
+<h3><a id="user-content-dashboard--style-name-value" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#dashboard--style-name-value"></a>dashboard -style [<code>&lt;name&gt;</code> [<code>&lt;value&gt;</code>]]</h3>
+
+<p>Access to the stylable attributes of the dashboard, see <a href="https://github.com/cyrus-and/gdb-dashboard#stylable-attributes">Stylable
+attributes</a>. For example, to change the prompt to
+something more familiar:</p>
+
+<pre><code>dashboard -style prompt '(gdb)'
+</code></pre>
+
+<p>The argument is parsed as a Python literal and converted to the proper type.</p>
+
+<p>When only the name is specified this command shows the current value,
+whereas without arguments prints all the attributes.</p>
+
+<h3><a id="user-content-modules-subcommands" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#modules-subcommands"></a>Modules subcommands</h3>
+
+<p>Every module adds its own subcommand <code>dashboard &lt;module&gt;</code> which is used to
+toggle the enable flag and to redisplay the dashboard.</p>
+
+<p>Modules may also declare additional subcommands, see <code>help dashboard &lt;module&gt;</code>
+from GDB.</p>
+
+<p>Moreover, if a module declare some stylable attributes then the command
+<code>dashboard &lt;module&gt; -style</code> will be available. Its functioning is equivalent to
+the <a href="https://github.com/cyrus-and/gdb-dashboard#dashboard--style-name-value"><code>dashboard -style</code></a> command but it does apply
+to a module.</p>
+
+<h2><a id="user-content-configuration" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#configuration"></a>Configuration</h2>
+
+<p>Files in <code>~/.gdbinit.d/</code> are executed in alphabetical order, but the preference
+is given to Python files. If there are subdirectories, they are walked
+recursively. The idea is to keep separated the custom modules definition from
+the configuration itself.</p>
+
+<p>The main configuration file can be placed in <code>~/.gdbinit.d/</code> (say
+<code>~/.gdbinit.d/init</code>) and should be used to tune the dashboard styles and modules
+configuration but also the usual GDB parameters.</p>
+
+<p>The alternative is to hard code changes in the provided <a href="https://raw.githubusercontent.com/cyrus-and/gdb-dashboard/master/.gdbinit"><code>.gdbinit</code></a>, to do
+so just add new modules and GDB settings under <code># Default modules</code> and <code># Better
+GDB defaults</code> respectively.</p>
+
+<h2><a id="user-content-stylable-attributes" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#stylable-attributes"></a>Stylable attributes</h2>
+
+<p>There is number of attributes that can be used to customize the aspect of the
+dashboard and of its modules. They are documented within the GDB help system.
+For what concerns the dashboard itself it can be reached with:</p>
+
+<pre><code>help dashboard -style
+</code></pre>
+
+<p>Whereas for modules:</p>
+
+<pre><code>help dashboard &lt;module&gt; -style
+</code></pre>
+
+<h3><a id="user-content-ansi-escape-codes" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#ansi-escape-codes"></a>ANSI escape codes</h3>
+
+<p>Colors and text styles are specified using <a href="https://en.wikipedia.org/wiki/ANSI_escape_code">ANSI</a> escape codes. For
+example setting a style to <code>1;31</code> will produce <code>^[[1;31m</code>, which will result in
+displaying the text red (<code>31</code>) and bright (<code>1</code>). The ansi output can be disabled
+by setting the <code>ansi</code> attribute (note that this will not affect the command
+prompt).</p>
+
+<h3><a id="user-content-dividers" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#dividers"></a>Dividers</h3>
+
+<p>A divider is basically a terminal-wide horizontal line with an optional label.
+Primary dividers are those used to separate the modules, whereas secondary
+dividers may be used inside modules to logically separate different sections.
+When a section or module is empty then the styles used for the divider are those
+with the <code>off</code> qualifier.</p>
+
+<h3><a id="user-content-common-styles" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#common-styles"></a>Common styles</h3>
+
+<p>These are general purpose <a href="https://en.wikipedia.org/wiki/ANSI_escape_code">ANSI</a> styles defined for convenience and used
+within the default modules.</p>
+
+<ul>
+<li><code>style_selected_1</code></li>
+<li><code>style_selected_2</code></li>
+<li><code>style_low</code></li>
+<li><code>style_high</code></li>
+<li><code>style_error</code></li>
+</ul>
+
+<h2><a id="user-content-custom-modules" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#custom-modules"></a>Custom modules</h2>
+
+<p>The idea of custom modules is that they provide ways to access readonly
+information from the the target program status; it is safe to assume that they
+will be queried during the program execution only.</p>
+
+<p>Custom modules must inherit the <code>Dashboard.Module</code> class and define some
+methods:</p>
+
+<ul>
+<li><p><code>label</code> returns the module label which will appear in the divider.</p></li>
+<li><p><code>lines</code> return a list of strings which will form the module content. When a
+module is temporarily unable to produce its content, it should return an
+empty list; its divider will then use the styles with the <code>off</code> qualifier.</p></li>
+</ul>
+
+<p>The name of a module is automatically obtained by the class name.</p>
+
+<p>Modules are instantiated once at initialization time and kept during the whole
+the GDB session.</p>
+
+<p>Optionally, a module may include a description which will appear in the GDB help
+system by specifying a Python docstring for the class.</p>
+
+<p>Optionally, a module may define stylable attributes by defining the <code>attributes</code>
+method returning a dictionary in which the key is the attribute name and the
+value is another dictionary:</p>
+
+<ol>
+<li><p><code>default</code> is the initial value for this attribute.</p></li>
+<li><p><code>doc</code> is the documentation of this attribute which will appear in the GDB
+help system. This key can be omitted.</p></li>
+<li><p><code>name</code> is the name of the attribute of the Python object, defaults to the
+key value.</p></li>
+<li><p><code>type</code> is the type of this attribute, it is used to coerce the value passed
+as an argument to the proper type, or raise an exception. This key defaults
+to the <code>str</code> type.</p></li>
+<li><p><code>check</code> is a control callback which accept the coerced value and returns
+<code>True</code> if the value satisfies the constraint and <code>False</code> otherwise. This key
+is optional, when omitted no check is performed.</p></li>
+</ol>
+
+<p>Optionally, a module may declare subcommands by defining the <code>commands</code> method
+returning a dictionary in which the key is the command name and the value is
+another dictionary:</p>
+
+<ol>
+<li><p><code>action</code> is the callback to be executed which accepts the raw input string
+from the GDB prompt. Callbacks may raise exceptions to notify erroneous
+situations which message will be shown automatically to the user.</p></li>
+<li><p><code>doc</code> is the command documentation.</p></li>
+<li><p><code>completion</code> is the completion policy, one of the <code>gdb.COMPLETE_*</code> constants
+defined in the <a href="https://sourceware.org/gdb/onlinedocs/gdb/Commands-In-Python.html">reference manual</a>. This key is optional and
+defaults to <code>None</code> which is equivalent to <code>gdb.COMPLETE_NONE</code>.</p></li>
+</ol>
+
+<h3><a id="user-content-common-functions" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#common-functions"></a>Common functions</h3>
+
+<p>A number of auxiliary common functions are defined in the global scope, they can
+be found in the provided <a href="https://raw.githubusercontent.com/cyrus-and/gdb-dashboard/master/.gdbinit"><code>.gdbinit</code></a> and concern topics like <a href="https://en.wikipedia.org/wiki/ANSI_escape_code">ANSI</a>
+output, divider formatting, conversion callbacks, etc. They should be more or
+less self-documented, some usage examples can be found within the bundled
+default modules.</p>
+
+<h3><a id="user-content-example" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#example"></a>Example</h3>
+
+<p>Default modules already provide a good example, but here is a simple module
+which may be used as a template for new custom modules, it allows the programmer
+to note down some snippets of text during the debugging session.</p>
+
+<div class="highlight highlight-python"><pre><span class="pl-k">class</span> <span class="pl-en">Notes</span>(<span class="pl-e">Dashboard.Module</span>):
+ <span class="pl-s"><span class="pl-pds">"""</span>Simple user-defined notes.<span class="pl-pds">"""</span></span>
+
+ <span class="pl-k">def</span> <span class="pl-en"><span class="pl-c1">__init__</span></span>(<span class="pl-smi">self</span>):
+ <span class="pl-v">self</span>.notes <span class="pl-k">=</span> []
+
+ <span class="pl-k">def</span> <span class="pl-en">label</span>(<span class="pl-smi">self</span>):
+ <span class="pl-k">return</span> <span class="pl-s"><span class="pl-pds">'</span>Notes<span class="pl-pds">'</span></span>
+
+ <span class="pl-k">def</span> <span class="pl-en">lines</span>(<span class="pl-smi">self</span>):
+ out <span class="pl-k">=</span> []
+ <span class="pl-k">for</span> note <span class="pl-k">in</span> <span class="pl-v">self</span>.notes:
+ out.append(note)
+ <span class="pl-k">if</span> <span class="pl-v">self</span>.divider:
+ out.append(divider())
+ <span class="pl-k">return</span> out[:<span class="pl-k">-</span><span class="pl-c1">1</span>] <span class="pl-k">if</span> <span class="pl-v">self</span>.divider <span class="pl-k">else</span> out
+
+ <span class="pl-k">def</span> <span class="pl-en">add</span>(<span class="pl-smi">self</span>, <span class="pl-smi">arg</span>):
+ <span class="pl-k">if</span> arg:
+ <span class="pl-v">self</span>.notes.append(arg)
+ <span class="pl-k">else</span>:
+ <span class="pl-k">raise</span> <span class="pl-c1">Exception</span>(<span class="pl-s"><span class="pl-pds">'</span>Cannot add an empty note<span class="pl-pds">'</span></span>)
+
+ <span class="pl-k">def</span> <span class="pl-en">clear</span>(<span class="pl-smi">self</span>, <span class="pl-smi">arg</span>):
+ <span class="pl-v">self</span>.notes <span class="pl-k">=</span> []
+
+ <span class="pl-k">def</span> <span class="pl-en">commands</span>(<span class="pl-smi">self</span>):
+ <span class="pl-k">return</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>add<span class="pl-pds">'</span></span>: {
+ <span class="pl-s"><span class="pl-pds">'</span>action<span class="pl-pds">'</span></span>: <span class="pl-v">self</span>.add,
+ <span class="pl-s"><span class="pl-pds">'</span>doc<span class="pl-pds">'</span></span>: <span class="pl-s"><span class="pl-pds">'</span>Add a note.<span class="pl-pds">'</span></span>
+ },
+ <span class="pl-s"><span class="pl-pds">'</span>clear<span class="pl-pds">'</span></span>: {
+ <span class="pl-s"><span class="pl-pds">'</span>action<span class="pl-pds">'</span></span>: <span class="pl-v">self</span>.clear,
+ <span class="pl-s"><span class="pl-pds">'</span>doc<span class="pl-pds">'</span></span>: <span class="pl-s"><span class="pl-pds">'</span>Remove all the notes.<span class="pl-pds">'</span></span>
+ }
+ }
+
+ <span class="pl-k">def</span> <span class="pl-en">attributes</span>(<span class="pl-smi">self</span>):
+ <span class="pl-k">return</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>divider<span class="pl-pds">'</span></span>: {
+ <span class="pl-s"><span class="pl-pds">'</span>doc<span class="pl-pds">'</span></span>: <span class="pl-s"><span class="pl-pds">'</span>Divider visibility flag.<span class="pl-pds">'</span></span>,
+ <span class="pl-s"><span class="pl-pds">'</span>default<span class="pl-pds">'</span></span>: <span class="pl-c1">True</span>,
+ <span class="pl-s"><span class="pl-pds">'</span>type<span class="pl-pds">'</span></span>: <span class="pl-c1">bool</span>
+ }
+ }</pre></div>
+
+<p>To use the above just save it in a Python file, say <code>notes.py</code>, inside
+<code>~/.gdbinit.d/</code>, the the following commands (together with the help) will be
+available:</p>
+
+<pre><code>dashboard notes
+dashboard notes add
+dashboard notes clear
+dashboard notes -style
+</code></pre>
+
+<h2><a id="user-content-resources" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#resources"></a>Resources</h2>
+
+
+
+<h2><a id="user-content-license" class="anchor" href="https://github.com/cyrus-and/gdb-dashboard#license"></a>License</h2>
+
+<p>Copyright (c) 2015 Andrea Cardaci <a href="mailto:cyrus.and@gmail.com">cyrus.and@gmail.com</a></p>
+
+<p>Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:</p>
+
+<p>The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.</p>
+
+<p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+</article>
+ </div>
+</body></html>

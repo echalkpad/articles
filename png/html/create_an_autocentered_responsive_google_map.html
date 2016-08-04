@@ -1,0 +1,84 @@
+<!DOCTYPE html><html><head><title>Create An Auto-Centered Responsive Google Map</title></head><body>
+<h1>Create An Auto-Centered Responsive Google Map</h1><p><a href="http://thenewcode.com/359/Create-An-Auto-Centered-Responsive-Google-Map" target="_new">Original URL</a></p>
+<p><blockquote>In principle, it&#x2019;s easy to make an embedded Google Map responsive: just remove the height and width attributes that Google supplies in the embed code and substitute appropriate CSS and&hellip;</blockquote></p>
+<div><div class="entry-content">
+	<p>In principle, it&#x2019;s easy to make an embedded <a href="http://thenewcode.com/132/Embedding-A-Google-Map-On-A-Web-Page">Google Map</a> responsive: just remove the <code>height</code> and <code>width</code> attributes that Google supplies in the embed code and substitute appropriate CSS and wrapping markup.
+</p><p>However, there&#x2019;s one significant problem: any horizontal window resize cuts off the edge of the map, meaning that it must be moved or rescaled to track back to the original coordinates. However, if you change the approach a little, it&#x2019;s entirely possible to solve the problem with a little <a href="http://thenewcode.com/javascript" rel="tag">JavaScript</a>.
+
+</p><p>First, rather than using an <a href="http://thenewcode.com/628/The-Curious-History-and-Quirky-Nature-of-iFrames"><code>&lt;iframe&gt;</code></a> as suggested by the Google Maps embed options, we must construct our own container for the map:
+
+</p><pre><code class="language-markup">&lt;div id="map_container"&gt;
+ &lt;div id="map"&gt;&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+
+<p>We need to size and position these elements to take the map we are going to project into it. To do so, we&#x2019;ll use a fairly standard <a href="http://thenewcode.com/css" rel="tag">CSS</a> pattern:
+
+</p><pre><code class="language-css">#map_container {
+	position: relative;
+	padding-top: 50%;
+}
+#map {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0;
+}</code></pre>
+
+<aside>
+<p>To make the map taller, increase the value of <code>padding-top</code>. The <code>map_container</code> can be styled in any way you wish (provided with a border, given a percentage width, etc).
+</p></aside>
+
+<p>To load the map into the <a href="http://thenewcode.com/57/Introduction-to-divs"><code>&lt;div&gt;</code> elements</a> we have made, we use the <a href="https://developers.google.com/maps/">Google Maps API</a>. At the bottom of the page, add:
+
+</p><pre><code class="language-markup">&lt;script src="https://maps.googleapis.com/maps/api/js?v=3.exp&amp;sensor=false"&gt;&lt;/script&gt;</code></pre>
+
+<p>Below this, add a script:
+
+</p><pre><code class="language-javascript">function initialize() {
+ var myLatlng = new google.maps.LatLng(53.3333,-3.08333),
+ mapOptions = {
+ zoom: 11,
+ center: myLatlng,
+ mapTypeId: google.maps.MapTypeId.ROADMAP
+ }
+var map = new google.maps.Map(document.getElementById('map'), mapOptions),
+contentString = 'Some address here..',
+infowindow = new google.maps.InfoWindow({
+ content: contentString,
+ maxWidth: 500
+)};
+
+var marker = new google.maps.Marker({
+ position: myLatlng,
+ map: map
+});
+
+google.maps.event.addListener(marker, 'click', function() {
+ infowindow.open(map,marker);
+});
+
+google.maps.event.addDomListener(window, "resize", function() {
+ var center = map.getCenter();
+ google.maps.event.trigger(map, "resize");
+ map.setCenter(center);
+ });
+}
+
+google.maps.event.addDomListener(window, 'load', initialize);</code></pre>
+
+<p>The result should be what you see at the top of this article. A few important points:
+</p><ol>
+<li><p>The values associated with <code>google.maps.LatLng</code> are the <code>latitude</code> and <code>longtitude</code> of your target. They will be similar to (but may not be exactly the same as) the values you see in the URL for the same location on the Google Maps website. For example:
+</p><pre><code class="language-markup">https://www.google.com/maps/place/Times+Square/@40.758895,-73.9873197,17z</code></pre>
+<p>The first number in this URL is the latitude of the location; the second, longitude. You&#x2019;ll see similar numbers used when you try to embed the location as a Google Map:
+</p><pre><code class="language-markup">&lt;iframe src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1
+d3022.1422937950165!2d-73.98731968484512!3d40.75889497932676 width="600" 
+height="450" frameborder="0" style="border:0" allowfullscreen&gt;&lt;/iframe&gt;</code></pre>
+<p>In the embed code, the longitude comes first, immediately after the <code>2d</code> in the URL, followed by the latitude.
+</p></li><li><code>zoom</code> is the level of zoom for the default appearance of the map. You&#x2019;ll also see that in both URLs, denoted by <code>z</code>.
+</li><li><code>contentString</code> is the label for the target, which will appear when it is clicked.
+</li></ol>
+
+<p>There&#x2019;s a great deal more that can be achieved with the Google Maps API, but I&#x2019;ll leave that for future articles.</p><p class="credit">I must acknowledge the help of <a href="http://codepen.io/jamesnew/">James New</a> in guiding me to this solution.</p>	</div>
+</div>
+</body></html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html><html><head><title>Implementing Sign in with Twitter for Node.js</title></head><body>
+<h1>Implementing Sign in with Twitter for Node.js</h1><p><a href="https://www.codementor.io/nodejs/tutorial/how-to-implement-twitter-sign-expressjs-oauth" target="_new">Original URL</a></p>
+<p><blockquote>More and more recently, I&#x2019;ve been seeing small applications implementing sign in with Twitter, Google, GitHub, LinkedIn, etc. I think this is a great move for a number of reasons. First, so I&hellip;</blockquote></p>
+<div><div class="detail template ng-non-bindable" id="detail">
+<img src="https://www.filepicker.io/api/file/YufF59XRS28TBJYp5dbg">
+<p>More and more recently, I&#x2019;ve been seeing small applications implementing sign in with Twitter, Google, GitHub, LinkedIn, etc. I think this is a great move for a number of reasons. First, so I don&#x2019;t have to sign up for yet another account at yet another site, and secondly because app developers no longer have to implement their own user sign up scheme with all the trimmings: forgotten passwords, activation emails, and so on. I&#x2019;m sure a lot of developers out there have those pieces of code as part of their toolbox, but for those who don&#x2019;t, OAuth sign ins are so much easier to build. I&#x2019;ve written a guide today that describes how to implement sign in with Twitter. And because I&#x2019;m really into Node.js at the moment, it&#x2019;s going to be written with JavaScript.</p>
+
+<p>For those of you who just want to cut to the chase, <a href="https://github.com/chrisharrington/node-twitter-sign-in-example">I&#x2019;ve made the server-side code available here.</a></p>
+
+<p>There&#x2019;s a few things we&#x2019;ll need to get started.</p>
+
+<ul>
+ <li><strong>An application with Twitter.</strong> You&#x2019;ll need a developer application to use with Twitter. If you&#x2019;re unfamiliar with how OAuth sign ins work, typically what happens is that you&#x2019;ll click on a &#x201C;sign in with Twitter&#x201D; button and be directed to a Twitter page with the application&#x2019;s name on it, with an optional logo. This page is why you need to create an application. Go <a href="https://apps.twitter.com/">here</a> to manage your Twitter applications. Once your application is created, make a note of the &#x201C;consumer token&#x201D; and &#x201C;consumer secret&#x201D; values under &#x201C;Keys and Access Tokens&#x201D;; we&#x2019;ll need them later.</li>
+ <li><strong>A basic Express-backed Node.js application.</strong> There&#x2019;s nothing that says we need to use Express specifically, but this 	guide will revolve around building a Node.js application from the ground up with Express. I&#x2019;m going to presume that the 	reader already has Node.js installed, so now we&#x2019;ll just need to initialize the Node.js application, as such:</li>
+</ul>
+<pre><code class="language-bash bash">npm init
+npm install express node-twitter-api bluebird --save</code></pre>
+<p>The <a href="https://www.npmjs.com/package/node-twitter-api">node-twitter-api</a> package is what we&#x2019;re going to use to 
+obfuscate a bunch of the more complicated inner workings of an 
+OAuth implementation. It&#x2019;s built specifically for Twitter. I&#x2019;ve also 
+got <a href="https://github.com/petkaantonov/bluebird">bluebird</a> in there, too, which is a comprehensive Promise 
+implementation.</p>
+
+<h2 id="the-plan">The Plan</h2>
+
+<p>So the idea here is that when a user shows up to your site, he or she can sign in using Twitter instead of registering using a custom implementation. This has a couple of parts.</p>
+
+<ul>
+ <li>The user clicks the sign in with Twitter button.</li>
+ <li>Your front-end code sends a request to your server-side code indicating that a user wants to sign in with Twitter.</li>
+ <li>Your server-side code sends an OAuth request to Twitter, indicating that we need a <strong>request token</strong>. This is the step we need the <strong>consumer token</strong> and <strong>consumer secret</strong> from your Twitter application.</li>
+ <li>If all goes well on Twitter&#x2019;s end, we get a <strong>request token</strong> and a <strong>request secret</strong> from them. At this point, we redirect the user to a predetermined (by Twitter) URL with that token as part of the query string.</li>
+ <li>The page we redirect the user to requires that he or she sign into his or her Twitter account. After signing in and agreeing to the application&#x2019;s terms, the user is redirected back to the application with the same <strong>request token</strong> and <em>another</em> value, this time the <strong>OAuth verifier</strong>.</li>
+ <li>Now we use the <strong>request token</strong> and <strong>request secret</strong> along with the <strong>OAuth verifier</strong> to get an <strong>access token</strong>, also from Twitter.</li>
+ <li>The previous request returns an <strong>access token</strong> and an <strong>access secret</strong>, both of which are used in the third and final request to Twitter, which is to verify credentials and get the authenticated user&#x2019;s information.</li>
+</ul>
+
+<p>Phew. Lots of steps.</p>
+
+<h3 id="the-user-clicks-the-sign-in-button">The user clicks the sign in button</h3>
+
+<p>So the very first step for this flow is when the user clicks the &#x201C;Sign in with Twitter!&#x201D; button. Here&#x2019;s some really basic code which uses jQuery to send an AJAX request to our server-side code to generate a <strong>request token</strong> and redirect the user to the Twitter sign in page.</p>
+
+<pre><code class="language-markup markup">&lt;!DOCTYPE html&gt;
+
+&lt;html&gt;
+ &lt;head&gt;
+ &lt;script src=&amp;quot;https://code.jquery.com/jquery-2.1.4.min.js&amp;quot;&gt;&lt;/script&gt;
+ &lt;script&gt;
+ $(function() {
+ $(&amp;quot;#sign-in-with-twitter&amp;quot;).on(&amp;quot;click&amp;quot;, function() {
+ window.location.href = &amp;quot;&lt;some domain&gt;/request-token&amp;quot;;
+ });
+ });
+ &lt;/script&gt;
+ &lt;/head&gt;
+ &lt;body&gt;
+ &lt;button id=&amp;quot;sign-in-with-twitter&amp;quot;&gt;Sign in with Twitter!&lt;/button&gt;
+ &lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+<p>Once the user clicks the sign in button, a request is directed to GET &lt;some domain&gt;/request-token. Don&#x2019;t worry; this request will redirect the user to the Twitter sign in page on the server-side.</p>
+
+<h3 id="get-the-request-token-and-redirect-the-user-to-sign-in">Get the request token and redirect the user to sign in</h3>
+
+<p>Now, on the server-side, here&#x2019;s the route to handle the /request-token request.</p>
+
+<pre><code class="language-javascript javascript">"use strict";
+
+var Twitter = require("node-twitter-api"),
+ secret = include("secret");
+
+module.exports = function(app) {
+ var twitter = new Twitter({
+ consumerKey: secret.twitter.consumerKey,
+ 	consumerSecret: secret.twitter.consumerSecret,
+ 	callback: secret.twitter.callbackUrl
+ });
+
+ var _requestSecret;
+
+ app.get("/request-token", function(req, res) {
+ twitter.getRequestToken(function(err, requestToken, requestSecret) {
+ if (err)
+ res.status(500).send(err);
+ else {
+ _requestSecret = requestSecret;
+ res.redirect("https://api.twitter.com/oauth/authenticate?oauth_token=" + requestToken);
+ }
+ });
+ });
+
+ ...
+};</code></pre>
+
+<p>Here, we&#x2019;re creating a node-twitter-api instance using the stored <strong>consumer key</strong>, <strong>consumer secret</strong> and <strong>callback URL</strong>, of which the first two are assigned to your Twitter application.</p>
+
+<p><strong>Note:</strong> Make sure you don&#x2019;t store these values in a publicly visible place, like GitHub. If you do, those with nefarious purposes can hijack your Twitter application.</p>
+
+<p>On a successful request, we take the <strong>request token</strong> and send it as the <strong>oauth_token</strong> query string value in the redirect URL. This sends the user to a Twitter sign in page, and allows that user to accept or reject the application&#x2019;s permissions request. Once they&#x2019;ve done that, Twitter will send the user to the URL specified as &#x201C;callback&#x201D; when creating the Twitter instance.</p>
+
+<h3 id="handle-the-result-of-the-redirect-from-twitter-to-your-callback">Handle the result of the redirect from Twitter to your callback</h3>
+
+<p>After the user has signed in, he or she will be redirected to the URL we&#x2019;ve specified when we created the Twitter instance, so now we should create that page.</p>
+
+<pre><code class="language-markup markup">&lt;!DOCTYPE html&gt;
+
+&lt;html&gt;
+ &lt;head&gt;
+ &lt;script src=&amp;quot;https://code.jquery.com/jquery-2.1.4.min.js&amp;quot;&gt;&lt;/script&gt;
+ &lt;script&gt;
+ $(function() {
+ $.get(&amp;quot;&lt;some domain&gt;/access-token&amp;quot; + location.search).done(function(user) {
+ // Do something with your signed in user&amp;#39;s information here.
+ });
+ });
+ &lt;/script&gt;
+ &lt;/head&gt;
+ &lt;body&gt;&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+<p>All our callback page is doing here is requesting an <strong>access token</strong> from our server. We&#x2019;re tacking on the query string from our callback page to the request because it contains the required <strong>oauth_token</strong> and <strong>oauth_verifier</strong> values, both of which are directly from Twitter.</p>
+
+<h3 id="handle-the-request-for-an-access-token">Handle the request for an access token</h3>
+
+<p>Now, we need to handle the request from our callback page for an access token.</p>
+
+<pre><code class="language-javascript javascript">"use strict";
+
+var Twitter = require("node-twitter-api"),
+ secret = include("secret");
+
+module.exports = function(app) {
+ var twitter = new Twitter({
+ consumerKey: secret.twitter.consumerKey,
+ 	consumerSecret: secret.twitter.consumerSecret,
+ 	callback: secret.twitter.callbackUrl
+ });
+
+ var _requestSecret;
+
+ ...
+
+ app.get("/access-token", function(req, res) {
+ var requestToken = req.query.oauth_token,
+	 verifier = req.query.oauth_verifier;
+
+ twitter.getAccessToken(requestToken, _requestSecret, verifier, function(err, accessToken, accessSecret) {
+ if (err)
+ res.status(500).send(err);
+ else
+ twitter.verifyCredentials(accessToken, accessSecret, function(err, user) {
+ if (err)
+ res.status(500).send(err);
+ else
+ res.send(user);
+ });
+ });
+ });
+};</code></pre>
+
+<p>This code exists in the same file as the route for request-token, but I&#x2019;ve hidden some of the other code to keep the snippet&#x2019;s size manageable. To get the <strong>access token</strong> and <strong>access secret</strong>, we need previously retrieved <strong>request secret</strong> as well as the passed in <strong>request token</strong> and <strong>verifier</strong> values. We pass those off to the <code>getAccessToken</code> function, which talks to Twitter and if all goes well, returns the sought after values. We use those to call <code>verifyCredentials</code> and retrieve the signed in user&#x2019;s information, direct from Twitter and send it straight back to our callback page.</p>
+
+<h2 id="next-steps">Next steps?</h2>
+
+<p>From here, it&#x2019;s usually a good idea to store the user somewhere for easy retrieval so the user doesn&#x2019;t have to sign in with Twitter every time he or she arrives at your site, but that&#x2019;s beyond the scope of this article.</p>
+
+<p>As I mentioned above, I&#x2019;ve cleaned up the server-side code and <a href="https://github.com/chrisharrington/node-twitter-sign-in-example">stored it on GitHub</a> in case anyone wants to take a closer look. It&#x2019;s not exactly the same as what&#x2019;s here, as I&#x2019;d put a bunch of stuff in a single file for the sake of easy teaching, but it&#x2019;s pretty close. If you have any questions, let me know in the comments and I&#x2019;ll see if I can help out. Thanks for reading!</p>
+
+</div>
+</div>
+</body></html>

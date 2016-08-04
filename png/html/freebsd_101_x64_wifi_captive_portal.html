@@ -1,0 +1,452 @@
+<!DOCTYPE html><html><head><title>FreeBSD 10.1 x64 WiFi Captive Portal</title></head><body>
+<h1>FreeBSD 10.1 x64 WiFi Captive Portal</h1><p><a href="http://www.unixmen.com/freebsd-10-1-x64-wifi-captive-portal/" target="_new">Original URL</a></p>
+<p><blockquote>Our goal is to build a FreeBSD server Captive Portal as it is in hotels and airports. Guest joins to wifi without entering a username or password, but when trying to join internet the user will be&hellip;</blockquote></p>
+<div><div class="clearfix">
+<p>Our goal is to build a FreeBSD server Captive Portal as it is in hotels and airports. Guest joins to wifi without entering a username or password, but when trying to join internet the user will be asked for username and password. If the username and password is true, the guest will be able to use internet. In my environment I used AP ubiquiti(official site: https://www.ubnt.com/). It is cheaper, stable and have open source wireless controller. The network structure will be as follows:<br>
+<a href="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/UNIXMEN-FR-1.jpg" rel="attachment wp-att-43174"><img class="aligncenter size-full wp-image-43174" src="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/UNIXMEN-FR-1.jpg?resize=300%2C232%20300w,%20http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/UNIXMEN-FR-1.jpg?resize=768%2C594%20768w,%20http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/UNIXMEN-FR-1.jpg?w=854%20854w" alt="UNIXMEN-FR"></a></p>
+<p>It is assumed that you have already configured FAMP and Apache PHP is stable. Apache web server is working on a group and user named <strong>unixmen</strong> which is created before. (In other words, in <strong>httpd.conf</strong> file directives are available: <strong>User unixmen</strong> and <strong>Group unixmen</strong>)</p>
+<p>In all Access Points IP addresses is configured as it is shown in picture and DHCP server and ROUTER, FreeBSD Server&#x2019;s internal network card&#x2019;s IP address is shown. In Apache configured <strong>VirtualHost</strong> and it operates under the domain name <strong>wifi.unixmen.com</strong></p>
+<p>VirtualHost&#x2019;s <strong>Public_html</strong> folder is the address of <strong>/usr/local/www/wifi/</strong>, and the&#xA0; membership and authority of folder is <strong>unixmen</strong>. And same as <strong>/usr/local/etc/apache24/httpd.conf</strong> configured file <strong>Listen 80</strong> and <strong>Listen 443</strong> defined. <strong>/usr/local/domen/wifi.unixmen.com</strong> virtualhos content of the file are as follows:<br>
+<code><strong>&lt;VirtualHost *:80&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; RewriteEngine on</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; ReWriteCond %{SERVER_PORT} !^443$</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; RewriteRule ^/(.*) https://%{HTTP_HOST}/$1 [NC,R,L]</strong><br>
+<strong>&lt;/VirtualHost&gt;</strong><br>
+<strong>&lt;VirtualHost *:443&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; SSLEngine on</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; SSLCertificateFile /usr/local/etc/apache24/ssl/wifi.pem</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; SSLCertificateKeyFile /usr/local/etc/apache24/ssl/wifi.key</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; DocumentRoot /usr/local/www/wifi/</strong><br>
+<strong>&lt;Directory "/usr/local/www/wifi"&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; AllowOverride All</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; Require all granted</strong><br>
+<strong>&lt;/Directory&gt;</strong><br>
+<strong>&lt;/VirtualHost&gt;</strong></code></p>
+<p>It is needed to install <strong>pear </strong>for php and create database and its user at MySQL&#xA0;We install <strong>pear </strong>and configure for php.<br>
+<code># <strong>cd `whereis pear | awk '{ print $2 }'`</strong>&#xA0; - enter Port Path<br>
+# <strong>make -DBATCH install</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; - install</code></p>
+<p>After we copy php file and change properly the changes of the context.<br>
+<code># <strong>cp /usr/local/etc/php.ini-production /usr/local/etc/php.ini</strong></code></p>
+<p>We do the changes in the file <strong>/usr/local/etc/php.ini</strong>:<br>
+<code><strong>date.timezone = 'Asia/Baku'</strong><br>
+<strong>include_path = '.:/usr/local/share/pear'</strong></code></p>
+<p>Now lets create MySQL database and define a user for this database. And create a schedule for wifi users<br>
+<code>mysql&gt; <strong>CREATE database wifi;</strong><br>
+mysql&gt; <strong>grant all privileges on wifi.* to wifidbuser@localhost identified by 'wifidbpassword';</strong><br>
+mysql&gt; <strong>use</strong> <strong>wifi</strong>;<br>
+mysql&gt; <strong>CREATE TABLE `users` (</strong><br>
+<strong>&#xA0; `id` int(10) unsigned NOT NULL auto_increment,</strong><br>
+<strong>&#xA0; `username` varchar(50) default NULL,</strong><br>
+<strong>&#xA0; `password` varchar(50) default NULL,</strong><br>
+<strong>&#xA0; `created` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,</strong><br>
+<strong>&#xA0; `time_begin` timestamp NOT NULL default '0000-00-00 00:00:00',</strong><br>
+<strong>&#xA0; `time_end` timestamp NOT NULL default '0000-00-00 00:00:00',</strong><br>
+<strong>&#xA0; `status` tinyint(4) NOT NULL default '0',</strong><br>
+<strong>&#xA0; `rule_num` smallint(5) unsigned NOT NULL,</strong><br>
+<strong>&#xA0; PRIMARY KEY&#xA0; (`id`),</strong><br>
+<strong>&#xA0; KEY `rule_num` (`rule_num`)</strong><br>
+<strong>) ENGINE=MyISAM AUTO_INCREMENT=6 DEFAULT CHARSET=cp1251 AUTO_INCREMENT=6 ;</strong></code></p>
+<p><strong>/etc/rc.conf</strong> the configuration file will be as follows<br>
+<code><strong>hostname="wifinat.unixmen.com"</strong><br>
+<strong>ifconfig_em0="inet 88.8.9.10 netmask 255.255.255.0"</strong><br>
+<strong>ifconfig_em1="inet 10.0.0.1 netmask 255.255.255.0"</strong><br>
+<strong>defaultrouter="88.8.9.1"</strong><br>
+<strong>sshd_enable="YES"</strong><br>
+<strong>dumpdev="NO"</strong></code></p>
+<p>#### Local Disabled Services ####<br>
+<strong>sendmail_enable=&#x201D;NO&#x201D;</strong><br>
+<strong>sendmail_submit_enable=&#x201D;NO&#x201D;</strong><br>
+<strong>sendmail_outbound_enable=&#x201D;NO&#x201D;</strong><br>
+<strong>sendmail_msp_queue_enable=&#x201D;NO&#x201D;</strong><br>
+<strong>sendmail_rebuild_aliases=&#x201D;NO&#x201D;</strong><br>
+<strong>syslogd_enable=&#x201D;YES&#x201D;</strong><br>
+<strong>syslogd_program=&#x201D;/usr/sbin/syslogd&#x201D;</strong><br>
+<strong>syslogd_flags=&#x201D;-ss&#x201D;</strong></p>
+<p>#### Local worked services ####<br>
+<strong>tcp_drop_synfin=&#x201D;YES&#x201D;</strong><br>
+<strong>icmp_drop_redirects=&#x201D;YES&#x201D;</strong><br>
+<strong>dhcpd_enable=&#x201D;YES&#x201D;</strong><br>
+<strong>dhcpd_ifaces=&#x201D;em1&#x2033;</strong><br>
+<strong>dhcpd_conf=&#x201D;/usr/local/etc/dhcpd.conf&#x201D;</strong><br>
+<strong>gateway_enable=&#x201D;YES&#x201D;</strong><br>
+<strong>natd_enable=&#x201D;YES&#x201D;</strong><br>
+<strong>natd_interface=&#x201D;em0&#x2033;</strong><br>
+<strong>firewall_enable=&#x201D;YES&#x201D;</strong><br>
+<strong>firewall_type=&#x201D;UNKNOWN&#x201D;</strong><br>
+<strong>firewall_script=&#x201D;/etc/ipfw.conf&#x201D;</strong></p>
+<p>#### Third Party Services ####<br>
+<strong>apache24_enable=&#x201D;YES&#x201D;</strong><br>
+<strong>mysql_enable=&#x201D;YES&#x201D;</strong></p>
+<p>we add the following lines to the file <strong>/etc/ipfw.conf </strong>in order our configured firewall to run after reboot.<br>
+<code><strong>ipfw add 00200 divert 8668 ip from any to any via em0</strong><br>
+<strong>ipfw add 10800 allow ip from any to 88.8.9.58</strong><br>
+<strong>ipfw add 10900 allow ip from 88.8.9.58 to any</strong><br>
+<strong>ipfw add 11000 allow ip from any to 88.8.9.59</strong><br>
+<strong>ipfw add 12000 allow ip from 88.8.9.59 to any</strong><br>
+<strong>ipfw add 60000 fwd 10.0.0.1,80 tcp from any to any dst-port 80 via em1</strong><br>
+<strong>ipfw add 60001 fwd 10.0.0.1,443 tcp from any to any dst-port 443 via em1</strong><br>
+<strong>ipfw add 65000 allow ip from any to any</strong><br>
+<strong>ipfw add 65535 deny ip from any to any</strong></code></p>
+<p>Minimize system kernel and compile the following options:<br>
+<code><strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; IPDIVERT</strong><br>
+<strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; IPFIREWALL</strong><br>
+<strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; IPFIREWALL_VERBOSE</strong><br>
+<strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; IPFIREWALL_VERBOSE_LIMIT=3</strong><br>
+<strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; DUMMYNET</strong><br>
+<strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; IPFIREWALL_FORWARD</strong><br>
+<strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; IPFIREWALL_NAT</strong><br>
+<strong>options&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; LIBALIAS</strong></code></p>
+<p>Install DHCP server from ports<br>
+<code># <strong>cd /usr/ports/net/isc-dhcp42-server/</strong>&#xA0;&#xA0;&#xA0; - enter the port address<br>
+# <strong>make config</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; - Choose the required modules<br>
+<a href="http://i2.wp.com/www.unixmen.com/wp-content/uploads/2016/01/dhcp-port.png" rel="attachment wp-att-43181"><img class="aligncenter size-full wp-image-43181" src="http://i2.wp.com/www.unixmen.com/wp-content/uploads/2016/01/dhcp-port.png?resize=300%2C103%20300w,%20http://i2.wp.com/www.unixmen.com/wp-content/uploads/2016/01/dhcp-port.png?w=535%20535w" alt="dhcp-port"></a><br>
+# <strong>make -DBATCH install</strong>&#xA0; &#xA0;&#xA0;&#xA0;&#xA0;&#xA0; - install</code></p>
+<p><strong>/usr/local/etc/dhcpd.conf</strong> we make installation file content as following:<br>
+<code><strong>option domain-name "wifiofis.unixmen.com";</strong><br>
+<strong>option domain-name-servers ns1.unixmen.com, ns2.unixmen.com;</strong><br>
+<strong>default-lease-time 3600;</strong><br>
+<strong>max-lease-time 86400;</strong><br>
+<strong>ddns-update-style none;</strong><br>
+<strong>authoritative;</strong><br>
+<strong>subnet 10.0.0.0 netmask 255.255.255.0 {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; range 10.0.0.50 10.0.0.254;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; option routers 10.0.0.1;</strong><br>
+<strong>}</strong><br>
+# we reserve Access Points for the IP addresses shown in the picture<br>
+<strong>host Wifi-1f.1 {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; hardware ethernet 04:18:76:8c:9a:a3;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; fixed-address 10.0.0.10;</strong><br>
+<strong>}</strong><br>
+<strong>host Wifi-2f.1 {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; hardware ethernet 04:18:66:43:11:11;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; fixed-address 10.0.0.20;</strong><br>
+<strong>}</strong><br>
+<strong>host Wifi-3f.1 {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; hardware ethernet 04:18:36:68:a9:9b;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; fixed-address 10.0.0.30;</strong></code></p>
+<p>we create a journal file for DHCP and filter from Syslog(<strong>/var/db/dhcpd/dhcpd.leases</strong> (you can look in this file)<br>
+<code># <strong>touch /var/log/dhcp.log</strong></code></p>
+<p>We add the follofing lines to the end of <strong>/etc/syslog.conf</strong> file:<br>
+<code><strong>!dhcpd</strong><br>
+<strong>*.*&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;/var/log/dhcp.log</strong></code></p>
+<p>We run the DHCP and check listening:<br>
+<code># <strong>/usr/local/etc/rc.d/isc-dhcpd start</strong><br>
+# <strong>sockstat -l|grep dhcp</strong><br>
+dhcpd&#xA0;&#xA0;&#xA0; dhcpd&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 4695&#xA0; 7&#xA0; udp4&#xA0;&#xA0; *:67&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; *:*<br>
+dhcpd&#xA0;&#xA0;&#xA0; dhcpd&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; 4695&#xA0; 20 udp4&#xA0;&#xA0; *:8997&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; *:*</code></p>
+<p>Install Sudo from the ports:<br>
+<code># <strong>cd `whereis sudo | awk '{ print $2 }'`</strong>&#xA0; - change directory to the port<br>
+# <strong>make config</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; - choose required modules<br>
+<a href="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/sudo-port.png" rel="attachment wp-att-43189"><img class="aligncenter size-full wp-image-43189" src="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/sudo-port.png?resize=300%2C124%20300w,%20http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/sudo-port.png?w=654%20654w" alt="sudo-port"></a><br>
+# <strong>make -DBATCH install</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; - install</code></p>
+<p>Add to <strong>/usr/local/etc/sudoers</strong> file the following lines(it is required for access of web server to firewall):<br>
+<code><strong>unixmen ALL=(ALL) NOPASSWD: SETENV: ALL</strong></code></p>
+<p><strong>/usr/local/www/wifi/config.php</strong> the content of configuration file will be as following lines(the registration and stop registered users is fulfill by adding or removing the rules of IPFW):<br>
+<code># <strong>cat /usr/local/www/wifi/config.php</strong><br>
+<strong>&lt;?php</strong><br>
+<strong>define('DEBUG', true);</strong><br>
+<strong>define('conf_DB_HOST', 'localhost');</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; //Database IP<br>
+<strong>define('conf_DB_USER', 'wifidbuser');</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; //username of database<br>
+<strong>define('conf_DB_PASS', 'wifidbpassword');</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; //the password of database<br>
+<strong>define('conf_DB_NAME', 'wifi');</strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; //the name of database<br>
+<strong>define('RULE_NUM_MIN', 400);&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; </strong>//IPFW rules begin from 400<br>
+<strong>define('RULE_NUM_MAX', 600);&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; </strong>//IPFW rule finishs with 600<br>
+<strong>define('CLIENTS_IP_BEGIN', '10.0.0.50');</strong> // the clients will start IP adress from<br>
+<strong>define('CLIENTS_IP_COUNT', '200');</strong><br>
+<strong>define('CLIENTS_TIME', '3600');</strong> //the period of internet access for users(an hour)<br>
+<strong>define('RULE_ADD_IP', 'sudo ipfw add %s allow ip from any to %s');</strong><br>
+<strong>define('RULE_ADD_IP2', 'sudo ipfw add %s allow ip from %s to any');</strong><br>
+<strong>define('RULE_DEL_IP', 'sudo ipfw del %s');</strong><br>
+<strong>define('RULE_DEL_IP2', 'sudo ipfw del %s');</strong><br>
+<strong>/*</strong><br>
+STATUS:<br>
+<strong>0</strong> &#x2013; If the information of connection is true you are connected, otherwise the rule is not added!<br>
+<strong>1</strong> -&#xA0; You have already connected<br>
+<strong>2</strong> &#x2013; The username has been already used.<br>
+<strong>3</strong> &#x2013; The user is stopped.<br>
+<strong>*/</strong><br>
+<strong>$db_link = mysql_connect(conf_DB_HOST, conf_DB_USER, conf_DB_PASS);</strong><br>
+<strong>if (!$db_link) return cms_errors('The connection to database is failed!);</strong><br>
+<strong>if (!mysql_select_db(conf_DB_NAME, $db_link)) return cms_errors('The connection to database is failed!!!');</strong><br>
+<strong>function cms_errors($text)</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (DEBUG) echo $text;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return false;</strong><br>
+<strong>}</strong><br>
+<strong>function dumpVarX(&amp;$Var, $Var_s = null)</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo "&lt;div align='left' class='debug'&gt;";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; dumpVar($Var, 0, $Var_s);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo "&lt;div&gt;";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return true;</strong><br>
+<strong>}</strong><br>
+<strong>function dumpVar(&amp;$Var, $Level = 0, $Var_s = null)</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($Level &gt; 4)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo "&lt;b&gt;...&lt;/b&gt; LEVEL &gt; 4&lt;br&gt;\n";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $is_ob_ar = false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $Type = gettype($Var);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (is_array($Var)) {$is_ob_ar = true; $Type = "Array[".count($Var)."]";}</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (is_object($Var)) $is_ob_ar = true;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($Level == 0)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($Var_s) echo "\n&lt;br&gt;\n&lt;b&gt;&lt;span style=\"color:#ff0000\"&gt;".$Var_s." = {&lt;/span&gt;&lt;/b&gt;";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($is_ob_ar &amp;&amp; count($Var)) echo "&lt;pre&gt;\n";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; else echo "\n&lt;tt&gt;";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $Level_zero = 0;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($is_ob_ar)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo "&lt;span style=\"color:#05a209\"&gt;$Type&lt;/span&gt;\n";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; for (Reset($Var), $Level++; list($k, $v)=each($Var);)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (is_array($v) &amp;&amp; $k==="GLOBALS") continue;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; for ($i=0; $i&lt;$Level*3; $i++) echo " ";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo "&lt;b&gt;".HtmlSpecialChars($k)."&lt;/b&gt; =&gt; ";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; dumpVar($v, $Level);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; else</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (is_string($Var) &amp;&amp; strlen($Var)&gt;400)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '('.$Type.') &lt;span style="color:#35BBFA"&gt;strlen = '.strlen($Var).'&lt;/span&gt;'."\n";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; else echo '('.$Type.') "&lt;span style="color:#0000FF"&gt;',HtmlSpecialChars($Var),'&lt;/span&gt;"'."\n";</strong><br>
+<strong>&#xA0;&#xA0; &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;}</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (isset($Level_zero))</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($is_ob_ar &amp;&amp; count($Var)) echo "&lt;/pre&gt;";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; else echo "&lt;/tt&gt;";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($Var_s) echo "&lt;b&gt;&lt;span style=\"color:#ff0000\"&gt;}&lt;/span&gt;&lt;/b&gt;&lt;br&gt;\n";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return true;</strong><br>
+<strong>}</strong><br>
+<strong>?&gt;</strong></code></p>
+<p>User&#x2019;s registration script: <strong>/usr/local/www/wifi/add.php</strong> file will be as follows:<br>
+<code># <strong>cat /usr/local/www/wifi/add.php</strong><br>
+<strong>&lt;?php</strong><br>
+<strong>require_once('config.php');</strong><br>
+<strong>$user = get_user($_GET['login'], $_GET['pass']);</strong><br>
+<strong>if ($user)</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; switch ($user['status'])</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; case 0:</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (add_rule($user)) echo '&lt;h2&gt;You are connected!&lt;/h2&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; else echo 'The wrong rule is not added!';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; break;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; case 1: echo '&lt;h2&gt;You have already connected&lt;/h2&gt;'; break;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; case 2: echo '&lt;h2&gt;Username has already been used&lt;/h2&gt;'; break;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; case 2: echo '&lt;h2&gt;Username is stopped&lt;/h2&gt;'; break;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; default: echo 'Error'; break;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>} else echo '&lt;h2&gt;Username or password is wrong&lt;/h2&gt;';</strong></code></p>
+<p>// Registration<br>
+<strong>function get_user($login, $pass)</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $user = null;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (!$login || !$pass) return null;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $login = addslashes($login);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $sql = &#x2018;SELECT articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii FROM users WHERE username=&#x201D;&#x2018;.$login.'&#x201D; AND password=&#x201D;&#x2018;.$pass.'&#x201D; LIMIT 1&#x2019;;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $res = mysql_query($sql);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($res) $user = mysql_fetch_assoc($res);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return $user;</strong><br>
+<strong>}</strong></p>
+<p>// Adding the rule<br>
+<strong>function add_rule($user)</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $user_ip = $_SERVER[&#x2018;REMOTE_ADDR&#x2019;];</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $current_date = time();</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (!checkip($user_ip)) return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $temp = 0;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $sql = &#x2018;SELECT rule_num FROM users WHERE status=1 ORDER BY rule_num&#x2019;;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $res = mysql_query($sql);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($res)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $t = mysql_fetch_array($res);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (!$t) $rule_num = RULE_NUM_MIN;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; else {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; while ($temp = mysql_fetch_array($res))</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (($t[0]+1) &lt; $temp[0]) break;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $t = $temp;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($t[0] &lt; RULE_NUM_MAX) $rule_num = $t[0]+1; else return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; } else return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $command = sprintf(RULE_ADD_IP, $rule_num, $user_ip);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; exec($command);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $command2 = sprintf(RULE_ADD_IP2, $rule_num+100, $user_ip);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; exec($command2);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $sql = &#x2018;UPDATE users SET status=1, time_begin=NOW(), rule_num=&#x2019;.$rule_num.&#x2019; WHERE id=&#x2019;.$user[&#x2018;id&#x2019;];</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; mysql_query($sql);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return true;</strong><br>
+<strong>}</strong><br>
+<strong>function checkip($ip)</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (!$ip) return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $user_ip = explode(&#x2018;.&#x2019;, $ip);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $check_ip = explode(&#x2018;.&#x2019;, CLIENTS_IP_BEGIN);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (($check_ip[0] != $user_ip[0]) &amp;&amp; $check_ip[0] != &#x201C;*&#x201D;) return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (($check_ip[1] != $user_ip[1]) &amp;&amp; $check_ip[1] != &#x201C;*&#x201D;) return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (($check_ip[2] != $user_ip[2]) &amp;&amp; $check_ip[2] != &#x201C;*&#x201D;) return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if (!(($check_ip[3] &lt;= $user_ip[3] &amp;&amp; ($check_ip[3] + CLIENTS_IP_COUNT) &gt;= $user_ip[3])) &amp;&amp; $check_ip[3] != &#x201C;*&#x201D;) return false;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return true;</strong><br>
+<strong>}</strong><br>
+<strong>?&gt;</strong></p>
+<p>User&#x2019;s closed script according to the end of time <strong>/usr/local/www/wifi/cron.php</strong>:<br>
+<code># <strong>cat /usr/local/www/wifi/cron.php</strong><br>
+<strong>&lt;?php</strong><br>
+<strong>require_once('config.php');</strong><br>
+<strong>check_users();</strong><br>
+<strong>function check_users()</strong><br>
+<strong>{</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $sql = 'SELECT articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii FROM users WHERE status=1 AND time_begin &gt; 0 AND (TIME_TO_SEC(TIMEDIFF(NOW(), time_begin)) &gt; '.CLIENTS_TIME.')';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $res = mysql_query($sql);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($res)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; while ($user = mysql_fetch_assoc($res))</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $command = sprintf(RULE_DEL_IP, $user['rule_num']);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; exec($command);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;$command2 = sprintf(RULE_DEL_IP2, $user['rule_num']+100);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; exec($command2);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $sql = 'UPDATE users SET status=2, time_end=NOW() WHERE id='.$user['id'];</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; mysql_query($sql);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; return true;</strong><br>
+<strong>}</strong><br>
+<strong>?&gt;</strong></code></p>
+<p>The form for adding username and pasword (such as <strong>index.html</strong> file):<br>
+<code># <strong>cat /usr/local/www/wifi/index.html</strong><br>
+<strong>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"&gt;</strong><br>
+<strong>&lt;html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en"&gt;</strong><br>
+<strong>&lt;head&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;title&gt;Administration&lt;/title&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;link rel="stylesheet" type="text/css" href="admin.css" /&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;!--[if lt IE 7]&gt;&lt;link rel="stylesheet" type="text/css" href="style-ie.css" /&gt;&lt;![endif]--&gt;</strong><br>
+<strong>&lt;/head&gt;</strong><br>
+<strong>&lt;body&gt;</strong><br>
+<strong>&lt;div class="login"&gt;</strong><br>
+<strong>&lt;div class="form"&gt;</strong><br>
+<strong>&lt;form method="get" action="add.php"&gt;</strong><br>
+<strong>&#xA0;&#xA0; &#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&lt;p&gt;&lt;label&gt;Login:&lt;/label&gt;&lt;input class="text" name="login" type="text" size="17"/&gt;&lt;/p&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;p&gt;&lt;label&gt;Password:&lt;/label&gt;&lt;input class="text" name="pass" type="password" size="16"/&gt;&lt;/p&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;p&gt;&lt;input class="submit" type="submit" value="Everything is OK!"/&gt;</strong><br>
+<strong>&lt;/form&gt;</strong><br>
+<strong>&lt;/div&gt;</strong><br>
+<strong>&lt;div class="rules"&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;h1&gt;Wi-Fi how to use&lt;/h1&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;ol&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;li&gt;It is free for guests!&lt;/li&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;li&gt;Come to reception&lt;/li&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;li&gt;Get username and password&lt;/li&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;li&gt;Use wifi&lt;/li&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;/ol&gt;</strong><br>
+<strong>&#xA0; &lt;/div&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;/div&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;/body&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;/html&gt;</strong></code></p>
+<p>Administration panel will be in <strong>/usr/local/www/wifi/admin </strong>folder. We must protect this folder with <strong>htpasswd </strong>for security. The content of file <strong>/usr/local/www/wifi/admin/admin.php</strong>&#xA0; will be as follows:<br>
+<code><strong>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"</strong><br>
+<strong>&#xA0; "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"&gt;</strong><br>
+<strong>&lt;html&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;head&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;title&gt;Administration panel&lt;/title&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;link type="text/css" rel="stylesheet" href="style.css"&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;/head&gt;</strong><br>
+<strong>&lt;body&gt;</strong><br>
+<strong>&lt;form method="post" action="admin.php"&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; The amount of users: &lt;input type="text" value="" name="num" size=2&gt; count.&lt;br&gt;&lt;br&gt;</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &lt;input type="submit" value="Generate"&gt;</strong><br>
+<strong>&lt;/form&gt;&lt;hr&gt;</strong><br>
+<strong>&lt;?php</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; require_once('/usr/local/www/wifi/config.php');</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $n = (int) $_POST['num'];</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($n &gt; 10) { echo '</strong><strong>The number of users that can be created is over limited!</strong> <strong>&lt;br&gt;&lt;br&gt;'; $n=0; }</strong><br>
+<strong>&#xA0; function generate_password($number=10)</strong><br>
+<strong>&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; $arr = array('1','2','3','4','5','6',</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; '7','8','9','0');</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; // Generate the password</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; $pass = "";</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; for($i = 0; $i &lt; $number; $i++)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; {</strong><br>
+// &#xA0;Calculate random index of massive<br>
+<strong>$index = rand(0, count($arr) - 1);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $pass .= $arr[$index];</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0; return $pass;</strong><br>
+<strong>&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; for ($i=0; $i&lt;$n; $i++)</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $login = generate_password(4);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $pass = generate_password(6);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $sql = 'INSERT INTO users (username, password, status, rule_num) VALUES("apt'.$login.'", "'.$pass.'", 0, 0)';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $res = mysql_query($sql);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($res) echo 'Count of users &lt;b&gt;'.$n.'&lt;/b&gt; is added.&lt;br&gt;&lt;br&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $sql = 'SELECT articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii FROM users';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; $res = mysql_query($sql);</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '&lt;table width=\'30%\'&gt;&lt;td&gt;&lt;b&gt;Username&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;Password&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;Status&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;Rule&lt;/b&gt;&lt;/td&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; while ($data = mysql_fetch_assoc($res))</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; {</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '&lt;tr&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '&lt;td&gt;'.$data['username'].'&lt;/td&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '&lt;td&gt;'.$data['password'].'&lt;/td&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($data['status'] == 0) { echo '&lt;td class=\'blue\'&gt;Is not active&lt;/td&gt;'; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($data['status'] == 1) { echo '&lt;td class=\'green\'&gt;Used&lt;/td&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '&lt;td&gt;'.$data['rule_num'].'&lt;/td&gt;';}</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($data['status'] == 2) { echo '&lt;td class=\'reds\'&gt;Was used&lt;/td&gt;'; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; if ($data['status'] == 3) { echo '&lt;td&gt;&lt;b&gt;Was stopped&lt;/b&gt;&lt;/td&gt;'; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '&lt;/tr&gt;';</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; }</strong><br>
+<strong>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; echo '&lt;/table&gt;';</strong><br>
+<strong>?&gt;</strong><br>
+<strong>&lt;/body&gt;</strong><br>
+<strong>&lt;/html&gt;</strong></code></p>
+<p><code><strong>/usr/local/www/wifi/admin/style.css</strong> content of the file will be as follows:<br>
+<strong>.reds {color:#f30;}</strong><br>
+<strong>.blue {color:#0000cc;}</strong><br>
+<strong>.green {color:#0f0;}</strong></code></p>
+<p>In the folder<strong> /usr/local/www/wifi</strong> we will create file named <strong>.htaccess </strong>and add the following lines.<br>
+<code><strong>AuthUserFile </strong><strong>/usr/local/www/wifi</strong><strong>/.htpasswd</strong><br>
+<strong>AuthName "Soft Admin"</strong><br>
+<strong>AuthType Basic</strong><br>
+<strong>Require valid-user</strong></code></p>
+<p>We create user name and password in<strong> /usr/local/www/wifi</strong> folder:<br>
+<code><strong>htpasswd -bc .htpasswd admin freebsd</strong></code>&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; &#x2013; Write <strong>admin</strong> username and <strong>freebsd</strong> password in <strong>.htpasswd</strong> file<br>
+<strong>-b</strong> take username and password from the command line.<br>
+<strong>-c</strong> &#x2013;Create the file which is shown and add to it(if it exists,it will remove and rewrite)</p>
+<p>To check users limits we will add cron file our global <strong>/etc/crontab</strong> configuration file. This will check users each 1 minutes interval.<br>
+<code># <strong>echo "*/1&#xA0;&#xA0;&#xA0; *&#xA0;&#xA0;&#xA0; *&#xA0;&#xA0;&#xA0; *&#xA0;&#xA0;&#xA0; *&#xA0;&#xA0;&#xA0; root&#xA0;&#xA0;&#xA0; /usr/local/bin/php /usr/local/www/wifi/cron.php" &gt;&gt; /etc/crontab</strong><br>
+# <strong>/etc/rc.d/cron restart</strong></code></p>
+<p><strong>/usr/local/www/wifi/admin.css </strong>file&#x2019;s content will be as follows(This file set the pictures which are in background). But the pictures is read from <strong>/usr/local/www/wifi/img/</strong> folder. Pictures are <strong>/usr/local/www/wifi/img/gp.gif</strong> and <strong>/usr/local/www/wifi/img/logo.png</strong> (You can change these pictures to anywhere you want):<br>
+<code><strong>.login {width:800px; height:540px; position:absolute; left:50%; top:50%; margin:-250px 0 0 -400px; border:dashed 1px #ddd; background:url(img/logo.png) 30px 30px no-repeat #fff;}</strong><br>
+<strong>.login .form {margin:120px 0 0 450px;}</strong><br>
+<strong>.login .form p {position:relative; margin:0 0 30px 0;}</strong><br>
+<strong>.login .form label {font:normal 18px arial; position:absolute; margin:3px 0 0 0; color:#aaa;}</strong><br>
+<strong>.login .form input {margin:0 0 0 100px; padding:2px; font:normal 18px arial;}</strong><br>
+<strong>.login .form input.text {border-right:solid 1px #ccc; border-bottom:solid 1px #ccc; border-left:solid 1px #888; border-top:solid 1px #888;}</strong><br>
+<strong>.login .rules {padding:10px 20px; margin:50px 30px; background:url(img/gp.gif) 420px 20px no-repeat #ececec;}</strong><br>
+<strong>h1 {margin:10px 0; font:normal 20px tahoma; color:#c00;}</strong><br>
+<strong>ol {margin:20px 0 0 30px; padding:0;}</strong><br>
+<strong>ol li {margin:0 0 10px 15px; font: normal 16px arial; }</strong></code></p>
+<p>We update all authorites in the folder, in order to set to all new files:<br>
+<code># <strong>chown -R unixmen:unixmen /usr/local/www/wifi/</strong></code></p>
+<p>As we enter the page We will be asked for username and password(we type <strong>admin </strong>&#xA0;username and password that we created before and then push enter):<br>
+<a href="http://i2.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Admin-panel-first-page-1.jpg" rel="attachment wp-att-43199"><img class="aligncenter size-full wp-image-43199" src="http://i2.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Admin-panel-first-page-1.jpg?resize=300%2C146%20300w,%20http://i2.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Admin-panel-first-page-1.jpg?resize=768%2C373%20768w,%20http://i2.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Admin-panel-first-page-1.jpg?w=834%20834w" alt="Admin-panel first page"></a></p>
+<p>The administrator interface will be as follows:<br>
+<a href="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Admin-Panel-1.jpg" rel="attachment wp-att-43200"><img class="aligncenter size-full wp-image-43200" src="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Admin-Panel-1.jpg?resize=300%2C256%20300w,%20http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Admin-Panel-1.jpg?w=593%20593w" alt="Admin-Panel"></a></p>
+<p>The user interface will be so:<br>
+<a href="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Wifi-captive-portal-1.jpg" rel="attachment wp-att-43201"><img class="aligncenter size-full wp-image-43201" src="http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Wifi-captive-portal-1.jpg?resize=300%2C206%20300w,%20http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Wifi-captive-portal-1.jpg?resize=768%2C527%20768w,%20http://i0.wp.com/www.unixmen.com/wp-content/uploads/2016/01/Wifi-captive-portal-1.jpg?w=829%20829w" alt="Wifi-captive-portal"></a></p>
+<p>The source of used PHP codes is from <strong>http://lissyara.su</strong><br>
+You can download source codes from <a href="http://www.unixmen.com/wp-content/uploads/2016/01/php-codes.zip">here</a></p>
+<p id="jp-relatedposts" class="jp-relatedposts">
+<h3 class="jp-relatedposts-headline"><em>Related</em></h3></p></div></div>
+</body></html>

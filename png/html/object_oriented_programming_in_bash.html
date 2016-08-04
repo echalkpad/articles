@@ -1,0 +1,174 @@
+<!DOCTYPE html><html><head><title>Object Oriented Programming in Bash</title></head><body>
+<h1>Object Oriented Programming in Bash</h1><p><a href="http://hipersayanx.blogspot.sk/2012/12/object-oriented-programming-in-bash.html" target="_new">Original URL</a></p>
+<p><blockquote>Bash is a very common *nix shell, and it's programming language is purely procedural and focused on command execution. Object Oriented Programming (OOP) is a programming paradigm that represents the&hellip;</blockquote></p>
+<div><div class="post-body entry-content" id="post-body-7398995422229677107">
+Bash is a very common *nix shell, and it's programming language is purely procedural and focused on command execution. Object Oriented Programming (OOP) is a programming paradigm that represents the elements of a problem as entities with a set of properties and actions that it can execute. If you use Bash to write very simple and short scripts, procedural programming is just fine, you don't need more. But if your program becomes more and more bigger, a monster program (&gt; 1000 lines), then you need a better way to structure your program to make it easy to maintain and read. Of course, Bash lacks OOP features, but with some tricks you can simulate it with a few lines added, and I'll show you how.<br>
+<div class="separator">
+<a href="http://commons.wikimedia.org/wiki/File:Analysis_Model_Objects.jpg"><img border="0" src="https://lh3.ggpht.com/-K7muL7uw4h8/UNXz7hCaU4I/AAAAAAAAAlU/pqYTXXL_7MM/s320/oop.png" width="400"></a></div>
+<a name="more"></a>
+
+<b>ATTENTION</b>: You need to have solid concepts of OOP and Bash before reading it, I will not explain nothing of that here.<br>
+<br>
+First at all create an script in which you will define your class, and give it execution permissions.
+<br>
+<pre class="brush:bash">touch vector.sh
+chmod +x vector.sh
+</pre>
+Then copy the following code inside the script:
+<br>
+<pre class="brush:bash">#!/bin/bash
+
+# Base class. (1)
+function Vector()
+{
+ # A pointer to this Class. (2)
+ base=$FUNCNAME
+ this=$1
+
+ # Inherited classes (optional). (3)
+ export ${this}_inherits="Class1 Class2 Class3" # (3.1)
+
+ for class in $(eval "echo \$${this}_inherits")
+ do
+ for property in $(compgen -A variable ${class}_)
+ do
+ export ${property/#$class\_/$this\_}="${property}" # (3.2)
+ done
+
+ for method in $(compgen -A function ${class}_)
+ do
+ export ${method/#$class\_/$this\_}="${method} ${this}"
+ done
+ done
+
+ # Declare Properties. (4)
+ export ${this}_x=$2
+ export ${this}_y=$3
+ export ${this}_z=$4
+
+ # Declare methods. (5)
+ for method in $(compgen -A function)
+ do
+ export ${method/#$base\_/$this\_}="${method} ${this}"
+ done
+}
+
+# Human readable representation of the vector. (6)
+function Vector_show()
+{
+ # (7)
+ base=$(expr "$FUNCNAME" : '\([a-zA-Z][a-zA-Z0-9]*\)')
+ this=$1
+
+ x=$(eval "echo \$${this}_x")
+ y=$(eval "echo \$${this}_y")
+ z=$(eval "echo \$${this}_z")
+
+ echo "$this ($x, $y, $z)"
+}
+
+# Adds two vectors.
+function Vector_add()
+{
+ base=$(expr "$FUNCNAME" : '\([a-zA-Z][a-zA-Z0-9]*\)')
+ this=$1
+ other=$2
+
+ # Get it's components
+ x1=$(eval "echo \$${this}_x")
+ y1=$(eval "echo \$${this}_y")
+ z1=$(eval "echo \$${this}_z")
+
+ x2=$(eval "echo \$${other}_x")
+ y2=$(eval "echo \$${other}_y")
+ z2=$(eval "echo \$${other}_z")
+
+ # Add it's components
+ x=$(($x1 + $x2))
+ y=$(($y1 + $y2))
+ z=$(($z1 + $z2))
+
+ # Create a new vector. (8)
+ Vector 'vector3' $x $y $z
+
+ $vector3_show
+}
+</pre>
+
+<ol>
+<li>
+This is function is an equivalent of the constructor of a class. It must have the same name of the class. The name of a class can't contains underscores (<b>_</b>). We will use this function to create instances of the <i>"Vector"</i> class.
+</li>
+<li>
+Here you can get a reference of the base class of the object and a reference of the object created. The first argument of the constructor must be always the name of the object to create.
+</li>
+<li>
+This block of code simulates multiple inheritance, is optional and you can remove it if you don't need.
+<ol>
+<li>
+Every property and method of the class can be accessed as <i>${this}_methodProperty_name</i>, or you can also call to it's base class as <i>${base}_methodProperty_name</i>.
+Multiple inheritance works overwriting the methods and properties (m&amp;p) of the preceding classes as follows:
+<br>
+
+<pre>Class1 &lt; Class2 &lt; Class3 &lt; Base</pre>
+<ul>
+<li><i>Class2</i> overwrites m&amp;p of <i>Class1</i>.</li>
+<li><i>Class3</i> overwrites m&amp;p of <i>Class1</i> and <i>Class2</i>.</li>
+<li><i>Base</i> overwrites m&amp;p of <i>Class1</i> and <i>Class2</i> and <i>Class3</i>.</li>
+</ul>
+</li>
+<li>This will export the m&amp;p of the base class as a m&amp;p of the object. See bellow.</li>
+</ol>
+</li>
+<li>Every method and property of the class is exported as a global variable in the form of <i>objectName_methodProperty_name</i>. You can initialize it's properties through the constructor's parameters, or with a default value, or leave it uninitialized.</li>
+<li>This will find every function with the pathern <i>BaseClass_*</i> and export it as a global variable replacing <i>BaseClass</i> with the object's name, the value of the variable will be a string with the base class method and the object name as first parameter that serves as a reference to it.</li>
+<li>The methods of the class are defined as <i>BaseClass_methodName</i>. Method names can contains underscores, but camelCase is recommended.</li>
+<li>Obtains a reference to the base class (not obligatory) and the object, remember, the first argument is the name of the object.</li>
+<li>Of course, you can create new objects inside the methods of the same class.</li>
+</ol>
+We are ready to use our class. Create an script from which you will use your class, give it execution permissions, and copy the following code inside it:
+<br>
+<pre class="brush:bash">#!/bin/bash
+
+# Import the class definition file.
+. vector.sh
+
+function main()
+{
+ # Create the vectors objects. (1)
+ Vector 'vector1' 1 2 3
+ Vector 'vector2' 7 5 3
+
+ # Show it's properties. (2)
+ echo "vector1 ($vector1_x, $vector1_y, $vector1_z)"
+ echo "vector2 ($vector2_x, $vector2_y, $vector2_z)"
+
+ # Call to it's methods.
+ $vector1_show
+ $vector2_show
+
+ $vector1_add vector2
+}
+
+main
+</pre>
+
+<ol>
+<li>Objects are declared as <i>Class objectName [arg1 arg2 arg3 ...]</i>.</li>
+<li>Now you can access to it's methods and properties as <i>$objectName_methodsProperty_name [arg1 arg2 arg3 ...]</i>.</li>
+</ol>
+The result of the script execution is:
+<br>
+<pre class="brush:bash">$ ./main.sh
+vector1 (1, 2, 3)
+vector2 (7, 5, 3)
+vector1 (1, 2, 3)
+vector2 (7, 5, 3)
+vector3 (8, 7, 6)
+</pre>
+OOP in Bash unlocked. Achievement reached :D
+
+</div>
+
+</div>
+</body></html>

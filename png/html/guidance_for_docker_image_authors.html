@@ -1,0 +1,186 @@
+<!DOCTYPE html><html><head><title>Guidance for Docker Image Authors</title></head><body>
+<h1>Guidance for Docker Image Authors</h1><p><a href="http://www.projectatomic.io/docs/docker-image-author-guidance/" target="_new">Original URL</a></p>
+<p><blockquote>Docker image authors have multiple concerns for their images: Is my image easy to use? Is my image easy to base another image on? Does my image behave in a performant manner? There are many details&hellip;</blockquote></p>
+<div><div class="col-sm-9">
+
+
+<p>Docker image authors have multiple concerns for their images:</p>
+
+<ul>
+<li>Is my image easy to use?</li>
+<li>Is my image easy to base another image on?</li>
+<li>Does my image behave in a performant manner?</li>
+</ul>
+
+<p>There are many details which can affect the answers to these questions. We&#x2019;ve created this 
+document to help image authors create images for which the answer is &#x2018;yes&#x2019; across the board.</p>
+
+<h2>Learn About Creating Images with Dockerfiles</h2>
+
+<p>There are two ways to create a docker image:</p>
+
+<ul>
+<li>Create a container and alter its state by running commands in it; create an image with
+<code>docker commit</code></li>
+<li>Create a <code>Dockerfile</code> and create an image with <code>docker build</code></li>
+</ul>
+
+<p>Most image authors will find that using a <code>Dockerfile</code> is a much easier way to repeatably create
+an image. A <code>Dockerfile</code> is made up of <i>instructions</i>, several of which will be discussed in this guide.</p>
+
+<p>You can find the complete <code>Dockerfile</code> instruction reference
+<a href="http://docs.docker.io/en/latest/reference/builder/#id5">here</a>.</p>
+
+<h2>Use <code>MAINTAINER</code></h2>
+
+<p>The <code>MAINTAINER</code> instruction sets the <i>Author</i> field of the image. This is useful for
+providing an email contact for your users if they have questions for you.</p>
+
+<h2>Know the Differences Between CMD and ENTRYPOINT</h2>
+
+<p>There are many details of how the Dockerfile <code>CMD</code> and <code>ENTRYPOINT</code> instructions work, and
+expressing exactly what you want is key to ensuring users of your image have the right
+experience. These two instructions are similar in that they both specify commands that run in an
+image, but there&#x2019;s an important difference: <code>CMD</code> simply sets a command to run in the image if no
+arguments are passed to <code>docker run</code>, while <code>ENTRYPOINT</code> is meant to make your image behave like a
+binary. The rules are essentially:</p>
+
+<ul>
+<li>If your <code>Dockerfile</code> uses only <code>CMD</code>, the provided command will be run if no arguments are
+passed to <code>docker run</code></li>
+<li>If your <code>Dockerfile</code> uses only <code>ENTRYPOINT</code>, the arguments passed to <code>docker run</code> will always
+be passed to the entrypoint; the entrypoint will be run if no arguments are passed to <code>docker
+run</code></li>
+<li>If your <code>Dockerfile</code> declares both <code>ENTRYPOINT</code> and <code>CMD</code>, and no arguments are passed to 
+<code>docker run</code>, then the argument(s) to <code>CMD</code> will be passed to the declared entrypoint</li>
+</ul>
+
+<p>Be careful with using <code>ENTRYPOINT</code>; it will make it more difficult to get a shell inside your
+image. While it may not be an issue if your image is designed to be used as a single command,
+it can frustrate or confuse users that expect to be able to use the idiom:</p>
+<pre class="highlight plaintext"><code># docker run -i -t &lt;your image&gt; /bin/bash
+</code></pre>
+
+<p>Then entrypoint of an image can be changed by the <code>--entrypoint</code> option to <code>docker run</code>. If you
+choose to set an entrypoint, consider educating your users on how to get a shell in your image 
+with:</p>
+<pre class="highlight plaintext"><code># docker run -i --entrypoint /bin/bash -t &lt;your image&gt;
+</code></pre>
+
+<h2>Know the Difference Between Array and String Forms of CMD and ENTRYPOINT</h2>
+
+<p>There are also two different forms of both <code>CMD</code> and <code>ENTRYPOINT</code>: array and string forms:</p>
+
+<ul>
+<li>Passing an array will result in the exact command being run. Example: <code>CMD [ "ls", "/" ]</code></li>
+<li>Passing a string will prefix the command with <code>/bin/sh -c</code>. Example: <code>CMD ls /</code></li>
+</ul>
+
+<p>The <code>-c</code> option affects how the shell interprets arguments. We recommend 
+<a href="http://www.gnu.org/software/bash/manual/html_node/Invoking-Bash.html#Invoking-Bash">reading up</a>
+on this option&#x2019;s behavior or using array syntax.</p>
+
+<h2>Always <code>exec</code> in Wrapper Scripts</h2>
+
+<p>Many images use wrapper scripts to do some setup before starting a process for the software being
+run. It is important that if your image uses such a script, that script should use <code>exec</code> so that
+the script&#x2019;s process is replaced by your software. If you do not use <code>exec</code>, then signals sent by
+docker will go to your wrapper script instead of your software&#x2019;s process. This is not what you
+want - as illustrated by the following example:</p>
+
+<p>Say that you have a wrapper script that starts a process for a server of some kind. You start
+your container (using <code>docker run -i</code>), which runs the wrapper script, which in turn starts your
+process. Now say that you want to kill your container with <code>CTRL+C</code>. If your wrapper script used
+<code>exec</code> to start the server process, docker will send <code>SIGINT</code> to the server process, and everything
+will work as you expect. If you didn&#x2019;t use <code>exec</code> in your wrapper script, docker will send 
+<code>SIGINT</code> to the process for the wrapper script - and your process will keep running like nothing
+happened.</p>
+
+<h2>Always EXPOSE Important Ports</h2>
+
+<p>The <code>EXPOSE</code> instruction makes a port in the container available to the host system and other 
+containers. While it is possible to specify that a port should be exposed with a <code>docker run</code> 
+invocation, using the <code>EXPOSE</code> instruction in a <code>Dockerfile</code> makes it easier for both humans and
+software to use your image by explicitly declaring the ports your software needs to run:</p>
+
+<ul>
+<li>Exposed ports will show up under <code>docker ps</code> associated with containers created from your image</li>
+<li>Exposed ports will also be present in the metadata for your image returned by <code>docker inspect</code></li>
+<li>Exposed ports will be linked when you link one container to another</li>
+</ul>
+
+<p>For more information about ports and docker, please check out the 
+<a href="http://docs.docker.io/en/latest/use/port_redirection/">docker documentation</a>.</p>
+
+<h2>Use Volumes Appropriately</h2>
+
+<p>The <code>VOLUME</code> instruction and the <code>-v</code> option to <code>docker run</code> tell docker to store files in a directory on the host
+instead of in the container&#x2019;s file system. Volumes give you a couple of key benefits:</p>
+
+<ul>
+<li>Volumes can be shared between containers using <code>--volumes-from</code></li>
+<li>Changes to large files are faster</li>
+</ul>
+
+<p>Volumes obey different rules from normal files in containers:</p>
+
+<ul>
+<li>Changes made to volumes are not included in the next <code>docker commit</code></li>
+<li>Volumes are a reference counted resource - they persist as long as there are containers using 
+them</li>
+</ul>
+
+<h3>Sharing Volumes Between Containers</h3>
+
+<p>It is possible to share the volumes created by one container with another by using the
+<code>--volumes-from</code> parameter to docker run. For example, say we make a container named 'ContainerA&#x2019;
+that has a volume:</p>
+<pre class="highlight plaintext"><code># docker run -i -v /var/volume1-name 'ContainerA' -t fedora /bin/bash
+</code></pre>
+
+<p>We can share the volumes from this container with another container:</p>
+<pre class="highlight plaintext"><code># docker run -i --volumes-from ContainerA -t fedora /bin/bash
+</code></pre>
+
+<p>In <code>ContainerB</code>, we will see <code>/var/volume1</code> from <code>ContainerA</code>. For more information about sharing
+volumes, please check out the 
+<a href="http://docs.docker.io/en/latest/use/working_with_volumes/">docker documentation</a></p>
+
+<h3>When to Use Volumes</h3>
+
+<p>We recommend that you use volumes in the following use-cases:</p>
+
+<ol>
+<li> You want to be able to share a directory between containers</li>
+<li> You intend on writing large amounts of data to a directory, for example, for a database</li>
+</ol>
+
+<h2>Use USER</h2>
+
+<p>By default docker containers run as <code>root</code>. A docker container running as root has <b>full control</b>
+of the host system. As docker matures, more secure default options may become available. For now,
+requiring <code>root</code> is dangerous for others and may not be available in all environments. Your image
+should use the <code>USER</code> instruction to specify a non-root user for containers to run as. If your 
+software does not create its own user, you can create a user and group in the <code>Dockerfile</code> as follows:</p>
+<pre class="highlight plaintext"><code>RUN groupadd -r swuser -g 433 &amp;&amp; \
+useradd -u 431 -r -g swuser -d &lt;homedir&gt; -s /sbin/nologin -c "Docker image user" swuser &amp;&amp; \
+chown -R swuser:swuser &lt;homedir&gt;
+</code></pre>
+
+<h3>Reusing an Image with a Non-root User</h3>
+
+<p>The default user in a <code>Dockerfile</code> is the user of the parent image. For example, if your image is
+derived from an image that uses a non-root user <code>swuser</code>, then <code>RUN</code> commands in your
+<code>Dockerfile</code> will run as <code>swuser</code>.</p>
+
+<p>If you need to run as root, you should change the user to root at the beginning of your
+<code>Dockerfile</code> then change back to the correct user with another <code>USER</code> instruction:</p>
+<pre class="highlight plaintext"><code>USER root
+RUN yum install -y &lt;some package&gt;
+USER swuser
+</code></pre>
+
+</div>
+
+</div>
+</body></html>

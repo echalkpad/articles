@@ -1,0 +1,484 @@
+<!DOCTYPE html><html><head><title>How to Create a Fullscreen Video Opening Animation</title></head><body>
+<h1>How to Create a Fullscreen Video Opening Animation</h1><p><a href="http://tympanus.net/codrops/2015/09/17/how-to-create-a-fullscreen-video-opening-animation/" target="_new">Original URL</a></p>
+<p><blockquote>A tutorial on how to create a video opening animation inspired by the effect seen on momentsapp.com. View demo Download source In t</blockquote></p>
+<div><div class="ct-post-content">
+								<p class="ct-post-excerpt">A tutorial on how to create a video opening animation inspired by the effect seen on momentsapp.com.</p>								<div class="ct-ad-article-wrapper">
+										<div class="ct-ad-article">
+																						<img class="ct-ad-img" src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/themes/codropstheme03/images/advertisement.jpg">
+												
+											
+										</div>
+									</div>
+								
+								<p><a href="http://tympanus.net/Tutorials/VideoOpeningAnimation/"><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/07/VideoOpeningAnimation_main.jpg" alt="VideoOpeningAnimation_main" width="580" class="alignnone size-full wp-image-24591"></a></p>
+<p><a class="demo" href="http://tympanus.net/Tutorials/VideoOpeningAnimation/">View demo</a> <a class="download" href="http://tympanus.net/Tutorials/VideoOpeningAnimation/VideoOpeningAnimation.zip">Download source</a></p>
+<p>In this in-depth tutorial we want to show you how to create a similar video opening effect to the one seen on <a href="http://momentsapp.com/">momentsapp.com</a>. If you click the &#x201C;Watch the video&#x201D; button on the Moments App page, you will see a new image appearing on the photo stack which contains a video. The animation is a slight rotation of the frame and a subtle scaling of the video, which already starts to play. The whole wrapper expands to full screen without any play controls; just the closing cross will be shown. Once the video ends, or, if the user clicks on the closing cross, the video will simply disappear.</p>
+<p>We&#x2019;ll be using many interesting CSS properties, like <a href="http://tympanus.net/codrops/css_reference/animation/">CSS animations</a>, <a href="http://tympanus.net/codrops/css_reference/length/#section_viewportlengths">viewport-percentage lengths</a>, <a href="http://www.w3.org/TR/css3-mediaqueries/">media queries</a> and the <a href="http://tympanus.net/codrops/css_reference/flexbox/">Flexbox</a> layout mode, beside others. We&#x2019;ll also dive a bit into HTML5 video and some of its attributes and definitions.</p>
+<p><em>Note that most of these properties are supported in modern browsers only.</em></p>
+<p><strong>The images in the demo are by photographer <a href="https://pixabay.com/en/users/Herriest-98056/">Herriest</a> and the video is from <a href="http://unripecontent.com/">UnripeContent</a>, a great place to find lots of free footage from various categories.</strong></p>
+<p>Let&#x2019;s get down to business and start by planning the effect, write our markup and the JavaScript. Then we&#x2019;ll style everything and set up the animations that will give live to the whole effect. </p>
+<h2>Planning, Markup and JavaScript</h2>
+<p>We want to animate a wrapper that contains a video that also gets animated, so we&#x2019;ll need a nested structure with two wrappers for the video. The only control that we want to have is a close button which will also go into the same wrapper. The video will need to be in MP4 format for minimum support but we&#x2019;ll add multiple sources for support in various browsers. Read more about this topic in the <a href="https://en.wikipedia.org/wiki/HTML5_video">Wikipedia entry on HTML5 video</a> and Pete LePage&#x2019;s insightful <a href="http://www.html5rocks.com/en/tutorials/video/basics/">HTML5 Video</a> article on HTML5 Rocks. We&#x2019;ve used the handy <a href="https://cloudconvert.com/mp4-to-anything">CloudConvert service</a> for converting our MP4 video into the required file formats (<em>WebM</em> and <em>Ogg</em>).</p>
+<p>The <em>poster</em> attribute value allows us to set an image that will be shown before the video loads. With the <em>preload</em> attribute value set to <strong>auto</strong>, we tell the browser that it&#x2019;s desirable to download the entire video optimistically, i.e. with the outlook on accomplishment. The sources for the different video file formats are listed inside the <code>video</code> element. When defining a source, we also set the <em>codec</em>; a <em>codec</em> encodes audio and video by turning a set of images into a compressed video stream or a set of audio samples into an audio stream and the other way around. The containers for video/audio stream combinations are the familiar file formats like MP4 (combines H.264 with AAC audio) or WebM (VP8 and Vorbis). These also have an identifying MIME type, like &#x201C;video/webm&#x201D;. For an in-depth explanation, check out <a href="http://tools.ietf.org/html/rfc6381">The &#x2018;Codecs&#x2019; and &#x2018;Profiles&#x2019; Parameters for &#x201C;Bucket&#x201D; Media Types</a>.</p>
+<figure id="attachment_24573" class="wp-caption alignnone"><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/07/VideoOpeningAnimation_codec.jpg" alt="Videocodec" width="890" class="size-full wp-image-24573"><figcaption id="figcaption_attachment_24573" class="wp-caption-text">Using a program like the VLC media player, you can get useful information about the streams.</figcaption></figure>
+<p>Let&#x2019;s write the markup:</p>
+<pre class="brush:html"><code>
+&lt;div class="video-wrap"&gt;
+	&lt;div class="video-inner"&gt;
+		&lt;video class="video-player" src="media/woods.mp4" poster="media/woods.jpg" preload="auto"&gt;
+			&lt;source src="media/woods.webm" type='video/webm; codecs="vp8.0, vorbis"'&gt;
+			&lt;source src="media/woods.ogg" type='video/ogg; codecs="theora, vorbis"'&gt;
+			&lt;source src="media/woods.mp4" type='video/mp4; codecs="avc1.4D401E, mp4a.40.2"'&gt;
+			&lt;p&gt;Sorry, but your browser does not support this video format.&lt;/p&gt;
+		&lt;/video&gt;
+		&lt;button class="action action--close"&gt;
+			&lt;i class="fa fa-close"&gt;&lt;/i&gt;
+			&lt;span class="action__label action__label--hidden"&gt;Close preview&lt;/span&gt;
+		&lt;/button&gt;
+	&lt;/div&gt;&lt;!-- /video-inner--&gt;
+&lt;/div&gt;&lt;!-- /video-wrap--&gt;
+
+&lt;div class="content"&gt;
+	&lt;div class="loader"&gt;
+		&lt;i class="fa fa-spinner fa-pulse"&gt;&lt;/i&gt;
+	&lt;/div&gt;
+	&lt;button class="action action--hidden action--play"&gt;
+		&lt;i class="fa fa-play"&gt;&lt;/i&gt;&lt;span class="action__label"&gt;Watch the video&lt;/span&gt;
+	&lt;/button&gt;
+&lt;/div&gt;
+</code></pre>
+<p>We&#x2019;ll also add a play button that will serve as our trigger for the opening animation and playing the video. As you can see, we are using the <a href="http://fortawesome.github.io/Font-Awesome/">Font Awesome icon font</a> here (class <strong>fa</strong>). </p>
+<p>When we click on that play button, we will add the class <strong>video-wrap&#x2013;show</strong> to the <strong>video-wrap</strong> division. This will allow us to control the effect on a class-basis by using CSS animations and transitions. Once we click on the closing cross, we will remove that class and add <strong>video-wrap&#x2013;hide</strong> instead. Like that, we can define an alternative closing behavior with a different animation. </p>
+<p>Our aim is to control all the effect using mostly CSS; adding the classes and controlling the playing of the video will be our script&#x2019;s job.</p>
+<p>So let&#x2019;s sum up what we need to do in order to achieve what we want:</p>
+<ul>
+<li>The video will take some time to load, so we&#x2019;ll need to make sure that we don&#x2019;t allow opening the video if it&#x2019;s not ready yet. We can do that by adding the control class <strong>video-loaded</strong> to the body once the video is loaded. This will allow us to control the visibility of the loader element and the play button.</li>
+<li>When we click on the play button, we want the animation to start. By adding the class <strong>video-wrap&#x2013;show</strong> to our video wrapper, we trigger the animation, and we start playing the video a bit later.</li>
+<li>When the video reaches the end or when we click on the closing cross, we&#x2019;ll add the class <strong>video-wrap&#x2013;hide</strong> to play our alternate closing animation.</li>
+<li>We pause the video if it hasn&#x2019;t ended and we set it to the beginning if we open it (again).</li>
+</ul>
+<p>Let&#x2019;s write the JavaScript, implementing all the control behavior we have defined before:</p>
+<pre class="brush:js"><code>;( function() {
+	
+	'use strict';
+
+	var bodyEl = document.body,
+		videoWrap = document.querySelector('.video-wrap'),
+		videoEl = videoWrap.querySelector('video'),
+		playCtrl = document.querySelector('.action--play'),
+		closeCtrl = document.querySelector('.action--close');
+
+	function init() {
+		initEvents();
+	}
+
+	function initEvents() {
+		playCtrl.addEventListener('click', play);
+		closeCtrl.addEventListener('click', hide);
+		videoEl.addEventListener('canplaythrough', allowPlay);
+		videoEl.addEventListener('ended', hide);
+	}
+
+	function allowPlay() {
+		classie.add(bodyEl, 'video-loaded');
+	}
+
+	function play() {
+		videoEl.currentTime = 0;
+		classie.remove(videoWrap, 'video-wrap--hide');
+		classie.add(videoWrap, 'video-wrap--show');
+		setTimeout(function() {videoEl.play();}, 600);
+	}
+
+	function hide() {
+		classie.remove(videoWrap, 'video-wrap--show');
+		classie.add(videoWrap, 'video-wrap--hide');
+		videoEl.pause();
+	}
+
+	init();
+
+})();
+</code></pre>
+<p>Quite straightforward, right? :) The beauty of having the functionality class-controlled is that we can now define the behavior in an interconnected way in our stylesheet. This has many advantages when it comes to managing an effect. But it&#x2019;s a matter of preference and requirements; if you have many complex interactions going on, you might be better off defining most or all the behavior (animations, transitions or visibility) in your JavaScript. But we want to dive into CSS today and explore some exciting properties that will hopefully help you with some other challenges during your development work.</p>
+<div class="ct-ad-article-wrapper ct-ad-article-wrapper-in"><div class="ct-ad-article"><img class="ct-ad-img" src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/themes/codropstheme03/images/advertisement.jpg"></div></div>
+<p>The effect from the Moments App website is great for examining and utilizing some exciting techniques, so let&#x2019;s dive into the CSS!</p>
+<h2>The CSS</h2>
+<p>Let&#x2019;s bring everything to life with our style definitions. We&#x2019;ll focus on the styles that are important for the effect only, but you can check out the resting styles for the page in the <em>style.css</em> file that is located in the <em>css</em> folder. </p>
+<p>Let&#x2019;s start by setting the <a href="http://tympanus.net/codrops/css_reference/box-sizing/">box-sizing</a> to <strong>border-box</strong> for all elements. This box model is the preferred choice among developers because it has the advantage of allowing to define sizes <em>including</em> borders and paddings:</p>
+<pre class="brush:html"><code>*,
+*:after,
+*:before {
+	-webkit-box-sizing: border-box;
+	box-sizing: border-box;
+}</code></pre>
+<p>Let&#x2019;s define the body and link styles:</p>
+<pre class="brush:css"><code>body {
+	font-family: 'Avenir Next', 'Helvetica Neue', 'Lato', 'Segoe UI', Helvetica, Arial, sans-serif;
+	color: #fff;
+	background: #333 url(../media/woods.jpg) no-repeat center center;
+	background-size: cover;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+a {
+	text-decoration: none;
+	color: #d9ecc9;
+	outline: none;
+}
+
+a:hover,
+a:focus {
+	color: #fff;
+}
+</code></pre>
+<p>You don&#x2019;t need to set the font-smoothing properties, but we choose to do so here as it makes the fonts crisp on Mac and prevents some jiggling in Firefox. </p>
+<p>Next, we need to set the styles for our main page container that wraps everything. Using <a href="http://tympanus.net/codrops/css_reference/length/#section_viewportlengths">viewport-percentage lengths</a>, we set its dimensions to span over the whole viewport and hide any overflow. <em>How do we want the elements inside of the container to be laid out?</em> Since we are using a fixed 100% height, we want the elements to be spread in one column, which is centered on the screen. What a pain this would be without the fantastic <a href="http://tympanus.net/codrops/css_reference/flexbox/">Flexbox</a> layout mode :) Let&#x2019;s make extensive use of it and define exactly what we want: </p>
+<pre class="brush:css"><code>.container {
+	width: 100vw;
+	height: 100vh;
+	border: 20px solid #fff;
+	position: relative;
+	overflow: hidden;
+	display: -webkit-flex;
+	display: flex;
+	-webkit-flex-direction: column;
+	flex-direction: column;
+	-webkit-justify-content: space-around;
+	justify-content: space-around;
+	-webkit-align-items: center;
+	align-items: center;
+}
+</code></pre>
+<p>We set the display to <strong>flex</strong> and the flex-direction property to <strong>column</strong>. Justifying the content with <strong>space-around</strong> and aligning the items using <strong>center</strong> will give us the elastic layout we want. Try resizing your browser window to see how the elements will be laid out depending on how much space is available.</p>
+<p>Let&#x2019;s take care of that main video wrapper. Now, before we start styling away, let&#x2019;s reflect on some possible scenarios and what we need to consider so that things don&#x2019;t break. We need to cover every possible case (or at least the most important ones, leaving out devices like tiny watches). Considering the case of a smartphone or small device, we want to avoid too much fanciness and we have to consider native behavior (which might just throw our entire effect overboard, like it is the case for iOS). </p>
+<p>So we want our effect to only animate entirely for larger screens and we don&#x2019;t want to do anything too elaborate for tiny screens (we just want to show the video wrapper). We make use of media queries of which we will have two: one for defining the whole effect for screens bigger than 25em, and one for defining some styles differently according to the aspect ratio of the screen. Our reference aspect ratio is the video itself: with a size of 1280 &#xD7; 720, we have an aspect ratio of 1280/720, or 16/9. Since we want to make sure that the video covers the whole screen, we need to distinguish between the &#x201C;vertical&#x201D; and the &#x201C;horizontal&#x201D; case. One will use the width of the video to cover the screen and one will take the height. But more on that later.</p>
+<p>The &#x201C;default&#x201D; styles without the main animation effect will be defined first, and then we&#x2019;ll add everything else we need to our media queries.</p>
+<p>The main wrapper will be a fixed element that will take up all the width and height available. We&#x2019;ll use flexbox to center the inner container, so let&#x2019;s define the necessary properties:</p>
+<pre class="brush:css"><code>.video-wrap {
+	position: fixed;
+	z-index: 1000;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	display: -webkit-flex;
+	display: flex;
+	-webkit-align-items: center;
+	align-items: center;
+}
+</code></pre>
+<p>We set the z-index value of the element very high so that it&#x2019;s on top of everything else, but we don&#x2019;t want it to be clickable when the inner parts are hidden. Using <strong>pointer-events: none</strong> will make the wrapper &#x201C;untouchable&#x201D; and invisible to interaction but be careful when using this, <a href="http://caniuse.com/#feat=pointer-events">support is limited</a>. You can achieve a similar behavior by using <em>visibility</em>, though. If you are interested in how that works, check out this short post of our <a href="http://tympanus.net/codrops/2014/02/06/fullscreen-overlay-effects/">Fullscreen Overlay Effects</a>. </p>
+<p>When we show the video, we will set the pointer-events to <em>auto</em>:</p>
+<pre class="brush:css"><code>.video-wrap--show {
+	pointer-events: auto;
+}
+</code></pre>
+<p>While the main video wrapper serves as a layout container, the <strong>video-inner</strong> division and the video itself are our crucial main players. Let&#x2019;s set the base styles for the <strong>video-inner</strong> div:</p>
+<pre class="brush:css"><code>.video-inner {
+	position: relative;
+	overflow: hidden;
+	width: 100%;
+	height: 100%;
+	margin: 0 auto;
+	opacity: 0;
+	background: black;
+}
+</code></pre>
+<p>Here we set the width and height to 100% because no expansion or fancy effect will happen for the base case of small devices.</p>
+<pre class="brush:css"><code>.video-wrap--show .video-inner {
+	opacity: 1;
+}
+</code></pre>
+<p>Adding our &#x201C;show&#x201D; class will simply trigger the visibility of the inner division.</p>
+<p>The video element itself will be positioned absolutely and centered by setting the top to 50% and a transform to &#x201C;pull&#x201D; it back up half of its own height:</p>
+<pre class="brush:css"><code>.video-player {
+	position: absolute;
+	top: 50%;
+	width: 100%;
+	-webkit-transform: translate3d(0,-50%,0);
+	transform: translate3d(0,-50%,0);
+}
+</code></pre>
+<p>These are the base styles that will allow to show the main video wrapper and to look like this for small screens:</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/07/VideoOpeningAnimation_screen_base.jpg" alt="VideoOpeningAnimation_screen_base" width="398" class="alignnone size-full wp-image-24576"></p>
+<p>Remember, the styles for the main effect will be defined in two media queries later on.</p>
+<p>Let&#x2019;s style the loader and action buttons (play and close). The loader and play button will be placed in a division with the class <strong>content</strong> which needs relative positioning. Why? We want the loader to be positioned absolutely in the same place of the play button so that we can switch both with a transition:</p>
+<pre class="brush:css"><code>.content {
+	position: relative;
+}
+
+/* Loader */
+.loader {
+	font-size: 2.5em;
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	-webkit-transform: translate3d(-50%,-50%,0);
+	transform: translate3d(-50%,-50%,0);
+}
+
+.video-loaded .loader {
+	opacity: 0;
+	pointer-events: none;
+	-webkit-transition: opacity 0.3s;
+	transition: opacity 0.3s;
+}
+</code></pre>
+<p>The buttons that are actions will get the class <strong>action</strong> and we will define some common styles:</p>
+<pre class="brush:css"><code>.action {
+	font-family: 'Avenir Next', 'Helvetica Neue', 'Lato', 'Segoe UI', Helvetica, Arial, sans-serif;
+	font-size: 1.15em;
+	font-weight: bold;
+	position: relative;
+	overflow: hidden;
+	margin: 0;
+	padding: 1em 2em;
+	color: #fff;
+	border: 2px solid;
+	border-radius: 40px;
+	background: none;
+	-webkit-flex: none;
+	flex: none;
+}
+
+.action:focus {
+	outline: none;
+}
+</code></pre>
+<p>Setting the flex property value to <em>none</em> will make sure that our button doesn&#x2019;t get squeezed when things get tight. </p>
+<p>We remove the outline on focus. <em>(Note: Yes, it&#x2019;s an absolute sin to do this but I consider it an absolute no-brainer that <strong>you should provide an appropriate focus style for maintaining good accessibility</strong> but when creating demos for Codrops, I want the UI to be impeccable for the sake of being able to concentrate solely on the effect in question; in my opinion, the :focus style breaks this by changing the style on click in a permanent way.)</em></p>
+<p>The action label or text will be set to inline and when we don&#x2019;t want to show the label but keep it screen reader accessible, we can hide it by setting its position to absolute and the top value to 200%. Note that we need to set the parent&#x2019;s overflow value to <em>hidden</em> for this to work. </p>
+<pre class="brush:css"><code>.action__label {
+	display: inline-block;
+	margin: 0 0 0 0.75em;
+}
+
+.action__label--hidden {
+	position: absolute;
+	top: 200%;
+}
+</code></pre>
+<p>The play button will be invisible initially, and then, when the video is loaded and we add the <strong>video-loaded</strong> class to the body, we show it: </p>
+<pre class="brush:css"><code>.action--play {
+	display: block;
+	margin: 1em auto;
+	opacity: 0;
+	pointer-events: none;
+	-webkit-transition: opacity 0.3s 0.1s;
+	transition: opacity 0.3s 0.1s;
+}
+
+.video-loaded .action--play {
+	opacity: 1;
+	pointer-events: auto;
+}
+</code></pre>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/07/VideoOpeningAnimation_screen12.jpg" alt="VideoOpeningAnimation_screen1" width="890" class="alignnone size-full wp-image-24587"></p>
+<p>The closing button which is placed in our inner video wrapper, will be shown using a transition on its opacity and scale transform. This transition will have a delay when we open the video wrapper, but none when we close it:</p>
+<pre class="brush:css"><code>.action--close {
+	line-height: 1;
+	position: absolute;
+	z-index: 1000;
+	top: 30px;
+	right: 30px;
+	width: 60px;
+	height: 60px;
+	padding: 0;
+	opacity: 0;
+	-webkit-transition: -webkit-transform 0.3s, opacity 0.3s;
+	transition: transform 0.3s, opacity 0.3s;
+	-webkit-transform: scale3d(0.7,0.7,1);
+	transform: scale3d(0.7,0.7,1);
+}
+
+.video-wrap--show .action--close {
+	opacity: 1;
+	-webkit-transition-delay: 1.2s;
+	transition-delay: 1.2s;
+	-webkit-transform: scale3d(1,1,1);
+	transform: scale3d(1,1,1);
+}
+</code></pre>
+<p>Now we are getting to the heart of our styles. </p>
+<p>For screens that are at least 25em in width, we want the expanding animation to take effect. So first we need to set the inner video wrapper to the right size. For the &#x201C;vertical&#x201D; case we will use the viewport width as a base measure to size our inner container. We do that so that we have a similar size to the decorative polaroid images which also have a dynamic width and height depending on the aspect ratio. </p>
+<p>Once we set the main wrapper&#x2019;s class to <strong>video-wrap&#x2013;show</strong>, we play the animation <strong>showVideo-1</strong>. When we close it, we will use the animation <strong>hideVideo</strong>. We&#x2019;ll have a more detailed look at the animations later on. </p>
+<p>The inner video wrapper will be slightly rotated and scaled down initially. You could also set these properties in the 0% keyframe but you can save yourself the repetition and just define the initial state in the class declaration. </p>
+<p>The video element will take up all the viewport height for this default &#x201C;vertical case&#x201D; (in the next media query we will switch that) and let the width be defined automatically. It will also be transformed; first, to be centered with the &#x201C;translate -50%&#x201D; technique, then scaled and rotated in the opposite direction to compensate the rotation of the parent slightly. We don&#x2019;t want to rotate it too much, as we don&#x2019;t want any edges to show here. Make sure to play around with these transforms to see how you can achieve other interesting effects.</p>
+<p>When we show the main wrapper, we will change the video element&#x2019;s transform (we&#x2019;ll still keep it centered, though) and make sure that it&#x2019;s also in that state when we close it. When we hide everything, we simply want to fade out the wrapper without animating it back. When closing things and making them disappear always think of the fastest elegant way to do it; remember that the user has decided to get rid of whatever is being closed, so making it easy and more fast can be desirable in cases like these.</p>
+<pre class="brush:css"><code>@media screen and (min-width: 25em) {
+	.video-inner {
+		width: 30vw;
+		height: 30vw;
+		border: 20px solid #fff;
+		-webkit-transform: scale3d(0.1,0.1,1) rotate3d(0,0,1,-5deg);
+		transform: scale3d(0.1,0.1,1) rotate3d(0,0,1,-5deg);
+	}
+	.video-wrap--show .video-inner {
+		opacity: 0;
+		-webkit-animation: showVideo-1 1.25s forwards;
+		animation: showVideo-1 1.25s forwards;
+	}
+	.video-wrap--hide .video-inner {
+		-webkit-animation: hideVideo 1.25s forwards;
+		animation: hideVideo 1.25s forwards;
+	}
+	.video-player {
+		left: 50%;
+		width: auto;
+		height: 100vh;
+		-webkit-transition: -webkit-transform 1s;
+		transition: transform 1s;
+		-webkit-transform: translate3d(-50%,-50%,0) scale3d(0.7,0.7,1) rotate3d(0,0,1,5deg);
+		transform: translate3d(-50%,-50%,0) scale3d(0.7,0.7,1) rotate3d(0,0,1,5deg);
+	}
+	.video-wrap--show .video-player,
+	.video-wrap--hide .video-player {
+		-webkit-transform: translate3d(-50%,-50%,0) scale3d(1,1,1);
+		transform: translate3d(-50%,-50%,0) scale3d(1,1,1);
+	}
+}
+</code></pre>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/07/VideoOpeningAnimation_screen2.jpg" alt="VideoOpeningAnimation_screen2" width="890" class="alignnone size-full wp-image-24575"></p>
+<p>The second media query is for the &#x201C;horizontal&#x201D; case, i.e. the case that we know will make the video cover the whole screen by setting the width to the full viewport width. We take the values of the video&#x2019;s width and height to define the minimum aspect ratio, which is the same as 16/9.</p>
+<p>We size our inner wrapper to <em>30vh</em> initially, and the video itself will take up all the width of the screen while leaving the height to <em>auto</em>. </p>
+<pre class="brush:css"><code>@media screen and (min-width: 25em) and (min-aspect-ratio: 1280/720) {
+	.video-inner {
+		width: 30vh;
+		height: 30vh;
+	}
+	.video-wrap--show .video-inner {
+		-webkit-animation: showVideo-2 1.25s forwards;
+		animation: showVideo-2 1.25s forwards;
+	}
+	.video-player {
+		width: 100vw;
+		height: auto;
+	}
+}
+</code></pre>
+<p>Just a side note on formatting the CSS: you might have noticed that we don&#x2019;t use a new line between rules in media queries; this turns out to be really useful because you <em>know</em> that you are inside of a media query when editing your styles. Not a big amazing thing, but sometimes it can speed things up and ease locating something. </p>
+<p>Let&#x2019;s define the animations! </p>
+<p><em>You might wonder why we are using the WebKit prefix for transitions and animations. Animations still <a href="http://caniuse.com/#search=animation">need the prefix</a> for Safari (8), iOS Safari (8.4) and Android (40) in order to work and <a href="http://caniuse.com/#search=transition">transitions</a> for some older Android browsers.</em></p>
+<p>The first animation is for expanding the inner video wrapper for the vertical case where we take the viewport width as base measure. You don&#x2019;t need to distinguish these two cases for the inner wrapper if you have a fixed initial size. But since we want a dynamic size depending on the ratio (and because we want to show you how to abuse the relative viewport units) we define two different opening animations. </p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/07/VideoOpeningAnimation_screen31.jpg" alt="VideoOpeningAnimation_screen3" width="890" class="alignnone size-full wp-image-24586"></p>
+<p>Considering the initial state of the inner wrapper, we now animate its dimensions to half of the viewport width and set the opacity to 1. We scale it up a bit but keep the rotation value. Then we animate to fullscreen, using 100vw for the width and 100vh for the height. The transforms will be &#x201C;unset&#x201D;: </p>
+<pre class="brush:css"><code>@-webkit-keyframes showVideo-1 {
+	50% {
+		width: 50vw;
+		height: 50vw;
+		opacity: 1;
+		-webkit-transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+		transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+	}
+	100% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 1;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+}
+
+@keyframes showVideo-1 {
+	50% {
+		width: 50vw;
+		height: 50vw;
+		opacity: 1;
+		-webkit-transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+		transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+	}
+	100% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 1;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+}
+</code></pre>
+<p>The other animation is exactly the same, we just use the viewport height as base measure and so we need to set the 50% keyframe width and height to 50vh.</p>
+<pre class="brush:css"><code>@-webkit-keyframes showVideo-2 {
+	50% {
+		width: 50vh;
+		height: 50vh;
+		opacity: 1;
+		-webkit-transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+		transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+	}
+	100% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 1;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+}
+
+@keyframes showVideo-2 {
+	50% {
+		width: 50vh;
+		height: 50vh;
+		opacity: 1;
+		-webkit-transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+		transform: scale3d(0.5,0.5,1) rotate3d(0,0,1,-5deg);
+	}
+	100% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 1;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+}
+</code></pre>
+<p>Notice, how we add the actual reset transform with the scale3d and the rotate3d. You could as well simply write one of the transform types but this is a troublemaker for browsers like FF. It&#x2019;s a good idea to thoroughly test each case if you&#x2019;d like to simplify it.</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/07/VideoOpeningAnimation_screen4.jpg" alt="VideoOpeningAnimation_screen4" width="890" class="alignnone size-full wp-image-24572"></p>
+<p>Last, but not least, we define the animation for hiding the whole thing. Remember that we&#x2019;ve already taken care of hiding the video element itself in the first media query. For the video wrapper animation we set the first and last keyframe to be the same except for the opacity. Like that we are simply fading out the video wrapper. </p>
+<pre class="brush:css"><code>@-webkit-keyframes hideVideo {
+	0% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 1;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+	100% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 0;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+}
+
+@keyframes hideVideo {
+	0% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 1;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+	100% {
+		width: 100vw;
+		height: 100vh;
+		opacity: 0;
+		-webkit-transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+		transform: scale3d(1,1,1) rotate3d(0,0,1,0deg);
+	}
+}
+</code></pre>
+<p>This syntax looks like we could simplify it, right? It should be possible to define the 0% and 100% keyframe in one definition and then set the different properties in single keyframes, but this does not seem to work well in IE, unfortunately. Also, placing the animations into the media query definitions will bring you into hell&#x2019;s kitchen in IE10 and IE11: they simply won&#x2019;t work. Read more about this problem in this article by Karen Menezes: <a href="http://blog.karenmenezes.com/2014/dec/26/ie-bug-keyframe-animations/">IE bug: keyframe animations inside a media query block</a>.</p>
+<p>These are all the styles for the effect. Make sure to play around with the transforms and the animations. For example, you could set a nice timing function or rotate differently, or even rotate in perspective; there are many possibilities&#x2014;imagination is all you need :)</p>
+<p><strong>We hope you enjoyed this tutorial and find it useful! Thank you for reading!</strong></p>
+
+<p><a class="demo" href="http://tympanus.net/Tutorials/VideoOpeningAnimation/">View demo</a> <a class="download" href="http://tympanus.net/Tutorials/VideoOpeningAnimation/VideoOpeningAnimation.zip">Download source</a></p>
+								
+																	 
+																
+							</div>
+						</div>
+</body></html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html><html><head><title>Animated Map Path for Interactive Storytelling</title></head><body>
+<h1>Animated Map Path for Interactive Storytelling</h1><p><a href="http://tympanus.net/codrops/2015/12/16/animated-map-path-for-interactive-storytelling/" target="_new">Original URL</a></p>
+<p><blockquote>An interactive journey where a Canvas map path is animated according to the content that is scrolled on the page.</blockquote></p>
+<div><div class="ct-post-content">
+								<p class="ct-post-excerpt">An interactive journey where a Canvas map path is animated according to the content that is scrolled on the page. </p>								<div class="ct-ad-article-wrapper">
+										<div class="ct-ad-article">
+																						<img class="ct-ad-img" src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/themes/codropstheme03/images/advertisement.jpg">
+												
+											
+										</div>
+									</div>
+								
+								<p><a href="http://tympanus.net/Development/StorytellingMap/"><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/StorytellingMap.jpg" alt="StorytellingMap" width="580" class="alignnone size-full wp-image-25707"></a></p>
+<div>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/1.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/2.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/3.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/4.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/5.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/6.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/7.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/8.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/9.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/10.jpg"><br>
+ <img src="http://tympanus.net/Development/StorytellingMap/img/journey/11.jpg">
+</div>
+<p><a class="demo" href="http://tympanus.net/Development/StorytellingMap/">View demo</a> <a class="download" href="http://tympanus.net/Development/StorytellingMap/StorytellingMap.zip">Download source</a></p>
+<p>Today we&#x2019;d like to share an experimental demo with you. This demo is an interactive map that will animate a map path while scrolling the page. The main idea is to connect the story being told with the path itself. The journey can also contain images that will indicate where they have been taken with a semi-transparent cone. It will appear as soon as the image is in the visible viewport. A little plane icon is used in the last bit of the path in order to indicate that the journey was made on an aircraft.</p>
+<p class="box-attention">
+<strong>Attention:</strong> This is a highly experimental project and it might not work in all browsers. <strong>Currently there is no IE support.</strong>
+</p>
+<strong>Browser Support:</strong> <ul class="browser-support"><li class="bs-chrome bs-supported"><span class="bs-browser">Chrome</span><span class="bs-info">Supported</span></li><li class="bs-firefox bs-supported"><span class="bs-browser">Firefox</span><span class="bs-info">Supported</span></li><li class="bs-ie"><span class="bs-browser">Internet Explorer</span><span class="bs-info">Not supported</span></li><li class="bs-safari bs-supported"><span class="bs-browser">Safari</span><span class="bs-info">Supported</span></li><li class="bs-opera bs-supported"><span class="bs-browser">Opera</span><span class="bs-info">Supported</span></li></ul>
+<p><strong>The photography is courtesy of <a href="http://instagram.com/danrubin/">Dan Rubin</a> who has travelled to Iceland and has taken some incredible shots that we used in the demo. Find him on <a href="http://instagram.com/danrubin">Instagram</a>, <a href="https://twitter.com/danrubin">Twitter</a>, <a href="https://www.flickr.com/photos/danrubin">Flickr</a> and <a href="http://danrubin.vsco.co/">VSCO</a>.</strong></p>
+<p>To make this map, we chose <a href="https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API"><code>canvas</code></a> for rendering for performance reasons. It could be done purely with SVG, but at the time of writing, SVG rendering performance isn&#x2019;t quite there yet, while <code>canvas</code> is hardware accelerated on most platforms.</p>
+<p>That&#x2019;s not to say we won&#x2019;t use SVG at all, though. On the contrary: to draw on the canvas, we need to get the map graphics from somewhere, and maps are perfectly suited for vector formats like SVG. Moreover, we also need to get trail and point data, and SVG is a great candidate to store that information.</p>
+<p>So now let&#x2019;s see how we can use both together.</p>
+<h2><a id="SVG__Canvas_17"></a>SVG + Canvas</h2>
+<p>First, we need to prepare our map. What we will need from it, for this project:</p>
+<ul>
+<li>The trail path;</li>
+<li>The path of the &#x201C;camera&#x201D;;</li>
+<li>Points of interest, with names;</li>
+<li>And of course, the map itself.</li>
+</ul>
+<p>Both paths are simple&#x2026; well, <code>&lt;path&gt;</code> elements, that can be drawn with any B&#xE9;zier curve tool or similar.</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/paths.png" alt="paths" width="1378" class="alignnone size-full wp-image-25730"></p>
+<p class="box-attention">
+It&#x2019;s important that they should be actual <code>&lt;path&gt;</code> elements instead of other primitives such as <code>&lt;polygon&gt;</code>, <code>&lt;line&gt;</code>, etc. If you are using Illustrator, create a <strong>Compound Path</strong> by selecting the object and going to <code>Edit &gt; Compound Path &gt; Make</code> or by pressing &lt;kbd&gt;Command/Ctrl&lt;/kbd&gt;+&lt;kbd&gt;8&lt;/kbd&gt; to convert the object to <code>&lt;path&gt;</code>
+</p>
+<p>Points of interest can be stored using <code>&lt;circle&gt;</code> elements, created with the regular ellipse tool. The names of the points can be set as the name of their layers, and you can retrieve them later with <code>getAttribute('id')</code>.<br>
+Speaking of layer names, don&#x2019;t forget to set the name of the layers of these &#x201C;special&#x201D; graphics, because we&#x2019;ll need them in order to access the layers later by code.</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/layers.png" alt="layers" width="211" class="alignnone size-full wp-image-25731"></p>
+<p>Finally, the map itself can be just any graphic. You can draw anything you want on top of it too, like additional points of interest, terrain, parallels, etc.</p>
+<div class="ct-ad-article-wrapper ct-ad-article-wrapper-in"><div class="ct-ad-article"><img class="ct-ad-img" src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/themes/codropstheme03/images/advertisement.jpg"></div></div>
+<p>Drawing SVG on <code>canvas</code> is simple, but comes with a caveat: you can only draw straight from actual .svg files, you can&#x2019;t modify the SVG with code before drawing. Therefore, you have to hide all the special layers of the SVG (camera path and the like) before saving. Loading the SVG both as a regular <code>&lt;img&gt;</code> for drawing in canvas and as a <code>&lt;svg&gt;</code> element for accessing data means that we have to load it two times and hope the browser cache saves us from having to download it twice.</p>
+<p>The code could look like this (using ES2015 and <a href="https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Promise">Promises</a>):</p>
+<pre class="brush:js"><code>
+ let mapFile='map.svg'
+ let mapSVG, mapImage
+
+ ajaxGet(mapFile).then(response=&gt;{ // Load the SVG with an Ajax request.
+ mapSVG=Array.from( // Makes a new array from...
+ new DOMParser()
+ .parseFromString(response,'image/svg+xml')
+ .childNodes // ...the NodeList we get from the parsed SVG file.
+ ) // It returns a handful of nodes, like 
+ .filter(node=&gt;{ // but we only need the svg element, so we filter that
+ let tag=node.tagName // array looking for any elements ...
+ if(typeof tag=='undefined')
+ return false
+ return tag.toLowerCase()==='svg' // ...that have the tag name svg...
+ })[0] // ...and we get the first (and usually only) one.
+
+ loadImage(mapFile).then(img=&gt;{ // Then we load the image again,
+ mapImage=img // this time as an `img` element.
+
+ ...
+</code></pre>
+<p>The performance gains for using <code>canvas</code> will be nullified, though, if we draw from the SVG on every frame, especially if your map is complex. There are some techniques you can use to avoid that.</p>
+<p>The simplest one is creating a hidden canvas and drawing the SVG there once. Then, you draw on the main canvas <em>from that hidden canvas</em> instead of drawing from the SVG: drawing from a bitmap source is much faster.</p>
+<p>That might come with some problems though: one of the biggest reasons for using vector graphics is being able to zoom without losing resolution, and that is lost if we draw on a canvas that&#x2019;s too small. Using a huge canvas for drawing on every frame, though, can get pretty slow.<br>
+A technique we can employ to mitigate both issues is keeping a high resolution copy of the map, and using a reasonably sized buffer canvas for moving &#x2013; and refresh that buffer only when we move or zoom too much.</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/buffer.gif" alt="buffer" width="700" class="alignnone size-full wp-image-25732"></p>
+<p>Doing this allows us to only draw from the high resolution image when we need it, and doesn&#x2019;t restrict us to using low resolutions.</p>
+<h3><a id="Paths_80"></a>Paths</h3>
+<p>We can move through an SVG path using a built-in <code>&lt;path&gt;</code> function: <code>getPointAtLength</code>. It returns the position of a point on an arbitrary length along the path. We can get the total length of the path using <code>getTotalLength</code>.</p>
+<pre class="brush:js"><code>
+ let path = mapSVG.querySelector('#camera-path path') // Gets the path element
+let length = mapSVG.getTotalLength() // Gets the length of the path
+
+// To get, for example, the position of a point halfway through the path
+path.getPointAtLength(length*0.5) // returns {x: ..., y: ...}
+</code></pre>
+<p>It would be useful to be able to tell how far along the path each point of interest is located. Unfortunately, there&#x2019;s no <code>getLengthAtPoint</code> function (of course, because there&#x2019;s no guarantee that a point crosses the path at all).<br>
+We can approximate that, however, getting a length that is more or less close to the point, using simple trigonometry and some iterations:</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/length.gif" alt="length" width="550" class="alignnone size-full wp-image-25733"></p>
+<p>We can use the same <code>getPointAtLength</code> function to draw the trail on the canvas, running the function a hundred of times, storing the points in an array, and then drawing lines from that array. Alternately, we can parse the <code>d</code> attribute from the <code>&lt;path&gt;</code> element and use similar <code>canvas</code> drawing commands.</p>
+<p>Hopefully these techniques will give you a bit of insight into how something like this can be achieved. Now, let&#x2019;s have a look at the results of our implementation.</p>
+<h2>The Map in Action</h2>
+<p>At the beginning of the journey, we show the map and when we start scrolling, the path animation begins.</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/StorytellingMap01.png" alt="StorytellingMap01" width="650" class="alignnone size-full wp-image-25706"></p>
+<p>When linking an image in the story with the path, we show a cone that indicates where the picture was taken:</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/StorytellingMap02.jpg" alt="StorytellingMap02" width="650" class="alignnone size-full wp-image-25726"></p>
+<p>There are points that can be zoomed and paused at, in order to show a gallery or other relevant parts of the story:</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/StorytellingMap03.png" alt="StorytellingMap03" width="650" class="alignnone size-full wp-image-25705"></p>
+<p>For the final bit, we use a little plane icon to indicate that this part of the journey was taken on an aircraft:</p>
+<p><img src="http://codropspz.tympanus.netdna-cdn.com/codrops/wp-content/uploads/2015/12/StorytellingMap04.png" alt="StorytellingMap04" width="650" class="alignnone size-full wp-image-25704"></p>
+<p><strong>We hope you enjoy this experiment and find it inspiring!</strong></p>
+<p><em>GitHub link coming soon!</em><br>
+
+</p><p><a class="demo" href="http://tympanus.net/Development/StorytellingMap/">View demo</a> <a class="download" href="http://tympanus.net/Development/StorytellingMap/StorytellingMap.zip">Download source</a></p>
+								
+																	 
+																
+							</div>
+						</div>
+</body></html>

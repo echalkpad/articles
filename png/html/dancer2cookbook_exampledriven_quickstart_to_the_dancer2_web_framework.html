@@ -1,0 +1,847 @@
+<!DOCTYPE html><html><head><title>Dancer2::Cookbook - Example-driven quick-start to the Dancer2 web framework</title></head><body>
+<h1>Dancer2::Cookbook - Example-driven quick-start to the Dancer2 web framework</h1><p><a href="https://metacpan.org/pod/Dancer2::Cookbook" target="_new">Original URL</a></p>
+<p><blockquote>NAME Dancer2::Cookbook - Example-driven quick-start to the Dancer2 web framework VERSION version 0.165000 DESCRIPTION A quick-start guide with examples to get you up and running with the Dancer2 web&hellip;</blockquote></p>
+<div><div class="pod content anchors">
+
+
+
+<h2 id="NAME">NAME</h2>
+
+<p>Dancer2::Cookbook - Example-driven quick-start to the Dancer2 web framework</p>
+
+<h2 id="VERSION">VERSION</h2>
+
+<p>version 0.165000</p>
+
+<h2 id="DESCRIPTION">DESCRIPTION</h2>
+
+<p>A quick-start guide with examples to get you up and running with the Dancer2 web framework. This document will be twice as useful if you finish reading the manual (<a href="https://metacpan.org/pod/distribution/Dancer2/lib/Dancer2/Manual.pod">Dancer2::Manual</a>) first, but that is not required... :-)</p>
+
+<h2 id="BEGINNERS-DANCE">BEGINNER'S DANCE</h2>
+
+<h2 id="A-simple-Dancer2-web-app">A simple Dancer2 web app</h2>
+
+<p>Dancer2 has been designed to be easy to work with - it's trivial to write a simple web app, but still has the power to work with larger projects. To start with, let's make an incredibly simple "Hello World" example:</p>
+
+<pre><code> #!/usr/bin/env perl
+
+ use Dancer2;
+
+ get '/hello/:name' =&gt; sub {
+ return "Why, hello there " . params-&gt;{name};
+ };
+
+ dance;</code></pre>
+
+<p>Yes - the above is a fully-functioning web app; running that script will launch a webserver listening on the default port (3000). Now you can make a request:</p>
+
+<pre><code> $ curl http://localhost:3000/hello/Bob
+ Why, hello there Bob</code></pre>
+
+<p>and it will say hello. The <code>:name</code> part is a named parameter within the route specification, whose value is made available through <code>params</code>.</p>
+
+<p>Note that you don't need to use the <code>strict</code> and <code>warnings</code> pragmas; they are already loaded by Dancer2.</p>
+
+<h2 id="Default-Route">Default Route</h2>
+
+<p>In case you want to avoid a <i>404 error</i>, or handle multiple routes in the same way and you don't feel like configuring all of them, you can set up a default route handler.</p>
+
+<p>The default route handler will handle any request that doesn't get served by any other route.</p>
+
+<p>All you need to do is set up the following route as the <b>last</b> route:</p>
+
+<pre><code> any qr{.*} =&gt; sub {
+ status 'not_found';
+ template 'special_404', { path =&gt; request-&gt;path };
+ };</code></pre>
+
+<p>Then you can set up the template like so:</p>
+
+<pre><code> You tried to reach [% path %], but it is unavailable at the moment.
+
+ Please try again or contact us at &lt;contact@example.com&gt;.</code></pre>
+
+<h2 id="Using-the-auto_page-feature-for-automatic-route-creation">Using the <code>auto_page</code> feature for automatic route creation</h2>
+
+<p>For simple "static" pages you can simply enable the <code>auto_page</code> config setting; this means you don't need to declare a route handler for those pages; if a request is for <code>/foo/bar</code>, Dancer2 will check for a matching view (e.g. <code>/foo/bar.tt</code> and render it with the default layout, if found. For full details, see the documentation for the <a href="https://metacpan.org/pod/distribution/Dancer2/lib/Dancer2/Config.pod#auto_page">auto_page setting</a>.</p>
+
+<h2 id="Simplifying-AJAX-queries-with-the-Ajax-plugin">Simplifying AJAX queries with the Ajax plugin</h2>
+
+<p>As an AJAX query is just an HTTP query, it's similar to a GET or POST route. You may ask yourself why you may want to use the <code>ajax</code> keyword (from the <a href="https://metacpan.org/pod/Dancer2::Plugin::Ajax">Dancer2::Plugin::Ajax</a> plugin) instead of a simple <code>get</code>.</p>
+
+<p>Let's say you have a path like <code>/user/:user</code> in your application. You may want to be able to serve this page with a layout and HTML content. But you may also want to be able to call this same url from a javascript query using AJAX.</p>
+
+<p>So, instead of having the following code:</p>
+
+<pre><code> get '/user/:user' =&gt; sub {
+ if ( request-&gt;is_ajax ) {
+ # create xml, set headers to text/xml, blablabla
+ header( 'Content-Type' =&gt; 'text/xml' );
+ header( 'Cache-Control' =&gt; 'no-store, no-cache, must-revalidate' );
+ to_xml({...})
+ } else {
+ template users =&gt; {...}
+ }
+ };</code></pre>
+
+<p>you can have</p>
+
+<pre><code> ajax '/user/:user' =&gt; sub {
+ to_xml( {...}, RootName =&gt; undef );
+ }</code></pre>
+
+<p>and</p>
+
+<pre><code> get '/user/:user' =&gt; sub {
+ template users =&gt; {...}
+ }</code></pre>
+
+<p>Because it's an AJAX query, you know you need to return XML content, so the content type of the response is set for you.</p>
+
+<h3 id="Example:-Feeding-graph-data-through-AJAX">Example: Feeding graph data through AJAX</h3>
+
+<p>Let us assume we are building an application that uses a plotting library to generate a graph and expects to get its data, which is in the form of wordcount from an AJAX call.</p>
+
+<p>For the graph, we need the url <i>/data</i> to return a JSON representation of the wordcount data. Dancer infact has a <code>to_json()</code> function that takes care of the JSON encapsulation.</p>
+
+<pre><code> get '/data' =&gt; sub {
+ open my $fh, '&lt;', $count_file;
+
+ my %contestant;
+ while (&lt;$fh&gt;) {
+ chomp;
+ my ( $date, $who, $count ) = split '\s*,\s*';
+
+ my $epoch = DateTime::Format::Flexible-&gt;parse_datetime($date)-&gt;epoch;
+ my $time = 1000 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii $epoch;
+ $contestant{$who}{$time} = $count;
+ }
+
+ my @json; # data structure that is going to be JSONified
+
+ while ( my ( $peep, $data ) = each %contestant ) {
+ push @json, {
+ label =&gt; $peep,
+ hoverable =&gt; \1, # so that it becomes JavaScript's 'true'
+ data =&gt; [ map { [ $_, $data-&gt;{$_} ] }
+ sort { $a &lt;=&gt; $b }
+ keys %$data ],
+ };
+ }
+
+ my $beginning = DateTime::Format::Flexible-&gt;parse_datetime( "2010-11-01")-&gt;epoch;
+ my $end = DateTime::Format::Flexible-&gt;parse_datetime( "2010-12-01")-&gt;epoch;
+
+ push @json, {
+ label =&gt; 'de par',
+ data =&gt; [
+ [$beginning articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1000, 0],
+ [ DateTime-&gt;now-&gt;epoch articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 1_000,
+ 50_000
+ articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii (DateTime-&gt;now-&gt;epoch - $beginning)
+ / ($end - $beginning)
+ ]
+ ],
+
+ };
+
+ to_json( \@json );
+ };</code></pre>
+
+<p>For more serious AJAX interaction, there's also <a href="https://metacpan.org/pod/Dancer2::Plugin::Ajax">Dancer2::Plugin::Ajax</a> that adds an <i>ajax</i> route handler to the mix.</p>
+
+<p>Because it's an AJAX query, you know you need to return XML content, so the content type of the response is set for you.</p>
+
+<h2 id="Using-the-prefix-feature-to-split-your-application">Using the prefix feature to split your application</h2>
+
+<p>For better maintainability, you may want to separate some of your application components into different packages. Let's say we have a simple web app with an admin section and want to maintain this in a different package:</p>
+
+<pre><code> package myapp;
+ use Dancer2;
+ use myapp::admin;
+
+ prefix undef;
+
+ get '/' =&gt; sub {...};
+
+ 1;
+
+ package myapp::admin;
+ use Dancer2 appname =&gt; 'myapp';
+
+ prefix '/admin';
+
+ get '/' =&gt; sub {...};
+
+ 1;</code></pre>
+
+<p>The following routes will be generated for us:</p>
+
+<pre><code> - get /
+ - get /admin/
+ - head /
+ - head /admin/</code></pre>
+
+<p>By default, a separate application is created for every package that uses Dancer2. The <code>appname</code> tag is used to collect routes and hooks into a single Dancer2 application. In the above example, <code>appname =&gt; 'myapp'</code> adds the routes from <code>myapp::admin</code> to the routes of the app <code>myapp</code>.</p>
+
+<p>When using multiple applications please ensure that your path definitions do not overlap. For example, if using a default route as described above, once a request is matched to the default route then no further routes (or applications) would be reached.</p>
+
+<h2 id="Delivering-custom-error-pages">Delivering custom error pages</h2>
+
+<h3 id="At-the-Core">At the Core</h3>
+
+<p>In Dancer2, creating new errors is done by creating a new <a href="https://metacpan.org/pod/Dancer2::Core::Error">Dancer2::Core::Error</a></p>
+
+<pre><code> my $oopsie = Dancer2::Core::Error-&gt;new(
+ status =&gt; 418,
+ message =&gt; "This is the Holidays. Tea not acceptable. We want eggnog.",
+ app =&gt; $app,
+ )</code></pre>
+
+<p>If not given, the status code defaults to a 500, there is no need for a message if we feel taciturn, and while the <code>$app</code> (which is a <i>Dancer2::Core::App</i> object holding all the pieces of information related to the current request) is needed if we want to take advantage of the templates, we can also do without.</p>
+
+<p>However, to be seen by the end user, we have to populate the <a href="https://metacpan.org/pod/Dancer2::Core::Response">Dancer2::Core::Response</a> object with the error's data. This is done via:</p>
+
+<pre><code> $oopsie-&gt;throw($response);</code></pre>
+
+<p>Or, if we want to use the response object already present in the <code>$app</code> (which is usually the case):</p>
+
+<pre><code> $oopsie-&gt;throw;</code></pre>
+
+<p>This populates the status code of the response, sets its content, and throws a <i>halt()</i> in the dispatch process.</p>
+
+<h3 id="What-it-will-look-like">What it will look like</h3>
+
+<p>The error object has quite a few ways to generate its content.</p>
+
+<p>First, it can be explicitly given</p>
+
+<pre><code> my $oopsie = Dancer2::Core::Error-&gt;new(
+ content =&gt; '&lt;html&gt;&lt;body&gt;&lt;h1&gt;OMG&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;',
+ );</code></pre>
+
+<p>If the <code>$context</code> was given, the error will check if there is a template by the name of the status code (so, say you're using Template Toolkit, <i>418.tt</i>) and will use it to generate the content, passing it the error's <code>$message</code>, <code>$status</code> code and <code>$title</code> (which, if not specified, will be the standard http error definition for the status code).</p>
+
+<p>If there is no template, the error will then look for a static page (to continue with our example, <i>418.html</i>) in the <i>public/</i> directory.</p>
+
+<p>And finally, if all of that failed, the error object will fall back on an internal template.</p>
+
+<h3 id="Errors-in-Routes">Errors in Routes</h3>
+
+<p>The simplest way to use errors in routes is:</p>
+
+<pre><code> get '/xmas/gift/:gift' =&gt; sub {
+ die "sorry, we're all out of ponies\n"
+ if param('gift') eq 'pony';
+ };</code></pre>
+
+<p>The die will be intercepted by Dancer, converted into an error (status code 500, message set to the dying words) and passed to the response.</p>
+
+<p>In the cases where more control is required, <code>send_error()</code> is the way to go:</p>
+
+<pre><code> get '/glass/eggnog' =&gt; sub {
+ send_error "Sorry, no eggnog here", 418;
+ };</code></pre>
+
+<p>And if total control is needed:</p>
+
+<pre><code> get '/xmas/wishlist' =&gt; sub {
+ Dancer2::Core::Error-&gt;new(
+ response =&gt; response(),
+ status =&gt; 406,
+ message =&gt; "nothing but coal for you, I'm afraid",
+ template =&gt; 'naughty/index',
+ )-&gt;throw unless user_was_nice();
+
+ ...;
+ };</code></pre>
+
+<h2 id="Template-Toolkits-WRAPPER-directive-in-Dancer2">Template Toolkit's WRAPPER directive in Dancer2</h2>
+
+<p>Dancer2 already provides a WRAPPER-like ability, which we call a "layout". The reason we don't use Template Toolkit's WRAPPER (which also makes us incompatible with it) is because not all template systems support it. In fact, most don't.</p>
+
+<p>However, you might want to use it, and be able to define META variables and regular <a href="https://metacpan.org/pod/Template::Toolkit">Template::Toolkit</a> variables.</p>
+
+<p>These few steps will get you there:</p>
+
+<ul>
+
+<li><p>Disable the layout in Dancer2</p>
+
+<p>You can do this by simply commenting (or removing) the <code>layout</code> configuration in the config file.</p>
+
+</li>
+<li><p>Use the Template Toolkit template engine</p>
+
+<p>Change the configuration of the template to Template Toolkit:</p>
+
+<pre><code> # in config.yml
+ template: "template_toolkit"</code></pre>
+
+</li>
+<li><p>Tell the Template Toolkit engine which wrapper to use</p>
+
+<pre><code> # in config.yml
+ # ...
+ engines:
+ template:
+ template_toolkit:
+ WRAPPER: layouts/main.tt</code></pre>
+
+</li>
+</ul>
+
+<p>Done! Everything will work fine out of the box, including variables and META variables.</p>
+
+
+
+<p>You may want to access your webapp's configuration from outside your webapp. You could, of course, use the YAML module of your choice and load your webapps's <code>config.yml</code>, but chances are that this is not convenient.</p>
+
+<p>Use Dancer2 instead. You can simply use the values from <code>config.yml</code> and some additional default values:</p>
+
+<pre><code> # bin/show_app_config.pl
+ use Dancer2;
+ printf "template: %s\n", config-&gt;{'template'}; # simple
+ printf "log: %s\n", config-&gt;{'log'}; # undef</code></pre>
+
+<p>Note that <code>config-&gt;{log}</code> should result in an uninitialized warning on a default scaffold since the environment isn't loaded and log is defined in the environment and not in <code>config.yml</code>. Hence <code>undef</code>.</p>
+
+<p>Dancer2 will load your <code>config.yml</code> configuration file along with the correct environment file located in your <code>environments</code> directory.</p>
+
+<p>The environment is determined by two environment variables in the following order:</p>
+
+<ul>
+
+<li><p>DANCER_ENVIRONMENT</p>
+
+</li>
+<li><p>PLACK_ENV</p>
+
+</li>
+</ul>
+
+<p>If neither of those is set, it will default to loading the development environment (typically <code>$webapp/environment/development.yml</code>).</p>
+
+<p>If you wish to load a different environment, you need to override these variables.</p>
+
+<p>You can call your script with the environment changed:</p>
+
+<pre><code> $ PLACK_ENV=production perl bin/show_app_config.pl</code></pre>
+
+<p>Or you can override them directly in the script (less recommended):</p>
+
+<pre><code> BEGIN { $ENV{'DANCER_ENVIRONMENT'} = 'production' }
+ use Dancer2;
+
+ ...</code></pre>
+
+<h2 id="Using-DBIx::Class">Using DBIx::Class</h2>
+
+<p><a href="https://metacpan.org/pod/DBIx::Class">DBIx::Class</a>, also known as DBIC, is one of the many Perl ORM (<i>Object Relational Mapper</i>). It is easy to use DBIC in Dancer2 using the <a href="https://metacpan.org/pod/Dancer2::Plugin::DBIC">Dancer2::Plugin::DBIC</a>.</p>
+
+<h3 id="An-example">An example</h3>
+
+<p>This example demonstrates a simple Dancer2 application that allows one to search for authors or books. The application is connected to a database, that contains authors, and their books. The website will have one single page with a form, that allows one to query books or authors, and display the results.</p>
+
+<h4 id="Creating-the-application">Creating the application</h4>
+
+<pre><code> $ dancer2 -a bookstore</code></pre>
+
+<p>To use the Template Toolkit as the template engine, we specify it in the congiguration file:</p>
+
+<pre><code> # add in bookstore/config.yml
+ template: template_toolkit</code></pre>
+
+<h4 id="Creating-the-view">Creating the view</h4>
+
+<p>We need a view to display the search form, and below, the results, if any. The results will be fed by the route to the view as an arrayref of results. Each result is a <i>hashref</i>, with a author key containing the name of the author, and a books key containing an <i>arrayref</i> of strings : the books names.</p>
+
+<pre><code> # example of a list of results
+ [ { author =&gt; 'author 1',
+ books =&gt; [ 'book 1', 'book 2' ],
+ },
+ { author =&gt; 'author 2',
+ books =&gt; [ 'book 3', 'book 4' ],
+ }
+ ]</code></pre>
+
+<p># bookstore/views/search.tt &lt;p&gt; &lt;form action="/search"&gt; Search query: &lt;input type="text" name="query" /&gt; &lt;/form&gt; &lt;/p&gt; &lt;br&gt;</p>
+
+<p>An example of the view, displaying the search form, and the results, if any:</p>
+
+<pre><code> &lt;% IF query.length %&gt;
+ &lt;p&gt;Search query was : &lt;% query %&gt;.&lt;/p&gt;
+ &lt;% IF results.size %&gt;
+ Results:
+ &lt;ul&gt;
+ &lt;% FOREACH result IN results %&gt;
+ &lt;li&gt;Author: &lt;% result.author.replace("((?i)$query)", '&lt;b&gt;$1&lt;/b&gt;') %&gt;
+ &lt;ul&gt;
+ &lt;% FOREACH book IN result.books %&gt;
+ &lt;li&gt;&lt;% book.replace("((?i)$query)", '&lt;b&gt;$1&lt;/b&gt;') %&gt;
+ &lt;% END %&gt;
+ &lt;/ul&gt;
+ &lt;% END %&gt;
+ &lt;% ELSE %&gt;
+ No result
+ &lt;% END %&gt;
+ &lt;% END %&gt;</code></pre>
+
+<h4 id="Creating-a-Route">Creating a Route</h4>
+
+<p>A simple route, to be added in the <i>bookstore.pm</i> module:</p>
+
+<pre><code> # add in bookstore/lib/bookstore.pm
+ get '/search' =&gt; sub {
+ my $query = params-&gt;{'query'};
+ my @results = ();
+
+ if ( length $query ) {
+ @results = _perform_search($query);
+ }
+
+ template search =&gt; {
+ query =&gt; $query,
+ results =&gt; \@results,
+ };
+ };</code></pre>
+
+<h4 id="Creating-a-database">Creating a database</h4>
+
+<p>We create a SQLite file database:</p>
+
+<pre><code> $ sqlite3 bookstore.db
+ CREATE TABLE author(
+ id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+ firstname text default '' not null,
+ lastname text not null);
+
+ CREATE TABLE book(
+ id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+ author INTEGER REFERENCES author (id),
+ title text default '' not null );</code></pre>
+
+<p>Now, to populate the database with some data, we use <a href="https://metacpan.org/pod/DBIx::Class">DBIx::Class</a>:</p>
+
+<pre><code> # populate_database.pl
+ package My::Bookstore::Schema;
+ use base qw(DBIx::Class::Schema::Loader);
+ package main;
+ my $schema = My::Bookstore::Schema-&gt;connect('dbi:SQLite:dbname=bookstore.db');
+ $schema-&gt;populate('Author', [
+ [ 'firstname', 'lastname'],
+ [ 'Ian M.', 'Banks' ],
+ [ 'Richard', 'Matheson'],
+ [ 'Frank', 'Herbert' ],
+ ]);
+ my @books_list = (
+ [ 'Consider Phlebas', 'Banks' ],
+ [ 'The Player of Games', 'Banks' ],
+ [ 'Use of Weapons', 'Banks' ],
+ [ 'Dune', 'Herbert' ],
+ [ 'Dune Messiah', 'Herbert' ],
+ [ 'Children of Dune', 'Herbert' ],
+ [ 'The Night Stalker', 'Matheson' ],
+ [ 'The Night Strangler', 'Matheson' ],
+ );
+ # transform author names into ids
+ $_-&gt;[1] = $schema-&gt;resultset('Author')-&gt;find({ lastname =&gt; $_-&gt;[1] })-&gt;id
+ foreach (@books_list);
+ $schema-&gt;populate('Book', [
+ [ 'title', 'author' ],
+ @books_list,
+ ]);</code></pre>
+
+<p>Then run it in the directory where <i>bookstore.db</i> sits:</p>
+
+<pre><code> perl populate_database.db</code></pre>
+
+<h4 id="Using-Dancer2::Plugin::DBIC">Using Dancer2::Plugin::DBIC</h4>
+
+<p>There are 2 ways of configuring DBIC to understand how the data is organized in your database:</p>
+
+<ul>
+
+<li><p>Use auto-detection</p>
+
+<p>The configuration file needs to be updated to indicate the use of the Dancer2::Plugin::DBIC plugin, define a new DBIC schema called <i>bookstore</i> and to indicate that this schema is connected to the SQLite database we created.</p>
+
+<pre><code> # add in bookstore/config.yml
+ plugins:
+ DBIC:
+ bookstore:
+ dsn: "dbi:SQLite:dbname=bookstore.db"</code></pre>
+
+<p>Now, <code>_perform_search</code> can be implemented using <a href="https://metacpan.org/pod/Dancer2::Plugin::DBIC">Dancer2::Plugin::DBIC</a>. The plugin gives you access to an additional keyword called <b>schema</b>, which you give the name of schema you want to retrieve. It returns a <code>DBIx::Class::Schema::Loader</code> which can be used to get a resultset and perform searches, as per standard usage of DBIX::Class.</p>
+
+<pre><code> # add in bookstore/lib/bookstore.pm
+ sub _perform_search {
+ my ($query) = @_;
+ my $bookstore_schema = schema 'bookstore';
+ my @results;
+ # search in authors
+ my @authors = $bookstore_schema-&gt;resultset('Author')-&gt;search({
+ -or =&gt; [
+ firstname =&gt; { like =&gt; "%$query%" },
+ lastname =&gt; { like =&gt; "%$query%" },
+ ]
+ });
+ push @results, map {
+ { author =&gt; join(' ', $_-&gt;firstname, $_-&gt;lastname),
+ books =&gt; [],
+ }
+ } @authors;
+ my %book_results;
+ # search in books
+ my @books = $bookstore_schema-&gt;resultset('Book')-&gt;search({
+ title =&gt; { like =&gt; "%$query%" },
+ });
+ foreach my $book (@books) {
+ my $author_name = join(' ', $book-&gt;author-&gt;firstname, $book-&gt;author-&gt;lastname);
+ push @{$book_results{$author_name}}, $book-&gt;title;
+ }
+ push @results, map {
+ { author =&gt; $_,
+ books =&gt; $book_results{$_},
+ }
+ } keys %book_results;
+ return @results;
+ }</code></pre>
+
+</li>
+<li><p>Use home made schema classes</p>
+
+<p>The <a href="https://metacpan.org/pod/DBIx::Class::MooseColumns">DBIx::Class::MooseColumns</a> lets you write the DBIC schema classes using <a href="https://metacpan.org/pod/Moose">Moose</a>. The schema classes should be put in a place that Dancer2 will find. A good place is in <i>bookstore/lib/</i>.</p>
+
+<p>Once your schema classes are in place, all you need to do is modify <i>config.yml</i> to specify that you want to use them, instead of the default auto-detection method:</p>
+
+<pre><code> # change in bookstore/config.yml
+ plugins:
+ DBIC:
+ bookstore:
+ schema_class: My::Bookstore::Schema
+ dsn: "dbi:SQLite:dbname=bookstore.db"</code></pre>
+
+<p><b>Starting the application</b>: Our bookstore lookup application can now be started using the built-in server:</p>
+
+<pre><code> # start the web application
+ plackup bin/app.psgi</code></pre>
+
+</li>
+</ul>
+
+<h2 id="Authentication">Authentication</h2>
+
+<p>Writing a form for authentication is simple: we check the user credentials on a request and decide whether to continue or redirect them to a form. The form allows them to submit their username and password and we save that and create a session for them so when they now try the original request, we recognize them and allow them in.</p>
+
+<h3 id="Basic-Application">Basic Application</h3>
+
+<p>The application is fairly simple. We have a route that needs authentication, we have a route for showing the login page, and we have a route for posting login information and creating a session.</p>
+
+<pre><code> package MyApp;
+ use Dancer2;
+
+ get '/' =&gt; sub {
+ session('user')
+ or redirect('/login');
+
+ template index =&gt; {};
+ };
+
+ get '/login' =&gt; sub {
+ template login =&gt; {};
+ };
+
+ post '/login' =&gt; sub {
+ my $username = param('username');
+ my $password = param('password');
+ my $redir_url = param('redirect_url') || '/login';
+
+ $username eq 'john' &amp;&amp; $password eq 'correcthorsebatterystaple'
+ or redirect $redir_url;
+
+ session user =&gt; $username;
+ redirect $redir_url;
+ };</code></pre>
+
+<h3 id="Tiny-Authentication-Helper">Tiny Authentication Helper</h3>
+
+<p><a href="https://metacpan.org/pod/Dancer2::Plugin::Auth::Tiny">Dancer2::Plugin::Auth::Tiny</a> allows you to abstract away not only the part that checks whether the session exists, but to also generate a redirect with the right path and return URL.</p>
+
+<p>We simply have to define what routes needs a login using Auth::Tiny's <code>needs</code> keyword.</p>
+
+<pre><code> get '/' =&gt; needs login =&gt; sub {
+ template index =&gt; {};
+ };</code></pre>
+
+<p>It creates a proper return URL using <code>uri_for</code> and the address from which the user arrived.</p>
+
+<p>We can thus decorate all of our private routes to require authentication in this manner. If a user does not have a session, it will automatically forward it to <i>/login</i>, in which we would render a form for the user to send a login request.</p>
+
+<p>Auth::Tiny even provides a new parameter, <code>return_url</code>, which can be used to send the user back to their original requested path.</p>
+
+<h3 id="Password-Hashing">Password Hashing</h3>
+
+<p><a href="https://metacpan.org/pod/Dancer2::Plugin::Passphrase">Dancer2::Plugin::Passphrase</a> provides a simple passwords-as-objects interface with sane defaults for hashed passwords which you can use in your web application. It uses <b>bcrypt</b> as the default but supports anything the <a href="https://metacpan.org/pod/Digest">Digest</a> interface does.</p>
+
+<p>Assuming we have the original user-creation form submitting a username and password:</p>
+
+<pre><code> package MyApp;
+ use Dancer2;
+ use Dancer2::Plugin::Passphrase;
+ post '/register' =&gt; sub {
+ my $username = param('username');
+ my $password = passphrase( param('password') )-&gt;generate;
+
+ # $password is now a hashed password object
+ save_user_in_db( $username, $password-&gt;rfc2307 );
+
+ template registered =&gt; { success =&gt; 1 };
+ };</code></pre>
+
+<p>We can now add the <b>POST</b> method for verifying that username and password:</p>
+
+<pre><code> post '/login' =&gt; sub {
+ my $username = param('username');
+ my $password = param('password');
+ my $saved_pass = fetch_password_from_db($username);
+
+ if ( passphrase($password)-&gt;matches($saved_pass) ) {
+ session user =&gt; $username;
+ redirect param('return_url') || '/';
+ }
+
+ # let's render instead of redirect...
+ template login =&gt; { error =&gt; 'Invalid username or password' };
+ };</code></pre>
+
+<h2 id="Writing-a-REST-application">Writing a REST application</h2>
+
+<p>With Dancer2, it's easy to write REST applications. Dancer2 provides helpers to serialize and deserialize for the following data formats:</p>
+
+<dl>
+
+<dt id="JSON">JSON</dt>
+<dd>
+
+</dd>
+<dt id="YAML">YAML</dt>
+<dd>
+
+</dd>
+<dt id="XML">XML</dt>
+<dd>
+
+</dd>
+<dt id="Data::Dumper">Data::Dumper</dt>
+<dd>
+
+</dd>
+</dl>
+
+<p>To activate this feature, you only have to set the <code>serializer</code> setting to the format you require, for instance in your config file:</p>
+
+<pre><code> serializer: JSON</code></pre>
+
+<p>Or directly in your code:</p>
+
+<pre><code> set serializer =&gt; 'JSON';</code></pre>
+
+<p>From now, all hashrefs or arrayrefs returned by a route will be serialized to the format you chose, and all data received from <b>POST</b> or <b>PUT</b> requests will be automatically deserialized.</p>
+
+<pre><code> get '/hello/:name' =&gt; sub {
+ # this structure will be returned to the client as
+ # {"name":"$name"}
+ return {name =&gt; params-&gt;{name}};
+ };</code></pre>
+
+<p>It's possible to let the client choose which serializer to use. For this, use the <code>mutable</code> serializer, and an appropriate serializer will be chosen from the <code>Content-Type</code> header.</p>
+
+<p>It's also possible to return a custom error using the <a href="https://metacpan.org/pod/Dancer2#send_error">send_error</a> keyword. When you don't use a serializer, the <code>send_error</code> function will take a string as first parameter (the message), and an optional HTTP code. When using a serializer, the message can be a string, an arrayref or a hashref:</p>
+
+<pre><code> get '/hello/:name' =&gt; sub {
+ if (...) {
+ send_error("you can't do that");
+ # or
+ send_error({reason =&gt; 'access denied', message =&gt; "no"});
+ }
+ };</code></pre>
+
+<p>The content of the error will be serialized using the appropriate serializer.</p>
+
+<h2 id="Using-the-serializer">Using the serializer</h2>
+
+<p>Serializers essentially do two things:</p>
+
+<ul>
+
+<li><p>Deserialize incoming requests</p>
+
+<p>When a user makes a request with serialized input, the serializer automatically deserializes it into actual input parameters.</p>
+
+</li>
+<li><p>Serialize outgoing responses</p>
+
+<p>When you return a data structure from a route, it will automatically serialize it for you before returning it to the user.</p>
+
+</li>
+</ul>
+
+<h3 id="Configuring">Configuring</h3>
+
+<p>In order to configure a serializer, you just need to pick which format you want for encoding/decoding (e.g. <a href="https://metacpan.org/pod/Dancer2::Serializer::JSON">JSON</a>) and set it up using the <code>serializer</code> configuration keyword.</p>
+
+<p>It is recommended to explicitly add it in the actual code instead of the configuration file so it doesn't apply automatically to every app that reads the configuration file (unless that's what you want):</p>
+
+<pre><code> package MyApp;
+ use Dancer2;
+ set serializer =&gt; 'JSON'; # Dancer2::Serializer::JSON
+
+ ...</code></pre>
+
+<h3 id="Using">Using</h3>
+
+<p>Now that we have a serializer set up, we can just return data structures:</p>
+
+<pre><code> get '/' =&gt; sub {
+ return { resources =&gt; \%resources };
+ };</code></pre>
+
+<p>When we return this data structure, it will automatically be serialized into JSON. No other code is necessary.</p>
+
+<p>We also now receive requests in JSON:</p>
+
+<pre><code> post '/:entity/:id' =&gt; sub {
+ my $entity = param('entity');
+ my $id = param('id');
+
+ # input which was sent serialized
+ my $user = param('user');
+
+ ...
+ };</code></pre>
+
+<p>We can now make a serialized request:</p>
+
+<pre><code> $ curl -X POST http://ourdomain/person/16 -d '{"user":"sawyer_x"}'</code></pre>
+
+<h3 id="App-specific-feature">App-specific feature</h3>
+
+<p>Serializers are engines. They affect a Dancer Application, which means that once you've set a serializer, <b>all</b> routes within that package will be serialized and deserialized. This is how the feature works.</p>
+
+<p>As suggested above, if you would like to have both, you need to create another application which will not be serialized.</p>
+
+<p>A common usage for this is an API providing serialized endpoints (and receiving serialized requests) and providing rendered pages.</p>
+
+<pre><code> # MyApp.pm
+ package MyApp;
+ use Dancer2;
+
+ # another useful feature:
+ set auto_page =&gt; 1;
+
+ get '/' =&gt; sub { template 'index' =&gt; {...} };
+
+ # MyApp/API.pm
+ package MyApp::API;
+ use Dancer2;
+ set serializer =&gt; 'JSON'; # or any other serializer
+
+ get '/' =&gt; sub { +{ resources =&gt; \%resources, ... } };
+
+ # user-specific routes, for example
+ prefix =&gt; '/users' =&gt; sub {
+ get '/view' =&gt; sub {...};
+ get '/view/:id' =&gt; sub {...};
+ put '/add' =&gt; sub {...}; # automatically deserialized params
+ };
+
+ ...</code></pre>
+
+<p>Then those will be mounted together for a single app:</p>
+
+<pre><code> # handler: app.pl:
+ use MyApp;
+ use MyApp::API;
+ use Plack::Builder;
+
+ builder {
+ mount '/' =&gt; MyApp-&gt;to_app;
+ mount '/api' =&gt; MyApp::API-&gt;to_app;
+ };</code></pre>
+
+<h3 id="An-example:-Writing-API-interfaces">An example: Writing API interfaces</h3>
+
+<p>This example demonstrates an app that makes a request to a weather API and then displays it dynamically in a web page.</p>
+
+<p>Other than <a href="https://metacpan.org/pod/Dancer2">Dancer2</a> for defining routes, we will use <a href="https://metacpan.org/pod/HTTP::Tiny">HTTP::Tiny</a> to make the weather API request, <a href="https://metacpan.org/pod/JSON">JSON</a> to decode it from JSON format, and finally <a href="https://metacpan.org/pod/File::Spec">File::Spec</a> to provide a fully-qualified path to our template engine.</p>
+
+<pre><code> use JSON;
+ use Dancer2;
+ use HTTP::Tiny;
+ use File::Spec;</code></pre>
+
+<h4 id="Configuration">Configuration</h4>
+
+<p>We use the <a href="https://metacpan.org/pod/Template::Toolkit">Template::Toolkit</a> template system for this app. Dancer searches for our templates in our views directory, which defaults to <i>views</i> directory in our current directory. Since we want to put our template in our current directory, we will configure that. However, <i>Template::Toolkit</i> does not want us to provide a relative path without configuring it to allow it. This is a security issue. So, we're using <a href="https://metacpan.org/pod/File::Spec">File::Spec</a> to create a full path to where we are.</p>
+
+<p>We also unset the default layout, so Dancer won't try to wrap our template with another one. This is a feature in Dancer to allow you to wrap your templates with a layout when your templating system doesn't support it. Since we're not using a layout here, we don't need it.</p>
+
+<pre><code> set template =&gt; 'template_toolkit'; # set template engine
+ set layout =&gt; undef; # disable layout
+ set views =&gt; File::Spec-&gt;rel2abs('.'); # full path to views</code></pre>
+
+<p>Now, we define our URL:</p>
+
+<pre><code> my $url = 'http://api.openweathermap.org/data/2.5/weather?id=5110629&amp;units=imperial';</code></pre>
+
+<h4 id="Route">Route</h4>
+
+<p>We will define a main route which, upon a request, will fetch the information from the weather API, decode it, and then display it to the user.</p>
+
+<p>Route definition:</p>
+
+<pre><code> get '/' =&gt; sub {
+ ...
+ };</code></pre>
+
+<p>Editing the stub of route dispatching code, we start by making the request and decoding it:</p>
+
+<pre><code> # fetch data
+ my $res = HTTP::Tiny-&gt;new-&gt;get($url);
+
+ # decode request
+ my $data = decode_json $res-&gt;{'content'};</code></pre>
+
+<p>The data is not just a flat hash. It's a deep structure. In this example, we will filter it for only the simple keys in the retrieved data:</p>
+
+<pre><code> my $metrics = { map +(
+ ref $data-&gt;{$_} ? () : ( $_ =&gt; $data-&gt;{$_} )
+ ), keys %{$data} };</code></pre>
+
+<p>All that is left now is to render it:</p>
+
+<pre><code> template index =&gt; { metrics =&gt; $metrics };</code></pre>
+
+<h2 id="NON-STANDARD-STEPS">NON-STANDARD STEPS</h2>
+
+<h2 id="Turning-off-warnings">Turning off warnings</h2>
+
+<p>The <code>warnings</code> pragma is already used when one loads Dancer2. However, if you <i>really</i> do not want the <code>warnings</code> pragma (for example, due to an undesired warning about use of undef values), add a <code>no warnings</code> pragma to the appropriate block in your module or psgi file.</p>
+
+
+
+<p>Dancer Core Developers</p>
+
+
+
+<p>This software is copyright (c) 2015 by Alexis Sukrieh.</p>
+
+<p>This is free software; you can redistribute it and/or modify it under the same terms as the Perl 5 programming language system itself.</p>
+
+	
+
+</div>
+
+ </div>
+</body></html>

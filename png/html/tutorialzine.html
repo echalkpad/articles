@@ -1,0 +1,193 @@
+<!DOCTYPE html><html><head><title>tutorialzine</title></head><body>
+<h1>tutorialzine</h1><p><a href="http://tutorialzine.com/2014/09/creating-your-first-node-js-command-line-application/" target="_new">Original URL</a></p>
+<p><blockquote>Martin Angelov September 25th, 2014 Command-line utilities are a must for every seasoned web developer. Node.js makes developing such tools extremely easy thanks to a wealth of open source modules&hellip;</blockquote></p>
+<div><div class="post-body">
+				
+
+				<p class="post-info"><i class="icon-author"></i> Martin Angelov <i class="icon-cal"></i><time datetime="2014-09-25">September 25th, 2014</time></p>
+
+				
+
+
+											
+				
+						
+				<p>Command-line utilities are a must for every seasoned web developer. Node.js makes developing such tools extremely easy thanks to a wealth of open source modules and a great package manager.</p>
+<p>In this tutorial, we will convert our <a title="Cute File Browser with jQuery and PHP" href="http://tutorialzine.com/2014/09/cute-file-browser-jquery-ajax-php/">Cute File Browser</a>, which we published last week, from PHP to Node. Our goal is to create a command line utility that users can start on their machine and make any folder available on the local network. This can be used in a home or office setting to quickly share a folder with files to everybody on the same network.</p>
+<h3>Quick start</h3>
+<p>The source code is available on <a href="https://github.com/martinaglv/cute-files" target="_blank">github</a> and <a href="https://www.npmjs.org/package/cute-files" target="_blank">npm</a>.&#xA0;If you don&#x2019;t want to follow this tutorial and only want to play with it, you can install it directly with this command:</p>
+<pre class="brush:plain">npm install -g cute-files</pre>
+<p>Then, navigate to a folder you wish to share in your terminal,&#xA0;and execute the command you&#xA0;just installed:</p>
+<pre class="brush:plain">cute-files</pre>
+<p>Now that folder will be available on <code>&lt;yourip&gt;:3000</code> and will be accessible by anyone in your lan.</p>
+<div id="attachment_4501" class="wp-caption alignnone"><a href="http://cdn.tutorialzine.com/wp-content/uploads/2014/09/file-and-folder-grid.jpg"><img class="size-full wp-image-4501" src="http://cdn.tutorialzine.com/wp-content/uploads/2014/09/file-and-folder-grid.jpg" alt="Cute file browser" width="680"></a><p class="wp-caption-text">Cute file browser (last week&#x2019;s demo, but the frontend is the same)</p></div>
+<h3>Let&#x2019;s build it step by step</h3>
+<p>Command line utilities are just regular node programs. They are available globally and can be called from any folder. So the steps for creating our command-line application are nearly identical to any other node-based project that you might have developed before. Create a new folder for your project and navigate to it in your terminal. We will refer to it as your <strong>project folder</strong>.</p>
+<h4>Setting up package.json</h4>
+<p>Assuming that you have already installed <a href="http://nodejs.org/" target="_blank">node</a>, we must first create a <strong>package.json</strong> file. The npm utility can help you with that. Run this command in your project folder:</p>
+<pre class="brush:plain">npm init</pre>
+<p>You will be prompted for information about your project. If you are not sure what to type just hit return for the default values. Fill in&#xA0;<strong>cute-files.js</strong> as the&#xA0;entry point. This will be the main file, which will be called by node. The package.json is not yet complete &#x2013; we want to make our script available globally, so we need to to add an extra field &#x2013; <strong>bin&#xA0;</strong>(see <a href="https://github.com/martinaglv/cute-files/blob/master/package.json#L29" target="_blank">my package.json</a> as an example). This tells npm to make these scripts available as executables.</p>
+<h4>Installing some packages</h4>
+<p>Now you will need to install some libraries that we need for the file browser. The <strong>&#x2013;save</strong> flag will add them to your package.json automatically:</p>
+<pre class="brush:plain">npm install commander content-disposition express --save</pre>
+<p>Here is what we will use them for:</p>
+<ul>
+<li><a href="https://www.npmjs.org/package/commander" target="_blank">commander</a>&#xA0;will parse command line arguments. We will only support one &#x2013; for the <strong>port</strong>, but since attribute parsing is a fundamental part of writing command line apps it&#xA0;is good to know how to use this library.</li>
+<li><a href="https://www.npmjs.org/package/content-disposition" target="_blank">content-disposition</a> will tell us the correct attachment headers for each file. These headers are needed in order to force the files to get downloaded (otherwise the browser would just open them).</li>
+<li><a href="https://www.npmjs.org/package/express" target="_blank">express</a> will serve the files and handle the <strong>/scan</strong> route which sends a JSON of all files and directories to the frontend.</li>
+</ul>
+<h4>Module for scanning files</h4>
+<p>In order to offer instant search and browsing, our application will send a JSON with all files and folder to the frontend on load. In the <a title="Cute File Browser with jQuery and PHP" href="http://tutorialzine.com/2014/09/cute-file-browser-jquery-ajax-php/" target="_blank">original tutorial</a>, we did this with PHP, but now we will do it with Node.&#xA0;Create a new file in the project folder &#x2013; <strong>scan.js</strong> &#x2013; and paste the following code:</p>
+<pre class="brush:js">var fs = require('fs'),
+	path = require('path');
+
+
+module.exports = function scan(dir, alias){
+
+	return {
+		name: alias,
+		type: 'folder',
+		path: alias,
+		items: walk(dir, alias)
+	};
+
+};
+
+
+function walk(dir, prefix){
+
+	prefix = prefix || '';
+
+	if(!fs.existsSync(dir)){
+		return [];
+	}
+
+	return fs.readdirSync(dir).filter(function(f){
+
+		return f &amp;&amp; f[0] != '.'; // Ignore hidden files
+
+	}).map(function(f){
+
+		var p = path.join(dir, f),
+			stat = fs.statSync(p);
+
+		if(stat.isDirectory()){
+
+			return {
+				name: f,
+				type: 'folder',
+				path: path.join(prefix, p),
+				items: walk(p, prefix)
+			};
+
+		}
+
+		return {
+			name: f,
+			type: 'file',
+			path: path.join(prefix, p),
+			size: stat.size
+		}
+
+	});
+
+};</pre>
+<p>This code uses node&#x2019;s <a href="http://nodejs.org/api/fs.html" target="_blank">fs module</a>, and recursively goes through all files and folders in a directory. It exports the <strong>scan</strong> function which gets called with a path and an alias. The path is the folder to be scanned, and the alias is the name with which it will be presented in the interface (we don&#x2019;t want to show the real directory name which is served). In our example, we replace it with &#x201C;files&#x201D;.</p>
+<h4>Main module</h4>
+<p>The main file of our app is <strong>cute-files.js</strong>. Create the file, and paste the following code:</p>
+<pre class="brush:js">#!/usr/bin/env node
+
+var path = require('path');
+var express = require('express');
+var contentDisposition = require('content-disposition');
+var pkg = require( path.join(__dirname, 'package.json') );
+
+var scan = require('./scan');
+
+
+// Parse command line options
+
+var program = require('commander');
+
+program
+	.version(pkg.version)
+	.option('-p, --port &lt;port&gt;', 'Port on which to listen to (defaults to 3000)', parseInt)
+	.parse(process.argv);
+
+var port = program.port || 3000;
+
+
+// Scan the directory in which the script was called. It will
+// add the 'files/' prefix to all files and folders, so that
+// download links point to our /files route
+
+var tree = scan('.', 'files');
+
+
+// Ceate a new express app
+
+var app = express();
+
+// Serve static files from the frontend folder
+
+app.use('/', express.static(path.join(__dirname, 'frontend')));
+
+// Serve files from the current directory under the /files route
+
+app.use('/files', express.static(process.cwd(), {
+	index: false,
+	setHeaders: function(res, path){
+
+		// Set header to force files to download
+
+		res.setHeader('Content-Disposition', contentDisposition(path))
+
+	}
+}));
+
+// This endpoint is requested by our frontend JS
+
+app.get('/scan', function(req,res){
+	res.send(tree);
+});
+
+
+// Everything is setup. Listen on the port.
+
+app.listen(port);
+
+console.log('Cute files is running on port ' + port);</pre>
+<p>The first line is important. Although it is not valid JS, it is used on *nix systems to allow scripts to be executed as programs, which is exactly what we need in order to make the <strong>cute-files</strong> command available anywhere.</p>
+<p>This script uses <strong>express</strong> and the other modules we installed previously, and our scan.js module. All that is left is to copy over the front end from the original tutorial.</p>
+<h4>The frontend</h4>
+<p>Nick already did most of the work in last week&#x2019;s tutorial. Our scan.js script returns the same output as scan.php did, so no modifications to&#xA0;the frontend are necessary. We only need to copy over <strong>index.html</strong> and the <strong>assets</strong> folder from last time to a new folder &#x2013; <strong>frontend</strong>, which will be served by express. You can see how your directories should look like from <a href="https://github.com/martinaglv/cute-files" target="_blank">the repo</a>.</p>
+<h4>Linking the module</h4>
+<p>Your new module is ready! It should work when you run <strong>node cute-files.js</strong> in the project folder. But this is not very useful, as it will only serve the project folder &#x2013; we want to be able to call the <strong>cute-files</strong>&#xA0;command from any directory, but it is not available unless you install the module globally.&#xA0;npm has a useful command which will help us. Run this in your terminal from the project folder:</p>
+<pre class="brush:plain">npm link
+</pre>
+<p>This will make the module available globally, so now you can use the <strong>cute-files</strong> command anywhere!</p>
+<h3>Publishing to npm</h3>
+<p>Where is the fun of writing a module and not sharing it with your friends? It is straightforward to&#xA0;publish your new module on npm (however I advice against doing it for this specific module &#x2013; it will only be duplicate of cute-files):</p>
+<ol>
+<li>Create an account on <a href="https://www.npmjs.org/" target="_blank">npm&#x2019;s website</a></li>
+<li>Login from the npm command line utility with the&#xA0;<code>npm login</code> command</li>
+<li>Choose a unique name for your module, and update package.json</li>
+<li>cd into the project folder and run <code>npm publish .</code></li>
+</ol>
+<p>If everything went without a hitch, in a few seconds you will see your module on npm&#x2019;s website and everybody will be able to install it.</p>
+<p><strong>Good job! You just created your first command-line application with node!</strong></p>
+
+				
+				
+
+				
+				
+
+				
+
+				
+				
+			</div>
+
+		</div>
+</body></html>

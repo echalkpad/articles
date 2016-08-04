@@ -1,0 +1,99 @@
+<!DOCTYPE html><html><head><title>Five Funny Little Linux Network Testers and Monitors</title></head><body>
+<h1>Five Funny Little Linux Network Testers and Monitors</h1><p><a href="http://www.linux.com/learn/tutorials/765381-five-funny-little-linux-network-testers-and-monitors/" target="_new">Original URL</a></p>
+<p><blockquote>In this roundup of Linux network testing utilities we use Bandwidthd, Speedometer, Nethogs, Darkstat, and iperf to track bandwidth usage, speed, find network hogs, and test performance. Bandwidthd&hellip;</blockquote></p>
+<div><div class="article-content">
+
+<p>In this roundup of Linux network testing utilities we use Bandwidthd, Speedometer, Nethogs, Darkstat, and iperf to track bandwidth usage, speed, find network hogs, and test performance.</p>
+<h3>Bandwidthd</h3>
+<p><a href="http://bandwidthd.sourceforge.net/">Bandwidthd</a>&#xA0;is a funny little app that hasn't been updated since 2005, but (at least on my Kubuntu system) it still works. It makes nice colorful graphs of your incoming and outgoing bandwidth usage, and tallies it up by day, week, month, and year on a Web page. So you also need Apache, or some other HTTP server. You can monitor a single PC, or everyone on your LAN. This is a nice app for tracking your monthly usage if you need to worry about bandwidth caps.</p>
+<p><img src="http://www.linux.com/images/stories/41373/fig-1-bandwidthd.png" alt="fig-1 bandwidthd" title="Figure 1: Pretty Bandwidthd graphs." class="caption" width="550"></p>
+<p>Bandwidthd has almost no documentation.&#xA0;<code>man bandwidthd</code>&#xA0;lists all of its configuration files and directories. Its Sourceforge page is even sparser. There are two versions:&#xA0;<code>bandwidthd&#xA0;</code>and&#xA0;<code>bandwidthd-pgsql</code>.&#xA0;<code>bandwidthd</code>&#xA0;generates static HTML pages every 150 seconds, and&#xA0;<code>bandwidthd-pgsql</code>&#xA0;displays graphs and data on dynamic PHP pages. The Web page says "The visual output of both is similar, but the database driven system allows for searching, filtering, multiple sensors and custom reports." I suppose if you want to search, filter, do multiple sensors, or create custom reports you'll have to hack PHP files. Installation on my system was easy, thanks to the Debian and Ubuntu package maintainers. It created the Apache configuration and set up PostgreSQL, and then all I had to do was open a Web browser to&#xA0;<a href="http://localhost/bandwidthd&lt;/code">http://localhost/bandwidthd</a>&#xA0;which is not documented anywhere, except in configuration files, so you heard it here first.</p>
+<h3>Speedometer</h3>
+<p><a href="http://www.linux.com/speedometer">Speedometer</a>&#xA0;displays real-time graphs on the console (so you don't need a Web server) of how fast data are moving across your network connection, and it also answers the question "How fast is my hard drive?" The simplest usage displays either received or transmitted bytes per second. This called a&#xA0;tap:</p>
+<pre><code>$ speedometer -r eth0</code></pre>
+<p>You can watch the flow both ways by creating two taps:</p>
+<pre><code>$ speedometer -r eth0 -t eth0</code></pre>
+<p>The default is to stack taps. The&#xA0;<code>-c</code>&#xA0;option makes nice columns instead, and&#xA0;<code>-k 256</code>&#xA0;displays 256 colors instead of the default 16, as in figure 2.</p>
+<pre><code>$ speedometer -r eth0 -c -t eth0</code></pre>
+<p><img src="http://www.linux.com/images/stories/41373/fig-2-speedometer.png" alt="fig-2 speedometer" title="Figure 2: Speedometer tracking incoming and outgoing traffic in 256 colors and columns." class="caption" width="550"></p>
+<p>You can measure your hard drive's raw write speed by using&#xA0;<code>dd</code>&#xA0;to create a 1-gigabyte raw file, and then use Speedometer to measure how long it takes to create it:</p>
+<pre><code>$ dd bs=1000000 count=1000 if=/dev/zero of=testfile &amp; speedometer testfile</code></pre>
+<p>Change the&#xA0;<code>count</code>&#xA0;value to generate a different file size; for example&#xA0;<code>count=2000</code>&#xA0;creates a 2GB file. You can also experiment with different block sizes (<code>bs</code>) to see if that makes a difference. Remember to delete the&#xA0;<code>testfile</code>&#xA0;when you're finished, unless you like having useless large files laying around.</p>
+<h3>Nethogs</h3>
+<p><a href="http://nethogs.sourceforge.net/">Nethogs</a>&#xA0;is a simple console app that displays bandwidth per process, so you can quickly see who is hogging your network. The simplest invocation specifies your network interface, and then it displays both incoming and outgoing packets:</p>
+<pre><code>$ sudo nethogs eth0
+NetHogs version 0.8.0
+ PID USER PROGRAM DEV SENT RECEIVED 
+1703 carla ssh eth0 9702.096 381.697 KB/sec
+5734 www-data /usr/bin/fie eth0 1.302 59.301 KB/sec
+13113 carla ..lib/firefox/firefox eth0 0.021 0.023 KB/sec
+2462 carla ..oobar/lib/foobar eth0 0.000 0.000 KB/sec
+? root unknown TCP 0.000 0.000 KB/sec
+ TOTAL 9703.419 441.021 KB/sec </code></pre>
+<p>Use the&#xA0;<code>-r</code>&#xA0;option to show only received packets, and&#xA0;<code>-s</code>&#xA0;to see only sent packets.</p>
+<h3>Darkstat</h3>
+<p><a href="http://unix4lyfe.org/darkstat/">Darkstat</a>&#xA0;is another Web-based network monitor, but it includes its own embedded HTTP server so you don't need Apache. Start it up with the name of your network interface as the only option:</p>
+<pre><code>$ sudo darkstat -i eth0</code></pre>
+<p>Then open a Web browser to&#xA0;<a href="http://localhost:667">http://localhost:667</a>, and you'll see something like figure 3.</p>
+<p><img src="http://www.linux.com/images/stories/41373/fig-3-darkstat.png" alt="fig-3-darkstat" title="Figure 3: Darkstat's default display." class="caption" width="550"></p>
+<p>Click the automatic reload button to make it update in real time. The Hosts tab shows who you're connected to, how long you've been connected, and how much traffic, in bytes, has passed between you.</p>
+<p>You can run Darkstat as a daemon and have it start at boot. How to do this depends on your Linux distribution, and what init system you are using (Upstart, systemd, sysvinit, BSD init). I shall leave it as your homework to figure this out.</p>
+<h3>iperf</h3>
+<p>Doubtless you fine readers have been wondering "What about&#xA0;<a href="http://iperf.sourceforge.net/">iperf</a>?" Well, here it is.&#xA0;<code>iperf</code>&#xA0;reports bandwidth, delay jitter, and datagram loss. In other words, it tests link quality, which is a big deal for streaming media such as music, videos, and video calls. You need to install&#xA0;<code>iperf</code>&#xA0;on both ends of the link you want to test, which in these examples are Studio and Uberpc. Then start&#xA0;<code>iperf</code>&#xA0;in server mode on one host, and run it in client mode on the other host. Note that on the client, you must name the server. This is the simplest way to run a test:</p>
+<pre><code><a href="mailto:carla@studio:~%24">carla@studio:~$</a> iperf -s
+<a href="mailto:terry@uberpc:~%24">terry@uberpc:~$</a> iperf -c studio</code></pre>
+<pre><code><a href="mailto:carla@studio:~%24">carla@studio:~$</a> iperf -s
+------------------------------------------------------------
+Server listening on TCP port 5001
+TCP window size: 85.3 KByte (default)
+------------------------------------------------------------
+[ 4] local 192.168.1.132 port 5001 connected with 192.168.1.182 port 32865
+[ ID] Interval Transfer Bandwidth
+[ 4] 0.0-10.0 sec 1.09 GBytes 938 Mbits/sec
+<a href="mailto:terry@uberpc:~%24">terry@uberpc:~$</a> iperf -c studio
+------------------------------------------------------------
+Client connecting to studio, TCP port 5001
+TCP window size: 22.9 KByte (default)
+------------------------------------------------------------
+[ 3] local 192.168.1.182 port 32865 connected with 192.168.1.132 port 5001
+[ ID] Interval Transfer Bandwidth
+[ 3] 0.0-10.0 sec 1.09 GBytes 938 Mbits/sec</code></pre>
+<p>That's one-way, from server to client. You can test bi-directional performance from the client:</p>
+<pre><code><a href="mailto:terry@uberpc:~%24">terry@uberpc:~$</a> iperf -c studio -d
+------------------------------------------------------------
+Server listening on TCP port 5001
+TCP window size: 85.3 KByte (default)
+------------------------------------------------------------
+------------------------------------------------------------
+Client connecting to studio, TCP port 5001
+TCP window size: 54.8 KByte (default)
+------------------------------------------------------------
+[ 5] local 192.168.1.182 port 32980 connected with 192.168.1.132 port 5001
+[ 4] local 192.168.1.182 port 5001 connected with 192.168.1.132 port 47130
+[ ID] Interval Transfer Bandwidth
+[ 5] 0.0-10.0 sec 1020 MBytes 855 Mbits/sec
+[ 4] 0.0-10.0 sec 1.07 GBytes 920 Mbits/sec
+</code></pre>
+<p>Those are good speeds for gigabit Ethernet, close to the theoretical maximums, so this tells us that the physical network is in good shape. Real-life performance is going to be slower because of higher overhead than this simple test. Now let's look at delay jitter. Stop the server with&#xA0;<code>Ctrl+c</code>, and then restart it with&#xA0;<code>iperf -su</code>. On the client try:</p>
+<pre><code>$ iperf -c studio -ub 900m</code></pre>
+<p><code>-b 900m</code>&#xA0;means run the test at 900 megabits per second, so you need to adjust this for your network, and to test different speeds. A good run looks like this:</p>
+<pre><code>[ ID] Interval Transfer Bandwidth Jitter Lost/Total Datagrams
+[ 3] 0.0-10.0 sec 958 MBytes 803 Mbits/sec 0.013 ms 1780/684936 (0.26%)
+[ 3] 0.0-10.0 sec 1 datagrams received out-of-order
+</code></pre>
+<p>0.013 ms jitter is about as clean as it gets. Anything over 1,000 ms is going to interfere with audio and video streaming. A datagram loss of 0.26% is also excellent. Higher losses contribute to higher latency as packets have to be re-sent.</p>
+<p>There is a new version of&#xA0;<code>iperf</code>, and that is&#xA0;<a href="http://code.google.com/p/iperf/">iperf 3.0.1</a>. Supposedly this is going to replace iperf2 someday. It has been rewritten from scratch so it's all spiffy clean and not crufty, and it includes a library version that can be used in other programs. It's still a baby so expect rough edges.</p>
+</div>
+
+
+
+
+
+
+					
+				 
+					
+		 
+									
+				</div>
+</body></html>

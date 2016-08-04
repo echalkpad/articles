@@ -1,0 +1,516 @@
+<!DOCTYPE html><html><head><title>How to C in 2016</title></head><body>
+<h1>How to C in 2016</h1><p><a href="https://matt.sh/howto-c" target="_new">Original URL</a></p>
+<p><blockquote>This is a draft I wrote in early 2015 and never got around to publishing. Here's the mostly unpolished version because it wasn't doing anybody any good sitting in my drafts folder. The simplest&hellip;</blockquote></p>
+<div><div class="panel-body">
+ 
+<p><em>This is a draft I wrote in early 2015 and never got around to publishing. Here's the mostly unpolished version because it wasn't doing anybody any good sitting in my drafts folder. The simplest change was updating year 2015 to 2016 at publication time.</em></p>
+<p><em>Feel free to submit fixes/improvements/complaints as necessary. -<a href="mailto:matt@matt.sh">Matt</a></em></p>
+<p><em><a href="https://github.com/AdrianArroyoCalle">Adri&#xE1;n Arroyo Calle</a> provides a Spanish translation at <a href="https://adrianarroyocalle.github.io/blog/2016/01/10/como-programar-en-c-en-2016/">&#xBF;C&#xF3;mo programar en C (en 2016)?</a></em></p>
+<p><em><a href="http://postd.cc">Japanese POSTD</a> provides a Japanese translation at <a href="http://postd.cc/how-to-c-in-2016-1/">2016&#x5E74;&#x3001;C&#x8A00;&#x8A9E;&#x306F;&#x3069;&#x3046;&#x66F8;&#x304F;&#x3079;&#x304D;&#x304B; (&#x524D;&#x7DE8;)</a> and <a href="http://postd.cc/how-to-c-in-2016-2/">2016&#x5E74;&#x3001;C&#x8A00;&#x8A9E;&#x306F;&#x3069;&#x3046;&#x66F8;&#x304F;&#x3079;&#x304D;&#x304B; (&#x5F8C;&#x7DE8;)</a>.</em></p>
+<p><em><a href="https://github.com/Keith-S-Thompson">Keith Thompson</a> provides a nice set of corrections and alternative opinions at <a href="https://github.com/Keith-S-Thompson/how-to-c-response/blob/master/README.md">howto-c-response</a>.</em></p>
+<p><em><a href="https://twitter.com/erratarob">Rob Graham</a> provides a response covering other avenues out of scope here at <a href="http://blog.erratasec.com/2016/01/some-notes-c-in-2016.html">Some notes C in 2016</a>.</em></p>
+<p><em>Now on to the article...</em></p>
+<p>The first rule of C is don't write C if you can avoid it.</p>
+<p>If you must write in C, you should follow modern rules.</p>
+<p>C has been around since the <a href="https://www.bell-labs.com/usr/dmr/www/chist.html">early 1970s</a>. People have "learned C" at various points during its evolution, but knowledge usually get stuck after learning, so everybody has a different set of things they believe about C based on the year(s) they first started learning.</p>
+<p>It's important to not remain stuck in your "things I learned in the 80s/90s" mindset of C development.</p>
+<p>This page assumes you are on a modern platform conforming to modern standards and you have no excessive legacy compatibility requirements. We shouldn't be globally tied to ancient standards just because some companies refuse to upgrade 20 year old systems.</p>
+<h2 id="_preflight">Preflight</h2>
+<p>Standard c99 (c99 means "C Standard from 1999"; c11 means "C Standard from 2011", so 11 &gt; 99).</p>
+<ul>
+<li>clang, default
+<ul>
+<li>clang uses an extended version of C11 by default (<code>GNU C11 mode</code>), so no extra options are needed for modern features.</li>
+<li>If you want standard C11, you need to specify <code>-std=c11</code>; if you want standard C99, use <code>-std=c99</code>.</li>
+<li>clang compiles your source files faster than gcc</li>
+</ul></li>
+<li>gcc requires you specify <code>-std=c99</code> or <code>-std=c11</code>
+<ul>
+<li>gcc builds source files slower than clang, but <em>sometimes</em> generates faster code. Performance comparisons and regression testings are important.</li>
+<li>gcc-5 defaults to <code>GNU C11 mode</code> (same as clang), but if you need exactly c11 or c99, you should still specify <code>-std=c11</code> or <code>-std=c99</code>.</li>
+</ul></li>
+</ul>
+<p>Optimizations</p>
+<ul>
+<li>-O2, -O3
+<ul>
+<li>generally you want <code>-O2</code>, but sometimes you want <code>-O3</code>. Test under both levels (and across compilers) then keep the best performing binaries.</li>
+</ul></li>
+<li>-Os
+<ul>
+<li><code>-Os</code> helps if your concern is cache efficiency (which it should be)</li>
+</ul></li>
+</ul>
+<p>Warnings</p>
+<ul>
+<li><code>-Wall -Wextra -pedantic</code>
+<ul>
+<li><a href="https://twitter.com/oliviergay/status/685389448142565376">newer compiler versions</a> have <code>-Wpedantic</code>, but they still accept the ancient <code>-pedantic</code> as well for wider backwards compatibility.</li>
+</ul></li>
+<li>during testing you should add <code>-Werror</code> and <code>-Wshadow</code> on all your platforms
+<ul>
+<li>it can be tricky deploying production source using <code>-Werror</code> because different platforms and compilers and libraries can emit different warnings. You probably don't want to kill a user's entire build just because their version of GCC on a platform you've never seen complains in new and wonderous ways.</li>
+</ul></li>
+<li>extra fancy options include <code>-Wstrict-overflow -fno-strict-aliasing</code>
+<ul>
+<li>Either specify <code>-fno-strict-aliasing</code> or be sure to only access objects as the type they have at creation. Since so much existing C code aliases across types, using <code>-fno-strict-aliasing</code> is a much safer bet if you don't control the entire underlying source tree.</li>
+</ul></li>
+<li>as of now, Clang reports some valid syntax as a warning, so you should add <code>-Wno-missing-field-initializers</code>
+<ul>
+<li>GCC fixed this unnecessary warning after GCC 4.7.0</li>
+</ul></li>
+</ul>
+<p>Building</p>
+<ul>
+<li>Compilation units
+<ul>
+<li>The most common way of building C projects is to decompose every source file into an object file then link all the objects together at the end. This procedure works great for incremental development, but it is suboptimal for performance and optimization. Your compiler can't detect potential optimizations across file boundaries this way.<br></li>
+</ul></li>
+<li>LTO &#x2014;&#xA0;Link Time Optimization
+<ul>
+<li>LTO fixes the "source analysis and optimization across compilation units problem" by annotating object files with intermediate representation so source-aware optimizations can be carried out across compilation units at link time.</li>
+<li>LTO can slow down the linking process noticeably, but <code>make -j</code> helps if your build includes multiple non-interdependent final targets (.a, .so, .dylib, testing executables, application executables, etc).</li>
+<li><a href="http://llvm.org/docs/LinkTimeOptimization.html">clang LTO</a> (<a href="http://llvm.org/docs/GoldPlugin.html">guide</a>)</li>
+<li><a href="https://gcc.gnu.org/onlinedocs/gccint/LTO-Overview.html">gcc LTO</a></li>
+<li>As of 2016, clang and gcc releases support LTO by just adding <code>-flto</code> to your command line options during object compilation and final library/program linking.</li>
+<li><code>LTO</code> still needs some babysitting though. Sometimes, if your program has code not used directly but used by additional libraries, LTO can evict functions or code because it detects, globally when linking, some code is unused/unreachable and doesn't <em>need</em> to be included in the final linked result.</li>
+</ul></li>
+</ul>
+<p>Arch</p>
+<ul>
+<li><code>-march=native</code>
+<ul>
+<li>give the compiler permission to use your CPU's full feature set</li>
+<li>again, performance testing and regression testing is important (then comparing the results across multiple compilers and/or compiler versions) is important to make sure any enabled optimizations don't have adverse side effects.</li>
+</ul></li>
+<li><code>-msse2</code> and <code>-msse4.2</code> may be useful if you need to target not-your-build-machine features.</li>
+</ul>
+<h2 id="_writing-code">Writing code</h2>
+<h3 id="_types">Types</h3>
+<p>If you find yourself typing <code>char</code> or <code>int</code> or <code>short</code> or <code>long</code> or <code>unsigned</code> into new code, you're doing it wrong.</p>
+<p>For modern programs, you should <code>#include &lt;stdint.h&gt;</code> then use <em>standard</em> types.</p>
+<p>For more details, see the <a href="http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdint.h.html">stdint.h specification</a>.</p>
+<p>The common standard types are:</p>
+<ul>
+<li><code>int8_t</code>, <code>int16_t</code>, <code>int32_t</code>, <code>int64_t</code> &#x2014;&#xA0;signed integers</li>
+<li><code>uint8_t</code>, <code>uint16_t</code>, <code>uint32_t</code>, <code>uint64_t</code> &#x2014; unsigned integers</li>
+<li><code>float</code> &#x2014;&#xA0;standard 32-bit floating point</li>
+<li><code>double</code> - standard 64-bit floating point</li>
+</ul>
+<p>Notice we don't have <code>char</code> anymore. <code>char</code> is actually misnamed and misused in C.</p>
+<p>Developers routinely abuse <code>char</code> to mean "byte" even when they are doing unsigned byte manipulations. It's much cleaner to use <code>uint8_t</code> to mean single a unsigned-byte/octet-value and <code>uint8_t *</code> to mean sequence-of-unsigned-byte/octet-values.</p>
+<h4 id="_special-standard-types">Special Standard Types</h4>
+<p>In addition to standard fixed-width like <code>uint16_t</code> and <code>int32_t</code>, we also have <strong>fast</strong> and <strong>least</strong> types defined in the <a href="http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdint.h.html">stdint.h specification</a>.</p>
+<p><strong>Fast</strong> types are:</p>
+<ul>
+<li><code>int_fast8_t</code>, <code>int_fast16_t</code>, <code>int_fast32_t</code>, <code>int_fast64_t</code> &#x2014; signed integers</li>
+<li><code>uint_fast8_t</code>, <code>uint_fast16_t</code>, <code>uint_fast32_t</code>, <code>uint_fast64_t</code> &#x2014; unsigned integers</li>
+</ul>
+<p>Fast types provide a minimum of <code>X</code> bits, but there is no guarantee the underlying storage size is exactly what you request. If a larger type has better support on your target platform, a <em>fast</em> type will automatically use the better supported larger type.</p>
+<p>The best example here is, on some 64-bit systems, when you request <code>uint_fast16_t</code> you actually get a <code>uint64_t</code> because operating on word-sized integers will be faster than operating on half of a 32-bit integer.</p>
+<p>The <em>fast</em> guidelines aren't followed on every system though. One standout is OS X, where <em>fast</em> types are <a href="https://opensource.apple.com/source/xnu/xnu-1456.1.26/EXTERNAL_HEADERS/stdint.h">defined exactly as their corresponding fixed width counterparts</a>.</p>
+<p>Fast types can be useful for self-documenting code as well. If you know your counters only need 16 bits, but you prefer your math use 64 bit integers because they are faster on your platform, that's where <code>uint_fast16_t</code> would help. Under 64-bit Linux platforms, <code>uint_fast16_t</code> gives you a fast 64-bit counter while maintaining the code-level inline documentation of "we only need 16 bits here."</p>
+<p>One thing to be aware of for fast types: it can impact certain test cases. If you need to test for storage width edge cases, having <code>uint_fast16_t</code> be 16 bits on some platforms (OS X) and 64 bits on other platforms (Linux) can increase the minimum number of platforms where your tests need to pass.</p>
+<p><em>Fast</em> types do introduce the same uncertainty as <code>int</code> not being a standard size across platforms, but with <em>fast</em> types, you can limit your uncertainty to known-safe locations in your code (counters, temporary values with checked bounds, etc).</p>
+<p><strong>Least</strong> types are:</p>
+<ul>
+<li><code>int_least8_t</code>, <code>int_least16_t</code>, <code>int_least32_t</code>, <code>int_least64_t</code> &#x2014; signed integers</li>
+<li><code>uint_least8_t</code>, <code>uint_least16_t</code>, <code>uint_least32_t</code>, <code>uint_least64_t</code> &#x2014; unsigned integers</li>
+</ul>
+<p>Least types provide you with the most <em>compact</em> number of bits for the type you request.</p>
+<p>The <em>least</em> guidelines, in practice, mean <em>least</em> types are just defined to standard fixed width types, since standard fixed width types already provide the exact minimum number of bits you request.</p>
+<h4 id="_to-int-or-not-to-int">to <code>int</code> or not to <code>int</code></h4>
+<p>Some readers have pointed out they truly love <code>int</code> and you'll have to pry it from their cold dead fingers. I'd like to point out is is technically <em>impossible</em> to program correctly if the sizes of your types change out from under you.</p>
+<p>Also see <a href="http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/inttypes.h.html#tag_13_19_06">RATIONALE</a> included with <a href="http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/inttypes.h.html">inttypes.h</a> for reasons why using non-fixed-width types is unsafe. If you are truly smart enough to conceptualize <code>int</code> being 16 bits on some platforms and 32 bits on other platforms throughout your development while also testing all 16 bit and 32 bit edge cases for every place you use <code>int</code>, please feel free to use <code>int</code>.</p>
+<p>For the rest of us who can't hold entire multi-level decision tree platform specification hierarchies in our heads while writing fizzbuzz, we can use fixed width types and automatically have more correct code with much less conceptual hassle and much less required testing overhead.</p>
+<p>Or, said more concisely in the specification: "the ISO C standard integer promotion rule can produce silent changes unexpectedly."</p>
+<p>Good luck with that.</p>
+<h4 id="_one-exception-to-never-char">One Exception to never-<code>char</code></h4>
+<p>The <em>only</em> acceptable use of <code>char</code> in 2016 is if a pre-existing API requires <code>char</code> (e.g. <code>strncat</code>, printf'ing "%s", ...) or if you're initializing a read-only string (e.g. <code>const char *hello = "hello";</code>) because the C type of string literals (<code>"hello"</code>) is <code>char []</code>.</p>
+<p>ALSO: In C11 we have native unicode support, and the type of UTF-8 string literals is still <code>char []</code> even for multibyte sequences like <code>const char *abcgrr = u8"abc&#x1F62C;";</code>.</p>
+<h4 id="_one-exception-to-never-intlongetc">One Exception to never-{<code>int</code>,<code>long</code>,etc}</h4>
+<p>If you are using a function with native return types or native parameters, use types as described by the function prototype or API specification.</p>
+<h4 id="_signedness">Signedness</h4>
+<p>At no point should you be typing the word <code>unsigned</code> into your code. We can now write code without the ugly C convention of multi-word types that impair readability as well as usage. Who wants to type <code>unsigned long long int</code> when you can type <code>uint64_t</code>? The <code>&lt;stdint.h&gt;</code> types are more <em>explicit</em>, more <em>exact</em> in meaning, convey <em>intentions</em> better, and are more <em>compact</em> for typographic <em>usage</em> and <em>readability</em>.</p>
+<h4 id="_pointers-as-integers">Pointers as Integers</h4>
+<p>But, you may say, "I need to cast pointers to <code>long</code> for dirty pointer math!"</p>
+<p>You may say that. But you are wrong.</p>
+<p>The correct type for pointer math is <code>uintptr_t</code> defined by <code>&lt;stdint.h&gt;</code>, while the also useful <code>ptrdiff_t</code> is defined by <a href="http://pubs.opengroup.org/onlinepubs/7908799/xsh/stddef.h.html">stddef.h</a>.</p>
+<p>Instead of:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">long</span> diff = (<span class="dt">long</span>)ptrOld - (<span class="dt">long</span>)ptrNew;</code></pre>
+<p>Use:</p>
+<pre class="sourceCode c"><code class="sourceCode c">ptrdiff_t diff = (uintptr_t)ptrOld - (uintptr_t)ptrNew;</code></pre>
+<p>Also:</p>
+<pre class="sourceCode c"><code class="sourceCode c">printf(<span class="st">"%p is unaligned by %"</span> PRIuPTR <span class="st">" bytes.</span><span class="ch">\n</span><span class="st">"</span>, (<span class="dt">void</span> *)p, ((uintptr_t)somePtr &amp; (<span class="kw">sizeof</span>(<span class="dt">void</span> *) - <span class="dv">1</span>)));</code></pre>
+<h4 id="_system-dependent-types">System-Dependent Types</h4>
+<p>You continue arguing, "on a 32 bit platform I want 32 bit longs and on a 64 bit platform I want 64 bit longs!"</p>
+<p>If we skip over the line of thinking where you are <em>deliberately</em> introducing difficult to reason about code by using two different sizes depending on platform, you still don't want to use <code>long</code> for system-dependent types.</p>
+<p>In these situations, you should use <code>intptr_t</code> &#x2014;&#xA0;the integer type capable of holding a pointer value for your platform.</p>
+<p>On modern 32-bit platforms, <code>intptr_t</code> is <code>int32_t</code>.</p>
+<p>On modern 64-bit platforms, <code>intptr_t</code> is <code>int64_t</code>.</p>
+<p><code>intptr_t</code> also comes in a <code>uintptr_t</code> flavor.</p>
+<p>For holding pointer offsets, we have the aptly named <code>ptrdiff_t</code> which is the proper type for storing values of subtracted pointers.</p>
+<h4 id="_maximum-value-holders">Maximum Value Holders</h4>
+<p>Do you need an integer type capable of holding any integer usable on your system?</p>
+<p>People tend to use the largest known type in this case, such as casting smaller unsigned types to <code>uint64_t</code>, but there's a more technically correct way to guarantee any value can hold any other value.</p>
+<p>The safest container for any integer is <code>intmax_t</code> (also <code>uintmax_t</code>). You can assign or cast any signed integer to <code>intmax_t</code> with no loss of precision, and you can assign or cast any unsigned integer to <code>uintmax_t</code> with no loss of precision.</p>
+<h4 id="_that-other-type">That Other Type</h4>
+<p>The most widely used system-dependent type is <code>size_t</code> and is provided by <a href="http://pubs.opengroup.org/onlinepubs/7908799/xsh/stddef.h.html">stddef.h</a>.</p>
+<p><code>size_t</code> is basically as "an integer capable of holding the largest array index" which also means it's capable of holding the largest memory offset in your program.</p>
+<p>In practical use, <code>size_t</code> is the return type of <code>sizeof</code> operator.</p>
+<p>In either case: <code>size_t</code> is <em>practically</em> defined to be the same as <code>uintptr_t</code> on all modern platforms, so on a 32-bit platform <code>size_t</code> is <code>uint32_t</code> and on a 64-bit platform <code>size_t</code> is <code>uint64_t</code>.</p>
+<p>There is also <code>ssize_t</code> which is a signed <code>size_t</code> used as the return value from library functions that return <code>-1</code> on error. (Note: <code>ssize_t</code> is POSIX and does not apply to Windows interfaces.)</p>
+<p>So, should you use <code>size_t</code> for arbitrary system-dependent sizes in your own function parameters? Technically, <code>size_t</code> is the return type of <code>sizeof</code>, so any functions accepting a size value representing a number of bytes is allowed to be a <code>size_t</code>.</p>
+<p>Other uses include: <code>size_t</code> is the type of the argument to malloc, and <code>ssize_t</code> is the return type of <code>read()</code> and <code>write()</code> (except on Windows where <code>ssize_t</code> doesn't exist and the return values are just <code>int</code>).</p>
+<h4 id="_printing-types">Printing Types</h4>
+<p>You should never cast types during printing.</p>
+<p>Always use proper type specifiers as defined by <a href="http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/inttypes.h.html">inttypes.h</a>.</p>
+<p>These include, but are not limited to:</p>
+<ul>
+<li><code>size_t</code> - <code>%zu</code></li>
+<li><code>ssize_t</code> - <code>%zd</code></li>
+<li><code>ptrdiff_t</code> - <code>%td</code></li>
+<li>raw pointer value - <code>%p</code> (prints hex in modern compilers; cast your pointer to <code>(void *)</code> first)</li>
+<li><code>int64_t</code> - <code>"%" PRId64</code></li>
+<li><code>uint64_t</code> - <code>"%" PRIu64</code>
+<ul>
+<li>64-bit types should only be printed using <code>PRI[udixXo]64</code> style macros.</li>
+<li>Why?
+<ul>
+<li>on some platforms a 64-bit value is a <code>long</code> and on others it's a <code>long long</code>. These macros provide the proper underlying format specification across platforms.</li>
+<li>it is actually impossible to specify a correct cross-platform format string without these format macros because the types change out from under you (and remember, casting values before printing is not safe or logical).</li>
+</ul></li>
+</ul></li>
+<li><code>intptr_t</code> &#x2014;&#xA0;<code>"%" PRIdPTR</code></li>
+<li><code>uintptr_t</code> &#x2014; <code>"%" PRIuPTR</code></li>
+<li><code>intmax_t</code> &#x2014; <code>"%" PRIdMAX</code></li>
+<li><code>uintmax_t</code> &#x2014; <code>"%" PRIuMAX</code></li>
+</ul>
+<p>One note about the <code>PRI*</code> formatting specifiers: they are <em>macros</em> and the macros expand to proper printf type specifiers on a platform-specific basis. This means you can't do:</p>
+<pre class="sourceCode c"><code class="sourceCode c">printf(<span class="st">"Local number: %PRIdPTR</span><span class="ch">\n\n</span><span class="st">"</span>, someIntPtr);</code></pre>
+<p>but instead, because they are macros, you do:</p>
+<pre class="sourceCode c"><code class="sourceCode c">printf(<span class="st">"Local number: %"</span> PRIdPTR <span class="st">"</span><span class="ch">\n\n</span><span class="st">"</span>, someIntPtr);</code></pre>
+<p>Notice you put the <code>%</code> <em>inside</em> your format string literal, but the type specifier is <em>outside</em> your format string literal because all adjacent strings get concatentated by the preprocessor into one final combined string literal.</p>
+<h3 id="_c99-allows-variable-declarations-anywhere">C99 allows variable declarations anywhere</h3>
+<p>So, do NOT do this:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> test(<span class="dt">uint8_t</span> input) {
+ <span class="dt">uint32_t</span> b;
+
+ <span class="kw">if</span> (input &gt; <span class="dv">3</span>) {
+ <span class="kw">return</span>;
+ }
+
+ b = input;
+}</code></pre>
+<p>do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> test(<span class="dt">uint8_t</span> input) {
+ <span class="kw">if</span> (input &gt; <span class="dv">3</span>) {
+ <span class="kw">return</span>;
+ }
+
+ <span class="dt">uint32_t</span> b = input;
+}</code></pre>
+<p>Caveat: if you have tight loops, test the placement of your initializers. Sometimes scattered declarations can cause unexpected slowdowns. For regular non-fast-path code (which is most of everything in the world), it's best to be as clear as possible, and defining types next to your initializations is a big readability improvement.</p>
+<h3 id="_c99-allows-for-loops-to-declare-counters-inline">C99 allows <code>for</code> loops to declare counters inline</h3>
+<p>So, do NOT do this:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint32_t</span> i;
+
+ <span class="kw">for</span> (i = <span class="dv">0</span>; i &lt; <span class="dv">10</span>; i++)</code></pre>
+<p>Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> <span class="kw">for</span> (<span class="dt">uint32_t</span> i = <span class="dv">0</span>; i &lt; <span class="dv">10</span>; i++)</code></pre>
+<p>One exception: if you need to retain your counter value after the loop exits, obviously don't declare your counter scoped to the loop itself.</p>
+<h3 id="_modern-compilers-support-pragma-once">Modern compilers support <code>#pragma once</code></h3>
+<p>So, do NOT do this:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#ifndef PROJECT_HEADERNAME</span>
+<span class="ot">#define PROJECT_HEADERNAME</span>
+.
+.
+.
+<span class="ot">#endif </span><span class="co">/* PROJECT_HEADERNAME */</span></code></pre>
+<p>Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#pragma once</span></code></pre>
+<p><code>#pragma once</code> tells the compiler to only include your header once and you <em>do not</em> need three lines of header guards anymore. This pragma is widely supported across all compilers across all platforms and is recommended over manually naming header guards.</p>
+<p>For more details, see list of supported compilers at <a href="https://en.wikipedia.org/wiki/Pragma_once">pragma once</a>.</p>
+<h3 id="_c-allows-static-initialization-of-auto-allocated-arrays">C allows static initialization of auto-allocated arrays</h3>
+<p>So, do NOT do this:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint32_t</span> numbers[<span class="dv">64</span>];
+ memset(numbers, <span class="dv">0</span>, <span class="kw">sizeof</span>(numbers));</code></pre>
+<p>Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> <span class="dt">uint32_t</span> numbers[<span class="dv">64</span>] = {<span class="dv">0</span>};</code></pre>
+<h3 id="_c-allows-static-initialization-of-auto-allocated-structs">C allows static initialization of auto-allocated structs</h3>
+<p>So, do NOT do this:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> <span class="kw">struct</span> thing {
+ <span class="dt">uint64_t</span> index;
+ <span class="dt">uint32_t</span> counter;
+ };
+
+ <span class="kw">struct</span> thing localThing;
+
+ <span class="dt">void</span> initThing(<span class="dt">void</span>) {
+ memset(&amp;localThing, <span class="dv">0</span>, <span class="kw">sizeof</span>(localThing));
+ }</code></pre>
+<p>Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> <span class="kw">struct</span> thing {
+ <span class="dt">uint64_t</span> index;
+ <span class="dt">uint32_t</span> counter;
+ };
+
+ <span class="kw">struct</span> thing localThing = {<span class="dv">0</span>};</code></pre>
+<p><strong>IMPORTANT NOTE</strong>: If your struct has padding, the <code>{0}</code> method does not zero out extra padding bytes. For example, <code>struct thing</code> has 4 bytes of padding after <code>counter</code> (on a 64-bit platform) because structs are padded to word-sized increments. If you need to zero out an entire struct <em>including</em> unused padding, use <code>memset(&amp;localThing, 0, sizeof(localThing))</code> because <code>sizeof(localThing) == 16 bytes</code> even though the addressable contents is only <code>8 + 4 = 12 bytes</code>.</p>
+<p>If you need to re-initialize already allocated structs, declare a global zero-struct for later assignment:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> <span class="kw">struct</span> thing {
+ <span class="dt">uint64_t</span> index;
+ <span class="dt">uint32_t</span> counter;
+ };
+
+ <span class="dt">static</span> <span class="dt">const</span> <span class="kw">struct</span> thing localThingNull = {<span class="dv">0</span>};
+ .
+ .
+ .
+ <span class="kw">struct</span> thing localThing = {.counter = <span class="dv">3</span>};
+ .
+ .
+ .
+ localThing = localThingNull;</code></pre>
+<p>If you are lucky enough to be in a C99 (or newer) environment, you can use compound literals instead of keeping a global "zero struct" around (also see, from 2001, <a href="http://www.drdobbs.com/the-new-c-compound-literals/184401404">The New C: Compound Literals</a>).</p>
+<p>Compound literals allow your compiler to automatically create temporary anyonomous structs then copy them onto a target value:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> localThing = (<span class="kw">struct</span> thing){<span class="dv">0</span>};</code></pre>
+<h3 id="_c99-added-variable-length-arrays-c11-made-them-optional">C99 added variable length arrays (C11 made them optional)</h3>
+<p>So, do NOT do this (if you know your array is tiny or you are just testing something quickly):</p>
+<pre class="sourceCode c"><code class="sourceCode c"> uintmax_t arrayLength = strtoumax(argv[<span class="dv">1</span>], NULL, <span class="dv">10</span>);
+ <span class="dt">void</span> *array[];
+
+ array = malloc(<span class="kw">sizeof</span>(*array) articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii arrayLength);
+
+ <span class="co">/* remember to free(array) when you're done using it */</span></code></pre>
+<p>Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"> uintmax_t arrayLength = strtoumax(argv[<span class="dv">1</span>], NULL, <span class="dv">10</span>);
+ <span class="dt">void</span> *array[arrayLength];
+
+ <span class="co">/* no need to free array */</span></code></pre>
+<p><strong>IMPORTANT CAVEAT:</strong> variable length arrays are (usually) stack allocated just like regular arrays. If you wouldn't create a 3 million element regular array statically, don't attempt to create a 3 million element array at runtime using this syntax. These are not scalable python/ruby auto-growing lists. If you specify a runtime array length and the length is too big for your stack, your program will do awful things (crashes, security issues). Variable Length Arrays are convienient for small, single-purpose situations, but should not be relied on at scale in production software. If sometimes you need a 3 element array and other times a 3 million element array, definitely do not use the variable length array capability.</p>
+<p>It's good to be aware of the VLA syntax in case you encounter it live (or want it for quick one-off testing), but it can almost be considered a <a href="https://twitter.com/grynspan/status/685509158024691712">dangerous anti-pattern</a> since you can crash your programs fairly simple by forgetting element size bounds checks or by forgetting you are on a strange target platform with no free stack space.</p>
+<p>NOTE: You must be certain <code>arrayLength</code> is a reasonable size in this situation. (i.e. less than a few KB, sometime your stack will max out at 4 KB on weird platforms). You can't stack allocate <em>huge</em> arrays (millions of entries), but if you know you have a limited count, it's much easier to use <a href="https://en.wikipedia.org/wiki/Variable-length_array">C99 VLA</a> capabilities rather than manually requesting heap memory from malloc.</p>
+<p>DOUBLE NOTE: there is no user input checking above, so the user can easily kill your program by allocating a giant VLA. <a href="https://twitter.com/comex/status/685423016981966848">Some people</a> go as far to call VLAs an anti-pattern, but if you keep your bounds tight, it can be a tiny win in certain situations.</p>
+<h3 id="_c99-allows-annotating-non-overlapping-pointer-parameters">C99 allows annotating non-overlapping pointer parameters</h3>
+<p>See the <a href="https://en.wikipedia.org/wiki/Restrict">restrict keyword</a> (often <code>__restrict</code>)</p>
+<h3 id="_parameter-types">Parameter Types</h3>
+<p>If a function accepts <strong>arbitrary</strong> input data and a length to process, don't restrict the type of the parameter.</p>
+<p>So, do NOT do this:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> processAddBytesOverflow(<span class="dt">uint8_t</span> *bytes, <span class="dt">uint32_t</span> len) {
+ <span class="kw">for</span> (<span class="dt">uint32_t</span> i = <span class="dv">0</span>; i &lt; len; i++) {
+ bytes[<span class="dv">0</span>] += bytes[i];
+ }
+}</code></pre>
+<p>Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> processAddBytesOverflow(<span class="dt">void</span> *input, <span class="dt">uint32_t</span> len) {
+ <span class="dt">uint8_t</span> *bytes = input;
+
+ <span class="kw">for</span> (<span class="dt">uint32_t</span> i = <span class="dv">0</span>; i &lt; len; i++) {
+ bytes[<span class="dv">0</span>] += bytes[i];
+ }
+}</code></pre>
+<p>The input types to your functions describe the <em>interface</em> to your code, not what your code is doing with the parameters. The interface to the code above means "accept a byte array and a length", so you don't want to restrict your callers to only uint8_t byte streams. Maybe your users even want to pass in old-style <code>char *</code> values or something else unexpected.</p>
+<p>By declaring your input type as <code>void *</code> then re-assigning or re-casting to the actual type you want inside your function, you save the users of your function from having to think about abstractions <em>inside</em> your own library.</p>
+<p>Some readers have pointed out alignment problems with this example, but we are accessing single byte elements of the input, so everything is fine. If instead we were casting the input to wider types, we would need to watch out for alignment issues. For a different write up dealing with cross-platform alignment issues, see <a href="https://www.kernel.org/doc/Documentation/unaligned-memory-access.txt">Unaligned Memory Access</a>. (reminder: this page of generic overview details isn't about cross-architecture intricacies of C, so external knowledge and experience is expected to fully use any examples provided.)</p>
+
+
+
+<h3 id="_return-parameter-types">Return Parameter Types</h3>
+<p>C99 gives us the power of <code>&lt;stdbool.h&gt;</code> which defines <code>true</code> to <code>1</code> and <code>false</code> to <code>0</code>.</p>
+<p>For success/failure return values, functions should return <code>true</code> or <code>false</code>, not an <code>int32_t</code> return type with manually specifying <code>1</code> and <code>0</code> (or worse, <code>1</code> and <code>-1</code> (or is it <code>0</code> success and <code>1</code> failure? or is it <code>0</code> success and <code>-1</code> failure?)).</p>
+<p>If a function mutates an input parameter to the extent the parameter is invalidated, instead of returning the altered pointer, your entire API should force double pointers as parameters anywhere an input can be invalidated. Coding with "for some calls, the return value invalidates the input" is too error prone for mass usage.</p>
+<p>So, do NOT do this:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> *growthOptional(<span class="dt">void</span> *grow, size_t currentLen, size_t newLen) {
+ <span class="kw">if</span> (newLen &gt; currentLen) {
+ <span class="dt">void</span> *newGrow = realloc(grow, newLen);
+ <span class="kw">if</span> (newGrow) {
+ <span class="co">/* resize success */</span>
+ grow = newGrow;
+ } <span class="kw">else</span> {
+ <span class="co">/* resize failed, free existing and signal failure through NULL */</span>
+ free(grow);
+ grow = NULL;
+ }
+ }
+
+ <span class="kw">return</span> grow;
+}</code></pre>
+<p>Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="co">/* Return value:</span>
+<span class="co"> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii - 'true' if newLen &gt; currentLen and attempted to grow</span>
+<span class="co"> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii - 'true' does not signify success here, the success is still in '*_grow'</span>
+<span class="co"> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii - 'false' if newLen &lt;= currentLen */</span>
+bool growthOptional(<span class="dt">void</span> **_grow, size_t currentLen, size_t newLen) {
+ <span class="dt">void</span> *grow = *_grow;
+ <span class="kw">if</span> (newLen &gt; currentLen) {
+ <span class="dt">void</span> *newGrow = realloc(grow, newLen);
+ <span class="kw">if</span> (newGrow) {
+ <span class="co">/* resize success */</span>
+ *_grow = newGrow;
+ <span class="kw">return</span> true;
+ }
+
+ <span class="co">/* resize failure */</span>
+ free(grow);
+ *_grow = NULL;
+
+ <span class="co">/* for this function,</span>
+<span class="co"> articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 'true' doesn't mean success, it means 'attempted grow' */</span>
+ <span class="kw">return</span> true;
+ }
+
+ <span class="kw">return</span> false;
+}</code></pre>
+<p>Or, even better, Do THIS instead:</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">enum</span> growthResult {
+ GROWTH_RESULT_SUCCESS = <span class="dv">1</span>,
+ GROWTH_RESULT_FAILURE_GROW_NOT_NECESSARY,
+ GROWTH_RESULT_FAILURE_ALLOCATION_FAILED
+} growthResult;
+
+growthResult growthOptional(<span class="dt">void</span> **_grow, size_t currentLen, size_t newLen) {
+ <span class="dt">void</span> *grow = *_grow;
+ <span class="kw">if</span> (newLen &gt; currentLen) {
+ <span class="dt">void</span> *newGrow = realloc(grow, newLen);
+ <span class="kw">if</span> (newGrow) {
+ <span class="co">/* resize success */</span>
+ *_grow = newGrow;
+ <span class="kw">return</span> GROWTH_RESULT_SUCCESS;
+ }
+
+ <span class="co">/* resize failure, don't remove data because we can signal error */</span>
+ <span class="kw">return</span> GROWTH_RESULT_FAILURE_ALLOCATION_FAILED;
+ }
+
+ <span class="kw">return</span> GROWTH_RESULT_FAILURE_GROW_NOT_NECESSARY;
+}</code></pre>
+<h3 id="_formatting">Formatting</h3>
+<p>Coding style is simultaneously very important and utterly worthless.</p>
+<p>If your project has a 50 page coding style guideline, nobody will help you. But, if your code isn't readable, nobody will <em>want</em> to help you.</p>
+<p>The solution here is to <strong>always</strong> use an automated code formatter.</p>
+<p>The only usable C formatter as of 2016 is <a href="http://clang.llvm.org/docs/ClangFormat.html">clang-format</a>. clang-format has the best defaults of any automatic C formatter and is still actively developed.</p>
+<p>Here's my preferred script to run clang-format with good parameters:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="co">#!/usr/bin/env bash</span>
+
+<span class="kw">clang-format</span> -style=<span class="st">"{BasedOnStyle: llvm, IndentWidth: 4, AllowShortFunctionsOnASingleLine: None, KeepEmptyLinesAtTheStartOfBlocks: false}"</span> <span class="st">"</span><span class="ot">$@</span><span class="st">"</span></code></pre>
+<p>Then call it as (assuming you named the script <code>cleanup-format</code>):</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="kw">matt@foo</span>:~/repos/badcode% cleanup-format -i *.<span class="dt">{c,h,cc,cpp,hpp,cxx}</span></code></pre>
+<p>The <code>-i</code> option overwrites existing files in place with formatting changes instead of writing to new files or creating backup files.</p>
+<p>If you have many files, you can recursively process an entire source tree in parallel:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="co">#!/usr/bin/env bash</span>
+
+<span class="co"># note: clang-tidy only accepts one file at a time, but we can run it</span>
+<span class="co"># parallel against disjoint collections at once.</span>
+<span class="kw">find</span> . <span class="dt">\(</span> -name <span class="dt">\*</span>.c -or -name <span class="dt">\*</span>.cpp -or -name <span class="dt">\*</span>.cc <span class="dt">\)</span> <span class="kw">|xargs</span> -n1 -P4 cleanup-tidy
+
+<span class="co"># clang-format accepts multiple files during one run, but let's limit it to 12</span>
+<span class="co"># here so we (hopefully) avoid excessive memory usage.</span>
+<span class="kw">find</span> . <span class="dt">\(</span> -name <span class="dt">\*</span>.c -or -name <span class="dt">\*</span>.cpp -or -name <span class="dt">\*</span>.cc -or -name <span class="dt">\*</span>.h <span class="dt">\)</span> <span class="kw">|xargs</span> -n12 -P4 cleanup-format -i</code></pre>
+<p>Now, there's a new cleanup-tidy script there. The contents of <code>cleanup-tidy</code> is:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="co">#!/usr/bin/env bash</span>
+
+<span class="kw">clang-tidy</span> \
+ <span class="kw">-fix</span> \
+ <span class="kw">-fix-errors</span> \
+ <span class="kw">-header-filter</span>=.* \
+ <span class="kw">--checks</span>=readability-braces-around-statements,misc-macro-parentheses \
+ <span class="ot">$1</span> <span class="kw">\</span>
+ <span class="kw">--</span> -I.</code></pre>
+<p><a href="http://clang.llvm.org/extra/clang-tidy/">clang-tidy</a> is policy driven code refactoring tool. The options above enable two fixups:</p>
+<ul>
+<li><code>readability-braces-around-statements</code> &#x2014;&#xA0;force all <code>if</code>/<code>while</code>/<code>for</code> statement bodies to be enclosed in braces
+<ul>
+<li>It's an accident of history for C to allow "brace optional" single statements after loop constructs and conditionals. It is <em>inexcusable</em> to write modern code without braces enforced on every loop and every conditional. Trying to argue "but, the compiler accepts it!" has <em>nothing</em> to do with the readability, maintainability, understandability, or skimability of code. You aren't programming to please your compiler, you are programming to please future people who have to maintain your current brain state years after everybody has forgotten why anything exists in the first place.</li>
+</ul></li>
+<li><code>misc-macro-parentheses</code> &#x2014; automatically add parens around all parameters used in macro bodies</li>
+</ul>
+<p><code>clang-tidy</code> is great when it works, but for some complex code bases it can get stuck. Also, <code>clang-tidy</code> doesn't <em>format</em>, so you need to run <code>clang-format</code> after you tidy to align new braces and reflow macros.</p>
+<h3 id="_readability">Readability</h3>
+<p><em>the writing seems to start slowing down here...</em></p>
+
+<p>logical self-contained portions of code file</p>
+<h4 id="_file-structure">File Structure</h4>
+<p>Try to limit files to a max of 1,000 lines (1,500 lines in really bad cases). If your tests are in-line with your source file (for testing static functions, etc), adjust as necessary.</p>
+<h3 id="_misc-thoughts">misc thoughts</h3>
+<h4 id="_never-use-malloc">Never use <code>malloc</code></h4>
+<p>You should always use <code>calloc</code>. There is no performance penalty for getting zero'd memory. If you don't like the function protype of <code>calloc(object count, size per object)</code> you can wrap it with <code>#define mycalloc(N) calloc(1, N)</code>.</p>
+<p>Readers have commented on a few things here:</p>
+<ul>
+<li><code>calloc</code> <em>does</em> have a performance impact for <strong>huge</strong> allocations</li>
+<li><code>calloc</code> <em>does</em> have a performance impact on weird platforms (minimal embedded systems, game consoles, 30 year old hardware, ...)</li>
+<li>wrapping <code>calloc(element count, size of each element)</code> is not always a good idea.</li>
+<li>a good reason to avoid <code>malloc()</code> is it can't check for integer overflow and is a potential security risk</li>
+<li><code>calloc</code> allocations remove valgrind's ability to warn you about unintentional reads or copies of uninitialized memory since allocations get initialized to <code>0</code> automatically</li>
+</ul>
+<p>Those are good points, and that's why we always must do performance testing and regression testing for speed across compilers, platforms, operating systems, and hardware devices.</p>
+<p>One advantage of using <code>calloc()</code> directly without a wrapper is, unlike <code>malloc()</code>, <code>calloc()</code> can check for integer overflow because it multiplies its arguments together to obtain your final allocation size. If you are only allocating tiny things, wrapping <code>calloc()</code> is fine. If you are allocating potentially unbounded streams of data, you may want to retain the regular <code>calloc(element count, size of each element)</code> calling convention.</p>
+<p>No advice can be universal, but trying to give <em>exactly perfect</em> generic recommendations would end up reading like a book of language specifications.</p>
+<p>For references on how <code>calloc()</code> gives you clean memory for free, see these nice writeups:</p>
+
+<p>I still stand by my recommendation of always using <code>calloc()</code> for most common scenarios of 2016 (assumption: x64 target platforms, human-sized data, not including human genome-sized data). Any deviations from "expected" drag us into the pit of despair of "domain knowledge," which are words we shan't speak this day.</p>
+<p>Subnote: The pre-zero'd memory delivered to you by <code>calloc()</code> is a one-shot deal. If you <code>realloc()</code> your <code>calloc()</code> allocation, the grown memory extended by realloc is <em>not</em> new zero'd out memory. Your grown allocation is filled with whatever regular uninitialized contents your kernel provides. If you need zero'd memory after a realloc, you must manually <code>memset()</code> the extent of your grown allocation.</p>
+<h4 id="_never-memset-if-you-can-avoid-it">Never memset (if you can avoid it)</h4>
+<p>Never <code>memset(ptr, 0, len)</code> when you can statically initialize a structure (or array) to zero (or reset it back to zero by assigning from an in-line compound literal or by assigning from a global zero'd out structure).</p>
+<p>Though, <code>memset()</code> is your only choice if you need to zero out a struct including its padding bytes (because <code>{0}</code> only sets defined fields, not undefined offsets filled by padding).</p>
+<h2 id="_learn-more">Learn More</h2>
+<p>Also see <a href="http://en.cppreference.com/w/c/types/integer">Fixed width integer types (since C99)</a></p>
+<p>Also see Apple's <a href="https://developer.apple.com/library/mac/documentation/Darwin/Conceptual/64bitPorting/MakingCode64-BitClean/MakingCode64-BitClean.html">Making Code 64-Bit Clean</a></p>
+<p>Also see the <a href="https://www.securecoding.cert.org/confluence/pages/viewpage.action?pageId=4374">sizes of C types across architectures</a> &#x2014;&#xA0;unless you keep that entire table in your head for every line of code you write, you should use explicitly defined integer widths and never use char/short/int/long built-in storage types.</p>
+<p>Also see <a href="http://www.viva64.com/en/a/0050/">size_t and ptrdiff_t</a></p>
+<p>Also see <a href="https://www.securecoding.cert.org/confluence/display/c/SEI+CERT+C+Coding+Standard">Secure Coding</a>. If you really want to write everything perfectly, simply memorize their thousand simple examples.</p>
+<p>Also see <a href="http://icube-icps.unistra.fr/img_auth.php/d/db/ModernC.pdf">Modern C</a> by Jens Gustedt at Inria.</p>
+<p>Also see <a href="http://www.dotslashzero.net/2014/08/22/understanding-characterstring-literals-in-cc/">Understanding Character/String Literals in C/C++</a> for details about Unicode support in C11.</p>
+<h3 id="_closing">Closing</h3>
+<p>Writing correct code at scale is essentially impossible. We have multiple operating systems, runtimes, libraries, and hardware platforms to worry about without even considering things like random bit flips in RAM or our block devices lying to us with unknown probability.</p>
+<p>The best we can do is write simple, understandable code with as few indirections and as little undocumented magic as possible.</p>
+<p>-<a href="mailto:matt@matt.sh">Matt</a> &#x2014; <a href="https://twitter.com/mattsta">@mattsta</a> &#x2014; <a href="https://github.com/mattsta">&#x2601;mattsta</a></p>
+<h3 id="_attributions">Attributions</h3>
+<p>This made the twitter and HN rounds, so many people helpfully pointed out flaws or biased thoughts I'm promulgating here.</p>
+<p>First up, Jeremy Faller and <a href="https://twitter.com/Sosowski/status/685431663501926400">Sos Sosowski</a> and Martin Heistermann and a few other people were kind enough to point out my <code>memset()</code> example was broken and provided the proper fix.</p>
+<p>Martin Heistermann also pointed out the <code>localThing = localThingNull</code> example was broken.</p>
+<p>The opening quote about not writing C if you can avoid it is from the wise internet sage <a href="https://twitter.com/badboy_">@badboy_</a>.</p>
+<p><a href="https://twitter.com/rgacogne/status/685390620723154944">Remi Gacogne</a> pointed out I forgot <code>-Wextra</code>.</p>
+<p><a href="https://twitter.com/pineal_servo/status/685393454487056384">Levi Pearson</a> pointed out gcc-5 defaults to gnu11 instead of c89 as well as clarifying the default clang mode.</p>
+<p><a href="https://twitter.com/shrydar/status/685375992114757632">Christopher</a> pointed out the <code>-O2</code> vs <code>-O3</code> section could use a little more clarification.</p>
+<p><a href="https://twitter.com/chadmiller/status/685469896914919424">Chad Miller</a> pointed out I was being lazy in the clang-format script params.</p>
+<p><a href="https://twitter.com/lordcyphar/status/685444198481412096">Many</a> people also pointed out the <code>calloc()</code> advice isn't <em>always</em> a good idea if you have extreme circumstances or non-standard hardware (examples of bad ideas: huge allocations, allocations on embedded jiggers, allocations on 30 year old hardware, etc).</p>
+<p>Charles Randolph pointed out I misspelled the world "Building."</p>
+<p>Sven Neuhaus pointed out kindly I also do not posess the ability to spell "initialization" or "initializers." (and also pointed out I misspelled "initialization" wrong the first time here as well)</p>
+<p><a href="https://twitter.com/colmmacc/status/685493166988906497">Colm MacC&#xE1;rthaigh</a> pointed out I forgot to mention <code>#pragma once</code>.</p>
+<p><a href="https://twitter.com/jyasskin/status/685493531515826176">Jeffrey Yasskin</a> pointed out we should kill strict aliasing too (mainly a gcc optimization).</p>
+<p>Jeffery Yasskin also provided better wording around the <code>-fno-strict-aliasing</code> section.</p>
+<p><a href="https://twitter.com/fugueish/status/685503534230458369">Chris Palmer</a> and a few others pointed out calloc-vs-malloc parameter advantages and the overall drawback of writing a wrapper for <code>calloc()</code> because <code>calloc()</code> provides a more secure interface than <code>malloc()</code> in the first place.</p>
+<p>Damien Sorresso pointed out we should remind people <code>realloc()</code> doesn't zero out grown memory after an initial zero'd <code>calloc()</code> request.</p>
+<p>Pat Pogson pointed out I was unable to spell the word "declare" correctly as well.</p>
+<p><a href="https://twitter.com/TopShibe/status/685505183762223105">@TopShibe</a> pointed out the stack-allocated initialization example was wrong because the examples I gave were global variables. Updated wording to just mean "auto-allocated" things, be it stack or data sections.</p>
+<p><a href="https://twitter.com/grynspan/status/685509158024691712">Jonathan Grynspan</a> suggested harsher wording around the VLA example because they <strong>are</strong> dangerous when used incorrectly.</p>
+<p>David O'Mahony kindly pointed out I can't spell "specify" either.</p>
+<p>Dr. David Alan Gilbert pointed out <code>ssize_t</code> is a POSIXism and Windows doesn't have it.</p>
+<p>Chris Ridd suggested we explicitly mention C99 is C from 1999 and C11 is C from 2011 because otherwise it looks strange having 11 be newer than 99.</p>
+<p>Chris Ridd also noticed the <code>clang-format</code> example used unclear naming conventions and suggested better consistency across examples.</p>
+<p><a href="https://twitter.com/Ideo_logiq/status/685384708188930048">Anthony Le Goff</a> pointed us to a book-length treatment of many modern C ideas called <a href="http://icube-icps.unistra.fr/img_auth.php/d/db/ModernC.pdf">Modern C</a>.</p>
+<p>Stuart Popejoy pointed out my inaccurate spelling of deliberately was truly inaccurate.</p>
+<p>jack rosen pointed out my usage of the word 'exists' does not mean 'exits' as I intended.</p>
+<p>Jo Booth pointed out I like to spell compatibility as compatability, which seems more logical, but English commonality disagrees.</p>
+<p>Stephen Anderson decoded my aberrant spelling of 'stil' back into 'still.'</p>
+<p>Richard Weinberger pointed out struct initialization with <code>{0}</code> doesn't zero out padding bytes, so sending a <code>{0}</code> struct over the wire can leak unintended bytes on under-specified structs.</p>
+<p><a href="https://twitter.com/JayBhukhanwala">@JayBhukhanwala</a> pointed out the function comment in <a href="https://matt.sh/howto-c#_return-parameter-types">Return Parameter Types</a> was inaccurate because I didn't update the comment when the code changed (story of our lives, right?).</p>
+<p>Lorenzo pointed out we should explicitly provide a warning concerning potential cross-platform alignment issues in section <a href="https://matt.sh/howto-c#_parameter-types">Parameter Types</a>.</p>
+<p><a href="https://twitter.com/Blaisorblade/status/686042231917178881">Paolo G. Giarrusso</a> re-clarified the alignment warning I previously added to be more correct regarding the examples given.</p>
+<p>Fabian Kl&#xF6;tzl provided the valid struct compound literal assignment example since it's perfectly valid syntax I just hadn't run across before.</p>
+<p>Omkar Ekbote provided a very thorough walkthrough of typos and consistency problems here including that I couldn't spell "platform," "actually," "defining," "experience," "simultaneously," "readability," as well as noted some other unclear wordings.</p>
+<p>Carlo Bellettini fixed my aberrant spelling of the word aberrant.</p>
+<p><a href="https://github.com/Keith-S-Thompson">Keith S Thompson</a> provided many technical corrections in his great article <a href="https://github.com/Keith-S-Thompson/how-to-c-response">how-to-c-response</a>.</p>
+<p>Marc Bevand pointed out we should say the <code>fprintf</code> type specifiers come from <a href="http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/inttypes.h.html">inttypes.h</a>.</p>
+<p><a href="https://twitter.com/brian_cain">Brian Cain</a> pointed out we should mention the <em>fast</em> and <em>least</em> types too.</p>
+<p>Many people on reddit went apeshit because this article originally had <code>#import</code> somewhere by mistake. Sorry, crazy people, but this started out as an unedited and unreviewed year old draft when originally pushed live. The error has since been remedied.</p>
+<p>Some people also pointed out the static initialization example uses globals which are always initialized to zero by default anyway (and that they aren't even initialized, they are statically allocated). This is a poor choice of example on my part, but the concepts still stand for typical usage within function scopes. The examples were meant to be any generic "code snippet" and not necessarily top level globals.</p>
+<p>A few people seem to have read this as an "I hate C" page, but it isn't. C is dangerous in the wrong hands (not enough testing, not enough experience when widely deployed), so paradoxically the two kinds of C developers should only be novice hobbyists (code failure causes no problems, it's just a toy) or people who are willing to test their asses off (code failure causes life or financial loss, it's not just a toy) should be writting C code for production usage. There's not much room for "casual observer C development." For the rest of the world, that's why we have Erlang.</p>
+<p>Many people have also mentioned their own pet issues as well or issues beyond the scope of this article (including new C11 only features like <a href="https://twitter.com/irrequietus/status/685407732464226306">George Makrydakis</a> reminding us about C11 generic abilities).</p>
+<p>Perhaps another article about "Practical C" will show up to cover testing, profiling, performance tracing, optional-but-useful warning levels, etc.</p>
+
+ </div>
+ 
+ </div>
+</body></html>

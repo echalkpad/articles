@@ -1,0 +1,446 @@
+<!DOCTYPE html><html><head><title>code_of_the_damned();</title></head><body>
+<h1>code_of_the_damned();</h1><p><a href="http://codeofthedamned.com/index.php/introduction-to-the-math-of" target="_new">Original URL</a></p>
+<p><blockquote>Three-dimensional computer graphics is an exciting aspect of computing because of the amazing visual effects that can be created for display. All of this is created from an enormous number of&hellip;</blockquote></p>
+<div><div class="bText"><p>Three-dimensional computer graphics is an exciting aspect of computing because of the amazing visual effects that can be created for display. All of this is created from an enormous number of calculations that manipulate virtual models, which are constructed from some form of geometric definition. While the math involved for some aspects of computer graphics and animation can become quite complex, the fundamental mathematics that is required is very accessible. Beyond learning some new mathematic notation, a basic three-dimensional view can be constructed with algorithms that only require basic arithmetic and a little bit of trigonometry.</p>
+
+<p>I demonstrate how to perform some basic operations with two key constructs for 3D graphics, without the rigorous mathematic introduction. Hopefully the level of detail that I use is enough for anyone that doesn't have a strong background in math, but would very much like to play with 3D APIs. I introduce the math that you <em>must</em> be familiar with in this entry, and in two future posts I demonstrate how to manipulate geometric models and apply the math towards the display of a 3D image.</p>
+
+<h2>Linear Algebra</h2>
+<p>The type of math that forms the basis of 3D graphics is called linear algebra. In general, linear algebra is quite useful for solving systems of linear equations. Rather than go into the details of linear algebra, and all of its capabilities, we are going to simply focus on two related constructs that are used heavily within the topic, the <em>matrix</em> and the <em>vertex</em>.</p> 
+
+
+<h3>Matrix</h3>
+<p>(Add matrix introduction)</p>
+
+<p>These are all examples of valid matrices:</p>
+<p>\(
+\left\lbrack
+\matrix{a &amp; b &amp; c \cr
+d &amp; e &amp; f}
+\right\rbrack,
+
+\left\lbrack
+\matrix{10 &amp; -27 \cr
+0 &amp; 13 \cr
+7 &amp; 17}
+\right\rbrack,
+
+\left\lbrack
+\matrix{x^2 &amp; 2x \cr
+0 &amp; e^x}
+\right\rbrack\)</p>
+
+<p>Square matrices are particularly important, that is a matrix with the same number of columns and rows. There are some operations that can only be performed on a square matrix, which I will introduce shortly. The notation for matrices, in general, uses capital letters as the variable names. Matrix dimensions can be specified as a shorthand notation, and to also identify an indexed position within the matrix. As far as I am aware, row-major indexing is <em>always</em> used for consistency, that is, the first index represents the row, and the second represents the column.</p>
+
+<p>\( A=
+[a_{ij}]=
+\left\lbrack
+\matrix{a_{11} &amp; a_{12} &amp; \ldots &amp; a_{1n} \cr
+a_{21} &amp; a_{22} &amp; \ldots &amp; a_{2n} \cr
+\vdots &amp; \vdots &amp; \ddots &amp; \vdots \cr
+a_{m1} &amp; a_{m2} &amp; \ldots &amp; a_{mn}
+}
+\right\rbrack \)</p>
+
+<h3>Vector</h3>
+<p>The vector is a special case of a matrix, where there is only a single row <em>or</em> a single column; also a common practice is to use lowercase letters to represent vectors:</p>
+<p>\( u=
+\left\lbrack
+\matrix{u_1 &amp; u_2 &amp; u_3}
+\right\rbrack \), 
+
+\( v=
+\left\lbrack
+\matrix{v_1\cr v_2\cr v_3}
+\right\rbrack\)</p>
+
+<h2>Operations</h2>
+<p>The mathematical shorthand notation for matrices is very elegant. It simplifies these equations that would be quite cumbersome, otherwise. There are only a few operations that we are concerned with to allow us to get started. Each operation has a basic algorithm to follow to perform a calculation, and the algorithm easily scales with the dimensions of a matrix.</p>
+
+<p>Furthermore, the relationship between math and programming is not always clear. I have a number of colleagues that are excellent programmers and yet they do not consider their math skills very strong. I think that it could be helpful to many to see the conversion of the matrix operations that I just described from mathematical notation into code form. Once I demonstrate how to perform an operation with the mathematical notation and algorithmic steps, I will also show a basic C++ implementation of the concept to help you understand how these concepts map to actual code.</p>
+
+<p>The operations that I implement below assume a Matrix class with the following interface:</p>
+<p class="codeblock_title">C++</p><div class="codeblock codeblock_with_title amc_cpp amc_short"><table><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>class</span> Matrix</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>public</span><span>:</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// Ctor and Dtor omitted </span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// Calculate and return a reference to the specified element.</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>double</span><span>&amp;</span> element<span>(</span><span>size_t</span> row, <span>size_t</span> column<span>)</span><span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// Resizes this Matrix to have the specified size.</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>void</span> resize<span>(</span><span>size_t</span> row, <span>size_t</span> column<span>)</span><span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// Returns the number rows.</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>size_t</span> rows<span>(</span><span>)</span><span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// Returns the number of columns.</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>size_t</span> columns<span>(</span><span>)</span><span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>private</span><span>:</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;std<span>::</span><span>vector</span><span>&lt;</span><span>double</span><span>&gt;</span>&#xA0;&#xA0;&#xA0;&#xA0;data<span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>}</span><span>;</span></code></td></tr></table></div>
+<br>
+
+<h3>Transpose</h3>
+<p><em>Transpose</em> is a unary operation that is performed on a single matrix, and it is represented by adding a <em>superscript</em> T to target matrix.</p>
+<p>For example, the transpose of a matrix A is represented with A<sup>T</sup>.</p>
+<p>The transpose "flips" the orientation of the matrix so that each row becomes a column, and each original column is transformed into a row. I think that a few examples will make this concept more clear.</p>
+
+<p>\( A=
+\left\lbrack
+\matrix{a &amp; b &amp; c \cr
+d &amp; e &amp; f \cr
+g &amp; h &amp; i}
+\right\rbrack \)</p>
+
+<p>\(A^T=
+\left\lbrack
+\matrix{a &amp; d &amp; g \cr
+b &amp; e &amp; h \cr
+c &amp; f &amp; i}
+\right\rbrack \)</p>
+
+<p>The resulting matrix will contain the same set of values as the original matrix, only their position in the matrix changes.</p>
+
+<p>\( B=
+\left\lbrack
+\matrix{1 &amp; 25 &amp; 75 &amp; 100\cr
+0 &amp; 5 &amp; -50 &amp; -25\cr
+0 &amp; 0 &amp; 10 &amp; 22}
+\right\rbrack \)</p>
+
+<p>\(B^T=
+\left\lbrack
+\matrix{1 &amp; 0 &amp; 0 \cr
+25 &amp; 5 &amp; 0 \cr
+75 &amp; -50 &amp; 10 \cr
+100 &amp; -25 &amp; 22}
+\right\rbrack \)</p>
+
+<p>It is very common to transpose a matrix, including vertices, before performing other operations. The reason will become clear for <em>matrix multiplication</em>.</p>
+
+<p>\( u=
+\left\lbrack
+\matrix{u_1 &amp; u_2 &amp; u_3}
+\right\rbrack \)</p>
+
+<p>\(u^T=
+\left\lbrack
+\matrix{u_1 \cr
+u_2 \cr
+u_3}
+\right\rbrack \)</p>
+
+<h3>Matrix Addition</h3>
+<p>Addition can only be performed between two matrices that are the same size. By size, we mean that the number of rows and columns are the same for each matrix. Addition is performed by adding the values of the corresponding positions of both matrices. The sum of the values creates a new matrix that is the same size as the original two matrices provided to the add operation.</p>
+
+
+<p> \( A=
+\left\lbrack
+\matrix{0 &amp; -2 &amp; 4 \cr
+-6 &amp; 8 &amp; 0 \cr
+2 &amp; -4 &amp; 6}
+\right\rbrack,
+
+B=
+\left\lbrack
+\matrix{1 &amp; 3 &amp; 5 \cr
+7 &amp; 9 &amp; 11 \cr
+13 &amp; 15 &amp; 17}
+\right\rbrack \)</p>
+
+<p>Then</p>
+<p> \(A+B=\left\lbrack
+\matrix{1 &amp; 1 &amp; 9 \cr
+1 &amp; 17 &amp; 11 \cr
+15 &amp; 11 &amp; 23}
+\right\rbrack \)
+</p>
+
+<p>The size of these matrices do not match in their current form.</p> 
+<p>\(U=
+\left\lbrack
+\matrix{4 &amp; -8 &amp; 5}\right\rbrack, 
+V=
+\left\lbrack
+\matrix{-1 \\ 5 \\ 4}\right\rbrack \)
+</p>
+
+<p>However, if we take the transpose of one of them, their sizes will match and they can then be added together. The size of the result matrix depends upon which matrix we perform the transpose operation on from the original expression.:</p>
+<p>\(U^T+V=
+\left\lbrack
+\matrix{3 \\ -3 \\ 9}
+\right\rbrack \)</p>
+
+<p>\(U+V^T=
+\left\lbrack
+\matrix{3 &amp; -3 &amp; 9}
+\right\rbrack \)
+</p>
+
+<p>Matrix addition has the same algebraic properties as with the addition of two scalar values:</p>
+
+<h4>Commutative Property:</h4> 
+\( A+B=B+A \) 
+<h4>Associative Property:</h4> 
+\( (U+V)+W=U+(V+W) \) 
+<h4>Identity Property:</h4> 
+\( A+0=A \) 
+<h4>Inverse Property:</h4> 
+\( A+(-A)=0 \) 
+
+<p>The code required to implement <em>matrix addition</em> is relatively simple. Here is an example for the <code class="codespan">Matrix</code> class definition that I presented earlier:</p>
+<p class="codeblock_title">C++</p><div class="codeblock codeblock_with_title amc_cpp amc_short"><table><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>void</span> Matrix<span>::</span><span>operator</span><span>+</span><span>=</span><span>(</span><span>const</span> Matrix<span>&amp;</span> rhs<span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>if</span> <span>(</span>rhs.<span>data</span>.<span>size</span><span>(</span><span>)</span> <span>==</span> data.<span>size</span><span>(</span><span>)</span><span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>// We can simply add each corresponding element</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>// in the matrix element data array.</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>for</span> <span>(</span><span>size_t</span> index <span>=</span> <span>0</span><span>;</span> index <span>&lt;</span> data.<span>size</span><span>(</span><span>)</span><span>;</span> <span>++</span>index<span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;data<span>[</span>index<span>]</span> <span>+</span><span>=</span> rhs.<span>data</span><span>[</span>index<span>]</span><span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>}</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">Matrix<span>&amp;</span> operator<span>+</span><span>(</span> <span>const</span> Matrix<span>&amp;</span> lhs,</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; <span>const</span> Matrix<span>&amp;</span> rhs<span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;Matrix result<span>(</span>lhs<span>)</span><span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;result <span>+</span><span>=</span> rhs<span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>return</span> result<span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>}</span></code></td></tr></table></div><br>
+
+<h3>Scalar Multiplication</h3>
+<p>Scalar multiplication allows a single scalar value to be multiplied with every entry within a matrix. The result matrix is the same size as the matrix provided to the scalar multiplication expression:</p>
+
+
+<p>\( A=
+\left\lbrack
+\matrix{3 &amp; 6 &amp; -9 \cr
+12 &amp; -15 &amp; -18}
+\right\rbrack \)</p>
+
+<p>Then</p>
+
+<p>\( \frac{1}3 A=
+\left\lbrack
+\matrix{1 &amp; 2 &amp; -3 \cr
+4 &amp; -5 &amp; -6}
+\right\rbrack,
+
+0A=
+\left\lbrack
+\matrix{0 &amp; 0 &amp; 0 \cr
+0 &amp; 0 &amp; 0}
+\right\rbrack,
+
+-A=
+\left\lbrack
+\matrix{-3 &amp; -6 &amp; 9 \cr
+-12 &amp; 15 &amp; 18}
+\right\rbrack,
+ \)</p>
+
+<p>Scalar multiplication with a matrix exhibits these properties, where <em>c</em> and <em>d</em> are scalar values:</p>
+<h4>Distributive Property:</h4> 
+\( c(A+B)=cA+cB \) 
+<h4>Identity Property:</h4> 
+\( 1A=A \) 
+
+<p>The implementation for scalar multiplication is even simpler than addition.<br> <em>Note: this implementation only allows the scalar value to appear before the Matrix object in multiplication expressions, which is how the operation is represented in math notation.</em>:</p>
+<p class="codeblock_title">C++</p><div class="codeblock codeblock_with_title amc_cpp amc_short"><table><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>void</span> Matrix<span>::</span><span>operator</span><span>*</span><span>=</span><span>(</span><span>const</span> <span>double</span> lhs<span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>for</span> <span>(</span><span>size_t</span> index <span>=</span> <span>0</span><span>;</span> index <span>&lt;</span> data.<span>size</span><span>(</span><span>)</span><span>;</span> <span>++</span>index<span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;data<span>[</span>index<span>]</span> <span>*</span><span>=</span> rhs<span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>}</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">Matrix<span>&amp;</span> operator<span>*</span><span>(</span> <span>const</span> <span>double</span> scalar,</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; <span>const</span> Matrix<span>&amp;</span> rhs<span>)</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>{</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;Matrix result<span>(</span>rhs<span>)</span><span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;result <span>*</span><span>=</span> scalar<span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>return</span> result<span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>}</span></code></td></tr></table></div><br>
+
+<h3>Matrix Multiplication</h3>
+<p>Everything seems very simple with matrices, at least once you get used to the new structure. Then you are introduced to <em>matrix multiplication</em>. The algorithm for multiplication is not difficult, however, it is much more labor intensive compared to the other operations that I have introduced to you. There are also a few more restrictions on the parameters for multiplication to be valid. Finally, unlike the addition operator, the matrix multiplication operator does not have all of the same properties as the multiplication operator for scalar values; specifically, the order of parameters matters.</p>
+
+<h4>Input / Output</h4>
+<p>Let's first address what you need to be able to multiply matrices, and what type of matrix you can expect as output. Once we have addressed the structure, we will move on to the process.</p>
+
+<p>Given an the following two matrices:</p>
+
+<p>\( 
+A=
+\left\lbrack
+\matrix{a_{11} &amp; \ldots &amp; a_{1n} \cr
+\vdots &amp; \ddots &amp; \vdots \cr
+a_{m1} &amp; \ldots &amp; a_{mn}
+}
+\right\rbrack, 
+
+B=
+\left\lbrack
+\matrix{b_{11} &amp; \ldots &amp; b_{1v} \cr
+\vdots &amp; \ddots &amp; \vdots \cr
+b_{u1} &amp; \ldots &amp; b_{uv}
+}
+\right\rbrack
+\)</p>
+
+<p>A valid product for \( AB=C \) is only possible if number of columns \( n \) in \( A \) is equal to the number of rows \( u \) in \( B \). The resulting matrix \( C \) will have the dimensions \( m \times v \).</p>
+<p>\( 
+AB=C=
+\left\lbrack
+\matrix{c_{11} &amp; \ldots &amp; c_{1v} \cr
+\vdots &amp; \ddots &amp; \vdots \cr
+c_{m1} &amp; \ldots &amp; c_{mv}
+}
+\right\rbrack, 
+\)</p>
+
+<p>Let's summarize this in a different way, hopefully this arrangement will make the concept more intuitive:</p>
+
+
+<img title="Matrix multiplication dimensions" src="http://codeofthedamned.com/media/shared/global/damned/matrix_mult.png" alt="Matrix multiplication dimensions">
+
+
+<p>One last form of the rules for matrix multiplication:
+</p><ul>
+<li>The number of columns, \(n\), in matrix \( A \) must be equal to the number of rows, \(u\), in matrix \( B \):<br> 
+\( n = u \)<br> </li>
+<li>The output matrix \( C \) will have the number of rows, \(m\), in \(A\), and the number of columns, \(v\), in \(B\): <br>
+\( m \times v \)<br> </li>
+<li>\(m\) and \(v\) do not have to be equal. The only requirement is that they are both greater-than zero: <br>
+\( m \gt 0,\) <br> 
+\(v \gt 0 \)</li>
+</ul>
+
+<h4>How to Multiply</h4>
+<p>To calculate a single entry in the output matrix, we must multiply the element from each column in the first matrix, with the element in the corresponding row in the second matrix, and add all of these products together. We use the same row in the first matrix, \(A\), for which we are calculating the row element in \(C\). Similarly, we use the column in the second matrix, \(B\) that corresponds with the calculating column element in \(C\).</p>
+<p>More succinctly, we can say we are <em>multiplying rows into columns</em>.</p>
+
+<p>For example:</p>
+<p>\( A=
+\left\lbrack
+\matrix{a_{11} &amp; a_{12} &amp; a_{13} \cr
+a_{21} &amp; a_{22} &amp; a_{23}}
+\right\rbrack,
+
+B=
+\left\lbrack
+\matrix{b_{11} &amp; b_{12} &amp; b_{13} &amp; b_{14} \cr
+b_{21} &amp; b_{22} &amp; b_{23} &amp; b_{24} \cr
+b_{31} &amp; b_{32} &amp; b_{33} &amp; b_{34}
+}
+\right\rbrack \)</p>
+
+<p>The number of columns in \(A\) is \(3\) and the number of rows in \(B\) is \(3\), therefore, we can perform this operation. The size of the output matrix will be \(2 \times 4\).</p>
+
+<p>This is the formula to calculate the element \(c_{11}\) in \(C\) and the marked rows used from \(A\) and the columns from \(B\):</p>
+<p>\(
+\left\lbrack
+\matrix{\color{#B11D0A}{a_{11}} &amp; \color{#B11D0A}{a_{12}} &amp; \color{#B11D0A}{a_{13}} \cr
+a_{21} &amp; a_{22} &amp; a_{23}}
+\right\rbrack
+\times
+\left\lbrack
+\matrix{\color{#B11D0A}{b_{11}} &amp; b_{12} &amp; b_{13} &amp; b_{14} \cr
+\color{#B11D0A}{b_{21}} &amp; b_{22} &amp; b_{23} &amp; b_{24} \cr
+\color{#B11D0A}{b_{31}} &amp; b_{32} &amp; b_{33} &amp; b_{34}
+}
+\right\rbrack
+=
+\left\lbrack
+\matrix{\color{#B11D0A}{c_{11}} &amp; c_{12} &amp; c_{13} &amp; c_{14}\cr
+c_{21} &amp; c_{22} &amp; c_{23} &amp; c_{24}
+}
+\right\rbrack \)</p>
+<p>\( c_{11}= (a_{11}\times b_{11}) + (a_{12}\times b_{21}) + (a_{13}\times b_{31}) \)</p>
+
+
+<p>To complete the multiplication, we need to calculate these other seven values \( c_{12}, c_{13}, c_{14}, c_{21}, c_{22}, c_{23}, c_{24}\). Here is another example for the element \(c_{23}\):</p>
+<p>\( 
+\left\lbrack
+\matrix{ a_{11} &amp; a_{12} &amp; a_{13} \cr
+\color{#B11D0A}{a_{21}} &amp; \color{#B11D0A}{a_{22}} &amp; \color{#B11D0A}{a_{23}}
+}
+\right\rbrack
+\times
+\left\lbrack
+\matrix{b_{11} &amp; b_{12} &amp; \color{#B11D0A}{b_{13}} &amp; b_{14} \cr
+b_{21} &amp; b_{22} &amp; \color{#B11D0A}{b_{23}} &amp; b_{24} \cr
+b_{31} &amp; b_{32} &amp; \color{#B11D0A}{b_{33}} &amp; b_{34}
+}
+\right\rbrack
+=
+\left\lbrack
+\matrix{c_{11} &amp; c_{12} &amp; c_{13} &amp; c_{14}\cr
+c_{21} &amp; c_{22} &amp; \color{#B11D0A}{c_{23}} &amp; c_{24}
+}
+\right\rbrack \)</p>
+<p>\( c_{23}= (a_{21}\times b_{13}) + (a_{22}\times b_{23}) + (a_{23}\times b_{33}) \)</p>
+
+<p>Notice how the size of the output matrix changes. Based on this and the size of the input matrices you can end up with some interesting results:</p>
+<p>\( 
+\left\lbrack
+\matrix{a_{11} \cr
+a_{21} \cr
+a_{31} }
+\right\rbrack
+\times
+\left\lbrack
+\matrix{ b_{11} &amp; b_{12} &amp; b_{13} }
+\right\rbrack
+=
+\left\lbrack
+\matrix{c_{11} &amp; c_{12} &amp; c_{13} \cr 
+c_{21} &amp; c_{22} &amp; c_{23} \cr 
+c_{31} &amp; c_{32} &amp; c_{33} }
+\right\rbrack \)</p>
+
+<p>\( 
+\left\lbrack
+\matrix{ a_{11} &amp; a_{12} &amp; a_{13} }
+\right\rbrack
+\times
+\left\lbrack
+\matrix{b_{11} \cr
+b_{21} \cr
+b_{31} }
+\right\rbrack
+=
+\left\lbrack
+\matrix{c_{11} }
+\right\rbrack \)</p>
+
+<blockquote>
+<p>Tip:</p>
+<p>To help you keep track of which row to use from the first matrix and which column from the second matrix, create your result matrix of the proper size, then methodically calculate the value for each individual element.</p>
+</blockquote>
+
+<p>The algebraic properties for the matrix multiplication operator do not match those of the scalar multiplication operator. These are the most notable:</p>
+<h4>Not Commutative:</h4> 
+<p>The order of the factor matrices definitely matters.</p>
+\( AB \ne BA \) in general
+<br>
+<p>I think it is very important to illustrate this fact. Here is a simple \(2 \times 2 \) multiplication performed two times with the order of the input matrices switched. I have highlighted the only two terms that the two resulting answers have in common:</p>
+<p>\(
+\left\lbrack
+\matrix{a &amp; b \cr
+c &amp; d
+}
+\right\rbrack
+\times 
+\left\lbrack
+\matrix{w &amp; x\cr
+y &amp; z 
+}
+\right\rbrack 
+=
+\left\lbrack
+\matrix{(\color{red}{aw}+by) &amp; (ax+bz)\cr
+(cw+dy) &amp; (cx+\color{red}{dz})
+}
+\right\rbrack 
+\)</p>
+
+<p>\(
+\left\lbrack
+\matrix{w &amp; x\cr
+y &amp; z 
+}
+\right\rbrack
+\times 
+\left\lbrack
+\matrix{a &amp; b \cr
+c &amp; d
+}
+\right\rbrack 
+=
+\left\lbrack
+\matrix{(\color{red}{aw}+cx) &amp; (bw+dx)\cr
+(ay+cz) &amp; (by+\color{red}{dz})
+}
+\right\rbrack 
+\)</p>
+
+
+<h4>Product of Zero:</h4> 
+\( AB=0 \) does not necessarily imply \( A=0 \) or \( B=0 \)
+<h4>Scalar Multiplication is Commutative:</h4> 
+\( (kA)B = k(AB) = A(kB) \) 
+<h4>Associative Property:</h4> 
+<p>Multiplication is associative, however, take note that the relative order for all of the matrices remains the same.</p>
+\( (AB)C=A(BC) \)
+<h4>Transpose of a Product:</h4> 
+<p>The transpose of a product is equivalent to the product of transposed factors multiplied in reverse order</p>
+\( (AB)^T=B^TA^T \) 
+<br>
+<h4>Code</h4>
+<p>We are going to use a two-step solution to create a general purpose matrix multiplication solution. The first step is to create a function that properly calculates a single element in the output matrix:</p>
+<p class="codeblock_title">C++</p><div class="codeblock codeblock_with_title amc_cpp amc_short"><table><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>double</span> Matrix<span>::</span><span>multiply_element</span><span>(</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>const</span> Matrix<span>&amp;</span> rhs,</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>const</span> Matrix<span>&amp;</span> rhs,</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>const</span> <span>size_t</span> i,</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>const</span> <span>size_t</span> j</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>)</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>{</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>double</span> product <span>=</span> <span>0</span><span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// Multiply across the specified row, i, for the left matrix</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// and the specified column, j, for the right matrix.</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// Accumulate the total of the products </span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>// to return as the calculated result.</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>for</span> <span>(</span><span>size_t</span> col_index <span>=</span> <span>1</span><span>;</span> col_index <span>&lt;=</span> lhs.<span>columns</span><span>(</span><span>)</span><span>;</span> <span>++</span>col_index<span>)</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>for</span> <span>(</span><span>size_t</span> row_index <span>=</span> <span>1</span><span>;</span> row_index <span>&lt;=</span> rhs.<span>rows</span><span>(</span><span>)</span><span>;</span> <span>++</span>row_index<span>)</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;product <span>+</span><span>=</span> lhs.<span>element</span><span>(</span>i, col_index<span>)</span> </code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; <span>*</span> rhs.<span>element</span><span>(</span>row_index, j<span>)</span><span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>return</span> product<span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>}</span></code></td></tr></table></div>
+
+<p>Now create the outer function that performs the multiplication to populate each field of the output matrix:</p>
+
+<p class="codeblock_title">C++</p><div class="codeblock codeblock_with_title amc_cpp amc_short"><table><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>// Because we may end up creating a matrix with </span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>// an entirely new size, it does not make sense </span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock"><span>// to have a *= operator for this general-purpose solution.</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">Matrix<span>&amp;</span> Matrix<span>::</span><span>operator</span><span>*</span><span>(</span> <span>const</span> Matrix<span>&amp;</span> lhs,</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; <span>const</span> Matrix<span>&amp;</span> rhs<span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>if</span> <span>(</span>lhs.<span>columns</span><span>(</span><span>)</span> <span>==</span> rhs.<span>rows</span><span>(</span><span>)</span><span>)</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>// Resize the result matrix to the proper size.</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;this<span>-</span><span>&gt;</span>resize<span>(</span>lhs.<span>row</span><span>(</span><span>)</span>, rhs.<span>columns</span><span>(</span><span>)</span><span>)</span><span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>// Calculate the value for each element</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>// in the result matrix.</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>for</span> <span>(</span><span>size_t</span> i <span>=</span> <span>1</span><span>;</span> i <span>&lt;=</span> this<span>-</span><span>&gt;</span>rows<span>(</span><span>)</span><span>;</span> <span>++</span>i<span>)</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;<span>for</span> <span>(</span><span>size_t</span> j <span>=</span> <span>1</span><span>;</span> j <span>&lt;=</span> this<span>-</span><span>&gt;</span>columns<span>(</span><span>)</span><span>;</span> <span>++</span>j<span>)</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;<span>{</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;element<span>(</span>i,j<span>)</span> <span>=</span> multiply_element<span>(</span>lhs, rhs, i, j<span>)</span><span>;</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>}</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock">&#xA0;</code></td></tr><tr class="amc_code_odd"><td class="amc_line"></td><td><code class="codeblock">&#xA0;&#xA0;<span>return</span> <span>*</span><span>this</span><span>;</span></code></td></tr><tr class="amc_code_even"><td class="amc_line"></td><td><code class="codeblock"><span>}</span></code></td></tr></table></div>
+<br>
+
+<h2>Summary</h2>
+<p>3D computer graphics relies heavily on the concepts found in the branch of math called, <em>Linear Algebra</em>. I have introduced two basic constructs from Linear Algebra that we will need to move forward and perform the fundamental calculations for rendering a three-dimensional display. At this point I have only scratched the surface as to what is possible, and I have only demonstrated <em>how</em>. I will provide context and demonstrate the <em>what</em> and <em>why</em>, to a degree, on the path helping you begin to work with three-dimensional graphics libraries, even if math is not one of your strongest skills.</p>
+
+<h3>References</h3>
+<p>Kreyszig, Erwin; "Chapter 7" from <em>Advanced Engineering Mathematics</em>, 7th ed., New York: John Wiley &amp; Sons, 1993</p></div></div>
+</body></html>

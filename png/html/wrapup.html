@@ -1,0 +1,241 @@
+<!DOCTYPE html><html><head><title>Wrap-Up</title></head><body>
+<h1>Wrap-Up</h1><p><a href="https://deis.com/blog/2016/coreos-overview-p3" target="_new">Original URL</a></p>
+<p><blockquote>This is the third and final post in a series looking at CoreOS. In my last post, we looked at the cloud-config file, running etcd in proxy mode, and some common etcd cluster setups. In this post, we&hellip;</blockquote></p>
+<div><article>
+ <p>This is the third and final post in a series looking at CoreOS.</p>
+
+<p>In my <a href="https://deis.com/blog/2016/coreos-overview-p2">last post</a>, we looked at the cloud-config file, running etcd in proxy mode, and some common etcd cluster setups.</p>
+
+<p>In this post, we take a closer look at systemd, unit files, Fleet, and fleetctl.</p>
+
+<h2>systemd Overview</h2>
+
+<p>systemd is an init system used by CoreOS that provides many powerful features for starting, stopping, monitoring, and restarting process. On CoreOS, systemd is used to manage the lifecycle of your Docker containers and also for different system bootstrap tasks.</p>
+
+<p>Learning systemd would need a series of blog posts in itself. Here we only cover systemd to the extent that we need to run systemd units for Docker containers on CoreOS. </p>
+
+<p>For more information about systemd, see <a href="http://www.freedesktop.org/wiki/Software/systemd/">the documentation</a>.</p>
+
+<a name="read-more" class="read-more-anchor"></a>
+
+<h3>Unit Files</h3>
+
+<p>systemd records initialization instructions for each daemon in a configuration file called <em>a unit</em>.</p>
+
+<p>This system replaces the traditional System V per-daemon <a href="https://www.wikiwand.com/en/Init">init scripts</a>. </p>
+
+<p>There are many different unit file types, but we'll only cover the <em>services</em> type used to run Docker containers. We call these <em>service units</em>.</p>
+
+<p>Here's a list of the most useful features, presented in the order they'll occur in the lifecycle of a service unit:</p>
+
+<ul>
+<li><code>ExecStartPre</code>: commands that run before <code>ExecStart</code></li>
+<li><code>ExecStart</code>: main commands to run for this unit</li>
+<li><code>ExecStartPost</code>: commands that run after all <code>ExecStart</code> commands have completed</li>
+<li><code>ExecReload</code>: commands that run when this unit is reloaded via <code>systemctl reload foo.service</code></li>
+<li><code>ExecStop</code>: commands that run when this unit is considered failed or if it is stopped via <code>systemctl stop foo.service</code></li>
+<li><code>ExecStopPost</code>: commands that run after <code>ExecStop</code> has completed</li>
+<li><code>RestartSec</code>: the amount of time to sleep before restarting a service (useful to prevent your failed service from attempting to restart itself every 100ms)</li>
+</ul>
+
+<p>Let&#x2019;s create a simple unit file called <code>hello_world.service</code>:</p>
+<figure class="highlight"><pre><code class="language-text">[Unit]
+Description=HelloWorldApp
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker rm busybox1
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --rm --name busybox1 busybox /bin/sh -c "while true; do echo Hello World; sleep 1; done"
+ExecStop=/usr/bin/docker stop busybox1
+
+[Install]
+WantedBy=multi-user.target
+</code></pre></figure>
+<p>Let&#x2019;s review the unit file we just created:</p>
+
+<ul>
+<li>The <code>Description</code> shows up in the systemd log (a unit&#x2019;s log can be checked with <em>journalctl</em> or <em>systemdctl</em>).</li>
+<li><code>After=docker.service</code> and <code>Requires=docker.service</code> means this unit only starts after <code>docker.service</code> is active. You can define as many of these as you want. You can delimit multiple <code>After</code> requirements using space as a separator.</li>
+<li>The <code>=-</code> is systemd syntax to ignore errors for this command. In our case, Docker will return a non-zero exit code if we try to stop a container that doesn't exist, so this is not an error for us.</li>
+<li><code>ExecStartPre=-/usr/bin/docker rm busybox1</code> will remove the Docker image <code>busybox1</code> if such image exists. If there&#x2019;s no Docker image to remove, the script will just move on.</li>
+<li><code>ExecStartPre=/usr/bin/docker pull busybox</code> will pull the <code>busybox</code> image from the Docker registry. </li>
+<li><code>ExecStart=</code> allows you to specify any command that you'd like to run when this unit is started. Do not run Docker containers with <code>-d</code> because this will prevent the container from starting as a child of this process. systemd will think the process has exited and the unit will be stopped.</li>
+<li><code>ExecStop=/usr/bin/docker stop busybox1</code> will stop the Docker container <code>busybox1</code>.</li>
+<li><code>WantedBy=multi-user.target</code>" tells systemd to pull in the unit when starting <code>multi-user.target</code>.</li>
+</ul>
+
+<p>Now to start a new unit, we need to tell systemd to create the symlink and then start the file:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo systemctl enable /etc/systemd/system/hello.service
+$ sudo systemctl start hello.service
+</code></pre></figure>
+<p>To verify the unit started, check the list of containers running with:</p>
+<figure class="highlight"><pre><code class="language-text">docker ps
+</code></pre></figure>
+<p>Then, read the unit's output with journalctl, like so:</p>
+<figure class="highlight"><pre><code class="language-text">$ journalctl -f -u hello.service
+-- Logs begin at Fri 2014-02-07 00:05:55 UTC. --
+Feb 11 17:46:26 localhost docker[23470]: Hello World
+Feb 11 17:46:27 localhost docker[23470]: Hello World
+Feb 11 17:46:28 localhost docker[23470]: Hello World
+[...]
+</code></pre></figure>
+<p>Here, <code>-u</code> means unit, and <code>-f</code> means follow. Press CTRL-c to exit.</p>
+
+<p>The systemd service units can only run and be controlled on a single machine. They are best used for simple tasks, like downloading files on reboot, and so on. </p>
+
+<p>For more information about systemd units, see <a href="https://coreos.com/docs/launching-containers/launching/getting-started-with-systemd/">the documentation</a>.</p>
+
+<h2>Fleet Overview</h2>
+
+<p>Fleet runs on top of systemd and controls systemd at the cluster level, creating a distributed systemd:</p>
+
+<p><img src="https://deis.com/images/blog-images/coreos-overview-3-0.png" alt=""></p>
+
+<p>To run your services in the cluster, you must submit regular systemd units combined with <a href="https://coreos.com/docs/launching-containers/launching/fleet-unit-files/">fleet-specific properties</a>.</p>
+
+<h3>fleetctl</h3>
+
+<p>fleetctl is a command line tool allowing you to control fleet units on local and remote CoreOS Clusters.</p>
+
+<p>The fleetctl commands are very similar to systemctl commands, and we do not have to use sudo with fleetctl. </p>
+
+<p>fleetctl commands can be run directly on a cluster machine.</p>
+
+<p>Or, if you prefer to execute fleetctl from an external host (i.e. your workstation), a system environment variable can be used to tunnel communication with your fleet cluster over SSH, like so:</p>
+<figure class="highlight"><pre><code class="language-text">$ export FLEETCTL_TUNNEL=remote_machines_ip
+</code></pre></figure>
+<p>Let's look at some of the tasks you can perform, listed with the required commands.</p>
+
+<p>Loading and starting the unit:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl start hello_world.service
+</code></pre></figure>
+<p>Checking the status of the unit:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl status hello_world.service
+</code></pre></figure>
+<p>Stopping the service:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl stop hello_world.service
+</code></pre></figure>
+<p>Viewing the content of service file:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl cat hello_world.service
+</code></pre></figure>
+<p>If you want to upload the unit file without starting it:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl submit hello_world.service
+</code></pre></figure>
+<p>Check the hello_world.service logs:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl journal hello_world.service
+</code></pre></figure>
+<p>You can even ssh to the host that runs the unit:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl ssh hello_world.service
+</code></pre></figure>
+<p>Listing all running fleet units:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl list-units
+</code></pre></figure>
+<p>Listing fleet cluster machines:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl list-machines
+</code></pre></figure>
+<h3>Unit Files</h3>
+
+<p>Unit files are the primary interaction with fleet.</p>
+
+<p>As with systemd units, fleet units define what you want to do and how fleet should provision them. Fleet schedules a valid unit file to one or more machines in a cluster, taking in mind fleet's special properties from the <code>[X-Fleet]</code> section, which replace the systemd unit's <code>[Install]</code> section. </p>
+
+<p>The rest of systemd's sections remain the same in fleet units.</p>
+
+<p>Let&#x2019;s review fleet specific options:</p>
+
+<ul>
+<li><code>MachineID</code>: Unit will be scheduled to the machine identified by a given string</li>
+<li><code>MachineOf</code>: Limit eligible machines to the one that hosts a specific unit</li>
+<li><code>MachineMetadata</code>: Limit eligible machines to those with this specific metadata</li>
+<li><code>Conflicts</code>: Prevent a unit from being collocated with other units using glob-matching on the other unit names</li>
+<li><code>Global</code>: Schedule this unit on all machines in the cluster</li>
+</ul>
+
+<p>All of these go in the <code>[X-Fleet]</code> section of the unit file.</p>
+
+<p>A unit is considered invalid if options other than <code>MachineMetadata</code> are provided alongside <code>Global=true</code>. Global units are very useful if you want to schedule the same unit on all machines or on some machines which <code>MachineMetadata</code> matches some value.</p>
+
+<p>Let&#x2019;s convert the systemd unit file <code>hello_world.service</code> we used above to a fleet unit:</p>
+<figure class="highlight"><pre><code class="language-text">[Unit]
+Description=HelloWorldApp
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker rm busybox1
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --rm --name busybox1 busybox /bin/sh -c "while true; do echo Hello World; sleep 1; done"
+ExecStop=/usr/bin/docker stop busybox1
+
+[X-Fleet]
+MachineMetadata=group=hw_webservers
+Conflicts=hello_world@*
+</code></pre></figure>
+<p>What does <code>hello_world@*</code> do in this example?</p>
+
+<p>Well, let's say we have two identical <code>hello_world@1.service</code> and <code>hello_world@2.service</code> files.</p>
+
+<p>We can start them on the cluster like so:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl start hello_world@*
+</code></pre></figure>
+<p>These two fleet units will be deployed to servers with <code>MachineMetadata=group=hw_webservers</code> metadada set, and <code>Conflicts=hello_world@*</code> will prevent a unit from being collocated with other units using glob-matching on the other unit names.</p>
+
+<p>Let's look at a few more examples with other fleet options for <code>hello_world.service</code> unit.</p>
+
+<p>This schedules this unit on all machines in the cluster:</p>
+<figure class="highlight"><pre><code class="language-text">[X-Fleet]
+Global=true
+</code></pre></figure>
+<p>This schedules the unit on the machine that has the <code>some_other_unit.service</code> unit.</p>
+<figure class="highlight"><pre><code class="language-text">[X-Fleet]
+MachineOf=some_other_unit.service
+</code></pre></figure>
+<p>This schedules the unit to the machine with the ID 562999f8:</p>
+<figure class="highlight"><pre><code class="language-text">[X-Fleet]
+MachineID="562999f8"
+</code></pre></figure>
+<p>You can check machine ID with:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl list-machines
+</code></pre></figure>
+<p>For more information about fleet units, see <a href="https://coreos.com/fleet/docs/latest/unit-files-and-scheduling.html">the documentation</a>.</p>
+
+<h3>Run a Container in the Cluster</h3>
+
+<p>Running a single container is very easy.</p>
+
+<p>All you need to do is provide a regular unit file without an <code>[Install]</code> section, like so:</p>
+<figure class="highlight"><pre><code class="language-text">[Unit]
+Description=hello_docker
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker rm busybox1
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --rm --name busybox1 busybox /bin/sh -c "while true; do echo Hello Docker; sleep 1; done"
+ExecStop=/usr/bin/docker stop busybox1
+</code></pre></figure>
+<p><em>Note: If you've been running Docker commands manually, make sure you don't copy a Docker run command that starts a container in detached mode (indicated by the <code>-d</code> switch). This will cause the unit to run for just a few seconds and then exit.</em></p>
+
+
+
+<p>In this post, we looked at:</p>
+
+<ul>
+<li>Writing unit files for systemd</li>
+<li>How Fleet is used to create a distributed systemd</li>
+<li>Writing unit files for Fleet</li>
+</ul>
+
+<p>Don't miss the previous two parts of this miniseries. In <a href="https://deis.com/blog/2016/coreos-overview-p1">part one</a>, we looked the basics of CoreOS, atomic upgrades and release channels, and cluster discovery. And in <a href="https://deis.com/blog/2016/coreos-overview-p2">part two</a>, we looked at cloud-config and etcd.</p>
+
+<p>In my next miniseries, I'll be looking at Docker.</p>
+
+ </article>
+ </div>
+</body></html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html><html><head><title>Making Sense of Everything with words2map</title></head><body>
+<h1>Making Sense of Everything with words2map</h1><p><a href="http://blog.yhat.com/posts/words2map.html" target="_new">Original URL</a></p>
+<p><blockquote>We are now at a point in history when algorithms can learn, like people, about pretty much anything. Facebook is pursuing &#x201C;computer services that have better perception than people&#x201D;,&hellip;</blockquote></p>
+<div>
+ <div class="row">
+ <br> 
+
+
+<p>We are now at a point in history when algorithms can learn, like people, about
+pretty much anything. Facebook is pursuing <a href="http://overlap.ai/facebook-computer-services-better-perception-than-people">&#x201C;computer services that have better
+perception than people&#x201D;</a>, while researchers at Google aim to &#x201C;<a href="http://overlap.ai/google-solve-intelligence">solve intelligence</a>&#x201D;.
+At <a href="http://overlap.ai/words2map">overlap.ai</a> we&#x2019;re building artificial intelligence to unite people through their
+overlapping passions, and here we introduce a framework we call <a href="http://overlap.ai/words2map-github">words2map</a> for
+considering what our users love, like these personal passions of ours:
+<br></p>
+<p><img src="http://blog.yhat.com/static/img/words2map-1.png"></p>
+<p>Let&#x2019;s explain <a href="http://overlap.ai/words2map-github">the code</a> that made this pretty picture just from the raw text,
+which serves as the basis for our recommender system. When we set out to
+automatically recommend groups and events to people that they may wish to
+join, we didn&#x2019;t have any data to start with, and yet the <a href="http://overlap.ai/google-unreasonable-effectiveness-of-data">unreasonable
+effectiveness</a> of data was not lost on us. So we decided to build from a
+pre-trained machine learning model that has basically already seen all
+there is to see: we set up a <a href="http://overlap.ai/word2vec-model">word2vec model from Google trained on 100
+billion words</a>&#x200A;&#x2014;&#x200A;just a few orders of magnitude bigger than Wikipedia.
+And indeed we found amazing insights embedded in the vectors, like:</p>
+<ul>
+<li><em>human + robot &#x2248; <strong>cyborg</strong></em></li>
+<li><em>electricity + silicon &#x2248; <strong>solar cells</strong></em></li>
+<li><em>virtual reality + reality &#x2248; <strong>augmented reality</strong></em></li>
+</ul>
+<p>Minus the futurism fetish above, you&#x2019;ll see the math above is fairly simple.
+We call this &#x201C;adding vectors&#x201D;, while below you see what we are really doing is
+averaging each element across all the vectors. Let&#x2019;s dissect the guts here,
+since deft applications of the vector algebra will take us far in terms of
+hacking intelligence into and out of the system:</p>
+<p><img alt="" src="http://blog.yhat.com/static/img/adding-vectors.png"></p>
+<p>The key point above is that new vectors are simply nearby existing vectors,
+such that <em>king - man + woman &#x2260; <strong>queen</strong></em> (at least not exactly). From this,
+it is clear that any new words can be introduced to the model simply by
+adding existing vectors for existing words. This idea is similar to how
+humans add words to their own vocabulary with a dictionary: consider
+some familiar words and combine their meanings to figure out new words.
+Our A.I. responds to unknown words by searching the web for them,
+extracting keywords from relevant websites, and adding vectors for
+those keywords it knows, to produce a new vector representing the new thing.
+This feels like it shouldn&#x2019;t work, like becoming a scientist just by reading
+Wikipedia instead of doing real science experiments, but surprisingly its
+performance is robust. Here is another cool map from <a href="http://overlap.ai/words2map-github">words2map</a> (which you
+can easily download and play with yourself) that demonstrates this:</p>
+<p><img src="http://blog.yhat.com/static/img/words2map-2.png"></p>
+<p>Once each word is derived in 300 dimensions (from the word2vec model trained on
+100 billion words) we then applied t-SNE to embed them into 2D, as x and y
+coordinates for data visualization, like seen above. This is indeed nice for
+data visualization, while it&#x2019;s also very helpful in our pipeline because it
+removes noise in the derived vectors, by forcing a new mapping based purely on
+relative similarity. For this reason we will be using the low-dimensional
+coordinates of each word in our recommender system.</p>
+<p>The above pipeline is strong enough for many applications, but in our case we
+wanted to go further to be able to uncover clusters of similar types of activities
+that our users really enjoy (and also, to be able to quickly infer what types of
+things you <em>don&#x2019;t</em> like). That way, we can recommend more or less of these things
+to you, and do so with high precision purely through A.I. At this point in our
+research we tried balltrees as a way to identify clusters:</p>
+<p><img src="http://blog.yhat.com/static/img/t-SNE-clusters.png"></p>
+<p>Upon close examination, these clusters are not bad, but we felt they weren&#x2019;t
+as responsive to the topology of the underlying data as we&#x2019;d like. So we continued
+researching and found a clustering algorithm that works really well for our
+complex distributions: HDBSCAN, i.e. &#x201C;hierarchical density-based spatial
+clustering of applications with noise&#x201D;. It sounds fancy, but it&#x2019;s very simple
+to work with, given that you only need to put in 2D coordinates.</p>
+<p>The full pipeline for all of this word vector hackery comes together like so:</p>
+<p><img alt="" src="http://blog.yhat.com/static/img/words2map-pipeline.png"></p>
+<p>We&#x2019;re very happy to make <a href="http://blog.yhat.com/posts/overlap.ai/words2map-github">words2map available through github</a>, and have worked hard
+to make sure that almost anyone with a Mac or Linux terminal can quickly download
+and play with it by copying and pasting:</p>
+<pre><code>git clone https://github.com/overlap-ai/words2map.git
+cd words2map
+./install.sh
+</code></pre>
+<p>We welcome critical feedback, and anyone interested in joining us in advancing
+the state of this art across machine learning + data visualization,
+to make it better and better for everyone.</p>
+<p>As of today, words2map is mapping every group that our users launch
+through our iPhone app&#x200A;&#x2014;&#x200A;which you can <a href="http://overlap.ai/download-overlap">download now</a>. We&#x2019;ve tested it,
+and know it reliably derives reasonable vectors in an online way for any
+topic that&#x2019;s learnable on the web&#x200A;&#x2014;&#x200A;i.e. just about every topic. Readers
+are invited to <a href="http://overlap.ai/words2map-github">try out words2map</a> for any type of natural language processing,
+and share their maps using a <a href="http://overlap.ai/words2map-hashtag">#words2map</a> hashtag.</p>
+<p>Readers are also invited to overlap with us over A.I. and data science&#x200B;,
+in New York City and beyond&#x200B;. This summer we&#x2019;re hosting coffee chats,
+data hackathon&#x200B;s&#x200B;, and other fun stuff so we can connect, join forces,
+and hack&#x200B; cool stuff&#x200B;&#x200B; together&#x200B;.&#x200B; Just <a href="http://overlap.ai/">download the app here</a> and soon you'll be
+nerding with us IRL.</p>
+<p>Big thanks to the data hipsters at <a href="http://overlap.ai/yhat">Yhat</a> for helping us share something new on their blog,
+and for spearheading great open source data science tools like <a href="http://overlap.ai/yhat-rodeo">Rodeo</a> and <a href="http://yhat.github.io/ggplot/">ggplot</a>.
+And thanks to so many scientists, engineers, and leaders who have helped make
+all of this possible. We love you:</p>
+<p><img src="http://blog.yhat.com/static/img/we-love-you.png"></p>
+
+ </div>
+ </div>
+</body></html>

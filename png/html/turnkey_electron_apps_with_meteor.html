@@ -1,0 +1,158 @@
+<!DOCTYPE html><html><head><title>Turn-key Electron apps with Meteor</title></head><body>
+<h1>Turn-key Electron apps with Meteor</h1><p><a href="https://mixmax.com/blog/turnkey-electron-apps-with-meteor" target="_new">Original URL</a></p>
+<p><blockquote>Monday, Jan 11th, 2016 Mixmax is a communications platform that brings email into the 21st century. We believe everything you do today on the web should be possible in any email. Last month, we&hellip;</blockquote></p>
+<div><div class="post__content layout__item 7/10 text-classic text-loose mb++ pb++">
+ <p class="text-normal mt-" title="Mon Jan 11 2016 08:00:00 GMT+0000 (UTC)"><b>Monday, Jan 11th, 2016</b></p>
+
+ <p class="mb++"><em>Mixmax is a communications platform that brings email into the 21st century. We believe everything you do today on the web should be possible in any email.</em></p>
+ <p>Last month, we released our first desktop application to
+<a href="https://www.producthunt.com/tech/mixmax-live-for-mac">rave reviews</a>. After several
+improvements and the release of the Windows version, we&#x2019;re pulling back the curtain to reveal how we
+built the&#xA0;app.</p>
+
+
+
+<p>When we decided to make a desktop application, <a href="http://electron.atom.io/">Electron</a> was
+an easy choice. Using a cross-platform framework would allow us to reach the most users, critical for
+a business at our early stage. Using a framework based on web technologies would allow us to reuse
+parts of our web application&#x2014;and best leverage the talent behind it, in particular
+<a href="https://twitter.com/chanpory">our designer</a>&#x2019;s marvelous <span class="caps">HTML</span> and <span class="caps">CSS</span> skills. And using a
+framework based on Chromium would give us access to the same bleeding-edge web APIs we use in our web
+application in our desktop&#xA0;app.</p>
+
+<p>But with that choice made, there were still a number of questions remaining: how would&#xA0;we&#x2026;</p>
+
+<ul>
+ <li>load our web application in&#xA0;Electron?</li>
+ <li>package the app?</li>
+ <li>communicate between the web and native parts of the&#xA0;app?</li>
+ <li>distribute the app?</li>
+</ul>
+
+<p>To answer these questions, we reviewed a ton of Electron documentation, GitHub issues, and prior
+art. The result is a Meteor package, <a href="https://github.com/rissem/meteor-electron">meteor-electron</a>,
+that makes it as easy as <code>meteor add quark:electron</code> to get your Meteor application running
+in a native shell. If you&#x2019;d like to try it out, head on over to the GitHub repo; but if you&#x2019;re
+interested in its development, read&#xA0;on!</p>
+
+<h2 id="preface">Preface</h2>
+
+<p>We developed our Electron infrastructure as a Meteor package because the web application we were
+wrapping was a Meteor application, but the techniques and lessons described below would in large part
+apply to packaging any web application (using Rails, Django, Express, etc.) as an Electron&#xA0;app.</p>
+
+<p>With that said, Meteor facilitates a particularly smooth workflow in that its packages can hook
+into the build process, server, <em>and</em> client. As you will see, Electron development requires
+coordinating changes across all three of those&#xA0;areas.</p>
+
+<h2 id="meteor-in-the-cloud--electron-on-the-desktop">Meteor in the cloud, Electron on the&#xA0;desktop</h2>
+
+<p>We first came across a prototype of meteor-electron when deciding how to load our Meteor app in
+Electron: remotely or locally? There were <a href="https://github.com/sircharleswatson/Electrometeor">several</a>
+<a href="https://github.com/arboleya/electrify">packages</a> that promised to do the latter&#x2014;build and
+run Meteor <em>inside</em> the Electron app. But that decision came with
+<a href="https://github.com/sircharleswatson/Electrometeor#windows-1">limited</a>
+<a href="https://github.com/arboleya/electrify#notes">support</a> for building the app for multiple
+platforms. The primary advantage of the local approach seemed to be offline support&#x2014;but we didn&#x2019;t need
+that for v1. More important to us was getting a cross-platform app out as soon as possible and being
+able to quickly iterate upon it. That made the case for loading Meteor remotely even more strongly,
+since we could use Meteor&#x2019;s <a href="http://info.meteor.com/blog/hot-code-pushes">hot code push</a>
+to update the bulk of the&#xA0;app.</p>
+
+<h2 id="automatic-packaging">Automatic packaging</h2>
+
+<p>We were also attracted to meteor-electron by its focus on ease of use. Where other projects
+foregrounded customization and build processes, meteor-electron got us started right away. When we
+added its package to our app, it automatically downloaded the Electron binary for our system, packaged
+our application, and opened it in a native&#xA0;shell.</p>
+
+<p>The packaging step bears some discussion: the officially-supported way to package an Electron app
+is to <a href="http://electron.atom.io/docs/v0.36.0/tutorial/application-distribution/">manually edit
+the contents of the Electron binary</a>! That&#x2019;s crazy. Under the hood, meteor-electron uses the
+excellent community project <a href="https://github.com/maxogden/electron-packager">electron-packager</a>
+to bundle your code and resources. What&#x2019;s more, meteor-electron uses reasonable defaults for packaging,
+<a href="https://github.com/rissem/meteor-electron#configuration">easily customizable</a> through
+your <a href="http://docs.meteor.com/#/full/meteor_settings">Meteor.settings</a>&#xA0;file.</p>
+
+<p>This turn-key packaging was a great user experience, and one that we&#x2019;ve enhanced working with
+meteor-electron&#x2019;s creator, <a href="https://twitter.com/rissem">Mike Risse</a>. For instance, we&#x2019;ve
+since improved the project to automatically rebuild and relaunch the app when the native code or the
+application settings&#xA0;change.</p>
+
+<h2 id="safe-native-bridge">Safe native bridge</h2>
+
+<p>Once we had our application loading in meteor-electron, we started to consider how we could
+customize it for the native context. Some simple
+<a href="https://github.com/rissem/meteor-electron/blob/4561e0156152267d00a68e147e54875e7b8f8823/client/index.js#L8">feature detection APIs</a>
+were trivial to add thanks to meteor-electron&#x2019;s ability, as a Meteor package, to load code on the server
+(like the packaging logic) <em>and</em> the&#xA0;client.</p>
+
+<p>Providing the client with access to native capabilities was trickier. Or should I say, it was
+<em>too </em>easy: by default, all Node APIs and modules are accessible from web&#xA0;content.</p>
+
+<p>Electron assumes that you will be loading your <span class="caps">HTML</span> etc. from disk, and thus views it as a trusted
+extension of the native code. But this assumption fails disastrously for hybrid native-web applications
+like Meteor desktop&#xA0;apps.</p>
+
+
+
+<p>Thankfully, it is possible to disable this Node integration when opening browser windows. (Bonus:
+doing so can fix web dependencies failing to load by incorrectly assuming they&#x2019;re
+<a href="https://github.com/atom/electron/issues/254">running in a CommonJS environment</a>.)</p>
+
+<p>We do still wish to expose <em>certain </em>native APIs to the web content. Luckily, there exists
+a mechanism for doing so called a &#x201C;preload script&#x201D;. This script is loaded before other
+scripts run in the page; always has access to Node APIs, no matter whether Node integration is turned
+on or off; and can add symbols to the page&#x2019;s global scope. With Node integration turned off:
+
+</p><table class="offset-table">
+ <thead>
+ <tr>
+ <th></th>
+ <th>&#xA0;&#xA0;Native scripts&#xA0;&#xA0;</th>
+ <th>&#xA0;&#xA0;Preload script&#xA0;&#xA0;</th>
+ <th>&#xA0;&#xA0;Browser scripts</th>
+ </tr>
+ </thead>
+ <tbody>
+ <tr>
+ <td>Access to Node global context</td>
+ <td class="arrow-line-through">&lt;</td>
+ <td class="arrow-line-through right-arrow-line-through">&gt;</td>
+ <td></td>
+ </tr>
+ <tr>
+ <td>Access to browser global context</td>
+ <td></td>
+ <td class="arrow-line-through">&lt;</td>
+ <td class="arrow-line-through right-arrow-line-through">&gt;</td>
+ </tr>
+ </tbody>
+</table>
+
+<br>
+
+This means that the preload script can provide the webpage with indirect access to select Node&#xA0;APIs:
+
+
+
+<p>meteor-electron&#x2019;s use of a preload script thus makes it possible for Meteor apps to safely
+make use of native&#xA0;functionality.</p>
+
+<h2 id="distribution:-to-be-continued---">Distribution: to be&#xA0;continued&#x2026;</h2>
+
+<p>You&#x2019;ve seen thus far how meteor-electron offers Meteor developers a simple and safe path to creating
+desktop applications. In part 2 of this blog post, we&#x2019;ll talk about how meteor-electron adds support
+for distribution, even automatic updates, without developers having to add any server-side code&#xA0;themselves.</p>
+
+<p><em>Tips for converting webapps to desktop apps? Tweet us
+<a href="https://twitter.com/intent/tweet?screen_name=MixmaxHQ">@MixmaxHQ</a> or drop us a line at
+<a href="mailto:hello@mixmax.com">hello@mixmax.com</a>. You can also come to
+<a href="http://www.meetup.com/Meteor-SFBay/events/227198908/">Meteor Night 1/21</a> to see
+Mike and Jeff demo meteor-electron&#xA0;live.</em></p>
+
+<p><em>Interested in solving hard problems like this? Come <a href="https://mixmax.com/careers">join us</a> at&#xA0;Mixmax.</em></p>
+
+ 
+ </div></div>
+</body></html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html><html><head><title>Creating an Audio Calling App with Ionic and PhoneRTC</title></head><body>
+<h1>Creating an Audio Calling App with Ionic and PhoneRTC</h1><p><a href="http://www.sitepoint.com/creating-an-audio-calling-app-with-ionic-and-phonertc/" target="_new">Original URL</a></p>
+<p><blockquote>In this tutorial I&#x2019;m going to create an audio calling app with Ionic. We will be implementing it using PhoneRTC, a Cordova plugin which allows you to use WebRTC on Android and iOS devices. In&hellip;</blockquote></p>
+<div><div class="ArticleCopy">
+ <p>In this tutorial I&#x2019;m going to create an audio calling app with <a target="_blank" href="http://ionicframework.com/">Ionic</a>. We will be implementing it using <a target="_blank" href="http://phonertc.io/">PhoneRTC</a>, a Cordova plugin which allows you to use WebRTC on Android and iOS devices. In this tutorial I&#x2019;m only going to show deploying on the Android platform because I personally use Linux. Only the deploying the app will be different. </p>
+<h2 id="setup">Set Up</h2>
+<p>I&#x2019;m going to assume that you have already used Cordova to develop hybrid mobile apps. If not, I suggest you read the <a target="_blank" href="http://cordova.apache.org/docs/en/5.0.0/guide_platforms_index.md.html#Platform%20Guides">Cordova Platform Guide</a>. It has all the information you need to get yourself setup on how to work with Cordova.</p>
+<p>Once you&#x2019;re done setting up the SDK&#x2019;s for your platform. You can now install Ionic and Cordova. Do this by executing the following command in terminal:</p>
+<pre class="brush: bash; title: ; notranslate" title="">npm install -g cordova ionic
+</pre>
+<p>The command above installs Cordova and Ionic globally so that these tools can be used from any terminal window.</p>
+<p>We will be using <a target="_blank" href="http://bower.io/">bower</a> for installing front-end dependencies so if you don&#x2019;t have it installed, run the following command:</p>
+<pre class="brush: bash; title: ; notranslate" title="">npm install -g bower
+</pre>
+<p>Once that&#x2019;s complete, create a new Ionic project.</p>
+<pre class="brush: bash; title: ; notranslate" title="">ionic start koler blank
+</pre>
+<p>Breaking the command above down, <code>ionic</code> is the command line tool, <code>start</code> is the command for starting new projects, <code>koler</code> is the name of the app and <code>blank</code> is one of the starter project templates provided by Ionic. The <code>blank</code> template keeps things simple.</p>
+<p>The following are the front-end dependencies for this project:</p>
+
+<p>Here&#x2019;s the command for installing the above.</p>
+<pre class="brush: bash; title: ; notranslate" title="">cd koler
+bower install random socket.io angular-socket-io
+</pre>
+<h2 id="buildingtheapp">Building the App</h2>
+<p>You can find the code for the complete app we will be building on <a target="_blank" href="https://github.com/sitepoint-editors/koler">Github</a>.</p>
+<p>Open the <em>index.html</em> file in the <em>www</em> directory of the project and add the following right before the <code>script</code> tag for linking the <em>cordova.js</em> file. This allows us to use the libraries just installed.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;script src="lib/sio-client/socket.io.js"&gt;&lt;/script&gt;
+&lt;script src="lib/angular-socket-io/socket.js"&gt;&lt;/script&gt;
+
+&lt;script src="lib/random/lib/random.min.js"&gt;&lt;/script&gt;
+</pre>
+<p>While still inside the <em>www</em> directory create a <em>templates</em> folder. This is where we will store HTML templates to be used for views. The first of those views is <em>call.html</em>. Add the following code to that file.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;ion-header-bar class="bar-stable"&gt;
+ &lt;h1 class="title"&gt;Koler&lt;/h1&gt;
+&lt;/ion-header-bar&gt;
+&lt;ion-content class="padding" ng-controller="CallController"&gt;
+
+ &lt;div class="card"&gt;
+ &lt;div class="item item-text-wrap"&gt;
+ Your User ID: &lt;strong&gt;{{ id }}&lt;/strong&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+
+ &lt;div class="list"&gt;
+ &lt;label class="item item-input"&gt;
+ &lt;span class="input-label"&gt;Peer ID&lt;/span&gt;
+ &lt;input type="text" ng-model="peer_id"&gt;
+ &lt;/label&gt;
+ &lt;/div&gt;
+
+ &lt;button class="button button-positive button-block" ng-click="startCall()"&gt;
+ Call
+ &lt;/button&gt;
+&lt;/ion-content&gt;
+</pre>
+<p>Breaking this down. The header region is created by using the <code>ion-header-bar</code> directive. This angular directive is built in to Ionic and specifically used for adding a fixed header bar above the main content.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;ion-header-bar class="bar-stable"&gt;
+ &lt;h1 class="title"&gt;Koler&lt;/h1&gt;
+&lt;/ion-header-bar&gt;
+</pre>
+<p>Next is the wrapper for the main content. The <code>ng-controller</code> attribute is used to specify which controller this view uses.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;ion-content class="padding" ng-controller="CallController"&gt;
+&lt;/ion-content&gt;
+</pre>
+<p>Inside the main content is a card for showing the random ID of the current user.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;div class="card"&gt;
+ &lt;div class="item item-text-wrap"&gt;
+ Your User ID: &lt;strong&gt;{{ id }}&lt;/strong&gt;
+ &lt;/div&gt;
+&lt;/div&gt;
+</pre>
+<p>Below is the form for calling a user with a specific ID. Take note of the value of the <code>ng-model</code> attribute of the text field. You can get the current value of this field from the controller by using its name. In this case it&#x2019;s <code>peer_id</code>. Below the text field, is the button for initiating the call. The <code>startCall</code> function is called when the button is clicked.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;div class="list"&gt;
+ &lt;label class="item item-input"&gt;
+ &lt;span class="input-label"&gt;Peer ID&lt;/span&gt;
+ &lt;input type="text" ng-model="peer_id"&gt;
+ &lt;/label&gt;
+&lt;/div&gt;
+
+&lt;button class="button button-positive button-block" ng-click="startCall()"&gt;
+ Call
+&lt;/button&gt;
+</pre>
+<p>Now we can start coding the <code>CallController</code>. Inside the <em>js</em> directory, create a <em>controllers</em> folder, this is where controllers will be stored. Create a <em>CallController.js</em> file inside and add the following code:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">(function(){
+ angular.module('starter')
+ .controller('CallController', ['$scope', '$state', '$timeout', '$ionicModal', 'SocketService', CallController]);
+
+ function CallController($scope, $state, $timeout, $ionicModal, SocketService){
+ ...
+ }
+
+})();
+</pre>
+<p>The code above creates a new controller for the starter module. We then inject the following into it:</p>
+<ul>
+<li><code>$scope</code> &#x2013; Access to the current scope.
+</li>
+<li><code>$state</code> &#x2013; Access to the current state.
+</li>
+<li><code>$timeout</code> &#x2013; Used for executing a function after a specified number of milliseconds.
+</li>
+<li><code>$ionicModal</code> &#x2013; Enables the use of the Ionic modal component inside the controller.
+</li>
+<li><code>SocketService</code> &#x2013; The service for using Socket.io.</li>
+</ul>
+<p>Inside the controller, generate a random integer between 10,000 and 99,999 and assign it as an ID for the current user. Store it in the <code>$scope</code> variable so it can be accessed from within the view.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">var r = new Random();
+
+var id = r.integer(10000, 99999);
+$scope.id = id;
+</pre>
+<p>Create an object for storing the current contact. This is the user whom the current user is trying to call.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.contact = {};
+</pre>
+<p>Create variables for storing the current call status. By default, a call shouldn&#x2019;t be in progress, ignored or ended so those are all set to <code>false</code>.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.callInProgress = false;
+$scope.callIgnored = false;
+$scope.callEnded = false;
+</pre>
+<p>Send a login message to the server along with the random ID generated earlier. This allows the server to assign a socket to the user ID so it can be used to later.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">SocketService.emit('login', {'id': id});
+</pre>
+<p>Create a modal for calls. This will be shown to the user when a call is started, in progress, ended or ignored.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$ionicModal.fromTemplateUrl('templates/call-modal.html', {
+ scope: $scope,
+ animation: 'slide-in-up'
+}).then(function(modal){
+ $scope.call_modal = modal;
+});
+</pre>
+<p>Create the function for calling. This function will be called when a user initiates or answers a call. It accepts 2 arguments, the <code>isInitiator</code> which is a boolean value that allows phoneRTC to determine the user who initiated the call. And the <code>peer_id</code> which is used for specifying the ID of the user that the current user is connecting to. I&#x2019;ll be referring to the current user or the user who is calling as the <em>initiator</em>, and the user who is the peer or accepting the calls as the <em>joiner</em> for the rest of the tutorial.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">function call(isInitiator, peer_id){
+
+ var config = {
+ isInitiator: isInitiator,
+ stun: {
+ host: 'stun:stun.l.google.com:19302'
+ },
+ turn: {
+ host: 'turn:numb.viagenie.ca',
+ username: 'webrtc@live.com',
+ password: 'muazkh'
+ },
+ streams: {
+ audio: true,
+ video: false
+ }
+ };
+
+ var session = new cordova.plugins.phonertc.Session(config);
+
+ session.on('sendMessage', function(data){
+
+ SocketService.emit('sendMessage', {
+ 'id': id,
+ 'peer_id': $scope.peer_id,
+ 'type': 'phonertc_handshake',
+ 'data': JSON.stringify(data)
+ });
+});
+
+ session.on('disconnect', function(){
+ SocketService.emit('sendMessage', { 'id': id, 'peer_id': $scope.peer_id, 'type': 'ignore' });
+ $scope.call_modal.hide();
+ });
+
+ session.call();
+ $scope.contact = session; 
+}
+</pre>
+<p>Breaking down the above code. First is the phoneRTC <em>STUN</em> and <em>TURN</em> server configuration. This allows peer to peer connection to be established if any devices are behind a firewall or NAT. You can use the same STUN and TURN server configuration that I&#x2019;ve used or pick from <a target="_blank" href="https://gist.github.com/zziuni/3741933">this list of STUN servers</a>. You can setup your own server, but I won&#x2019;t be covering that in this tutorial.</p>
+<p>Lastly, is <code>streams</code>, this allows you to set whether you capture only the device audio, the camera, or both. This configuration is then passed as an argument to the phoneRTC session. This session will represent the connection between the 2 peers.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">var config = {
+ isInitiator: isInitiator,
+ stun: {
+ host: 'stun:stun.l.google.com:19302'
+ },
+ turn: {
+ host: 'turn:numb.viagenie.ca',
+ username: 'webrtc@live.com',
+ password: 'muazkh'
+ },
+ streams: {
+ audio: true,
+ video: false
+ }
+};
+
+var session = new cordova.plugins.phonertc.Session(config);
+</pre>
+<p>Create the event handler for when a message is sent on the current session. This event is fired when a user sends a message via Socket.io. When this event is fired, you have to respond with the <code>phonertc_handshake</code> message and pass in the same data that was passed on that message. The data is converted into a JSON string by using <code>JSON.stringify</code>. Other data such as the peer ID and the ID of the current user are passed so that the signaling server knows where the message came from and where is it going to.</p>
+<p>Why do you need to pass the same data? That&#x2019;s how WebRTC works. Network information should be exchanged and verified between each peer so that the connection can be established. If you want to dive in deeper into this topic, I recommend reading the <a target="_blank" href="http://www.html5rocks.com/en/tutorials/webrtc/basics/">Getting Started with WebRTC article on the HTML5Rocks website</a>.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">session.on('sendMessage', function(data){
+
+ SocketService.emit('sendMessage', {
+ 'id': id,
+ 'peer_id': $scope.peer_id,
+ 'type': 'phonertc_handshake',
+ 'data': JSON.stringify(data)
+ });
+});
+</pre>
+<p>When the current session disconnects, send a message to the other peer that the call is ignored and then hide the call modal.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">session.on('disconnect', function(){
+ SocketService.emit('sendMessage', { 'id': id, 'peer_id': $scope.peer_id, 'type': 'ignore' });
+ $scope.call_modal.hide();
+});
+</pre>
+<p>Finally you make a call and set the current session to the contact variable in the current scope. This allows you to receive messages, disconnect or close the peer connection later.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">session.call();
+$scope.contact = session;
+</pre>
+<p>To initiate the call, start by setting the <code>isCalling</code> variable to <code>true</code>. This will control what is shown in the call modal. Next, inform the peer that you are trying to call them by sending a message containing the ID of the current user, the ID of the peer and the message type. Lastly, show the call modal. The function below is called when the &#x2018;call&#x2019; button is clicked in the <em>call.html</em> view.</p>
+<p>Add this code to your controller file:</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.startCall = function(){
+
+ $scope.isCalling = true;
+ $scope.callIgnored = false;
+ $scope.callEnded = false;
+
+ SocketService.emit('sendMessage', { 'id': id, 'peer_id': $scope.peer_id, type: 'call'});
+
+ $scope.call_modal.show(); 
+}
+</pre>
+<p>The call modal contains the following. Add this code to a new <em>templates/call-modal.html</em> file:</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;ion-modal-view&gt;
+ &lt;div class="bar bar-header item-input-inset bar-calm"&gt;
+ &lt;button class="button button-icon icon ion-ios-arrow-left" ng-click="closeModal()"&gt;&lt;/button&gt;
+ Call {{ peer_id }}
+ &lt;/div&gt;
+
+ &lt;ion-content class="padding has-header"&gt;
+
+ &lt;div class="calling-container" ng-if="isCalling &amp;amp;&amp;amp; !callInProgress &amp;amp;&amp;amp; !callIgnored &amp;amp;&amp;amp; !callEnded"&gt;
+ &lt;p&gt;Calling to &lt;span class="balanced"&gt;{{ peer_id }}&lt;/span&gt;...&lt;/p&gt;
+
+ &lt;button class="button button-assertive" ng-click="ignore()"&gt;
+ Nevermind
+ &lt;/button&gt;
+ &lt;/div&gt;
+
+ &lt;div class="calling-container" ng-if="!isCalling &amp;amp;&amp;amp; !callInProgress &amp;amp;&amp;amp; !callIgnored &amp;amp;&amp;amp; !callEnded"&gt;
+ &lt;p&gt;&lt;span class="balanced"&gt;{{ peer_id }}&lt;/span&gt; is calling you&lt;/p&gt;
+
+ &lt;button class="button button-positive" ng-click="answer()"&gt;
+ Answer
+ &lt;/button&gt;
+
+ &lt;button class="button button-assertive" ng-click="ignore()"&gt;
+ Ignore
+ &lt;/button&gt;
+ &lt;/div&gt;
+
+ &lt;div class="calling-container" ng-if="callInProgress &amp;amp;&amp;amp; !callIgnored &amp;amp;&amp;amp; !callEnded"&gt;
+ &lt;p&gt;Call in progress...&lt;/p&gt;
+
+ &lt;button class="button button-assertive" ng-click="end()"&gt;
+ End
+ &lt;/button&gt;
+ &lt;/div&gt;
+
+ &lt;div ng-if="callIgnored &amp;amp;&amp;amp; !callEnded &amp;amp;&amp;amp; !callInProgress"&gt;
+ &lt;p&gt;Call Ignored&lt;/p&gt;
+ &lt;button class="button button-positive button-block" ng-click="closeModal()"&gt;Go back&lt;/button&gt;
+ &lt;/div&gt;
+
+ &lt;div ng-if="callEnded &amp;amp;&amp;amp; !callIgnored &amp;amp;&amp;amp; !callInProgress"&gt;
+ &lt;p&gt;Call Ended&lt;/p&gt;
+ &lt;button class="button button-positive button-block" ng-click="closeModal()"&gt;Go back&lt;/button&gt;
+ &lt;/div&gt;
+
+ &lt;/ion-content&gt;
+&lt;/ion-modal-view&gt;
+</pre>
+<p>Breaking the above code down. The header contains a button which allows the user to close the modal and a title which tells the current user the ID of the peer.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;div class="bar bar-header item-input-inset bar-calm"&gt;
+ &lt;button class="button button-icon icon ion-ios-arrow-left" ng-click="closeModal()"&gt;&lt;/button&gt;
+ Call {{ peer_id }}
+&lt;/div&gt;
+</pre>
+<p>This is the message that will show if the current user is the initiator. It also has a button for cancelling the call if the joiner doesn&#x2019;t answer.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;div class="calling-container" ng-if="isCalling &amp;amp;&amp;amp; !callInProgress &amp;amp;&amp;amp; !callIgnored &amp;amp;&amp;amp; !callEnded"&gt;
+ &lt;p&gt;Calling to &lt;span class="balanced"&gt;{{ peer_id }}&lt;/span&gt;...&lt;/p&gt;
+
+ &lt;button class="button button-assertive" ng-click="ignore()"&gt;
+ Nevermind
+ &lt;/button&gt;
+&lt;/div&gt;
+</pre>
+<p>When the joiner answers the call, the call is set to <em>in progress</em> and it will then show the following. This allows either of the users to end the call.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;div class="calling-container" ng-if="callInProgress &amp;amp;&amp;amp; !callIgnored &amp;amp;&amp;amp; !callEnded"&gt;
+ &lt;p&gt;Call in progress...&lt;/p&gt;
+
+ &lt;button class="button button-assertive" ng-click="end()"&gt;
+ End
+ &lt;/button&gt;
+&lt;/div&gt;
+</pre>
+<p>Once a call is ended by either of the 2 users, the call is mark as ended. The user can then choose to close the call modal.</p>
+<pre class="brush: xml; title: ; notranslate" title="">&lt;div ng-if="callIgnored &amp;amp;&amp;amp; !callEnded &amp;amp;&amp;amp; !callInProgress"&gt;
+ &lt;p&gt;Call Ignored&lt;/p&gt;
+ &lt;button class="button button-positive button-block" ng-click="closeModal()"&gt;Go back&lt;/button&gt;
+&lt;/div&gt;
+
+&lt;div ng-if="callEnded &amp;amp;&amp;amp; !callIgnored &amp;amp;&amp;amp; !callInProgress"&gt;
+ &lt;p&gt;Call Ended&lt;/p&gt;
+ &lt;button class="button button-positive button-block" ng-click="closeModal()"&gt;Go back&lt;/button&gt;
+&lt;/div&gt;
+</pre>
+<p>Returning to the <em>CallController.js</em> file, here&#x2019;s the code for closing the modal.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.closeModal = function(){
+ $scope.call_modal.hide();
+};
+</pre>
+<p>When a call is ignored by the initiator, the connection to the joiner is disconnected. If the joiner is the one who ignored the call then you have to send a message to the initiator to inform them that the call was ignored.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.ignore = function(){
+
+ if(JSON.stringify($scope.contact) === '{}'){
+ $scope.contact.disconnect();
+ }else{
+ SocketService.emit('sendMessage', { 'id': id, 'peer_id': $scope.peer_id, 'type': 'ignore' });
+ $scope.call_modal.hide();
+ }
+
+};
+</pre>
+<p>When the call is ended by either of the users, close the connection to the peer and send a message to the other user so that they will be informed the call has been ended. Update the scope variables so that the UI will also be updated.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.end = function(){
+ $scope.contact.close();
+ $scope.contact = {};
+
+ SocketService.emit('sendMessage', { 'id': id, 'peer_id': $scope.peer_id, 'type': 'end' });
+ $scope.callInProgress = false;
+ $scope.callEnded = true;
+ $scope.call_modal.hide();
+};
+</pre>
+<p>When the call is answered by the peer, set the call to <em>in progress</em> and make the connection to the initiator by calling the <code>call</code> method. Since the user answering the call is always the joiner, you have to pass <code>false</code> for the <code>isInitiator</code> parameter. Next, send a message to the initiator that the joiner has answered the call. You have to give padding time of at least 1.5 seconds before sending the message to give time for the connection to be established between the two peers. Because once the initiator receives the answer message, the UI is immediately updated. We don&#x2019;t want the initiator to start talking if the connection hasn&#x2019;t been established yet.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.answer = function(){
+
+ if($scope.callInProgress){
+ return;
+ }
+
+ $scope.callInProgress = true;
+
+ call(false, $scope.peer_id);
+
+ setTimeout(function(){
+ SocketService.emit('sendMessage', { 'id': id, 'peer_id': $scope.peer_id, 'type': 'answer' });
+ }, 1500);
+};
+</pre>
+<p>Next, create the function that will handle things on the front-end when a message is received by either of the users. A switch statement is used to determine what type of message was received. Each case will then handle the type of message accordingly.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">function onMessageReceive(message){
+
+ switch(message.type){
+
+ case 'answer':
+
+ $scope.$apply(function(){
+ $scope.callInProgress = true;
+ });
+
+ call(true, message.id);
+ break;
+
+ case 'ignore':
+ $scope.callInProgress = false;
+ $scope.callIgnored = true;
+ $scope.callEnded = false;
+ break;
+
+ case 'phonertc_handshake':
+ $scope.contact.receiveMessage(JSON.parse(message.data));
+ break;
+
+ case 'call':
+ $scope.isCalling = false;
+ $scope.callIgnored = false;
+ $scope.callEnded = false;
+
+ $scope.call_modal.show();
+
+ $scope.peer_id = message.id;
+
+ $scope.current_modal = 'call_modal';
+ break;
+
+ case 'end':
+ $scope.callInProgress = false;
+ $scope.callEnded = true;
+ $scope.callIgnored = false;
+ break;
+
+ }
+}
+</pre>
+<p>The <code>answer</code> message can only be received by the initiator. As seen earlier, this message is sent right after the <code>call</code> method is called, which tries to establish the connection between the joiner and the initiator. The first thing it does is set the call to <em>in progress</em> so the UI is updated. Then the connection is established to the joiner by calling the <code>call</code> method. The <code>message.id</code> contains the ID of joiner.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">case 'answer':
+
+ $scope.$apply(function(){
+ $scope.callInProgress = true;
+ });
+
+ call(true, message.id);
+break;
+</pre>
+<p>On <code>ignore</code>, set the <code>callIgnored</code> variable in the scope to <code>true</code> so the UI is updated.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">case 'ignore':
+
+ $scope.callInProgress = false;
+ $scope.callIgnored = true;
+ $scope.callEnded = false;
+
+break;
+</pre>
+<p>Next is <code>phonertc_handshake</code>. This message is sent every time the <code>call</code> method is called. Its sole purpose is for receiving the network information that is passed by the peer. This is important for establishing the connection between the peers.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">case 'phonertc_handshake':
+
+ $scope.contact.receiveMessage(JSON.parse(message.data));
+
+break;
+</pre>
+<p>When a <code>call</code> message is received, reset the scope variables for controlling the UI to <code>false</code>, show the call modal and then set the peer ID as a scope variable. The peer ID is the ID of the joiner. So this specific message can only be received by the joiner.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">case 'call':
+ $scope.isCalling = false;
+ $scope.callIgnored = false;
+ $scope.callEnded = false;
+
+ $scope.call_modal.show();
+ $scope.current_modal = 'call_modal';
+
+ $scope.peer_id = message.id;
+break;
+</pre>
+<p>Once a call <code>end</code> message is received, update the UI by setting <code>callEnded</code> to <code>true</code>.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">case 'end':
+ $scope.callInProgress = false;
+ $scope.callEnded = true;
+ $scope.callIgnored = false;
+break;
+</pre>
+<p>The <code>onMessageReceive</code> method is fired every time a message is received, add this code below the last function.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">SocketService.on('messageReceived', onMessageReceive);
+</pre>
+<p>Finally, once the current scope is destroyed, the listener is removed. This happens when the user navigates to a new page or closes the app.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">$scope.$on('$destroy', function(){
+ SocketService.removeListener('messageReceived', onMessageReceive);
+});
+</pre>
+<p>Create a <em>services</em> folder in the <em>js</em> directory, create a <em>SocketService.js</em> file and add the following code.</p>
+<pre class="brush: jscript; title: ; notranslate" title="">(function(){
+
+ angular.module('starter')
+ .service('SocketService', ['socketFactory', SocketService]);
+
+ function SocketService(socketFactory){
+ return socketFactory({
+ ioSocket: io.connect('http://yourserver.com:4000')
+ });
+ }
+})();
+</pre>
+<p>The code above is used for connecting to the Socket.io server. This initializes Socket.io so it can be used as a service inside Angular. This uses the <em>angular-socket-io</em> library which was installed earlier.</p>
+<p>In the next part of this tutorial we will look at creating the server that manages calls between users. If you have any questions at this point, then please let me know.</p>
+ </div>
+
+ 
+ </div>
+</body></html>

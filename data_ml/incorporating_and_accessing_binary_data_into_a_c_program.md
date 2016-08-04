@@ -1,0 +1,73 @@
+# Incorporating and accessing binary data into a C program
+
+[Original URL](http://smackerelofopinion.blogspot.com/2015/12/incorporating-and-accesses-binary-data.html)
+
+> The other day I needed to incorporate a large blob of binary data in a C program. One simple way is to use xxd, for example, on the binary data in file "blob", one can do: xxd –include blob unsigned...
+
+The other day I needed to incorporate a large blob of binary data in a C program. One simple way is to use xxd, for example, on the binary data in file "blob", one can do:
+
+```
+xxd --include blob 
+
+ unsigned char blob[] = { 
+ 0xc8, 0xe5, 0x54, 0xee, 0x8f, 0xd7, 0x9f, 0x18, 0x9a, 0x63, 0x87, 0xbb, 
+ 0x12, 0xe4, 0x04, 0x0f, 0xa7, 0xb6, 0x16, 0xd0, 0x70, 0x06, 0xbc, 0x57, 
+ 0x4b, 0xaf, 0xae, 0xa2, 0xf2, 0x6b, 0xf4, 0xc6, 0xb1, 0xaa, 0x93, 0xf2, 
+ 0x12, 0x39, 0x19, 0xee, 0x7c, 0x59, 0x03, 0x81, 0xae, 0xd3, 0x28, 0x89, 
+ 0x05, 0x7c, 0x4e, 0x8b, 0xe5, 0x98, 0x35, 0xe8, 0xab, 0x2c, 0x7b, 0xd7, 
+ 0xf9, 0x2e, 0xba, 0x01, 0xd4, 0xd9, 0x2e, 0x86, 0xb8, 0xef, 0x41, 0xf8, 
+ 0x8e, 0x10, 0x36, 0x46, 0x82, 0xc4, 0x38, 0x17, 0x2e, 0x1c, 0xc9, 0x1f, 
+ 0x3d, 0x1c, 0x51, 0x0b, 0xc9, 0x5f, 0xa7, 0xa4, 0xdc, 0x95, 0x35, 0xaa, 
+ 0xdb, 0x51, 0xf6, 0x75, 0x52, 0xc3, 0x4e, 0x92, 0x27, 0x01, 0x69, 0x4c, 
+ 0xc1, 0xf0, 0x70, 0x32, 0xf2, 0xb1, 0x87, 0x69, 0xb4, 0xf3, 0x7f, 0x3b, 
+ 0x53, 0xfd, 0xc9, 0xd7, 0x8b, 0xc3, 0x08, 0x8f 
+ }; 
+ unsigned int blob_len = 128; 
+```
+
+..and redirecting the output from xxd into a C source and compiling this simple and easy to do.
+
+However, for large binary blobs, the C source can be huge, so an alternative way is to use the linker ld as follows:
+
+```
+ld -s -r -b binary -o blob.o blob 
+```
+
+...and this generates the blob.o object code. To reference the data in a program one needs to determine the symbol names of the start, end and perhaps the length too. One can use objdump to find this as follows:
+
+```
+ objdump -t blob.o 
+ blob.o: file format elf64-x86-64 
+ SYMBOL TABLE: 
+ 0000000000000000 l d .data 0000000000000000 .data 
+ 0000000000000080 g .data 0000000000000000 _binary_blob_end 
+ 0000000000000000 g .data 0000000000000000 _binary_blob_start 
+ 0000000000000080 g *ABS* 0000000000000000 _binary_blob_size 
+```
+
+To access the data in C, use something like the following:
+
+```
+ cat test.c 
+
+ #include <stdio.h> 
+ int main(void) 
+ { 
+ extern void *_binary_blob_start, *_binary_blob_end; 
+ void *start = &_binary_blob_start, 
+ *end = &_binary_blob_end; 
+ printf("Data: %p..%p (%zu bytes)\n", 
+ start, end, end - start); 
+ return 0; 
+ } 
+```
+
+...and link and run as follows:
+
+```
+ gcc test.c blob.o -o test 
+ ./test 
+ Data: 0x601038..0x6010b8 (128 bytes) 
+```
+
+So for large blobs, I personally favour using ld to do the hard work for me since I don't need another tool (such as xxd) and it removes the need to convert a blob into C and then compile this.

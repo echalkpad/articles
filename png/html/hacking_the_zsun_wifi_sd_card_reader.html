@@ -1,0 +1,410 @@
+<!DOCTYPE html><html><head><title>Hacking the Zsun WiFi SD Card Reader</title></head><body>
+<h1>Hacking the Zsun WiFi SD Card Reader</h1><p><a href="https://wiki.hackerspace.pl/projects:zsun-wifi-card-reader" target="_new">Original URL</a></p>
+<p><blockquote>The goal of this project is to learn as much as possible about the Zsun WiFi card reader and run OpenWrt on it to turn it into an awesome wifi device. People Involved Current status All the important&hellip;</blockquote></p>
+<div><div class="page group">
+ 
+ 
+
+
+
+
+<div class="level1">
+
+<p>
+<img src="https://wiki.hackerspace.pl/_media/projects:banner.jpg?w=700&amp;tok=ce421d" class="media" alt="" width="700">
+</p>
+
+<p>
+The goal of this project is to learn as much as possible about the Zsun WiFi card reader and run OpenWrt on it to turn it into an awesome wifi device.
+</p>
+
+</div>
+
+<h4 id="people_involved">People Involved</h4>
+<div class="level4">
+<ul>
+<li class="level1">
+</li>
+<li class="level1">
+</li>
+<li class="level1">
+</li>
+</ul>
+
+</div>
+
+<h3 class="sectionedit2" id="current_status">Current status</h3>
+<div class="level3">
+
+<p>
+All the important aspects of hardware are understood. <br>
+
+OpenWrt Chaos Calmer ported (but not yet thoroughly tested), can be flashed over telnet if you dare.
+</p>
+
+</div>
+
+<h3 class="sectionedit3" id="what_can_i_do_with_it">What can I do with it?</h3>
+<div class="level3">
+<ul>
+<li class="level1"><p class="li"> Use it for its intended purpose of serving files, duh</p>
+</li>
+<li class="level1"><p class="li"> Use as a tiny and pretty good WiFi AP/client/repeater (the hardware supports multiple simultaneous wireless interfaces!)</p>
+</li>
+<li class="level1"><p class="li"> Play around with OpenWrt</p>
+</li>
+<li class="level1"><p class="li"> Use it as the brains of your IoT project</p>
+</li>
+<li class="level1"><p class="li"> Buy a dozen and play around with mesh networking</p>
+</li>
+<li class="level1"><div class="li"> Use it for distributed WiFi activism like PirateBox or OccupyWiFi, or run a <a href="https://gist.github.com/Informatic/65261ffd1aee8ddae861" class="urlextern" title="https://gist.github.com/Informatic/65261ffd1aee8ddae861" rel="nofollow">minimal Tor hidden service</a> (with addition of being easily hidden in public places)</div>
+</li>
+<li class="level1"><p class="li"> Host Node.js on it and take your apps to your favorite coffee shop :^)</p>
+</li>
+</ul>
+
+<p>
+<br>
+
+<a href="https://wiki.hackerspace.pl/_media/projects:zsun_powerbank.jpg" class="media" title="projects:zsun_powerbank.jpg"><img src="https://wiki.hackerspace.pl/_media/projects:zsun_powerbank.jpg?w=400&amp;tok=381b21" class="media" title="Size comparison with a single cell powerbank" alt="Size comparison with a single cell powerbank" width="400"></a>
+</p>
+
+<p>
+Size comparison with a single 18650 cell powerbank.
+</p>
+
+</div>
+
+<h3 class="sectionedit4" id="hardware">Hardware</h3>
+<div class="level3">
+<ul>
+<li class="level1"><p class="li"> AR9331 SoC</p>
+</li>
+<li class="level1"><p class="li"> 64MB RAM</p>
+</li>
+<li class="level1"><p class="li"> 16MB SPI Flash</p>
+</li>
+<li class="level1"><p class="li"> GL827L USB SD Card Reader</p>
+</li>
+</ul>
+
+<p>
+<br>
+
+The device consists of two PCBs sandwiched together and connected via 8 pins.<br>
+
+The bottom PCB contains only the SD card reader chip and SD slot, it can be safely removed without affecting operation.
+</p>
+
+</div>
+
+<h4 id="serial_port">Serial Port</h4>
+<div class="level4">
+
+<p>
+The serial console is brought out on testpoints (see pictures).
+Bitrate is 115200.
+</p>
+
+<p>
+Original firmware root password is &#x201C;zsun1188&#x201D;
+</p>
+
+</div>
+
+<h4 id="ethernet_port">Ethernet Port</h4>
+<div class="level4">
+
+<p>
+There are testpoints for connecting an ethernet port (eth1 of the SoC).<br>
+
+Use a Magjack or similar connector with magnetics.<br>
+
+This port is required for uploading images to u-boot.<br>
+
+</p>
+
+</div>
+
+<h4 id="usb_switch">USB switch</h4>
+<div class="level4">
+
+<p>
+The device contains a WAS7227Q USB switch, which connects the sd card reader chip to either the USB plug, or the AR9331 SoC.<br>
+
+The switch is controlled with GPIO21. Set pin to LOW to connect card reader to SoC.
+</p>
+
+</div>
+
+<h4 id="gpio">GPIO</h4>
+<div class="level4">
+<ul>
+<li class="level1"><p class="li"> GPIO0 - LED</p>
+</li>
+<li class="level1"><p class="li"> GPIO18 - card reader reset</p>
+</li>
+<li class="level1"><p class="li"> GPIO21 - USB switch</p>
+</li>
+<li class="level1"><p class="li"> GPIO22 - card detect</p>
+</li>
+</ul>
+
+</div>
+
+<h3 class="sectionedit5" id="hardware_hacking">Hardware hacking</h3>
+<div class="level3">
+
+<p>
+If you remove the card reader board you get easy access to one USB port and 3 GPIO pins.
+<strong>Remember that GPIO is 2.5V!</strong>
+</p>
+
+</div>
+
+<h4 id="gpio_pins_and_bootstrap">GPIO pins and bootstrap</h4>
+<div class="level4">
+
+<p>
+Here's a closeup of the bootstrap GPIO pins, perhaps useful if you want to try enabling USB device mode.
+</p>
+
+<p>
+<a href="https://wiki.hackerspace.pl/_media/projects:zsun_gpio_bootstrap_annot.jpg" class="media" title="projects:zsun_gpio_bootstrap_annot.jpg"><img src="https://wiki.hackerspace.pl/_media/projects:zsun_gpio_bootstrap_annot.jpg" class="media" alt=""></a>
+</p>
+
+<p>
+Bootstrap functions:
+</p>
+<ul>
+<li class="level1"><p class="li"> GPIO 0 : Crystal frequency of external clock 0=25, 1=40 <abbr title="Megahertz">MHz</abbr></p>
+</li>
+<li class="level1"><p class="li"> GPIO 1 : Booting from internal 0=ROM, 1=SPI Flash</p>
+</li>
+<li class="level1"><p class="li"> GPIO 11: 0=General JTAG, 1=CPU ICE</p>
+</li>
+<li class="level1"><p class="li"> GPIO 12/28 : external memory type (00=SDR, 01=DDR, 10=DDR2)</p>
+</li>
+<li class="level1"><p class="li"> GPIO 13: USB mode 0=device, 1=host</p>
+</li>
+<li class="level1"><p class="li"> GPIO 16: Download firmware from 0=USB, 1=MDIO</p>
+</li>
+</ul>
+
+</div>
+
+<h4 id="usb_device_mode">USB device mode</h4>
+<div class="level4">
+
+<p>
+AR9331 is capable of working as a usb device (gadget).
+Unfortunately the code for that exists only as a patch for an old version of OpenWrt:
+<a href="http://neykov.name/posts/ar933x-usb-device-driver/" class="urlextern" title="http://neykov.name/posts/ar933x-usb-device-driver/" rel="nofollow">http://neykov.name/posts/ar933x-usb-device-driver/</a>
+</p>
+
+<p>
+So if you want to use the zsun as a USB gadget you will need to:
+</p>
+<ol>
+<li class="level1"><p class="li"> Port the code </p>
+</li>
+<li class="level1"><p class="li"> Remove the bootstrap resistor setting USB to host mode</p>
+</li>
+<li class="level1"><p class="li"> Remove the card reader PCB and rewire the the USB signal pins</p>
+</li>
+</ol>
+
+</div>
+
+<h3 class="sectionedit6" id="original_firmware">Original firmware</h3>
+<div class="level3">
+
+<p>
+The original firmware is full of holes, including an always on telnet backdoor on port 11880. 
+Source: <a href="http://www.zoobab.com/zsun-sd11x-wifi-card-reader" class="urlextern" title="http://www.zoobab.com/zsun-sd11x-wifi-card-reader" rel="nofollow">http://www.zoobab.com/zsun-sd11x-wifi-card-reader</a>
+</p>
+
+<p>
+Regular telnet won't work but you can connect using socat:
+</p>
+<pre class="code">$ socat - TCP4:10.168.168.1:11880
+&#xFFFD;&#xFFFD;&#xFFFD;&#xFFFD;&#xFFFD;&#xFFFD;!&#xFFFD;&#xFFFD;&#xFFFD;&#xFFFD;
+(none) login: root
+root
+Password: zsun1188
+
+Welcome to
+ ------- | / /--/ ___ |
+ / | /| \/ _____ --|--|
+ /_____\ |--- --|-- //--/ / / |
+ __|__ | /|\ / \/ /___\ / |
+ ___|___ ___|____ / | \ / / \|
+ &#x6DF1;&#x5733;&#x81F3;&#x4E0A;&#x79FB;&#x52A8;&#x79D1;&#x6280;&#x6709;&#x9650;&#x516C;&#x53F8;
+ Shenzhen Zsun Cloud Technology Co., LTD.
+ www.zsuncloud.com
+
+BusyBox v1.01 (2014.12.27-02:50+0000) Built-in shell (ash)
+Enter 'help' for a list of built-in commands.
+
+~ #</pre>
+
+<p>
+If you want to use proper telnet just run it on different port with:
+</p>
+<pre class="code">telnetd -p 2137</pre>
+
+</div>
+
+<h3 class="sectionedit7" id="openwrt">OpenWrt</h3>
+<div class="level3">
+
+<p>
+<strong>WARNING</strong> Still under development <br>
+
+My OpenWrt port, based on the 15.05 &#x201C;Chaos Calmer&#x201D; release: <br>
+
+<a href="https://code.hackerspace.pl/emeryth/openwrt_zsun/" class="urlextern" title="https://code.hackerspace.pl/emeryth/openwrt_zsun/" rel="nofollow">https://code.hackerspace.pl/emeryth/openwrt_zsun/</a>
+</p>
+
+<p>
+Compiled images and image builder: <br>
+
+<a href="https://owncloud.hackerspace.pl/index.php/s/7s5c5RDS7Njgwpv" class="urlextern" title="https://owncloud.hackerspace.pl/index.php/s/7s5c5RDS7Njgwpv" rel="nofollow">https://owncloud.hackerspace.pl/index.php/s/7s5c5RDS7Njgwpv</a>
+</p>
+
+<p>
+<strong>You cannot use kernel modules from the official repository, use the image builder or compile them yourself if they're not included.</strong>
+</p>
+
+<p>
+This port sticks to the original flash layout. <br>
+
+I've added a few things to this port to make it more usable on the zsun without having to solder.
+</p>
+<ul>
+<li class="level1"><p class="li"> Wifi is enabled by default, AP mode, no encryption</p>
+</li>
+<li class="level1"><p class="li"> Entering failsafe will run a script that automatically does a factory rest</p>
+</li>
+<li class="level1"><p class="li"> The SD card detect pin is registered as a button and will trigger failsafe when inserted/removed during boot</p>
+</li>
+<li class="level1"><p class="li"> The SD card reader is reset every time a card is inserted or removed</p>
+</li>
+</ul>
+
+</div>
+
+<h3 class="sectionedit8" id="flashing">Flashing</h3>
+<div class="level3">
+
+<p>
+Here are some ways you can flash the device:
+</p>
+<ol>
+<li class="level1"><p class="li"> Solder on an ethernet jack and flash from the original uboot (hard but safe)</p>
+</li>
+<li class="level1"><p class="li"> Reflash the bootloader from the original firmware to one that supports upload over serial (less soldering but fatal if you mess up)</p>
+</li>
+<li class="level1"><p class="li"> Reflash the firmware from the original firmware using mtd_write (easy but you have to do it right on the first try)</p>
+</li>
+<li class="level1"><p class="li"> Attach a programmer to the flash chip (impossible to mess up)</p>
+</li>
+</ol>
+
+</div>
+
+<h4 id="flashing_with_original_uboot">Flashing with original uboot</h4>
+<div class="level4">
+
+<p>
+Attach an ethernet jack and serial cable, setup a TFTP server on your PC with a static IP 10.168.168.10
+</p>
+
+<p>
+Then at the uboot prompt enter the following commands:
+</p>
+<pre class="code">tftpboot 80060000 openwrt.bin
+erase 9f020000 +${filesize}
+cp.b 80060000 9f020000 ${filesize}</pre>
+
+<p>
+Where openwrt.bin is your rootfs+kernel image (in that order!).
+</p>
+
+</div>
+
+<h4 id="flashing_from_original_firmware_mtd_write">Flashing from original firmware (mtd_write)</h4>
+<div class="level4">
+
+<p>
+<strong>WARNING</strong> <strong>This method is risky, you have only one chance to get it right.</strong> However if you fail to do so, you still can use above method (unless you completely screw it up by overwriting u-boot, but that's pretty unlikely)
+</p>
+
+<p>
+The method could use some improvement, like a script that does pivotroot&#x2026;
+</p>
+
+<p>
+There are multiple ways to get files onto zsun rootfs, one of which is TFTP (pretty easy to setup, no need for SD card)
+To start TFTP server on your Linux computer you can use dnsmasq, like this:
+</p>
+<pre class="code">sudo dnsmasq -p0 --enable-tftp --tftp-root=`pwd` -d --user=`whoami`
+# serves files off your current directory, remember to chmod o+r files you'd like to use</pre>
+
+<p>
+Then download your files onto zsun's /tmp (ramfs is mounted there), copy mtd_write to ramfs too, just to be safe, and write them with mtd_write.
+Keep in mind <strong>you have to flash kernel first</strong>, since rootfs is used by running system.
+</p>
+
+<p>
+<strong>To be extra safe, you can kill all processes that are not telentd and your shell.</strong>
+It has been shown that flashing can succeed without this, but you never know.
+</p>
+<pre class="code">$ socat - TCP4:10.168.168.1:11880
+(none) login: root
+Password: zsun1188
+
+[...]
+
+# cd /tmp
+# tftp -g 10.168.168.100 -r openwrt-ar71xx-generic-zsun-sdreader-kernel.bin
+# tftp -g 10.168.168.100 -r openwrt-ar71xx-generic-zsun-sdreader-rootfs-squashfs.bin
+# cat /proc/mtd
+dev: size erasesize name
+mtd0: 00010000 00010000 "u-boot"
+mtd1: 00010000 00010000 "u-boot-env"
+mtd2: 00e90000 00010000 "rootfs"
+mtd3: 00130000 00010000 "uImage"
+mtd4: 00010000 00010000 "NVRAM"
+mtd5: 00010000 00010000 "ART"
+# mtd_write write openwrt-ar71xx-generic-zsun-sdreader-kernel.bin /dev/mtd3
+Unlocking /dev/mtd3 ...
+Writing from openwrt-ar71xx-generic-zsun-sdreader-kernel.bin to /dev/mtd3 ... [w]
+# mtd_write write openwrt-ar71xx-generic-zsun-sdreader-rootfs-squashfs.bin /dev/mtd2
+Unlocking /dev/mtd2 ...
+Writing from openwrt-ar71xx-generic-zsun-sdreader-rootfs-squashfs.bin to /dev/mtd2 ... [w]
+Bus error</pre>
+
+<p>
+&#x201C;<em>Bus error</em>&#x201D; indicates system finished flashing, you can now just power cycle the device and wait for open &#x201C;<em>OpenWRT</em>&#x201D; network. First boot takes quite some time.
+</p>
+
+</div>
+
+<h3 class="sectionedit9" id="pictures">Pictures</h3>
+<div class="level3">
+
+<p>
+<a href="https://wiki.hackerspace.pl/_media/projects:zsun_top_annot.jpg" class="media" title="projects:zsun_top_annot.jpg"><img src="https://wiki.hackerspace.pl/_media/projects:zsun_top_annot.jpg?w=400&amp;tok=632aa7" class="media" alt="" width="400"></a>
+<a href="https://wiki.hackerspace.pl/_media/projects:zsun_top.jpg" class="media" title="projects:zsun_top.jpg"><img src="https://wiki.hackerspace.pl/_media/projects:zsun_top.jpg?w=400&amp;tok=46f491" class="media" alt="" width="400"></a>
+<a href="https://wiki.hackerspace.pl/_media/projects:zsun_inside.jpg" class="media" title="projects:zsun_inside.jpg"><img src="https://wiki.hackerspace.pl/_media/projects:zsun_inside.jpg?w=400&amp;tok=1e55c9" class="media" alt="" width="400"></a>
+<a href="https://wiki.hackerspace.pl/_media/projects:zsun_bottom.jpg" class="media" title="projects:zsun_bottom.jpg"><img src="https://wiki.hackerspace.pl/_media/projects:zsun_bottom.jpg?w=400&amp;tok=01b3b4" class="media" alt="" width="400"></a>
+</p>
+
+</div>
+
+ 
+ </div>
+
+ </div>
+</body></html>

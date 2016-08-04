@@ -1,0 +1,264 @@
+<!DOCTYPE html><html><head><title>Centralized logs with rsyslog, systemd and golang</title></head><body>
+<h1>Centralized logs with rsyslog, systemd and golang</h1><p><a href="http://indevwith.streamroot.io/centralized-logs-with-rsyslog-systemd-and-golang/" target="_new">Original URL</a></p>
+<p><blockquote>Here is how to build easily a centralized logging pipeline - log drain - with minimal dependencies. Through structured logging syntax, we will show how to effortlessly support monitoring and&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p>Here is how to build easily a centralized logging pipeline - log drain - with minimal dependencies. Through <em>structured logging syntax</em>, we will show how to effortlessly support <strong>monitoring and alerting</strong>. </p>
+
+<p>At Streamroot we like simple, pragmatic yet scalable solutions. Here the only dependencies are <code>rsyslog</code> and <code>systemd</code> (a.k.a Ubuntu 15.x, etc...).</p>
+
+<p>For demonstration purposes our scenario will use:</p>
+
+<ul>
+<li>some applications deployed on machine that have <code>rsyslog</code> and <code>systemd</code> installed (ex: Ubuntu 15.x). We'll call that the <strong>sender side</strong>.</li>
+<li>one machine with <code>rsyslog</code> that will receive incoming logs from all applications. We'll call that the <strong>receiver side</strong>.</li>
+<li><em>optionally</em> an application on the receiver end that can monitor and alert according to your own rules</li>
+<li><em>Golang</em> to build handy application binaries without introducing new dependencies</li>
+</ul>
+
+<p>Some direct benefits:</p>
+
+<ul>
+<li>our business applications are unaware they participate in a centralized logging system. That is a good practice of <strong>externalized configuration</strong> and injection through environment</li>
+<li>by using a structured logging syntax, exposing/exporting application metrics imposes no overhead on the application runtime (as far as the application is concerned this is just regular logging)</li>
+<li>you have a central place to tail your logs and apply some alerting and monitoring rules</li>
+<li>adding new applications that send logs down our pipeline is painless and can be easily automated if needed</li>
+</ul>
+
+
+
+<h4 id="systemdconfiguration">Systemd configuration</h4>
+
+<p>Our business applications will be managed by <code>systemd</code>. You would typically replicate the following configuration to all your applications.</p>
+
+<p>Here is a simple systemd service file for a binary application. Create a new service file at <code>/etc/systemd/system/myapp.service</code> with the following content:</p>
+
+<pre><code class="language-vim">[Unit]
+Description=My application 
+After=network.target
+
+[Service]
+SyslogIdentifier=streamroot-myapp 
+ExecStart=/home/streamroot/goapps/myapp 
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target 
+</code></pre>
+
+<p>The <strong>key part</strong> here is the <code>SyslogIdentifier</code> which will be the rsyslog tag to differentiate our applications among other syslog usual system or kernel logging.</p>
+
+<p>If you need a quick and dirty business application to test your log drain create a new <code>myapp.go</code> file with: </p>
+
+<pre><code class="language-go">package main
+
+import ( 
+ "log"
+ "os"
+ "time"
+)
+
+func main() { 
+ hostname, _ := os.Hostname()
+ log.Println("Starting business application")
+ for {
+ time.Sleep(10 articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii time.Second)
+ log.Printf("hello from %s", hostname)
+ }
+}
+</code></pre>
+
+<p>Then compile and copy that to the sender machine with:</p>
+
+<pre><code class="language-bash">GOARCH=amd64 GOOS=linux go build myapp.go 
+scp myapp sendermachine:~/goapps 
+sudo systemctl start myapp 
+</code></pre>
+
+<h4 id="rsyslogconfiguration">Rsyslog configuration</h4>
+
+<p>Next at the end of the rsyslog configuration file <code>/etc/rsyslog.conf</code> add:</p>
+
+<pre><code class="language-vim"># TCP forwarding
+:syslogtag, startswith, "streamroot-"@@10.0.0.51
+</code></pre>
+
+<ul>
+<li>the ip address will be the ip of the receiver side (the port default conveniently to 514)</li>
+<li><code>:syslogtag</code> allow us to only forward to the receiving side the logs from our business applications using the <code>SyslogIdentifier</code> defined above</li>
+<li>if you want to use UDP forwarding use only one <code>@</code> sign instead of two</li>
+</ul>
+
+<p>Then restart your local syslog with:</p>
+
+<pre><code class="language-bash">sudo systemctl restart rsyslog 
+</code></pre>
+
+<h4 id="journaldconfiguration">Journald configuration</h4>
+
+<p>Still on the sender side, we need to allow <code>journald</code> (logging system of systemd) to forward to the local syslog. So make sure you uncomment the line <code>ForwardToSyslog=yes</code> from <code>/etc/systemd/journald.conf</code></p>
+
+<p>Additionally, using <code>journalctl</code>, you can tail locally your application in many ways. Either through it systemd service name. You will get all kinds off logs related to your application (systemd itself, ...): </p>
+
+<pre><code class="language-bash">journalctl -f -u myapp 
+</code></pre>
+
+<p>Or you can tail using the <code>SyslogIdentifier</code> (a.k.a syslog tag). In this case, the logs lines will only be the one written by your application:</p>
+
+<pre><code class="language-bash">journalctl -f -t streamroot-myapp 
+</code></pre>
+
+
+
+<p>The receiver side is the machine receiving all logs stream from our business applications. Its <code>/etc/rsyslog.conf</code> must have the following line uncommented to receive the traffic:</p>
+
+<pre><code class="language-vim"># provides TCP syslog reception
+module(load="imtcp") 
+input(type="imtcp" port="514") 
+</code></pre>
+
+<p>Then restart your local syslog.</p>
+
+<p>From this machine, you can already follow the incoming stream of logs with:</p>
+
+<pre><code class="language-bash">sudo tail -f /var/log/syslog 
+</code></pre>
+
+<p>Handy!</p>
+
+<h2 id="monitoringandalerting">Monitoring and alerting</h2>
+
+<p>On the receiver side, you can deploy a small monitoring application that would subscribe to the local log stream.</p>
+
+<p>In order to do that, configure the local rsyslog receiver to forward to our monitoring application. Let's say this application listens on port 5000. Append to the local <code>/etc/rsyslog.conf</code> file:</p>
+
+<pre><code># Forward all message through TCP
+*.* @@localhost:5000
+</code></pre>
+
+<p>Restart.</p>
+
+<p>All that is left to do, is to write an code that listens on port 5000, knows how to parse syslog message and that contains your monitoring and alerting rules.</p>
+
+<p>Below would be the skeleton of such an app written in Go:</p>
+
+<pre><code class="language-go">package main
+
+import ( 
+ "log"
+ "net"
+ "strings"
+
+ "github.com/jeromer/syslogparser"
+ "github.com/jeromer/syslogparser/rfc3164"
+)
+
+const ( 
+ SYSLOG_APP_PREFIX = "streamroot-"
+)
+
+type event struct { 
+ Machine string `json:"machine"`
+ App string `json:"app"`
+ Message string `json:"message"`
+}
+
+func main() { 
+ ln, err := net.Listen("tcp", ":5000")
+ if err != nil {
+ log.Fatalf(err)
+ }
+
+ log.Println("Starting receiving Syslog stream on :5000")
+
+ for {
+ conn, err := ln.Accept()
+ if err != nil {
+ log.Printf("new conn: %s", err)
+ continue
+ }
+
+ go parseMessage(conn)
+ }
+}
+
+func parseMessage(conn net.Conn) { 
+ defer conn.Close()
+
+ buff := make([]byte, 4096)
+
+ if _, err := conn.Read(buff); err != nil {
+ log.Printf("reading on conn: %s", err)
+ return
+ }
+
+ evt, err := parseEvent(buff)
+ if err != nil {
+ log.Printf("parsing event: %s", err)
+ }
+
+ if evt != nil {
+ // alert and monitor away!
+ }
+}
+
+func parseEvent(syslogMsg []byte) (*event, error) { 
+ p := rfc3164.NewParser(syslogMsg)
+
+ if err := p.Parse(); err != nil {
+ return nil, err
+ }
+
+ parts := p.Dump()
+
+ if ok, app := isStreamrootApp(parts); ok {
+ return &amp;event{
+ App: app,
+ Message: parts["content"].(string),
+ Machine: parts["hostname"].(string),
+ }, nil
+ }
+
+ return nil, nil
+}
+
+func isStreamrootApp(parts syslogparser.LogParts) (bool, string) { 
+ tag := parts["tag"].(string)
+ index := strings.Index(tag, SYSLOG_APP_PREFIX)
+ if index != 0 {
+ return false, ""
+ }
+
+ return true, tag[len(SYSLOG_APP_PREFIX):]
+}
+</code></pre>
+
+<p>A first simple use case - extending this code - could be to expose parsed events through a websocket subscription: internal log dashboards, etc ...</p>
+
+<h2 id="structuredloggingsyntax">Structured logging syntax</h2>
+
+<p>To help parsing and running your alerting rules on incoming syslog messages, you should decide on a common logging syntax. Hopefully, such a syntax has been thought out already. You can use for instance the <code>l2met</code> one.</p>
+
+<p>The simplest form is to use the <code>key=value</code> format in your log line. </p>
+
+<p>You want to send a notification in <strong>Slack</strong> into the <em>alert</em> room, do it with:</p>
+
+<pre><code>log.Printf("cannot start application slack=alert") 
+</code></pre>
+
+<p>You want to send an <em>sms</em> to the 1st line of support using <strong>Twilio</strong>, do it with:</p>
+
+<pre><code>log.Printf("cannot start application sms=roberto") 
+</code></pre>
+
+<p>For advance metrics storage you can use the <code>measure#key=value</code> format.</p>
+
+<p>You want to store into <strong>InfluxDB</strong> the number of request per seconds, do it with:</p>
+
+<pre><code>log.Printf("collector throughput measure#collector.rps=156900") 
+</code></pre>
+
+<p>Hack away!</p>
+ </section>
+
+ </div>
+</body></html>

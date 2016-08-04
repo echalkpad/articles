@@ -1,0 +1,83 @@
+<!DOCTYPE html><html><head><title>Fix Time Machine Sparsebundle NAS Based Backup Errors</title></head><body>
+<h1>Fix Time Machine Sparsebundle NAS Based Backup Errors</h1><p><a href="http://www.garth.org/archives/2011,08,27,169,fix-time-machine-sparsebundle-nas-based-backup-errors.html" target="_new">Original URL</a></p>
+<p><blockquote>This is a modification of an original post for use when you have a corrupt sparsebundle backup on a NAS (as opposed to an external drive attached to a router) and it needs to be repaired. The NAS is&hellip;</blockquote></p>
+<div><div class="entry-content">
+		<p><a href="http://www.garth.org/wp-content/uploads/2011/08/time-machine-icon.png"><img class="alignright size-thumbnail wp-image-150" title="Time Machine" alt="Time Machine" src="http://www.garth.org/wp-content/uploads/2011/08/time-machine-icon-150x150.png" width="150"></a></p>
+<p>This is a modification of an <a href="http://www.garth.org/archives/2010,07,16,124,fixing-time-machine-sparsebundle-network-backup-errors.html">original post</a> for use when you have a corrupt sparsebundle backup on a NAS (as opposed to an <a title="Fix Time Machine Sparsebundle Network Backup Errors" href="http://www.garth.org/archives/2010,07,16,124,fixing-time-machine-sparsebundle-network-backup-errors.html">external drive attached to a router</a>) and it needs to be repaired. The NAS is likely a hardware product from the likes of Netgear, Synology, Buffalo or QNap &#x2013; or for those of us with a home-grown backup server running FreeNAS.</p>
+<p>The error you may see is &#x201C;Time Machine completed a verification of your backups. To improve reliability, Time Machine must create a new backup for you.&#x201D; This can be fixed by following the below.</p>
+<p>From your Mac, connect to the network share that houses the sparsebundle.</p>
+<p>At the top level of the drive are the various sparsebundles that make up your individual computer backups.</p>
+<p>Do not double click on these sparsebundles or try to repair with Disk Utility.</p>
+<p>Open Terminal and then switch to root by typing</p>
+<p><code>sudo su -</code></p>
+<p>and then enter your password.</p>
+<p>The verication that has already run has marked your sparsebundle as bad, so first we need to make it look normal.</p>
+<p>From the command line</p>
+<p><code>chflags -R nouchg /Volumes/{name of your network share}/{name of}.sparsebundle</code></p>
+<p>This may take a little while.</p>
+<p>Now type</p>
+<p><code>hdiutil attach -nomount -noverify -noautofsck /Volumes/{name of your network share/{name of}.sparsebundle</code></p>
+<p>You will then see something like</p>
+<p><code>/dev/diskx Apple_partition_scheme<br>
+/dev/diskxs1 Apple_partition_map<br>
+/dev/diskxs2 Apple_HFSX</code></p>
+<p>Where x is the disk id for the external disk. You are interested in the one labeled Apple_HFSX or Apple_HFS. It might be 2, 3, 4 or higher.</p>
+<p>At this point, I have found that the filesystem check is already happening. You can check for activity by tail&#x2019;ing the fsck_hfs.log</p>
+<p><code>tail -f /var/log/fsck_hfs.log</code></p>
+<p>If fsck is going then in my experience it will be able to repair the sparsebundle. Go away for a few hours and let it chug away.</p>
+<p>When it is done, you will either see</p>
+<p>&#x2018;The Volume was repaired successfully&#x2019;</p>
+
+<p>&#x2018;The Volume could not be repaired&#x2019;</p>
+<p>If the latter you can run disk repair again:</p>
+<p><code>fsck_hfs -drfy /dev/diskxs2</code></p>
+<p>(Optionally if you have the available RAM, you can set a RAM cache in the command above to help speed up this command like so:</p>
+<p><code>fsck_hfs -drfy -c 750 /dev/diskxs2</code></p>
+<p>This will use 750MB of RAM &#x2013; feel free to change this amount to best fit your system (amount of RAM vs size of your Time Machine Sparsebundle). If you are unsure about this, use the first command.</p>
+<p>Make sure to replace x with whatever number your disk is from the output above.</p>
+<p>The letters &#x201C;drfy&#x201D; tell the filecheck utility different things. d for &#x2018;Show Debug&#x2019; &#x2013; r for &#x2018;Rebuild Catalog Tree&#x2019; &#x2013; f for &#x2018;Force&#x2019; and y for assume &#x2018;yes&#x2019; to any prompts.</p>
+<p>Now go do something for an hour or two. Come back and</p>
+<p><code>tail -f /var/log/fsck_hfs.log</code></p>
+<p>If all went well, the last output you will see is</p>
+<p>&#x2018;The Volume was repaired successfully&#x2019;</p>
+<p>Now you need to type<br>
+<code>hdiutil detach /dev/diskxs2</code></p>
+<p>You can redo the above for any other Time Machine sparse bundles you have permission to modify while you have the network share attached to your computer.</p>
+<p>Final step.</p>
+<p>When complete, you need to edit an plist file within the sparsebundle that records the state of the backup. On the top level of the sparsebundle find a file called com.apple.TimeMachine.MachineID.plist. Edit it and remove these two nodes</p>
+<p><code>&lt;key&gt;RecoveryBackupDeclinedDate&lt;/key&gt;<br>
+&lt;date&gt;{whatever-the-date}&lt;/date&gt;</code></p>
+<p>Finally you want to change</p>
+<p><code>&lt;key&gt;VerificationState&lt;/key&gt;<br>
+&lt;integer&gt;2&lt;/integer&gt;</code></p>
+<p>to<br>
+<code>&lt;key&gt;VerificationState&lt;/key&gt;<br>
+&lt;integer&gt;0&lt;/integer&gt;</code></p>
+<p>Now you can eject the network share and have Time Machine give it another go. After the (long) verification step, backups should proceed once again.</p>
+<p>Notes:</p>
+<p>Ideally this should be done over a gigabit wired network connection. Do not attempt using Wi-Fi. You also want to make sure your machine does not go to sleep during the above operation.</p>
+<p>[Update: 1.1.2013]</p>
+<p>I appreciate all the warm feedback from people all over the world who have been helped by this post. This site helps to fund my hobbies, so if this post has helped you please consider a USD $1.99 donation to my hobby fund.</p>
+
+
+
+ 
+
+
+
+<p>[Update: 12.23.2012]</p>
+<p>If after running the initial</p>
+<p><code>fsck_hfs -drfy /dev/diskxs2</code></p>
+<p>command you get a message in the fsck_hfs.log along the lines of</p>
+<p><code>RebuildBTree &#x2013; record x in node y is not recoverable.</code></p>
+<p>then try</p>
+<p><code> fsck_hfs -p /dev/diskxs2</code></p>
+<p>followed by</p>
+<p><code> fsck_hfs -drfy /dev/diskxs2</code></p>
+<p>And see if that works. &#xA0;It did for me today.
+</p>
+	</div>
+	
+	
+</div>
+</body></html>

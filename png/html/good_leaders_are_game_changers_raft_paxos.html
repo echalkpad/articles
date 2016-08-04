@@ -1,0 +1,72 @@
+<!DOCTYPE html><html><head><title>Good Leaders are game changers: Raft & Paxos</title></head><body>
+<h1>Good Leaders are game changers: Raft & Paxos</h1><p><a href="http://mysqlhighavailability.com/good-leaders-are-game-changers-raft-paxos/" target="_new">Original URL</a></p>
+<p><blockquote>Introduction Consensus is a key component to providing fault-tolerant services such as synchronously replicated data stores, non-blocking atomic commitment and Paxos and Raft are among the most&hellip;</blockquote></p>
+<div><div class="entry-content">
+		<p><strong>Introduction</strong></p>
+
+<p>Consensus is a key component to providing fault-tolerant services such as synchronously replicated data stores, non-blocking atomic commitment and Paxos and Raft are among the most popular consensus algorithms. Paxos has been widely studied by researchers while Raft has become very popular among engineers.</p>
+<p>The Raft&#x2019;s popularity comes from the fact that despite all the interest around Paxos among researchers, engineers still have to read several papers to be able to understand and create a solution that solves a practical problem and provides good performance in terms of communication steps, number of messages and resource utilization. Besides, they still have to fill in some gaps with home-made implementations that sometimes turn out to be really fragile.</p>
+<p>In order to overcome this hurdle, Diego Ongaro and John Ousterhout created a new consensus algorithm called Raft which was designed to be more understandable and provide a better foundation for building practical systems than Paxos [2]. Although Raft brings some novelty to the complex world of Distributed Systems, it still shares a lot of things in common with Paxos. For example, both elect a single leader which is responsible for deciding whether the participants in the consensus have reached an agreement or not.</p>
+<p>In this blog post, we will briefly show the similarities and differences between Paxos and Raft. Firstly, we will describe what a consensus algorithm is. Secondly, we will describe how to build a replication solution using instances of a consensus algorithm. Then we will describe how leaders are elected in both algorithms and some safety and liveness properties.</p>
+<p>Note that this blog is not a deep dive into Paxos nor Raft but an overview on both algorithms. Users willing to understand their subtle details should read the following papers: [1, 2, 3, 4].</p>
+<p><strong>Consensus</strong></p>
+
+<p>Distributed systems can be characterized by a set of safety and liveness&#xA0;properties or the mix of the two. Informally, safety is a property that&#xA0;stipulates that nothing bad happens during execution of a program. On the&#xA0;other hand, liveness stipulates that something good eventually happens.</p>
+<p>In consensus, whose goal is to make a set of servers agree on a value, the&#xA0;liveness is characterized by the fact that eventually every server should&#xA0;decide on a value. Safety states that no two servers decide differently.</p>
+<p>Unfortunately, a server may take longer to execute an algorithm step than&#xA0;others and may crash and stop processing the consensus algorithm. Messages&#xA0;might get delayed, delivered out of order or dropped. These aspects make&#xA0;the implementation of a consensus algorithm really hard and oblige them to&#xA0;be indulgent and preserve safety during &#x2018;instability&#x2019; periods [5]. Exactly&#xA0;when the system will become &#x2018;stable&#x2019; though is unknown but eventually it&#xA0;will remain &#x2018;stable&#x2019; long enough so that the consensus algorithm can achieve&#xA0;a decision.</p>
+<p>In a stable run, the system requires two communication steps: leader &#x2013;(1)&#x2013;&gt;&#xA0;servers &#x2013;(2)&#x2013;&gt; leader:</p>
+<p><a href="http://mysqlhighavailability.com/wp-content/uploads/2015/11/consensus-image1.png"><img class=" wp-image-4834 aligncenter" src="http://mysqlhighavailability.com/wp-content/uploads/2015/11/consensus-image1-300x134.png" alt="consensus-image" width="316"></a></p>
+<p>The leader sends the value it wants to achieve an agreement on to all servers&#xA0;and each server replies back to the leader notifying that it has accepted the&#xA0;request. So when the leader gets accept messages from a quorum of servers,&#xA0;agreement is reached.</p>
+<p>Note that we have omitted two messages from this analysis: the message that&#xA0;forwards a value which a server wants to reach an agreement on to the leader&#xA0;and the message that informs servers that an agreement on the value was&#xA0;reached. The latter message may not be necessary if servers send the accept&#xA0;message to all servers or the information is piggybacked in the next message&#xA0;the leader sends to the servers.</p>
+<p><strong>Replication</strong></p>
+
+<p>In order to implement replication, several instances of a consensus algorithm&#xA0;are run and each instance is bounded to a slot entry in the replicated log&#xA0;which might be persisted on disk or not [6]. The leader may run several&#xA0;instances in parallel to fill in different slots and thus increase performance.&#xA0;However, the degree of parallelism is highly dependent on the hardware, network&#xA0;in use and the application [7].</p>
+<p>Each leader is uniquely responsible for a round or term which is monotonically&#xA0;increased when a new leader is elected:</p>
+<p><a href="http://mysqlhighavailability.com/wp-content/uploads/2015/11/slots-image.png"><img class="alignnone size-full wp-image-4831" src="http://mysqlhighavailability.com/wp-content/uploads/2015/11/slots-image.png" alt="slots-image" width="251"></a></p>
+<p><strong>Leader Election</strong></p>
+
+<p>Both Paxos and Raft assume that eventually there will be a leader that all&#xA0;stable servers trust and a single leader is responsible for a term. A&#xA0;new leader will propose a new term, which must be greater than the previous&#xA0;one, if the current leader is suspected to have failed.</p>
+<p>In Raft, a server sends a &#x201C;leader request&#x201D; to other servers and expects a reply from a&#xA0;majority of them before considering itself a leader. If it does not get a reply&#xA0;from a majority of servers or a message saying that another server has become&#xA0;the leader, it will timeout and start over a new election process. Servers can&#xA0;only vote for one leader request per term.</p>
+<p>Paxos, though, does not really define how a server becomes a leader. For simplicity, researchers exploit the a-priori rank among processes such as the server&#x2019;s id&#xA0;(e.g. an integer). So the server with the highest or the lowest rank that has&#xA0;not been suspected becomes the new leader [8]. Although, this is a simple and&#xA0;intuitive solution, it requires to divide the terms&#x2019; space among servers: new&#xA0;term = old term + N, where N is the maximum number of servers.</p>
+<p>Raft imposes a restriction to the leader election process: only the most&#xA0;up-to-date server can become a leader. Basically, it guarantees that a leader has&#xA0;all committed entries from previous terms and does not need to learn about old&#xA0;entries in the replicated log that it is not aware of. So after becoming a&#xA0;leader, a server can simply start &#x201C;imposing&#x201D; its &#x201C;wishes&#x201D; on other servers.</p>
+<p>Paxos, however, allows any server to become a leader. So a server has to learn&#xA0;about the past before starting &#x201C;imposing&#x201D; its &#x201C;wishes&#x201D; on other servers and as usual, flexibility comes along with additional complexity.</p>
+<p><a href="http://mysqlhighavailability.com/wp-content/uploads/2015/11/leader-image.png"><img class="alignnone size-full wp-image-4832" src="http://mysqlhighavailability.com/wp-content/uploads/2015/11/leader-image.png" alt="leader-image" width="152"></a></p>
+<p>In Raft, either Server 1 or 2 could become a leader. In Paxos, any of them.</p>
+<p><strong>Safety</strong></p>
+
+<p>Due to the asynchronous nature of the system, servers may perceive failures&#xA0;and elections at different times. This means that servers may temporarily&#xA0;operate in different terms but eventually all servers will converge to a&#xA0;single term.</p>
+<p>In any case, if a server gets a message from a term older than its current&#xA0;one, this means that the sender either was the leader or is trying to become&#xA0;one for an old term and the receiver must reject the message and inform the&#xA0;sender.</p>
+<p>If a server gets a message from a term greater than its current one, this&#xA0;means that there is a new term and a new leader and the receiver must start&#xA0;accepting the leader&#x2019;s &#x201C;wishes&#x201D;.</p>
+<p>However, both algorithms must carefully avoid overwriting a decision&#xA0;made by an old leader and thus violating safety. This is where Raft and&#xA0;Paxos diverge and where we can see the simple and elegant approach used&#xA0;by Raft.</p>
+<p>Raft imposes restrictions on the leader election algorithm as aforementioned&#xA0;and only the most up-to-date server can become a leader:</p>
+<blockquote><p>Raft determines which of two logs is more up-to-date by comparing the&#xA0;index and term of the last entries in the logs. If the logs have last&#xA0;entries with different terms, then the log with the later term is more&#xA0;up-to-date. If the logs end with the same term, then whichever log is&#xA0;longer is more up-to-date.</p></blockquote>
+<p>Then the leader only needs to ensure that the replicated log in the servers&#xA0;eventually converge, which is done by imposing the following restriction: A server cannot accept a value for slot <code>"n"</code> if it has not previously accepted&#xA0;a value for slot <code>"n - 1"</code>. The leader includes the term of the previous log&#xA0;entry in the current request and the server only accepts the request if the&#xA0;term of its previous request matches the one sent by the leader. Otherwise, it&#xA0;asks the leader to send the previous missing request first, and so forth for <code>"n - 2"</code> and&#xA0;<code>"n - 3"</code>, etc.</p>
+<p>In Paxos, any server can become a leader so that the task of avoiding that a&#xA0;decision is not overwritten becomes a little bit more complex as the new leader&#xA0;leader has to find out what other servers have processed so far before starting&#xA0;&#x201C;imposing&#x201D; its &#x201C;wishes&#x201D; on others. This is the prepare phase in the Paxos&#xA0;algorithm and has to be run once after the new leader is elected. The prepare&#xA0;message contains the new term and the slot number <code>"n"</code> through which agreement has&#xA0;been reached for all previous entries. Servers reply with information on slots&#xA0;greater than <code>"n"</code> and this information is used to restrict the values that the&#xA0;new leader will propose for these slots.</p>
+<p><strong>Liveness</strong></p>
+
+<p>Progress is guaranteed as long as the majority of servers are alive [9].</p>
+<p><strong>Conclusions</strong></p>
+
+<p>We have shown the similarities between Raft and Paxos and that the key difference&#xA0;relies on how a leader is elected and preserves safety. In Raft, only the most&#xA0;up-to-date server can become a leader while Paxos allows any server to become a&#xA0;leader. This flexibility, however, comes along with additional complexity.</p>
+<p>Note that the leader in both Raft and Paxos might become a bottleneck as all the&#xA0;traffic goes through it. The leader handles <code>O(N)</code> message while a non-leader handles&#xA0;<code>O(1)</code>.</p>
+<p>There are other Paxos-based protocols that support multiple leaders such as&#xA0;Mencius [10] or order non-conflicting requests in parallel such as Egalitarian&#xA0;Paxos or Generalized Paxos [11, 12]. It would be great to see Raft-based protocols&#xA0;with similar optimizations.</p>
+<p><strong>References</strong></p>
+
+<p>1 &#x2013; <a title="http://research.microsoft.com/en-us/um/people/lamport/pubs/paxos-simple.pdf" href="http://research.microsoft.com/en-us/um/people/lamport/pubs/paxos-simple.pdf" target="_blank">Paxos made simple</a><br>
+2 &#x2013; <a title="https://ramcloud.stanford.edu/raft.pdf" href="https://ramcloud.stanford.edu/raft.pdf" target="_blank">In Search of an Understandable Consensus Algorithm</a><br>
+3 &#x2013; <a title="http://www.cs.utexas.edu/~lorenzo/corsi/cs380d/papers/deconstr_paxos.pdf" href="http://www.cs.utexas.edu/~lorenzo/corsi/cs380d/papers/deconstr_paxos.pdf" target="_blank">Desconstructing Paxos</a><br>
+4 &#x2013; <a title="http://www.zurich.ibm.com/~cca/papers/pax.pdf" href="http://www.zurich.ibm.com/~cca/papers/pax.pdf" target="_blank">Yet Another Visit to Paxos</a><br>
+5 &#x2013; <a title="http://groups.csail.mit.edu/tds/papers/Lynch/jacm88.pdf" href="http://groups.csail.mit.edu/tds/papers/Lynch/jacm88.pdf" target="_blank">Consensus in the presence of partial synchrony</a><br>
+6 &#x2013; <a title="http://research.microsoft.com/en-us/people/weic/disc98_recovery.pdf" href="http://research.microsoft.com/en-us/people/weic/disc98_recovery.pdf" target="_blank">Failure Detection and Consensus in the Crash-Recovery Model</a><br>
+7 &#x2013; <a title="http://dl.acm.org/citation.cfm?id=2183688" href="http://dl.acm.org/citation.cfm?id=2183688" target="_blank">Tuning paxos for high-throughput with batching and pipelining</a><br>
+8 &#x2013; <a title="http://www.distributedprogramming.net/" href="http://www.distributedprogramming.net/" target="_blank">Introduction to Reliable and Secure Distributed Programming</a><br>
+9 &#x2013; <a title="http://research.microsoft.com/en-us/um/people/lamport/pubs/lower-bound.pdf" href="http://research.microsoft.com/en-us/um/people/lamport/pubs/lower-bound.pdf" target="_blank">Lower Bounds for Asynchronous Consensus</a><br>
+10 &#x2013; <a title="http://sysnet.ucsd.edu/~yamao/pub/mencius-osdi.pdf" href="http://sysnet.ucsd.edu/~yamao/pub/mencius-osdi.pdf" target="_blank">Mencius: Building Efficient Replicated State Machines for WANs</a><br>
+11 &#x2013; <a title=" https://www.cs.cmu.edu/~dga/papers/epaxos-sosp2013.pdf" href="http://www.cs.cmu.edu/~dga/papers/epaxos-sosp2013.pdf" target="_blank">There Is More Consensus in Egalitarian Parliaments</a><br>
+12 &#x2013; <a title="http://research.microsoft.com/pubs/64631/tr-2005-33.pdf" href="http://research.microsoft.com/pubs/64631/tr-2005-33.pdf" target="_blank">Generalized Consensus and Paxos</a></p>
+
+	</div>
+	
+	
+</div>
+</body></html>

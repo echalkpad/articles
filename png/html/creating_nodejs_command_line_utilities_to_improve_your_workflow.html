@@ -1,0 +1,265 @@
+<!DOCTYPE html><html><head><title>Creating Node.js Command Line Utilities to Improve Your Workflow</title></head><body>
+<h1>Creating Node.js Command Line Utilities to Improve Your Workflow</h1><p><a href="http://developer.telerik.com/featured/creating-node-js-command-line-utilities-improve-workflow/" target="_new">Original URL</a></p>
+<p><blockquote>Once upon a time, the command line seemed scary and intimidating to me. I felt as if it stared back at me blankly like the price tag on something extremely expensive saying, &#x201C;If you have to&hellip;</blockquote></p>
+<div><div class="Article">
+ 
+
+ <p>Once upon a time, the command line seemed scary and intimidating to me. I felt as if it stared back at me blankly like the price tag on something extremely expensive saying, &#x201C;If you have to ask, it&#x2019;s not for you.&#x201D; I preferred the comfort of the buttons and menus laying out for me what the possibilities were.</p>
+<p>Today, the command line is all about completing tasks as fast as you can type them, without the overhead of a GUI program. I&#x2019;ve even <a href="https://www.youtube.com/watch?v=zfP1caw0ANw">spoken before</a> about how npm offers a wealth of command-line utilities that can improve a developer&#x2019;s workflow. And since then, the list of tools has only grown tremendously.</p>
+<p>However, in every job there are repetetive tasks that both unique to that position but also ripe for automating&#x2026;if only it were easy to build yourself a tool to do so.</p>
+<p>Today, I&#x2019;m going to explore how, using an npm library named <a href="https://github.com/dthree/vorpal">Vorpal</a>, it is relatively easy to create your own command line applications. And I do mean applications.</p>
+<p>What differentiates Vorpal from <a href="https://developer.atlassian.com/blog/2015/11/scripting-with-node/">rolling your own command line tools</a> is that it makes it easy to build much more complex and immersive command line applications rather than simple, single-command utilities. These command line applications run within their own context that offers built-in help, command history, tabbed auto-completion and more. Combining Vorpal with the abundance of modules available on npm opens up a ton of possibilities.</p>
+<h2>A Simple Example</h2>
+<p>Most tutorials start with &#x201C;Hello World.&#x201D; That&#x2019;s boring. I want something with a little more attitude. I&#x2019;m sure you&#x2019;re already thinking what I&#x2019;m thinking. Right, let&#x2019;s build a &#x201C;Hello Daffy Duck.&#x201D;</p>
+<p><a href="http://developer.telerik.com/wp-content/uploads/2015/11/DuckRabbitDuck.jpg"><img src="http://developer.telerik.com/wp-content/uploads/2015/11/DuckRabbitDuck.jpg" alt="Daffy Duck" width="500" class="alignnone size-full wp-image-62973"></a></p>
+<p>My sample command line application is going to be based off the <a href="http://www.imdb.com/title/tt0043953/">Rabbit Fire</a> episode from Looney Tunes. If you don&#x2019;t know which one I am talking about, then you are missing out. It&#x2019;s a classic.</p>
+<p><iframe width="500" height="375" src="https://www.youtube.com/embed/9-k5J4RxQdE?feature=oembed"></iframe></p>
+<p>Of course, first you need to install <a href="https://github.com/dthree/vorpal">Vorpal</a>.</p>
+<pre><code class="language-bash">npm install vorpal</code></pre>
+<p>Now, let&#x2019;s create an daffy.js file and require Vorpal.</p>
+<pre><code class="language-javascript">var vorpal = require('vorpal')();</code></pre>
+<h3>Delimiter</h3>
+<p>One of the cool things about Vorpal is that it offers a variety of methods for you to customize the &#x201C;UI&#x201D; of your utility. For example, let&#x2019;s start by making our command line delimiter &#x201C;daffy.&#x201D;</p>
+<pre><code class="language-javascript">vorpal
+ .delimiter('daffy$')
+ .show();</code></pre>
+<p>Go ahead and run the program via <code>node daffy.js</code> and you&#x2019;ll see something like this:</p>
+<p><a href="http://developer.telerik.com/wp-content/uploads/2015/11/daffy_delimeter.jpg"><img src="http://developer.telerik.com/wp-content/uploads/2015/11/daffy_delimeter.jpg" alt="Daffy Delimiter" width="500" class="alignnone size-full wp-image-62981"></a></p>
+<p>At this point our utility doesn&#x2019;t do anything, so let&#x2019;s add some functionality.</p>
+<h3>Commands</h3>
+<p>The primary way of interacting with a command line utility is via <a href="https://github.com/dthree/vorpal/wiki/api-%7C-vorpal.command#vorpalcommandcommand-description">commands</a>. Commands in Vorpal have a lot of flexibility &#x2013; for instance, they can be a single word or multiple words and have required arguments as well as optional arguments.</p>
+<p>Let&#x2019;s start with a simple one word command &#x2013; when we say &#x201C;duck&#x201D; then Daffy will respond with &#x201C;Wabbit.&#x201D;</p>
+<pre><code class="language-javascript">// duck
+vorpal
+ .command('duck', 'Outputs "rabbit"')
+ .action(function(args, callback) {
+ this.log('Wabbit');
+ callback();
+ });</code></pre>
+<p>The <code>command()</code> method defines the text of the command as well as the help text (i.e. what will show up when I use <code>--help</code> in the command line). We then use Vorpal&#x2019;s <code>log()</code> method rather than the <code>console.log()</code> to output to the console. Calling the callback method will return the user to our custom console, as opposed to exiting the program.</p>
+<h3>Completed Code</h3>
+<p>The complete code for the Daffy command line application is below. It includes several multi-word commands that all work fairly similarly.</p>
+<pre><code class="language-javascript">var vorpal = require('vorpal')(),
+ duckCount = 0,
+ wabbitCount = 0;
+
+// duck
+vorpal
+ .command('duck', 'Outputs "rabbit"')
+ .action(function(args, callback) {
+ this.log('Wabbit');
+ callback();
+ });
+vorpal
+ .command('duck season', 'Outputs "rabbit season"')
+ .action(function(args, callback) {
+ duckCount++;
+ this.log('Wabbit season');
+ callback();
+ });
+
+// wabbit
+vorpal
+ .command('wabbit', 'Outputs "duck"')
+ .action(function(args, callback) {
+ this.log('Duck');
+ callback();
+ });
+vorpal
+ .command('wabbit season', 'Outputs "duck season"')
+ .action(function(args, callback) {
+ // no cheating
+ if (duckCount &lt; 2) {
+ duckCount = 0;
+ this.log('You\'re despicable');
+ callback();
+ }
+ else if (wabbitCount === 0) {
+ wabbitCount++;
+ this.log('Duck season');
+ callback();
+ }
+ // doh!
+ else {
+ this.log('I say it\'s duck season. And I say fire!');
+ vorpal.ui.cancel();
+ }
+ });
+
+vorpal
+ .delimiter('daffy$')
+ .show();</code></pre>
+<p>Since the methods all work similarly, this should be pretty straightforward. You&#x2019;ll notice the use of <code>vorpal.ui.cancel()</code>, this exits the application and returns to the main command line console (one note, this can&#x2019;t be followed by additional code or it will fail to function).</p>
+<p>Now that the application is built, a <code>help</code> command is built in, without requiring any additional code. Notice that the multiword commands are automatically grouped.</p>
+<p><a href="http://developer.telerik.com/wp-content/uploads/2015/11/vorpal_help.jpg"><img src="http://developer.telerik.com/wp-content/uploads/2015/11/vorpal_help.jpg" alt="Daffy help" width="572" class="alignnone size-full wp-image-62991"></a></p>
+<p>Let&#x2019;s see our application in action!</p>
+<p><a href="http://developer.telerik.com/wp-content/uploads/2015/11/daffy_opt.gif"><img src="http://developer.telerik.com/wp-content/uploads/2015/11/daffy_opt.gif" alt="Daffy command line app" width="570" class="alignnone size-full wp-image-63001"></a></p>
+<p><a href="http://developer.telerik.com/wp-content/uploads/2015/11/daffy_fired.jpg"><img src="http://developer.telerik.com/wp-content/uploads/2015/11/daffy_fired.jpg" alt="Daffy fired" width="500" class="alignnone size-full wp-image-63011"></a></p>
+<h2>A Real World Example</h2>
+<p>While I&#x2019;m certain you will find hours of entertainment in the Daffy sample, let&#x2019;s try something a little more complex. In this example application, we&#x2019;ll explore things like required and optional arguments as well as getting feedback from the user via <a href="https://github.com/dthree/vorpal/wiki/API-%7C-CommandInstance#commandinstancepromptobject-callback">prompts</a>.</p>
+<p>The utility we are going to start building will allow us to quickly resize and reformat images individually or in bulk. In my role managing this site (i.e. the Telerik Developer Network), I often receive articles with very numerous large PNG formatted images. These images need to be resized and reformatted before posting to reduce the weight of the images on the page. Being able to quickly resize every image in a folder would make this a much simpler and less tedious task.</p>
+<h3>Sharp</h3>
+<p>Of course, on its own, Vorpal can&#x2019;t do image resizing. And while Node.js has a <a href="https://nodejs.org/docs/v0.3.1/api/fs.html#file_System">filesystem</a> module, it doesn&#x2019;t have the capability to manipulate images.</p>
+<p>Luckily, there are a number of image resizing modules on npm. The one I chose to use is called <a href="https://github.com/lovell/sharp">Sharp</a> (<a href="http://sharp.dimens.io/en/stable/">documentation</a>).</p>
+<p>Sharp works fast, but, unfortunately, the <a href="http://sharp.dimens.io/en/stable/install/">setup is a little complex</a> depending on what platform you are running on. Sharp depends on a library called <a href="https://github.com/jcupitt/libvips">libvips</a>, which we&#x2019;ll need to install first. I am working on a Mac with <a href="http://brew.sh/">Homebrew</a> installed, which offered the easiest route for me to get libvips.</p>
+<pre><code class="language-bash">brew install homebrew/science/vips --with-webp --with-graphicsmagick</code></pre>
+<p>Once libvips is installed, then install Sharp.</p>
+<pre><code class="language-bash">npm install sharp</code></pre>
+<p>Of course, to use Sharp within our application, we&#x2019;ll need to require it.</p>
+<pre><code class="language-javascript">var sharp = require('sharp');</code></pre>
+<h3>MMMagic</h3>
+<p>Since we&#x2019;ll be bulk modifying any images in a given directory, we&#x2019;ll need to be able to tell that any given file is an image or not. Again, the filesystem module, while powerful, doesn&#x2019;t quite meet our needs.</p>
+<p>For this purpose, I chose a npm module called <a href="https://github.com/mscdex/mmmagic">MMMagic</a>. MMMagic allows you to pass a file and it will get the MIME type, encoding and other metadata for you.</p>
+<p>There are no complicated prerequisites for MMMagic, simply&#x2026;</p>
+<pre><code class="language-bash">npm install mmmagic</code></pre>
+<p>Now require it&#x2026;</p>
+<pre><code class="language-javascript">var mmm = require('mmmagic');</code></pre>
+<p>We&#x2019;ll also need an instance of it to work with.</p>
+<pre><code class="language-javascript">var Magic = mmm.Magic;</code></pre>
+<p>The reason for having both the <code>mmm</code> and <code>Magic</code> variables is because later on we&#x2019;ll need to access some constants that are in the root (<code>mmm</code> in this case).</p>
+<h3>Putting All the Pieces Together</h3>
+<p>We&#x2019;ll start by creating a single <code>resize</code> command that will take both a required argument (the path of the directory or image that you want to resize) as well as some optional arguments. The optional arguments are available as a shortcut for the user to bypass some of the prompts and make our task even faster to complete.</p>
+<pre><code class="language-javascript">vorpal
+ .command('resize &lt;path&gt; [width] [height]', 'Resize an image or all images in a folder')
+ .action(function(args, cb) {
+ const self = this;
+ path = args.path;
+
+ // if a width and height are defined when the command is called, set them
+ if (args.width)
+ width = args.width;
+ if (args.height)
+ height = args.height;
+
+ // resize all images in a directory to a set width
+ if (fs.lstatSync(path).isDirectory()) {
+ this.prompt({
+ type: 'confirm',
+ name: 'continue',
+ default: false,
+ message: 'Resize all images in the folder? ',
+ },
+ function(result){
+ if (result.continue) {
+ files = fs.readdirSync(args.path);
+ // skip the prompts if a width was supplied
+ if (width)
+ doResize(self);
+ else
+ getWidth(self);
+ }
+ else {
+ cb();
+ }
+ });
+ }
+ // resize a single image
+ else if (fs.lstatSync(args.path).isFile()) {
+ // get the file name without the path
+ files = [args.path.split("/").pop()];
+ //get the path without the file name
+ path = args.path.substr(0, args.path.lastIndexOf('/'))
+ // skip the questions if a width was supplied
+ if (width)
+ doResize(self);
+ else
+ getWidth(self);
+ }
+ });</code></pre>
+<p>Let&#x2019;s walk through the code a bit. The required argument, <code>path</code>, is denoted with angle brackets (i.e. <code>&lt;</code> and <code>&gt;</code>). The optional arguments, <code>width</code> and <code>height</code>, are denoted by square brackets (i.e. <code>[</code> and <code>]</code>). The arguments are available in the <code>args</code> object.</p>
+<p>After setting our variables, we determine whether the user has passed a filename or a directory and respond accordingly (note that a future improvement would be to handle situations where the user passes an invalid file or directory). If the user passed a directory, we display a corfirm-type prompt to ensure that they intend to resize every image in the directory.</p>
+<p>Finally, in both cases we either move on to complete the resizing or move to the next prompt if the user did not specify a width argument in the command. Let&#x2019;s look at the prompts to get the width and height when the user doesn&#x2019;t specify them.</p>
+<h3>Input Prompts</h3>
+<p>The below prompts request additional information for the maximum width and height via an input-type prompt on the command line. The way the application currently works is that it will shrink anything over these sizes to the specified dimensions, but will not enlarge items that are already less than the specified dimensions.</p>
+<pre><code class="language-javascript">// ask for a width
+function getWidth(v) {
+ self = v;
+ self.prompt({
+ type: 'input',
+ name: 'width',
+ default: false,
+ message: 'Max width? ',
+ },
+ function(result){
+ if (result.width)
+ width = result.width;
+ getHeight(self);
+ });
+}
+
+// ask for a height
+function getHeight(v) {
+ self = v;
+ self.prompt({
+ type: 'input',
+ name: 'height',
+ default: false,
+ message: 'Max height? ',
+ },
+ function(result){
+ if (result.height)
+ height = result.height;
+ doResize(self);
+ });
+}</code></pre>
+<p>Both inputs have a default if no value is entered (i.e. the user simply hits the enter key).</p>
+<h3>Resizing the Images</h3>
+<p>The next step is to loop through the specified files and resize them. Note that in the case where a user specifies a single file, it is still placed within the same array of files, it just only contains a single file.</p>
+<pre><code class="language-javascript">function doResize(v) {
+ self = v;
+ // create a folder to dump the resized images into
+ if (!fs.existsSync('optimized'))
+ fs.mkdirSync('optimized')
+
+ for (var i in files) {
+ detectFileType(files[i]);
+ }
+}</code></pre>
+<p>You&#x2019;ll note above that we create a folder to place the optimized images.</p>
+<p>Within the loop, we call a function to detect the file type to prevent errors when the folder contains files other than images.</p>
+<pre><code class="language-javascript">function detectFileType(filename) {
+ var fullpath = path + "/" + filename,
+ filenameNoExt = filename.substr(0, filename.lastIndexOf('.'));
+ magic = new Magic(mmm.MAGIC_MIME_TYPE);
+
+ // make sure this is an appropriate image file type
+ magic.detectFile(fullpath, function(err, result) {
+ if (!err) {
+ if (result.split('/')[0] == 'image')
+ // resize to a jpeg without enlarging it beyond the specified width/height
+ sharp(fullpath)
+ .resize(parseInt(width),parseInt(height))
+ .max()
+ .withoutEnlargement()
+ .jpeg()
+ .toFile('optimized/'+filenameNoExt+'.jpg', function(err) {
+ if (err)
+ self.log(err);
+ else
+ self.log('Resize of ' + filename + ' complete');
+ });
+ }
+ else
+ self.log(err);
+ });
+}</code></pre>
+<p>In the <code>detectFileType</code> method we use the MMMagic module to determine if the current file is actually an image. Sharp can handle <a href="http://sharp.dimens.io/en/stable/api/#format">most image types</a>, so at this point we&#x2019;re simply assuming that if it is an image, Sharp can handle it (plus, if the image processing fails for some reason, we do note it in the console output).</p>
+<p>Lastly, we finally put Sharp to use to perform the resize. The <code>resize()</code> method can take a width and/or height, and if only one is passed, it will resize while maintaining the same aspect ratio. The <code>max()</code> and <code>withoutEnlargement()</code> methods ensure that we only resize images larger than the specified sizes, though all images will be processed and converted into a JPEG regardless.</p>
+<p>If the resize is successful, we note it in the console. If there is an error, we note that as well.</p>
+<p>Let&#x2019;s see the utility in action. In the example below, I am passing just the directory so that you can see the prompts (note that I do not supply a height). As you can see by the results, the images in the optimized folder are all JPEG (including the one PNG from the source) and are all 600px width (except the one image that was already less than 600px wide).</p>
+<p><a href="http://developer.telerik.com/wp-content/uploads/2015/11/resizer_opt.gif"><img src="http://developer.telerik.com/wp-content/uploads/2015/11/resizer_opt.gif" alt="resizing utility" width="781" class="alignnone size-full wp-image-63021"></a></p>
+<p>We could bypass the prompts by using the command <code>resize images 600</code> which would have specified the width. We also could have simply resized a single image using <code>resize images\test3.png 600</code>.</p>
+<h3>Future Improvements</h3>
+<p>While this utility is already useful, I would love to add some improvements. First, of course, even though this is a personal utility, the code could almost certainly be improved (I&#x2019;m relatively new to using Node.js, so I&#x2019;m sure there are things I can be doing better).</p>
+<p>Second, I should <a href="https://developer.atlassian.com/blog/2015/11/scripting-with-node/#packaging-shell-commands">package the command line utility</a> so that it is installable. This would allow me to call it much more easily from whichever directory I happen to be working in.</p>
+<p>Also, at this point, it really is a single command utility, but there are a number of ways I would like to see it expand into a full application. For example, I didn&#x2019;t specify an output <a href="http://sharp.dimens.io/en/stable/api/#qualityquality">quality</a> for my JPEG, which is something I will need to do in the long run. I could also create additional commands to allow different kinds of resizing or even cropping &#x2013; Sharp offers a good number of <a href="http://sharp.dimens.io/en/stable/api/#operations">operations</a> that can be performed on images that we didn&#x2019;t cover here. In the long run, it could become a full command-line image tool rather than just a resizer.</p>
+<h2>Conclusion</h2>
+<p>I&#x2019;m sure that there are a ton of tasks in your own job that you could potentially automate. Creating a complete command-line application for these purposes is easy using <a href="https://github.com/dthree/vorpal">Vorpal</a>. These applications can get very complex &#x2013; we only touched on commands and prompts, but Vorpal offers a fairly <a href="https://github.com/dthree/vorpal#api">extensive API</a>.</p>
+<p>So get busy automating those time-consuming and repetetive tasks with custom command-line applications. You don&#x2019;t even need to tell your boss. Perhaps you can use the spare time to hunt wabbits &#x2013; it&#x2019;s wabbit season after all!</p>
+<p><a href="http://developer.telerik.com/wp-content/uploads/2015/11/Rabbit-Season.jpg"><img src="http://developer.telerik.com/wp-content/uploads/2015/11/Rabbit-Season.jpg" alt="Rabbit Season" width="320" class="alignnone size-full wp-image-63031"></a></p>
+
+ 
+ </div>
+
+ </div>
+</body></html>

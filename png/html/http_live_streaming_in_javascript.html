@@ -1,0 +1,124 @@
+<!DOCTYPE html><html><head><title>HTTP Live Streaming In Javascript</title></head><body>
+<h1>HTTP Live Streaming In Javascript</h1><p><a href="https://blog.peer5.com/http-live-streaming-in-javascript/" target="_new">Original URL</a></p>
+<p><blockquote>A flashocalypse is approaching - paraphrasing John Luther, JW Player (TL;DR) We can finally play HLS using only javascript. It works faster than Flash, unlocking the potential to stream live in 4k&hellip;</blockquote></p>
+<div><section class="post-content">
+ <blockquote>
+ <p><a href="http://www.streaminglearningcenter.com/blogs/dash-the-most-popular-format-(almost)-no-one-is-using-.html">A flashocalypse is approaching </a> - paraphrasing John Luther, <a href="https://blog.peer5.com/http-live-streaming-in-javascript/jwplayer.com">JW Player</a></p>
+</blockquote>
+
+<p>(TL;DR) <br>
+We can finally play HLS using only javascript. It works faster than <a href="http://www.adobe.com/products/flashplayer.html">Flash</a>, unlocking the potential to stream live in 4k and 60fps.</p>
+
+<h4 id="whatishls">What is HLS?</h4>
+
+<p>HLS, which stands for HTTP Live Streaming, is a video format invented by Apple for live streaming. It&#x2019;s file based, meaning you can serve it over an HTTP connection on the web.</p>
+
+<p>In its simplest form, you have a manifest file, a.k.a playlist, that is the &#x2018;main&#x2019; file for a stream. This file contains metadata about the stream and a list of URIs for the video segments of the stream. When a player requests this playlist, a server responds with an updated manifest file that specifies segments that have recently been added to the stream. <br>
+<img src="https://blog.peer5.com/content/images/2015/11/hls-manifest.jpg" alt="HLS Manifest - HLS Live Streaming With Peer5">
+This file format has many advantages over alternatives like RTP or RTMP in terms of device support, ease of deployment, and scalability. As a result, it has become a mainstream technology for live streaming, and is widely used for VoD as well.</p>
+
+<h4 id="hlsonallplatforms">HLS On All Platforms</h4>
+
+<p>If you&#x2019;re familiar with HLS you might be thinking, &#x201C;isn&#x2019;t HLS already supported by HTML?&#x201D; The answer: sort of! When Apple invented HLS, they also implemented a &#x2018;player&#x2019; mechanism inside of their browser. This meant that in Safari you could add a line of HTML to the page, for example, <code>&lt;video src=&#x2019;path/to/playlist.m3u8&#x2019;&gt;&lt;/video&gt;</code>, and voila, you&#x2019;d have a working HLS player! </p>
+
+<p>But, for various reasons, other browsers didn&#x2019;t implement this, meaning that systems needed to be designed to stream differently depending on which device and browser a user was operating on. A stream might use HLS on Safari or iOS and RTMP or HDS on desktop. Eventually Chrome and Firefox implemented an HLS player for their mobile versions, but Chrome, Firefox, and IE still don&#x2019;t use this technology on their desktop versions. A technology for desktop browsers was needed to stream HLS on all devices. Eventually, a few great libraries were released to solve this problem. <a href="http://www.flashls.org/">Flashls</a>, which is open source, and <a href="http://osmfhls.kutu.ru/">osmfhls</a>, which is proprietary, are two Flash plugin libraries for players that enable HLS on desktop.</p>
+
+<h4 id="playinghlswithoutflash">Playing HLS Without Flash</h4>
+
+<p>HLS experienced mainstream adoption, but Flash was still a requirement. Flash is heavy, slow, and <a href="http://www.computerworld.com/article/2971721/security/stop-the-flash-madness-5-bugs-a-week.html">full of security flaws</a>. Experts have been predicting Flash&#x2019;s demise for a while <a href="http://www.wsj.com/articles/tech-world-prepares-obituary-for-adobe-flash-1437341315">now</a>, and an alternative is needed. To add some context, we&#x2019;ll have to take a quick detour to another video format, or rather a standard, MPEG-DASH. Dash basically takes all of the good stuff from HLS and gets rid of the bad pieces. Like HLS, it&#x2019;s also file based, however, in order to support this new format in the browser <a href="https://blog.peer5.com/http-live-streaming-in-javascript/www.w3.org">W3C</a> decided to create new HTML5 API&#x2019;s called Media Source Extensions (MSE) and Encrypted Media Extensions (EME). MSE give developers an API to control the video tag&#x2019;s video buffer and inject data into it. EME is an API that provides DRM support. As a result, it's become possible to inject data into the browser&#x2019;s video player and use it to implement HLS.</p>
+
+<p>Technically, this requires HLS playback logic that requests HLS files from a server, transmuxes them into the correct mp4 format in javascript, and injects them into the video tag using MSE. There are a few FOSS libraries that do just that, including: <a href="https://github.com/dailymotion/hls.js">hlsjs</a>, videojs&#x2019;s <a href="https://github.com/videojs/videojs-contrib-hls">videojs-contrib-hls</a>, and <a href="https://github.com/Orange-OpenSource/hasplayer.js/tree/master">hasplayer</a>. Now we have HLS in the desktop browser, with only javascript, no Flash necessary. It&#x2019;s supported in Chrome, Firefox 42+, IE11+, Edge, and Opera.</p>
+
+<h4 id="performance">Performance</h4>
+
+<p>It&#x2019;s time for comparisons, performance, and analysis. In this section, I will show the results for tests run on videojs5 (with videojs-contrib-hls v1.0), its flash predecessor videojs4, hls.js, and its flash predecessor flashls. I&#x2019;ll focus on CPU performance testing. </p>
+
+<p>For each player I used Chrome's Timeline pane to track the browser's fps, Profile pane to record how much CPU time was utilized, and task manager to monitor the overall CPU usage.</p>
+
+<h5 id="hlsjs">Hlsjs</h5>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/hlsjs-timeline.jpg" alt="HLSJS Timeline - HLS Video Streaming Test">
+The main thread held 60fps, except for the timestamps around 4,000ms and 14,000ms (each 10 seconds) where it dropped to 30fps. This can probably be traced to the handling of the segment.</p>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/hlsjs-profile.jpg" alt="HLSJS Profile - HLS Video Streaming Test">
+I also ran CPU profiling for 20,098 ms. The total CPU time while profiling was 729.6ms (3.6% of the experiment length), 74% of which was Chrome&#x2019;s program thread.</p>
+
+<p>Examining the Chrome task manager, CPU usage was mostly 0-2%, with 4% peaks.</p>
+
+<h5 id="videojs5">Videojs5</h5>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/videojs5-timeline.jpg" alt="VideoJS5 Timeline - HLS Video Streaming Test">
+The main thread was a constant 60fps.</p>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/videojs5-profile.jpg" alt="VideoJS5 Profile - HLS Video Streaming Test">
+A CPU profiling test of 20,143ms showed that the total CPU run time was 794.83ms (3.9%), of which 77.8% was Chrome&#x2019;s program thread.</p>
+
+<p>Examining the Chrome task manager, CPU usage was mostly 0-1%, with 5% peaks.</p>
+
+<h5 id="videojs4">Videojs4</h5>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/videojs4-timeline.jpg" alt="VideoJS4 Timeline - HLS Video Streaming Test">
+Here we saw a big impact on fps, which decreased to 6 frames per second. This stalled the main thread for up to 160ms at a time.</p>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/videojs4-profile.jpg" alt="VideoJS4 Profile - HLS Video Streaming Test">
+CPU profiling for 20,084ms showed that the total CPU run time was 5,385.9ms (26.8%) and only 27.8% was Chrome&#x2019;s program thread.</p>
+
+<p>Examining the Chrome task manager, CPU usage was 16% on average, with peaks of 24% of CPU (divided between flash - 20% and page - 4%)</p>
+
+<h5 id="chromelessflashls">Chromeless Flashls</h5>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/flashls-timeline.jpg" alt="Flashls Timeline - HLS Video Streaming Test">
+The main thread held 60 fps, and dropped to 30 fps every 10 seconds.</p>
+
+<p><img src="https://blog.peer5.com/content/images/2015/11/flashls-profile.jpg" alt="Flashls Profile - HLS Video Streaming Test">
+CPU profiling of 20,092ms showed that CPU was active for 1,311.6ms (6.5%), 92.8% of which was Chrome&#x2019;s program thread.</p>
+
+<p>Examining the Chrome task manager, CPU usage was mostly 3-5%, with peaks of 8% (3% flash, 3% flash gpu, 3% page)</p>
+
+<h5 id="conclusion">Conclusion</h5>
+
+<p>Both videojs5 and hlsjs performed very well. They easily played 30fps HD videos without setting back the main thread. Videojs5 showed superb performance with 60fps videos as well and didn't drop any frames. Hlsjs dropped frames when processing new segments.</p>
+
+<p>Ranking the libraries cpu performance, I would suggest:</p>
+
+<ol>
+<li>videojs5 </li>
+<li>hlsjs </li>
+<li>flashls, </li>
+<li>videojs4</li>
+</ol>
+
+<p>The comparison isn&#x2019;t shown here, but both javascript players started faster than their Flash counterparts did due to Flash&#x2019;s asynchronous load requirements for the .swf file and the crossdomain file.</p>
+
+<p>It's important to mention that the libraries used are still very young and videojs still hasn&#x2019;t released javascript HLS support. We will likely see improvements in all of the libraries. These innovations, as well as others, will likely drive higher quality video and create better viewing experiences on the web.</p>
+
+<p>Peer5 is a peer-to-peer CDN that improves content delivery for live and on-demand video streams. Want to try Flashless HLS? Sign up for your free trial <a href="https://app.peer5.com/register">here</a>. <br>
+After registering, select JW7 and check the "Play HLS in Javascript" checkbox.</p>
+
+<h5 id="notes">Notes</h5>
+
+<ol>
+<li>Further tests need to be done with 4k videos. </li>
+<li>All tests were done on <em>Intel Corei7-4810MQ machine</em>. <br>
+The stream tested is <a href="http://www.streambox.fr/playlists/x36xhzz/url_9/193039199_mp4_h264_aac_fhd_7.m3u8">60fps-HD video</a>: <br>
+<em>Average segment duration: 9.92 seconds <br>
+Segment bitrate: Average: 6.31 Mbits/sec, Max: 10.83 Mbits/sec <br>
+Average segment structural overhead: 193.93 kbits/sec (3.07 %) <br>
+Track ID: 1 <br>
+Audio Codec: AAC-LC <br>
+Audio sample rate: 44100 Hz <br>
+ACL: Stereo (L R) <br>
+Track ID: 2 <br>
+Video Codec: avc1 <br>
+H.264 profile: High <br>
+H.264 level: 4.0 <br>
+Video resolution: 1920x1080 pixels <br>
+Video average IDR interval: 3.706 seconds, Standard deviation: 2.775 <br>
+Video frame rate: 60.000 fps <br>
+Average video bitrate: 5.96 Mbits/sec <br>
+Average audio bitrate: 151.79 kbits/sec</em></li>
+</ol>
+ </section>
+
+ </div>
+</body></html>

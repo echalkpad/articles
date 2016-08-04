@@ -1,0 +1,209 @@
+<!DOCTYPE html><html><head><title>Unit Testing and TDD in Node.js – Part 1</title></head><body>
+<h1>Unit Testing and TDD in Node.js – Part 1</h1><p><a href="https://www.codementor.io/nodejs/tutorial/unit-testing-nodejs-tdd-mocha-sinon" target="_new">Original URL</a></p>
+<p><blockquote>Testing is an important practice in software development to improve software quality. There are many forms of testing; manual testing, acceptance testing, unit testing, and a few others. In this post&hellip;</blockquote></p>
+<div><div class="detail template ng-non-bindable" id="detail">
+
+
+<p><img class="alignnone" src="https://s3.amazonaws.com/codementor_content/2015-Nov-week3/nodejs-test.jpg" alt="" width="484"></p>
+<p>Testing is an important practice in software development to improve software quality. There are many forms of testing; manual testing, acceptance testing, unit testing, and a few others. In this post we are going to look at unit testing in Node using the <a href="https://mochajs.org/" target="_blank">Mocha</a> test framework. Unit tests typically make up the majority of test suites. They test small units of code, typically a method or a function, <strong>in isolation</strong>. The key thing to remember is the <strong>in isolation</strong> aspect.</p>
+<p>In this post, we&#x2019;ll start off writing unit tests for a function that simply takes some input, returns some output, and has no dependencies. Then we will look at two types of test doubles, stubs and spies, using the Sinon library. Lastly, we will look at how to test asynchronous code in Mocha. Let&#x2019;s get started!</p>
+<h2 id="Installing_Mocha_and_Chai_0">Installing Mocha and Chai</h2>
+<p>To install Mocha, simply run:</p>
+<pre><code class="language-bash">npm install mocha -g
+</code></pre>
+<p>Unlike other JavaScript testing frameworks like Jasmine and QUnit, Mocha does not come with an assertion library. Instead, Mocha allows you to choose your own. Popular assertion libraries used with Mocha include <a href="https://github.com/tj/should.js/" target="_blank">should.js</a>, <a href="https://github.com/Automattic/expect.js" target="_blank">expect.js</a>, <a href="http://chaijs.com/" target="_blank">Chai</a>, and Node&#x2019;s built in <code>assert</code> module. In this post, we are going to use Chai.</p>
+<p>First, let&#x2019;s create a <code>package.json</code> file and install Chai:</p>
+<pre><code class="language-javascript">touch package.json
+echo {} &gt; package.json
+npm install chai --save-dev
+</code></pre>
+<p>Chai comes with three different assertion flavors. It has the <code>should</code> style, the <code>expect</code> style, and the <code>assert</code> style. They all get the job done and choosing one is just a matter of preference in how you want the language of your tests to read. Personally I like the <code>expect</code> style so we will be using that.</p>
+<h2 id="Your_First_Test_1">Your First Test</h2>
+<p><em>(<a href="https://github.com/skaterdav85/node-testing" target="_blank">Source code to project</a>)</em></p>
+<p>For our first example, we will use test driven development (TDD) to create a <code>CartSummary</code> constructor function, which will be used to total up items placed in a shopping cart. In short, TDD is the practice of writing tests before an implementation to drive the design of your code. TDD is practiced in the following steps:</p>
+<ol>
+<li>Write a test and watch it fail</li>
+<li>Write the minimal amount of code to make that test pass</li>
+<li>Repeat</li>
+</ol>
+<p>By following this process, you are guaranteed to have tests for your code because you are writing them first. It is not always possible, or it is sometimes very difficult, to write unit tests after the fact. Anyways, enough about TDD, let&#x2019;s see some code!</p>
+<pre><code class="language-javascript">// tests/part1/cart-summary-test.js
+var chai = require('chai');
+var expect = chai.expect; // we are using the "expect" style of Chai
+var CartSummary = require('./../../src/part1/cart-summary');
+
+describe('CartSummary', function() {
+ it('getSubtotal() should return 0 if no items are passed in', function() {
+ var cartSummary = new CartSummary([]);
+ expect(cartSummary.getSubtotal()).to.equal(0);
+ });
+});</code></pre>
+<p>The <code>describe</code> function is used to set up a group of tests with a name. I tend to put the module under test as the name, in this case <code>CartSummary</code>. A test is written using the <code>it</code> function. The <code>it</code> function is given a description as the first argument of what the module under test should do. The second argument of the <code>it</code> function is a function that will contain one or more assertions (also called expectations) using Chai in this example. Our first test simply verifies that the subtotal is 0 if the cart has no items.</p>
+<p>To run this test, run <code>mocha tests --recursive --watch</code> from the root of the project. The recursive flag will find all files in subdirectories, and the watch flag will watch all your source and test files and rerun the tests when they change. You should see something like this:</p>
+<p><img src="https://s3.amazonaws.com/codementor_content/2015-Nov-week3/failing-test-1.png" alt="failing-test-1.png"></p>
+<p>Our test is failing because we have not yet implemented <code>CartSummary</code>. Let&#x2019;s do that.</p>
+<pre><code class="language-javascript">// src/part1/cart-summary.js
+function CartSummary() {}
+
+CartSummary.prototype.getSubtotal = function() {
+ return 0;
+};
+
+module.exports = CartSummary;</code></pre>
+<p>Here we&#x2019;ve written the minimal amount of code to make our test pass.</p>
+<p><img src="https://s3.amazonaws.com/codementor_content/2015-Nov-week3/passing-test-1.png" alt="passing test-1"></p>
+<p>Let&#x2019;s move on to our next test.</p>
+<pre><code class="language-javascript">it('getSubtotal() should return the sum of the price articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii quantity for all items', function() {
+ var cartSummary = new CartSummary([{
+ id: 1,
+ quantity: 4,
+ price: 50
+ }, {
+ id: 2,
+ quantity: 2,
+ price: 30
+ }, {
+ id: 3,
+ quantity: 1,
+ price: 40
+ }]);
+
+ expect(cartSummary.getSubtotal()).to.equal(300);
+});</code></pre>
+<p><img src="https://s3.amazonaws.com/codementor_content/2015-Nov-week3/failing-test-2.png" alt="failing-test-2.png"></p>
+<p>The failing output shows what value <code>getSubtotal</code> returned in red and what value we expected in green. Let&#x2019;s revise <code>getSubtotal</code> so our test passes.</p>
+<pre><code class="language-javascript">// src/part1/cart-summary.js
+function CartSummary(items) {
+ this._items = items;
+}
+
+CartSummary.prototype.getSubtotal = function() {
+ if (this._items.length) {
+ return this._items.reduce(function(subtotal, item) {
+ return subtotal += (item.quantity articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii item.price);
+ }, 0);
+ }
+
+ return 0;
+};</code></pre>
+<p>Our test passes! We have successfully used TDD to implement the <code>getSubtotal</code> method.</p>
+<h2 id="Stubs_with_Sinon_2">Stubs with Sinon</h2>
+<p>Let&#x2019;s say we now want to add tax calculation to <code>CartSummary</code> in a <code>getTax()</code> method. The end usage will look like this:</p>
+<pre><code class="language-javascript">var cartSummary = new CartSummary([ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ... _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ ]);
+cartSummary.getTax('NY', function() {
+ // executed when the tax API request has finished
+});</code></pre>
+<p>The <code>getTax</code> method will use another module we will create called <code>tax</code> with a <code>calculate</code> method that will deal with the intricacies of calculating tax by state. Even though we have not implemented <code>tax</code>, we can still finish our <code>getTax</code> method as long as we identify a contract for the <code>tax</code> module. This contact will state that there should be a module called <code>tax</code> with a <code>calculate</code> method that takes three arguments: a subtotal, a state, and a callback function that will execute when the tax API request has completed. As mentioned before, unit tests test units in isolation. We want to test our <code>getTax</code> method isolated from <code>tax.calculate</code>. As long as <code>tax.calculate</code> abides by its code contract, or interface, <code>getTax</code> should work. What we can do is fake out <code>tax.calculate</code> when testing <code>getTax</code> using a stub, a type of test double that acts as a controllable replacement. Test doubles are often compared to stunt doubles, as they replace one object with another for testing purposes, similar to how actors and actresses are replaced with stunt doubles for dangerous action scenes. We can create this stub using the Sinon library.</p>
+<p>To install Sinon, run:</p>
+<pre><code class="language-bash">npm install sinon --save-dev
+</code></pre>
+<p>The first thing we have to do before we can stub out the <code>tax.calculate</code> method is define it. We don&#x2019;t have to implement the details of it, but the method <code>calculate</code> must exist on the <code>tax</code> object.</p>
+<pre><code class="language-javascript">// src/part1/tax.js
+module.exports = {
+ calculate: function(subtotal, state, done) {
+ // implemented later or in parallel by our coworker
+ }
+};</code></pre>
+<p>Now that <code>tax.calculate</code> has been created, we can stub it out with our pre-programmed replacement using Sinon:</p>
+<pre><code class="language-javascript">// tests/part1/cart-summary-test.js
+// ...
+var sinon = require('sinon');
+var tax = require('./../../src/part1/tax');
+
+describe('getTax()', function() {
+ beforeEach(function() {
+ sinon.stub(tax, 'calculate', function(subtotal, state, done) {
+ setTimeout(function() {
+ done({
+ amount: 30
+ });
+ }, 0);
+ });
+ });
+
+ afterEach(function() {
+ tax.calculate.restore();
+ });
+
+ it('get Tax() should execute the callback function with the tax amount', function(done) {
+ var cartSummary = new CartSummary([{
+ id: 1,
+ quantity: 4,
+ price: 50
+ }, {
+ id: 2,
+ quantity: 2,
+ price: 30
+ }, {
+ id: 3,
+ quantity: 1,
+ price: 40
+ }]);
+
+ cartSummary.getTax('NY', function(taxAmount) {
+ expect(taxAmount).to.equal(30);
+ done();
+ });
+ });
+});</code></pre>
+<p>We start by requiring Sinon and our tax module into the test. To stub out a method in Sinon, we call the <code>sinon.stub</code> function and pass it the object with the method being stubbed, the name of the method to be stubbed, and a function that will replace the original during our test.</p>
+<pre><code class="language-javascript">var stub = sinon.stub(object, 'method', func);</code></pre>
+<p>In this example, I have simply stubbed out <code>tax.calculate</code> with the following:</p>
+<pre><code class="language-javascript">function(subtotal, state, done) {
+ setTimeout(function() {
+ done({
+ amount: 30
+ });
+ }, 0);
+}</code></pre>
+<p>This is just a function that calls <code>done</code> with a static tax details object containing a tax amount of 30. <code>setTimeout</code> is used to mimic the asynchronous behavior of this method since in reality it will be making an asynchronous API call to some tax service. This happens in a <code>beforeEach</code> block which executes before every test. After each test, the <code>afterEach</code> block is executed which restores the original <code>tax.calculate</code>.</p>
+<p>This test verifies that the callback function passed to <code>getTax</code> is executed with the tax amount, not the entire tax details object that gets passed to the callback function for <code>tax.calculate</code>. As you can see, our test for <code>getTax</code> is passing even though we haven&#x2019;t implemented <code>tax.calculate</code> yet. We&#x2019;ve merely defined the interface of it. As long as <code>tax.calculate</code> upholds to this interface, both modules should work correctly together.</p>
+<p>This example also exhibits asynchronous testing. Specifying a parameter in the <code>it</code> function (called <code>done</code> in this example), Mocha will pass in a function and wait for it to execute before ending the test. The test will timeout and error if <code>done</code> is not invoked within 2000 milliseconds. If we had not made this an asynchronous test, the test would have finished before our expectation has run, leading us to think all of our tests are passing when in reality they are not.</p>
+<p>Now let&#x2019;s write the implementation for <code>getTax</code> to make our test pass:</p>
+<pre><code class="language-javascript">CartSummary.prototype.getTax = function(state, done) {
+ tax.calculate(this.getSubtotal(), state, function(taxInfo) {
+ done(taxInfo.amount);
+ });
+};</code></pre>
+<h2 id="Spies_with_Sinon_3">Spies with Sinon</h2>
+<p>One issue that our <code>getTax</code> method has is that our test does not verify that <code>tax.calculate</code> is called with the correct subtotal and state. Our test would still pass if we hardcoded subtotal and state values in the <code>getTax</code> implementation. Go ahead and give it a try in the <a href="https://github.com/skaterdav85/node-testing" target="_blank">sample code</a>. That&#x2019;s no good! To verify <code>tax.calculate</code> is called with the correct arguments, we can leverage Sinon spies.</p>
+<p>A spy is another type of test double that records how a function is used. This includes information such as what arguments a spy is called with, how many times a spy is called, and if the spy throws an error. The great thing about Sinon stubs is that they are built on top of spies! Here is our updated test:</p>
+<pre><code class="language-javascript">it('getTax() should execute the callback function with the tax amount', function(done) {
+ var cartSummary = new CartSummary([
+ {
+ id: 1,
+ quantity: 4,
+ price: 50
+ },
+ {
+ id: 2,
+ quantity: 2,
+ price: 30
+ },
+ {
+ id: 3,
+ quantity: 1,
+ price: 40
+ }
+ ]);
+
+ cartSummary.getTax('NY', function(taxAmount) {
+ expect(taxAmount).to.equal(30);
+ expect(tax.calculate.getCall(0).args[0]).to.equal(300);
+ expect(tax.calculate.getCall(0).args[1]).to.equal('NY');
+ done();
+ });
+});</code></pre>
+<p>Two more expectations were added to this test. <code>getCall</code> is used to get the first call to the stub for <code>tax.calculate</code>. <code>args</code> contains the arguments for that call. We are simply verifying that <code>tax.calculate</code> was called with the correct subtotal and state as opposed to hardcoded values.</p>
+<p>Sinon is a very powerful library and offers a lot of test double functionality for both Node and browser JavaScript testing that you will find useful so definitely check out the documentation.</p>
+<h2 id="Conclusion_4">Conclusion</h2>
+<p>In this post, we looked at a few practical examples of unit testing in Node using the Mocha testing framework, the Chai assertion library, and Sinon for test doubles in the form of stubbing and spying. I hope you enjoyed this post. If you have any questions, ask them below or reach me on Twitter <a href="https://twitter.com/skaterdav85" target="_blank">@skaterdav85</a>. <a href="https://www.codementor.io/nodejs/tutorial/unit-testing-tdd-node-js-nockjs-part-2" target="_blank">Part 2 will be about Testing HTTP Requests with Nock.</a></p>
+<p><a href="https://github.com/skaterdav85/node-testing" target="_blank">Source code</a></p>
+
+<h4>About the Author</h4>
+<p><img class="alignright" src="https://s3.amazonaws.com/codementor_content/2015-Oct-week3/davidtang.jpg" alt="" width="114">David Tang is a full-stack engineer passionate about testing, application architecture, and creating great user experiences. David is a part-time lecturer for the University of Southern California, and has contributed to or created popular repositories such as: Restangular, angular-data, validatorjs, and Backbone Computed Properties. Find more of David&#x2019;s tips and tricks on writing testable JavaScript on <a href="http://thejsguy.com/" target="_blank">his blog</a>!</p>
+
+
+</div>
+</div>
+</body></html>

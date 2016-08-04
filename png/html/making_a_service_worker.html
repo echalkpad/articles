@@ -1,0 +1,473 @@
+<!DOCTYPE html><html><head><title>Making A Service Worker</title></head><body>
+<h1>Making A Service Worker</h1><p><a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/" target="_new">Original URL</a></p>
+<p><blockquote>There&#x2019;s no shortage of boosterism or excitement about the fledgling service worker API, now shipping in some popular browsers. There are cookbooks and blog posts, code snippets and tools. But&hellip;</blockquote></p>
+<div><article class="post-236238 post type-post status-publish format-standard has-post-thumbnail hentry category-coding tag-javascript tag-service-worker tag-techniques">
+
+		
+
+			
+
+	
+	
+	<p>There&#x2019;s no shortage of boosterism or excitement about the fledgling <a href="https://www.w3.org/TR/service-workers/">service worker API</a>, now shipping in <a href="https://jakearchibald.github.io/isserviceworkerready/">some popular browsers</a>. There are cookbooks and blog posts, code snippets and tools. But I find that when I want to learn a new web concept thoroughly, rolling up my proverbial sleeves, diving in and building something from scratch is often ideal.</p>
+<p>The bumps and bruises, gotchas and bugs I ran into this time have benefits: Now I understand service workers a lot better, and with any luck I can help you avoid some of the headaches I encountered when working with the new API.</p>
+<p><strong>Service workers do a lot of different things</strong>; there are myriad ways to harness their powers. I decided to build a simple service worker for my (static, uncomplicated) website that roughly mirrors the features that the obsolete Application Cache API used to provide &#x2014; that is:</p>
+<ul>
+<li>make the website function offline,</li>
+<li>increase online performance by reducing network requests for certain assets,</li>
+<li>provide a customized offline fallback experience.</li>
+</ul>
+<p>Before beginning, I&#x2019;d like to acknowledge two people whose work made this possible. First, I&#x2019;m hugely indebted to Jeremy Keith for the implementation of service workers on his own website, which served as the starting point for my own code. I was inspired by <a href="https://adactio.com/journal/9888">his recent post</a> describing his ongoing service worker experiences. In fact, my work is so heavily derivative that I wouldn&#x2019;t have written about it except for Jeremy&#x2019;s exhortation in <a href="https://adactio.com/journal/9775">an earlier post</a>:</p>
+<blockquote>
+<p>So if you decide to play around with Service Workers, please, please share your experience.</p>
+</blockquote>
+<p>Secondly, all sorts of big old thanks to <a href="https://jakearchibald.com/">Jake Archibald</a> for his excellent technical review and feedback. Always nice when one of the <a href="https://github.com/slightlyoff/ServiceWorker">service worker specification</a>&#x2019;s creators and evangelists is able to set you straight!</p>
+<h3 id="what-is-a-service-worker-anyway">What Is A Service Worker Anyway? <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#what-is-a-service-worker-anyway" class="sr hsl">Link</a></h3>
+<p>A service worker is a <strong>script that stands between your website and the network</strong>, giving you, among other things, the ability to intercept network requests and respond to them in different ways.</p>
+<p>In order for your website or app to work, the browser fetches its assets &#x2014; such as HTML pages, JavaScript, images, fonts. In the past, the management of this was chiefly the browser&#x2019;s prerogative. If the browser couldn&#x2019;t access the network, you would probably see its &#x201C;Hey, you&#x2019;re offline&#x201D; message. There were techniques you could use to encourage the local caching of assets, but the browser often had the last say.</p>
+<p>This wasn&#x2019;t such a great experience for users who were offline, and it left web developers with little control over browser caching.</p>
+<p>Cue Application Cache (or AppCache), whose arrival several years ago seemed promising. It ostensibly let you dictate how different assets should be handled, so that your website or app could work offline. Yet AppCache&#x2019;s simple-looking syntax belied its <a href="http://alistapart.com/article/application-cache-is-a-douchebag">underlying confounding nature and lack of flexibility</a>.</p>
+<p>The fledgling service worker API can do what AppCache did, and a whole lot more. But it looks a little daunting at first. The specifications make for heavy and abstract reading, and numerous APIs are subservient to it or otherwise related: <code>cache</code>, <code>fetch</code>, etc. Service workers encompass so much functionality: push notifications and, soon, background syncing. Compared to AppCache, it looks&#x2026; complicated.</p>
+<p>Whereas AppCache (which, by the way, is <a href="https://html.spec.whatwg.org/multipage/browsers.html#offline">going away</a>) was easy to learn but terrible for every single moment after that (my opinion), service workers are more of an initial cognitive investment, but they are powerful and useful, and you can generally get yourself out of trouble if you break things.</p>
+<h3 id="some-basic-service-worker-concepts">Some Basic Service Worker Concepts <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#some-basic-service-worker-concepts" class="sr hsl">Link</a></h3>
+<p>A service worker is a file with some JavaScript in it. In that file you can write JavaScript as you know and love it, with a few important things to keep in mind.</p>
+<p><strong>Service worker scripts run in a separate thread in the browser</strong> from the pages they control. There are ways to communicate between workers and pages, but they execute in a separate <a href="https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerGlobalScope">scope</a>. That means you won&#x2019;t have access to the DOM of those pages, for example. I visualize a service worker as sort of running in a separate tab from the page it affects; this is not at all accurate, but it is a helpful rough metaphor for keeping myself out of confusion.</p>
+<p>JavaScript in a service worker must not block. You need to use asynchronous APIs. For example, you cannot use <code>localStorage</code> in a service worker (<code>localStorage</code> is a synchronous API). Humorously enough, even knowing this, I managed to run the risk of violating it, as we&#x2019;ll see.</p>
+<h4 id="registering-a-service-worker">Registering a Service Worker <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#registering-a-service-worker" class="sr hsl">Link</a></h4>
+<p>You make a service worker take effect by registering it. This registration is done from outside the service worker, by another page or script on your website. On my website, a global <code>site.js</code> script is included on every HTML page. I register my service worker from there.</p>
+<p>When you register a service worker, you (optionally) also tell it what <strong>scope</strong> it should apply itself to. You can instruct a service worker only to handle stuff for part of your website (for example, <code>'/blog/'</code>) or you can register it for your whole website (<code>'/'</code>) like I do.</p>
+<h4 id="service-worker-lifecycle-and-events">Service Worker Lifecycle And Events <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#service-worker-lifecycle-and-events" class="sr hsl">Link</a></h4>
+<p>A service worker does the bulk of its work by <strong>listening for relevant events and responding to them in useful ways</strong>. Different events are triggered at different points in a service worker&#x2019;s lifecycle.</p>
+<p>Once the service worker has been registered and downloaded, it gets <strong>installed</strong> in the background. Your service worker can listen for the <code>install</code> event and perform tasks appropriate for this stage.</p>
+<p>In our case, we want to take advantage of the <code>install</code> state to pre-cache a bunch of assets that we know we will want available offline later.</p>
+<p>After the <code>install</code> stage is finished, the service worker is then <strong>activated</strong>. That means the service worker is now in control of things within its <code>scope</code> and can do its thing. The <code>activate</code> event isn&#x2019;t too exciting for a new service worker, but we&#x2019;ll see how it&#x2019;s useful when updating a service worker with a new version.</p>
+<p>Exactly when activation occurs depends on whether this is a brand new service worker or an updated version of a pre-existing service worker. If the browser does not have a previous version of a given service worker already registered, activation will happen immediately after installation is complete.</p>
+<p>Once installation and activation are complete, they won&#x2019;t occur again until an updated version of the service worker is downloaded and registered.</p>
+<p>Beyond installation and activation, we&#x2019;ll be looking primarily at the <code>fetch</code> event today to make our service worker useful. But there are several useful events beyond that: <strong>sync</strong> events and <strong>notification</strong> events, for example.</p>
+<p>For extra credit or leisure fun, you can read more about the <a href="https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API#Interfaces">interfaces that service workers implement</a>. It&#x2019;s by implementing these interfaces that service workers get the bulk of their events and much of their extended functionality.</p>
+<h4 id="the-service-workers-promise-based-api">The Service Worker&#x2019;s Promise-Based API <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#the-service-workers-promise-based-api" class="sr hsl">Link</a></h4>
+<p>The service worker API makes heavy use of <code>Promises</code>. A promise represents the eventual result of an asynchronous operation, even if the actual value won&#x2019;t be known until the operation completes some time in the future.</p>
+<pre><code class="language-javascript">getAnAnswerToADifficultQuestionSomewhereFarAway()
+ .then(answer =&gt; {
+ console.log('I got the ${answer}!');
+ })
+ .catch(reason =&gt; {
+ console.log('I tried to figure it out but couldn't because ${reason}');
+});
+</code></pre>
+<p>The <code>getAnAnswer&#x2026;</code> function returns a <code>Promise</code> that (we hope) will eventually be fulfilled by, or resolve to, the <code>answer</code> we&#x2019;re looking for. Then, that <code>answer</code> can be fed to any chained <code>then</code> handler functions, or, in the sorry case of failure to achieve its objective, the <code>Promise</code> can be rejected &#x2014; often with a reason &#x2014; and <code>catch</code> handler functions can take care of these situations.</p>
+<p>There&#x2019;s more to promises, but I&#x2019;ll try to keep the examples here straightforward (or at least commented). I urge you to do some <a href="https://developer.mozilla.org/en-US/docs/Mozilla/JavaScript_code_modules/Promise.jsm/Promise">informative reading</a> if you&#x2019;re new to promises.</p>
+<p><strong>Note</strong>: I use certain ECMAScript6 (or ES2015) features in the sample code for service workers because browsers that support service workers also support these features. Specifically here, I am using <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/Arrow_functions">arrow functions</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/template_strings">template strings</a>.</p>
+<h4 id="other-service-worker-necessities">Other Service Worker Necessities <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#other-service-worker-necessities" class="sr hsl">Link</a></h4>
+<p>Also, note that service workers <strong>require HTTPS</strong> to work. There is an important and useful exception to this rule: Service workers work for <code>localhost</code> on insecure <code>http</code>, which is a relief because setting up local SSL is sometimes a slog.</p>
+<p>Fun fact: This project forced me to do something I&#x2019;d been putting off for a while: getting and configuring SSL for the <code>www</code> subdomain of my website. This is something I urge folks to consider doing because pretty much all of the fun new stuff hitting the browser in the future will require SSL to be used.</p>
+<p>All of the stuff we&#x2019;ll put together works today in Chrome (I use version 47). Any day now, Firefox 44 will ship, and it supports service workers. <a href="https://jakearchibald.github.io/isserviceworkerready/">Is Service Worker Ready?</a> provides granular information about support in different browsers.</p>
+<h3 id="registering-installing-and-activating-a-service-worker">Registering, Installing And Activating A Service Worker <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#registering-installing-and-activating-a-service-worker" class="sr hsl">Link</a></h3>
+<p>Now that we&#x2019;ve taken care of some theory, we can start putting together our service worker.</p>
+<p>To install and activate our service worker, we want to listen for <code>install</code> and <code>activate</code> events and act on them.</p>
+<p>We can start with an empty file for our service worker and add a couple of <code>eventListeners</code>. In <code>serviceWorker.js</code>:</p>
+<pre><code class="language-javascript">self.addEventListener('install', event =&gt; {
+ // Do install stuff
+});
+
+self.addEventListener('activate', event =&gt; {
+ // Do activate stuff: This will come later on.
+});</code></pre>
+<h4 id="registering-our-service-worker">Registering Our Service Worker <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#registering-our-service-worker" class="sr hsl">Link</a></h4>
+<p>Now we need to tell the pages on our website to use the service worker.</p>
+<p>Remember, this registration happens from outside the service worker &#x2014; in my case, from within a script (<code>/js/site.js</code>) that is included on every page of my website.</p>
+<p>In my <code>site.js</code>:</p>
+<pre><code class="language-javascript">if ('serviceWorker' in navigator) {
+ navigator.serviceWorker.register('/serviceWorker.js', {
+ <span class="hljs-attribute">scope: '/'</span>
+ });
+}</code></pre>
+<h4 id="pre-caching-static-assets-during-install">Pre-Caching Static Assets During Install <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#pre-caching-static-assets-during-install" class="sr hsl">Link</a></h4>
+<p>I want to use the install stage to pre-cache some assets on my website.</p>
+<ul>
+<li>By pre-caching some static assets (images, CSS, JavaScript) that are used by many pages on my website, I can speed up loading times by grabbing these out of cache, instead of fetching from the network on subsequent page loads.</li>
+<li>By pre-caching an offline fallback page, I can show a nice page when I can&#x2019;t fulfill a page request because the user is offline.</li>
+</ul>
+<p>The steps to do this are:</p>
+<ol>
+<li>Tell the <code>install</code> event to hang on and not to complete until I&#x2019;ve done what I need to do by using <code>event.waitUntil</code>.</li>
+<li>Open the appropriate <code>cache</code>, and stick the static assets in it by using <code>Cache.addAll</code>. In <a href="https://developers.google.com/web/progressive-web-apps?hl=en">progressive web app</a> parlance, these assets make up my &#x201C;application shell.&#x201D;</li>
+</ol>
+<p>In <code>/serviceWorker.js</code>, let&#x2019;s expand the <code>install</code> handler:</p>
+<pre><code class="language-javascript">self.addEventListener('install', event =&gt; {
+
+ function onInstall () {
+ return caches.open('static')
+ .then(cache =&gt; cache.addAll([
+ '/images/lyza.gif',
+ '/js/site.js',
+ '/css/styles.css',
+ '/offline/',
+ '/'
+ ])
+ );
+ }
+
+ event.waitUntil(onInstall(event));
+});</code></pre>
+<p>The service worker implements the <a href="https://developer.mozilla.org/en-US/docs/Web/API/CacheStorage"><code>CacheStorage</code> interface</a>, which makes the <code>caches</code> property available globally in our service worker. There are several useful methods on <code>caches</code> &#x2014; for example, <code>open</code> and <code>delete</code>.</p>
+<p>You can see <code>Promises</code> at work here: <code>caches.open</code> returns a <code>Promise</code> resolving to a <a href="https://developer.mozilla.org/en-US/docs/Web/API/Cache"><code>cache</code></a> object once it has successfully opened the <code>static</code> cache; <code>addAll</code> also returns a <code>Promise</code> that resolves when all of the items passed to it have been stashed in the cache.</p>
+<p>I tell the <code>event</code> to wait until the <code>Promise</code> returned by my handler function is resolved successfully. Then we can be sure that all of those pre-cache items get sorted before the installation is complete.</p>
+<h3 id="console-confusions">Console Confusions <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#console-confusions" class="sr hsl">Link</a></h3>
+<h4 id="stale-logging">Stale Logging <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#stale-logging" class="sr hsl">Link</a></h4>
+<p>Possibly not a bug, but <a href="https://code.google.com/p/chromium/issues/detail?id=543104&amp;q=service%20worker%20event&amp;colspec=ID%20Pri%20M%20Stars%20ReleaseBlock%20Cr%20Status%20Owner%20Summary%20OS%20Modified#makechanges">certainly a confusion</a>: If you <code>console.log</code> from service workers, Chrome will continue to re-display (rather than clear) those log messages on subsequent page requests. This can make it <em>seem</em> like events are firing too many times or like code is executing over and over.</p>
+<p>For example, let&#x2019;s add a <code>log</code> statement to our <code>install</code> handler:</p>
+<pre><code class="language-javascript">self.addEventListener('install', event =&gt; {
+ // &#x2026; as before
+ console.log('installing');
+});
+</code></pre>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/01-stale-logging-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/01-stale-logging-preview-opt.png" alt="Stale Logs Freak Me Out"></a><br>
+<figcaption>As of Chrome 47, the &#x201C;installing&#x201D; log message will continue to appear on subsequent page requests. Chrome isn&#x2019;t really firing the <code>install</code> event on every page load. Instead, it&#x2019;s showing stale logs. (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/01-stale-logging-opt.png">View large version</a>)</figcaption>
+</figure>
+<h4 id="an-error-when-things-are-ok">An Error When Things Are OK <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#an-error-when-things-are-ok" class="sr hsl">Link</a></h4>
+<p>Another odd thing is that once a service worker is installed and activated, subsequent page loads for any page within its scope will always <a href="https://code.google.com/p/chromium/issues/detail?id=541797">cause a single error in the console</a>. I thought I was doing something wrong.</p>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/02-console-error-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/02-console-error-preview-opt.png" alt="Omnimpresent Chrome Service Worker Error"></a><br>
+<figcaption>As of Chrome 47, accessing a page with an already-registered service worker will always cause this error in the console. (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/02-console-error-opt.png">View large version</a>)</figcaption>
+</figure>
+<h3 id="what-weve-accomplished-so-far">What We&#x2019;ve Accomplished So Far <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#what-weve-accomplished-so-far" class="sr hsl">Link</a></h3>
+<p>The service worker handles the <code>install</code> event and pre-caches some static assets. If you were to use this service worker and register it, it would indeed pre-cache the indicated assets but wouldn&#x2019;t yet be able to take advantage of them offline.</p>
+<p>The contents of <code>serviceWorker.js</code> <a href="https://github.com/lyzadanger/serviceworker-example/blob/master/01-install-precache/serviceWorker.js">are on GitHub</a>.</p>
+<h3 id="fetch-handling-with-service-workers">Fetch Handling With Service Workers <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#fetch-handling-with-service-workers" class="sr hsl">Link</a></h3>
+<p>So far, our service worker has a fleshed-out <code>install</code> handler but doesn&#x2019;t <em>do</em> anything beyond that. The magic of our service worker is really going to happen when <code>fetch</code> events are triggered.</p>
+<p>We can respond to fetches in different ways. By using different <strong>network strategies</strong>, we can tell the browser to always try to fetch certain assets from the network (making sure key content is fresh), while favoring cached copies for static assets &#x2014; really slimming down our page payloads. We can also provide a nice offline fallback if all else fails.</p>
+<p>Whenever a browser wants to fetch an asset that is within the scope of this service worker, we can hear about it by, yep, adding an <code>eventListener</code> in <code>serviceWorker.js</code>:</p>
+<pre><code class="language-javascript">self.addEventListener('fetch', event =&gt; {
+ // &#x2026; Perhaps respond to this fetch in a useful way?
+});
+</code></pre>
+<p>Again, every fetch that falls within this service worker&#x2019;s scope (i.e. path) will trigger this event &#x2014; HTML pages, scripts, images, CSS, you name it. We can selectively handle the way the browser responds to any of these fetches.</p>
+<h4 id="should-we-handle-this-fetch">Should We Handle This Fetch? <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#should-we-handle-this-fetch" class="sr hsl">Link</a></h4>
+<p>When a <code>fetch</code> event occurs for an asset, the first thing I want to determine is whether this service worker should interfere with the fetching of the given resource. Otherwise, it should do nothing and let the browser assert its default behavior.</p>
+<p>We&#x2019;ll end up with basic logic like this in <code>serviceWorker.js</code>:</p>
+<pre><code class="language-javascript">self.addEventListener('fetch', event =&gt; {
+
+ function shouldHandleFetch (event, opts) {
+ // Should we handle this fetch?
+ }
+
+ function onFetch (event, opts) {
+ // &#x2026; TBD: Respond to the fetch
+ }
+
+ if (shouldHandleFetch(event, config)) {
+ onFetch(event, config);
+ }
+});</code></pre>
+<p>The <code>shouldHandleFetch</code> function assesses a given request to determine whether we should provide a response or let the browser assert its default handling.</p>
+<h4 id="why-not-use-promises">Why Not Use Promises? <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#why-not-use-promises" class="sr hsl">Link</a></h4>
+<p>To keep with service worker&#x2019;s predilection for promises, the first version of my <code>fetch</code> event handler looked like this:</p>
+<pre><code class="language-javascript">self.addEventListener('fetch', event =&gt; {
+
+ function shouldHandleFetch (event, opts) { }
+ function onFetch (event, opts) { }
+
+ shouldHandleFetch(event, config)
+ .then(onFetch(event, config))
+ .catch(&#x2026;);
+});</code></pre>
+<p>Seems logical, but I was making a couple of rookie mistakes with promises. I swear I did sense a code smell even initially, but it was Jake who set me straight on the errors of my ways. (Lesson: As always, if code feels wrong, it probably is.)</p>
+<p>Promise rejections should not be used to indicate, &#x201C;I got an answer I didn&#x2019;t like.&#x201D; Instead, rejections should indicate, &#x201C;Ah, crap, something went wrong in trying to get the answer.&#x201D; That is, <a href="https://www.w3.org/2001/tag/doc/promises-guide#rejections-should-be-exceptional">rejections should be exceptional</a>.</p>
+<h4 id="criteria-for-valid-requests">Criteria for Valid Requests <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#criteria-for-valid-requests" class="sr hsl">Link</a></h4>
+<p>Right, back to determining whether a given fetch request is applicable for my service worker. My site-specific criteria are as follows:</p>
+<ol>
+<li>The requested URL should represent something I want to cache or respond to. Its path should match a <code>Regular Expression</code> of valid paths.</li>
+<li>The request&#x2019;s HTTP method should be <code>GET</code>.</li>
+<li>The request should be for a resource from my origin (<code>lyza.com</code>).</li>
+</ol>
+<p>If any of the <code>criteria</code> tests evaluate to <code>false</code>, we should not handle this request. In <code>serviceWorker.js</code>:</p>
+<pre><code class="language-javascript">function shouldHandleFetch (event, opts) {
+ var request = event.request;
+ var url = new URL(request.url);
+ var criteria = {
+ matchesPathPattern: !!(opts.cachePathPattern.exec(url.pathname),
+ isGETRequest : request.method === 'GET',
+ isFromMyOrigin : url.origin === self.location.origin
+ };
+
+ // Create a new array with just the keys from criteria that have
+ // failing (i.e. false) values.
+ var failingCriteria = Object.keys(criteria)
+ .filter(criteriaKey =&gt; !criteria[criteriaKey]);
+
+ // If that failing array has any length, one or more tests failed.
+ return !failingCriteria.length;
+}</code></pre>
+<p>Of course, the criteria here are my own and would vary from site to site. <code>event.request</code> is a <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request"><code>Request</code></a> object that has all kinds of data you can look at to assess how you&#x2019;d like your fetch handler to behave.</p>
+<p>Trivial note: If you noticed the incursion of <code>config</code>, passed as <code>opts</code> to handler functions, well spotted. I factored out some reusable <code>config</code>-like values and created a <code>config</code> object in the top-level scope of the service worker:</p>
+<pre><code class="language-javascript">var config = {
+ staticCacheItems: [
+ '/images/lyza.gif',
+ '/css/styles.css',
+ '/js/site.js',
+ '/offline/',
+ '/'
+ ],
+ cachePathPattern: /^\/(?:(20[0-9]{2}|about|blog|css|images|js)\/(.+)?)?$/
+};
+</code></pre>
+<h4 id="why-whitelist">Why Whitelist? <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#why-whitelist" class="sr hsl">Link</a></h4>
+<p>You may be wondering why I&#x2019;m only caching things with paths that match this regular expression:</p>
+<p><code>/^\/(?:(20[0-9]{2}|about|blog|css|images|js)\/(.+)?)?$/</code></p>
+<p>&#x2026; instead of caching anything coming from my own origin. A couple of reasons:</p>
+<ul>
+<li>I don&#x2019;t want to cache the service worker itself.</li>
+<li>When I&#x2019;m developing my website locally, some requests generated are for things I don&#x2019;t want to cache. For example, I use <code>browserSync</code>, which kicks off a bunch of related requests in my development environment. I don&#x2019;t want to cache that stuff! It seemed messy and challenging to try to think of everything I wouldn&#x2019;t want to cache (not to mention, a little weird to have to spell it out in my service worker&#x2019;s configuration). So, a whitelist approach seemed more natural.</li>
+</ul>
+<h3 id="writing-the-fetch-handler">Writing The Fetch Handler <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#writing-the-fetch-handler" class="sr hsl">Link</a></h3>
+<p>Now we&#x2019;re ready to pass applicable <code>fetch</code> requests on to a handler. The <code>onFetch</code> function needs to determine:</p>
+<ol>
+<li>what kind of resource is being requested,</li>
+<li>and how I should fulfill this request.</li>
+</ol>
+<h4 id="1-what-kind-of-resource-is-being-requested">1. What Kind of Resource Is Being Requested? <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#1-what-kind-of-resource-is-being-requested" class="sr hsl">Link</a></h4>
+<p>I can look at the <code>HTTP Accept</code> header to get a hint about what kind of asset is being requested. This helps me figure out how I want to handle it.</p>
+<pre><code class="language-javascript">function onFetch (event, opts) {
+ var request = event.request;
+ var acceptHeader = request.headers.get('Accept');
+ var resourceType = 'static';
+ var cacheKey;
+
+ if (acceptHeader.indexOf('text/html') !== -1) {
+ resourceType = 'content';
+ } else if (acceptHeader.indexOf('image') !== -1) {
+ resourceType = 'image';
+ }
+
+ // {String} [static|image|content]
+ cacheKey = resourceType;
+ // &#x2026; now do something
+}</code></pre>
+<p>To stay organized, I want to stick different kinds of resources into different caches. This will allow me to manage those caches later. These cache key <code>String</code>s are arbitrary &#x2014; you can call your caches whatever you&#x2019;d like; the cache API doesn&#x2019;t have opinions.</p>
+
+<p>The next thing for <code>onFetch</code> to do is to <code>respondTo</code> the <code>fetch</code> event with an intelligent <code>Response</code>.</p>
+<pre><code class="language-javascript">function onFetch (event, opts) {
+ // 1. Determine what kind of asset this is&#x2026; (above).
+ if (resourceType === 'content') {
+ // Use a network-first strategy.
+ event.respondWith(
+ fetch(request)
+ .then(response =&gt; addToCache(cacheKey, request, response))
+ .catch(() =&gt; fetchFromCache(event))
+ .catch(() =&gt; offlineResponse(opts))
+ );
+ } else {
+ // Use a cache-first strategy.
+ event.respondWith(
+ fetchFromCache(event)
+ .catch(() =&gt; fetch(request))
+ .then(response =&gt; addToCache(cacheKey, request, response))
+ .catch(() =&gt; offlineResponse(resourceType, opts))
+ );
+ }
+}</code></pre>
+<h4 id="careful-with-async">Careful With Async! <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#careful-with-async" class="sr hsl">Link</a></h4>
+<p>In our case, <code>shouldHandleFetch</code> doesn&#x2019;t do anything asynchronous, and neither does <code>onFetch</code> up to the point of <code>event.respondWith</code>. If something asynchronous <em>had</em> happened before that, we would be in trouble. <code>event.respondWith</code> must be called between the <code>fetch</code> event firing and control returning to the browser. Same goes for <code>event.waitUntil</code>. Basically, if you&#x2019;re handling an event, either do something immediately (synchronously) or tell the browser to hang on until your asynchronous stuff is done.</p>
+<h3 id="html-content-implementing-a-network-first-strategy">HTML Content: Implementing A Network-First Strategy <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#html-content-implementing-a-network-first-strategy" class="sr hsl">Link</a></h3>
+<p>Responding to <code>fetch</code> requests involves implementing an appropriate network strategy. Let&#x2019;s look more closely at the way we&#x2019;re responding to requests for HTML content (<code>resourceType === 'content'</code>).</p>
+<pre><code class="language-javascript">if (resourceType === 'content') {
+ // Respond with a network-first strategy.
+ event.respondWith(
+ fetch(request)
+ .then(response =&gt; addToCache(cacheKey, request, response))
+ .catch(() =&gt; fetchFromCache(event))
+ .catch(() =&gt; offlineResponse(opts))
+ );
+}</code></pre>
+<p>The way we fulfill requests for content here is a network-first strategy. Because HTML content is the core concern of my website and it changes often, I always try to get fresh HTML documents from the network.</p>
+<p>Let&#x2019;s step through this.</p>
+<h4 id="1-try-fetching-from-the-network">1. Try Fetching From the Network <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#1-try-fetching-from-the-network" class="sr hsl">Link</a></h4>
+<pre><code class="language-javascript">fetch(request)
+ .then(response =&gt; addToCache(cacheKey, request, response))
+</code></pre>
+<p>If the network request is successful (i.e. the promise resolves), go ahead and stash a copy of the HTML document in the appropriate cache (<code>content</code>). This is called <strong>read-through caching</strong>:</p>
+<pre><code class="language-javascript">function addToCache (cacheKey, request, response) {
+ if (response.ok) {
+ var copy = response.clone();
+ caches.open(cacheKey).then( cache =&gt; {
+ cache.put(request, copy);
+ });
+ return response;
+ }
+}</code></pre>
+<p>Responses may be <strong>used only once</strong>.</p>
+<p>We need to do two things with the <code>response</code> we have:</p>
+<ul>
+<li>cache it,</li>
+<li>respond to the event with it (i.e. return it).</li>
+</ul>
+<p>But <code>Response</code> objects may be used only once. By cloning it, we are able to create a copy for the cache&#x2019;s use:</p>
+<p><code class="language-javascript">var copy = response.clone();</code></p>
+<p><strong>Don&#x2019;t cache bad responses.</strong> Don&#x2019;t make the same mistake I did. The first version of my code didn&#x2019;t have this conditional:</p>
+<pre><code class="language-javascript">if (response.ok)</code></pre>
+<p>Pretty awesome to end up with 404 or other bad responses in the cache! Only cache happy responses.</p>
+<h4 id="2-try-to-retrieve-from-cache">2. Try to Retrieve From Cache <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#2-try-to-retrieve-from-cache" class="sr hsl">Link</a></h4>
+<p>If retrieving the asset from the network succeeds, we&#x2019;re done. However, if it doesn&#x2019;t, we might be offline or otherwise network-compromised. Try retrieving a previously cached copy of the HTML from cache:</p>
+<pre><code class="language-javascript">fetch(request)
+ .then(response =&gt; addToCache(cacheKey, request, response))
+ .catch(() =&gt; fetchFromCache(event))
+</code></pre>
+<p>Here is the <code>fetchFromCache</code> function:</p>
+<pre><code class="language-javascript">function fetchFromCache (event) {
+ return caches.match(event.request).then(response =&gt; {
+ if (!response) {
+ // A synchronous error that will kick off the catch handler
+ throw Error('${event.request.url} not found in cache');
+ }
+ return response;
+ });
+}</code></pre>
+<p>Note: Don&#x2019;t indicate which cache you wish to check with <code>caches.match</code>; check &#x2019;em all at once.</p>
+<h4 id="3-provide-an-offline-fallback">3. Provide an Offline Fallback <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#3-provide-an-offline-fallback" class="sr hsl">Link</a></h4>
+<p>If we&#x2019;ve made it this far but there&#x2019;s nothing in the cache we can respond with, return an appropriate offline fallback, if possible. For HTML pages, this is the page cached from <code>/offline/</code>. It&#x2019;s a reasonably well-formatted page that tells the user they&#x2019;re offline and that we can&#x2019;t fulfill what they&#x2019;re after.</p>
+<pre><code class="language-javascript">fetch(request)
+ .then(response =&gt; addToCache(cacheKey, request, response))
+ .catch(() =&gt; fetchFromCache(event))
+ .catch(() =&gt; offlineResponse(opts))
+</code></pre>
+<p>And here is the <code>offlineResponse</code> function:</p>
+<pre><code class="language-javascript">function offlineResponse (resourceType, opts) {
+ if (resourceType === 'image') {
+ return new Response(opts.offlineImage,
+ { headers: { 'Content-Type': 'image/svg+xml' } }
+ );
+ } else if (resourceType === 'content') {
+ return caches.match(opts.offlinePage);
+ }
+ return undefined;
+}</code></pre>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/03-offline-page-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/03-offline-page-preview-opt.png" alt="Providing an offline page"></a><br>
+<figcaption>An offline page (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/03-offline-page-opt.png">View large version</a>)</figcaption>
+</figure>
+<h3 id="other-resources-implementing-a-cache-first-strategy">Other Resources: Implementing A Cache-First Strategy <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#other-resources-implementing-a-cache-first-strategy" class="sr hsl">Link</a></h3>
+<p>The fetch logic for resources other than HTML content uses a <strong>cache-first strategy</strong>. Images and other static content on the website rarely change; so, check the cache first and avoid the network roundtrip.</p>
+<pre><code class="language-javascript">event.respondWith(
+ fetchFromCache(event)
+ .catch(() =&gt; fetch(request))
+ .then(response =&gt; addToCache(cacheKey, request, response))
+ .catch(() =&gt; offlineResponse(resourceType, opts))
+);
+</code></pre>
+<p>The steps here are:</p>
+<ol>
+<li>try to retrieve the asset from cache;</li>
+<li>if that fails, try retrieving from the network (with read-through caching);</li>
+<li>if that fails, provide an offline fallback resource, if possible.</li>
+</ol>
+<h4 id="offline-image">Offline Image <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#offline-image" class="sr hsl">Link</a></h4>
+<p>We can return an SVG image with the text &#x201C;Offline&#x201D; as an offline fallback by completing the <code>offlineResource</code> function:</p>
+<pre><code class="language-javascript">function offlineResponse (resourceType, opts) {
+ if (resourceType === 'image') {
+ // &#x2026; return an offline image
+ } else if (resourceType === 'content') {
+ return caches.match('/offline/');
+ }
+ return undefined;
+}</code></pre>
+<p>And let&#x2019;s make the relevant updates to <code>config</code>:</p>
+<pre><code class="language-javascript">var config = {
+ // &#x2026;
+ offlineImage: '&lt;svg role="img" aria-labelledby="offline-title"'
+ + 'viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg"&gt;'
+ + '&lt;title id="offline-title"&gt;Offline&lt;/title&gt;'
+ + '&lt;g fill="none" fill-rule="evenodd"&gt;&lt;path fill=&gt;"#D8D8D8" d="M0 0h400v300H0z"/&gt;'
+ + '&lt;text fill="#9B9B9B" font-family="Times New Roman,Times,serif" font-size="72" font-weight="bold"&gt;'
+ + '&lt;tspan x="93" y="172"&gt;offline&lt;/tspan&gt;&lt;/text&gt;&lt;/g&gt;&lt;/svg&gt;',
+ offlinePage: '/offline/'
+};
+</code></pre>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/04-offline-image-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/04-offline-image-preview-opt.png" alt="Providing an offline image"></a><br>
+<figcaption>An offline image. Credit for the SVG source goes to Jeremy Keith. (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/04-offline-image-opt.png">View large version</a>)</figcaption>
+</figure>
+<h4 id="watch-out-for-cdns">Watch Out for CDNs <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#watch-out-for-cdns" class="sr hsl">Link</a></h4>
+<p>Watch out for CDNs if you are restricting fetch handling to your origin. When constructing my first service worker, I forgot that my hosting provider sharded assets (images and scripts) onto its CDN, so that they no were no longer served from my website&#x2019;s origin (<code>lyza.com</code>). Whoops! That didn&#x2019;t work. I ended up disabling the CDN for the affected assets (but optimizing those assets, of course!).</p>
+<h3 id="completing-the-first-version">Completing The First Version <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#completing-the-first-version" class="sr hsl">Link</a></h3>
+<p>The first version of our service worker is now done. We have an <code>install</code> handler and a fleshed-out <code>fetch</code> handler that can respond to applicable fetches with optimized responses, as well as provide cached resources and an offline page when offline.</p>
+<p>As users browse the website, they&#x2019;ll continue to build up more cached items. When offline, they&#x2019;ll be able to continue to browse items they&#x2019;ve already got cached, or they&#x2019;ll see an offline page (or image) if the resource requested isn&#x2019;t available in cache.</p>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/05-preview-offline-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/05-preview-offline-preview-opt.png" alt="Testing Offline Mode"></a><br>
+<figcaption>In Chrome, you can test how your service worker behaves offline by entering &#x201C;device mode&#x201D; and selecting the &#x201C;Offline&#x201D; network preset. This is an invaluable trick. (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/05-preview-offline-opt.png">View large version</a>)</figcaption>
+</figure>
+<p>The full code with fetch handling (<code>serviceWorker.js</code>) <a href="https://github.com/lyzadanger/serviceworker-example/blob/master/02-fetch-handling/serviceWorker.js">is on GitHub</a>.</p>
+<h3 id="versioning-and-updating-the-service-worker">Versioning And Updating The Service Worker <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#versioning-and-updating-the-service-worker" class="sr hsl">Link</a></h3>
+<p>If nothing were ever going to change on our website again, we could say we&#x2019;re done. However, service workers need to be updated from time to time. Maybe I&#x2019;ll want to add more cache-able paths. Maybe I want to evolve the way my offline fallbacks work. Maybe there&#x2019;s something slightly buggy in my service worker that I want to fix.</p>
+<p>I want to stress that there are automated tools for making service-worker management part of your workflow, like <a href="https://github.com/GoogleChrome/sw-precache">Service Worker Precache</a> from Google. You don&#x2019;t <em>need</em> to manage versioning this by hand. However, the complexity on my website is low enough that I use a human versioning strategy to manage changes to my service worker. This consists of:</p>
+<ul>
+<li>a simple version string to indicate versions,</li>
+<li>implementation of an <code>activate</code> handler to clean up after old versions,</li>
+<li>updating of the <code>install</code> handler to make updated service workers <code>activate</code> faster.</li>
+</ul>
+<h3 id="versioning-cache-keys">Versioning Cache Keys <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#versioning-cache-keys" class="sr hsl">Link</a></h3>
+<p>I can add a <code>version</code> property to my <code>config</code> object:</p>
+<pre><code class="language-javascript">version: 'aether'</code></pre>
+<p>This should change any time I want to deploy an updated version of my service worker. I use the names of Greek deities because they&#x2019;re more interesting to me than random strings or numbers.</p>
+<p>Note: I made some changes to the code, adding a convenience function (<code>cacheName</code>) to generate prefixed cache keys. It&#x2019;s tangential, so I&#x2019;m not including it here, but you can see it in the <a href="https://github.com/lyzadanger/serviceworker-example/blob/master/03-versioning/serviceWorker.js">completed service worker code</a>.</p>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/06-cache-contents-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/06-cache-contents-opt.png" alt="Cache contents in Chrome Developer Tools"></a><br>
+<figcaption>In Chrome, you can see the contents of caches in the &#x201C;Resources&#x201D; tab. You can see how different versions of my service worker have different cache names. (This is version <code>achilles</code>.) (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/06-cache-contents-opt.png">View large version</a>)</figcaption>
+</figure>
+<h4 id="dont-rename-your-service-worker">Don&#x2019;t Rename Your Service Worker <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#dont-rename-your-service-worker" class="sr hsl">Link</a></h4>
+<p>At one point, I was futzing around with naming conventions for the service worker&#x2019;s file name. Don&#x2019;t do this. If you do, the browser will register the new service worker, but the old service worker will stay installed, too. This is a messy state of affairs. I&#x2019;m sure there&#x2019;s a workaround, but I&#x2019;d say don&#x2019;t rename your service worker.</p>
+<h4 id="dont-use-importscripts-for-config">Don&#x2019;t Use importScripts for config <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#dont-use-importscripts-for-config" class="sr hsl">Link</a></h4>
+<p>I went down a path of putting my <code>config</code> object in an external file and using <a href="https://developer.mozilla.org/en-US/docs/Web/API/WorkerGlobalScope/importScripts"><code>self.importScripts()</code></a> in the service worker file to pull that script in. That seemed like a reasonable way to manage my <code>config</code> outside of the service worker, but there was a hitch.</p>
+<p>The browser byte-compares service worker files to determine whether they have been updated &#x2014; that&#x2019;s how it knows when to re-trigger a download-and-install cycle. Changes to the external <code>config</code> don&#x2019;t cause any changes to the service worker itself, meaning that changes to the <code>config</code> weren&#x2019;t causing the service worker to update. Whoops.</p>
+<h3 id="adding-an-activate-handler">Adding An Activate Handler <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#adding-an-activate-handler" class="sr hsl">Link</a></h3>
+<p>The purpose of having version-specific cache names is so that we can clean up caches from previous versions. If there are caches around during activation that are not prefixed with the current version string, we&#x2019;ll know that they should be deleted because they are crufty.</p>
+<h4 id="cleaning-up-old-caches">Cleaning Up Old Caches <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#cleaning-up-old-caches" class="sr hsl">Link</a></h4>
+<p>We can use a function to clean up after old caches:</p>
+<pre><code class="language-javascript">function onActivate (event, opts) {
+ return caches.keys()
+ .then(cacheKeys =&gt; {
+ var oldCacheKeys = cacheKeys.filter(key =&gt;
+ key.indexOf(opts.version) !== 0
+ );
+ var deletePromises = oldCacheKeys.map(oldKey =&gt; caches.delete(oldKey));
+ return Promise.all(deletePromises);
+ });
+}</code></pre>
+<h4 id="speeding-up-install-and-activate">Speeding Up Install and Activate <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#speeding-up-install-and-activate" class="sr hsl">Link</a></h4>
+<p>An updated service worker will get downloaded and will <code>install</code> in the background. It is now a <strong>worker in waiting</strong>. By default, the updated service worker will not activate while any pages are loaded that are still using the old service worker. However, we can speed that up by making a small change to our <code>install</code> handler:</p>
+<pre><code class="language-javascript">self.addEventListener('install', event =&gt; {
+ // &#x2026; as before
+
+ event.waitUntil(
+ onInstall(event, config)
+ .then( () =&gt; self.skipWaiting() )
+ );
+});</code></pre>
+<p><code>skipWaiting</code> will cause <code>activate</code> to happen immediately.</p>
+<p>Now, finish the <code>activate</code> handler:</p>
+<pre><code class="language-javascript">self.addEventListener('activate', event =&gt; {
+ function onActivate (event, opts) {
+ // &#x2026; as above
+ }
+
+ event.waitUntil(
+ onActivate(event, config)
+ .then( () =&gt; self.clients.claim() )
+ );
+});</code></pre>
+<p><code>self.clients.claim</code> will make the new service worker take effect immediately on any open pages in its scope.</p>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/07-serviceworker-internals-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/07-serviceworker-internals-preview-opt.png" alt="Viewing Serviceworker Internals in Chrome"></a><br>
+<figcaption>You can use the special URL <code>chrome://serviceworker-internals</code> in Chrome to see all of the service workers that the browser has registered. (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/07-serviceworker-internals-opt.png">View large version</a>)</figcaption>
+</figure>
+<figure><a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/08-my-site-offline-opt.png"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/08-my-site-offline-preview-opt.png" alt="My website's offline mode"></a><br>
+<figcaption>Here is my website as it appears in Chrome&#x2019;s device mode, with the &#x201C;Offline Network&#x201D; preset, emulating what a user would see when offline. It works! (<a href="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/01/08-my-site-offline-opt.png">View large version</a>)</figcaption>
+</figure>
+<h3 id="ta-da">Ta-Da! <a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#ta-da" class="sr hsl">Link</a></h3>
+<p>We now have a version-managed service worker! You can see the updated <a href="https://github.com/lyzadanger/serviceworker-example/blob/master/03-versioning/serviceWorker.js"><code>serviceWorker.js</code> file with version management on GitHub</a>.</p>
+<p><em>(jb, ml, al, mse)</em></p>
+
+	
+	
+	<div class="lt"><a href="https://www.smashingmagazine.com/tag/javascript/">JavaScript</a><a href="https://www.smashingmagazine.com/tag/service-worker/">Service Worker</a><a href="https://www.smashingmagazine.com/tag/techniques/">Techniques</a></div>
+<p>
+	<a href="https://www.smashingmagazine.com/2016/02/making-a-service-worker/#top" class="top">&#x2191; Back to top</a>
+	<a class="sot single" href="https://twitter.com/intent/tweet?original_referer=https%3A%2F%2Fwww.smashingmagazine.com%2F2016%2F02%2Fmaking-a-service-worker%2F&amp;source=tweetbutton&amp;text=Making%20A%20Service%20Worker%3A%20A%20Case%20Study&amp;url=https%3A%2F%2Fwww.smashingmagazine.com%2F2016%2F02%2Fmaking-a-service-worker%2F&amp;via=smashingmag">Tweet it</a><a class="sot single" href="http://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.smashingmagazine.com%2F2016%2F02%2Fmaking-a-service-worker%2F">Share on Facebook</a></p>
+
+</article>
+</div>
+</body></html>

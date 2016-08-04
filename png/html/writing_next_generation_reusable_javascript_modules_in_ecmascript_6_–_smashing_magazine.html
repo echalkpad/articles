@@ -1,0 +1,470 @@
+<!DOCTYPE html><html><head><title>Writing Next Generation Reusable JavaScript Modules in ECMAScript 6 – Smashing Magazine</title></head><body>
+<h1>Writing Next Generation Reusable JavaScript Modules in ECMAScript 6 – Smashing Magazine</h1><p><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/" target="_new">Original URL</a></p>
+<p><blockquote>Are you excited to take advantage of new JavaScript language features but not sure where to start, or how? You&#x2019;re not alone! I&#x2019;ve spent the better part of the last year and a half&hellip;</blockquote></p>
+<div><article class="post-229817 post type-post status-publish format-standard has-post-thumbnail hentry category-coding tag-es6 tag-javascript">
+
+		
+
+			
+
+	
+	
+
+	<p>Are you excited to <strong>take advantage of new JavaScript language features</strong> but not sure <em>where</em> to start, or <em>how</em>? You&#x2019;re not alone! I&#x2019;ve spent the better part of the last year and a half trying to ease this pain. During that time there have been some amazing quantum leaps in JavaScript tooling.</p>
+<p>These leaps have made it possible for you and me to dive head first into writing fully ES6 modules, without compromising on the essentials like testing, linting and (most importantly) the ability for others to easily consume what we write.</p>
+<figure><a href="https://github.com/lukehoban/es6features"><img src="https://media-mediatemple.netdna-ssl.com/wp-content/uploads/2016/02/js-opt.png" width="500" alt="Writing Next Generation Reusable JavaScript Modules"></a><sup class="po" id="note-1"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#1">1</a></sup><br>
+<figcaption>ECMAScript 6 is here. An <a href="https://github.com/lukehoban/es6features">overview of fancy and useful features in the new version of JavaScript</a><sup class="po" id="note-2"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#2">2</a></sup>.</figcaption></figure>
+<p>In this post, we&#x2019;re going to focus on <strong>how to create a JavaScript package written in ES6</strong> that&#x2019;s usable in a site or app regardless of whether you&#x2019;re using CommonJS, asynchronous module definition (AMD) or plain browser global modules.</p>
+<blockquote>
+<p><strong>Wait, is it ES6 or ES2015?</strong> My habits certainly prefer ES6, but the name was recently and officially changed to ES2015. However, there&#x2019;s a greater level of awareness of ES6, which is how I will refer to it in this post.</p>
+<p>I&#x2019;d also like to give special thanks to <a href="https://twitter.com/dougneiner">Doug Neiner</a><sup class="po" id="note-3"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#3">3</a></sup> and <a href="https://twitter.com/rpniemeyer">Ryan Niemeyer</a><sup class="po" id="note-4"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#4">4</a></sup> &#x2013; both have shared this journey into better ES6 tooling. This post wouldn&#x2019;t have been possible without them.</p>
+</blockquote>
+
+<p>In parts 1 and 2 of this series, we&#x2019;ll look at some of the tools that make this possible. Today we&#x2019;ll cover writing, transpiling and packaging our library; and in part 2 we&#x2019;ll focus on linting, formatting and testing (using JSCS, ESLint, mocha, Chai, Karma and Istanbul). Meet your new best friends for part 1:</p>
+<ul>
+<li><a href="http://babeljs.io/">Babel</a><sup class="po" id="note-8"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#8">8</a></sup><sup class="po" id="note-5"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#5">5</a></sup> (which just celebrated its first birthday) has made the process of transpiling ES6 to ES5 not only simple, but <em>pleasant</em>.</li>
+<li><a href="http://webpack.github.io/">webpack</a><sup class="po" id="note-23"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#23">23</a></sup><sup class="po" id="note-9"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#9">9</a></sup><sup class="po" id="note-6"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#6">6</a></sup> silenced every aspect of the &#x201C;module wars&#x201D; on my team by letting us consume <em>everything</em> (CommonJS, AMD and ES6) with aplomb. It turns out that webpack also does a fantastic job of packaging standalone ES6 libraries &#x2013; a fact we will look at closely during this post.</li>
+<li><a href="http://gulpjs.com/">Gulp</a><sup class="po" id="note-7"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#7">7</a></sup> is a powerful tool for automating build-related tasks.</li>
+</ul>
+<h3 id="the-goal">The Goal <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#the-goal" class="sr hsl">Link</a></h3>
+<h4 id="write-in-es6-use-in-es5">Write In ES6, Use In ES5 <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#write-in-es6-use-in-es5" class="sr hsl">Link</a></h4>
+<p>We&#x2019;re going to talk about writing ES6 client-side <em>libraries</em>, not bundling entire sites or apps. (This is really any reusable bit of code you&#x2019;d like to share between projects, whether it&#x2019;s an open source software project or something you use internally at work between applications.) <i>&#x201C;Wait a second&#x201D;</i>, you might be thinking. <i>&#x201C;Won&#x2019;t it be a while until the browser range I have to support can handle ES6?&#x201D;</i></p>
+<p>That&#x2019;s correct! However, I mentioned <a href="http://babeljs.io/">Babel</a><sup class="po" id="note-8"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#8">8</a></sup><sup class="po" id="note-5"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#5">5</a></sup> above because we&#x2019;re going to use it to convert our ES6 to ES5, making it a practical option to use today for most situations.</p>
+<h4 id="make-it-easy-for-anyone-to-consume">Make It Easy For Anyone To Consume <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#make-it-easy-for-anyone-to-consume" class="sr hsl">Link</a></h4>
+<p>The second part of our goal is to write a module that we could use in most common module ecosystems. Die-hard AMD fan? You get a module. CommonJS plus browserify the only song you sing? And <em>you</em> get a module. Not sure what the AMD versus CommonJS fuss is about, and you just want to drop the <code>&lt;script&gt;</code> tag on the page and go? <em>You</em> get a module too! It&#x2019;s a bit like an Oprah module giveaway &#x2013; where the part of Oprah is played by <a href="http://webpack.github.io/">webpack</a><sup class="po" id="note-23"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#23">23</a></sup><sup class="po" id="note-9"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#9">9</a></sup><sup class="po" id="note-6"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#6">6</a></sup>. webpack will help package our module in a special wrapper called a <a href="https://github.com/umdjs/umd">universal module definition (UMD)</a><sup class="po" id="note-22"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#22">22</a></sup><sup class="po" id="note-10"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#10">10</a></sup>, making it possible to consume in any of the above scenarios.</p>
+
+<h3 id="setting-up-our-project">Setting Up Our Project <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#setting-up-our-project" class="sr hsl">Link</a></h3>
+<p>Over the next few minutes, we&#x2019;ll be working towards the <a href="https://github.com/ifandelse/legoQuotes/releases/tag/v1.0.0">resulting code here</a><sup class="po" id="note-11"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#11">11</a></sup>. I usually start a project off with <i>src/</i>, <i>spec/</i> and <i>lib/</i> folders. In our <i>src/</i> folder, you&#x2019;ll see a contrived but fun set of example modules that, when used together, let us retrieve a random quote from a <a href="http://www.imdb.com/title/tt1490017/">Lego Movie</a><sup class="po" id="note-12"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#12">12</a></sup> character. While the behavior is fairly useless, this example makes use of <a href="http://www.2ality.com/2015/02/es6-classes-final.html">classes</a><sup class="po" id="note-13"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#13">13</a></sup>, <a href="http://www.2ality.com/2014/09/es6-modules-final.html">modules</a><sup class="po" id="note-14"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#14">14</a></sup>, <code><a href="http://www.2ality.com/2015/02/es6-scoping.html">const</a><sup class="po" id="note-15"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#15">15</a></sup></code>, <a href="http://www.2ality.com/2015/01/es6-destructuring.html">destructuring</a><sup class="po" id="note-16"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#16">16</a></sup>, a <a href="http://www.2ality.com/2015/03/es6-generators.html">generator</a><sup class="po" id="note-17"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#17">17</a></sup> and more &#x2013; all features we&#x2019;d like to safely transpile to ES5.</p>
+<p>The main focus of this post is to discuss how to use Babel and webpack to transpile and package an ES6 library. However, I also wanted to take a brief look at our example code so that you can see that we are indeed using ES6.</p>
+<p><strong>Note:</strong> Don&#x2019;t worry if you&#x2019;re new to ES6 syntax. These examples are simple enough to follow.</p>
+<h3 id="the-legocharacter-class">The LegoCharacter Class <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#the-legocharacter-class" class="sr hsl">Link</a></h3>
+<p>In our <i>LegoCharacter.js</i> module, we see the following (be sure to read the comments for more explanation):</p>
+<pre><code class="language-javascript">// LegoCharacter.js
+// Let's import only the getRandom method from utils.js
+import { getRandom } from "./utils";
+
+// the LegoCharacter class is the default export of the module, similar
+// in concept to how many node module authors would export a single value
+export default class LegoCharacter {
+ // We use destructuring to match properties on the object
+ // passed into separate variables for character and actor
+ constructor( { character, actor } ) {
+ this.actor = actor;
+ this.name = character;
+ this.sayings = [
+ "I haven't been given any funny quotes yet."
+ ];
+ }
+ // shorthand method syntax, FOR THE WIN
+ // I've been making this typo for years, it's finally valid syntax :)
+ saySomething() {
+ return this.sayings[ getRandom( 0, this.sayings.length - 1 ) ];
+ }
+}
+</code></pre>
+<p>Pretty boring on its own &#x2013; this class is meant to be extended, which we do in our <i>Emmet.js</i> module:</p>
+<pre><code class="language-javascript">// emmet.js
+import LegoCharacter from "./LegoCharacter";
+
+// Here we use the extends keyword to make
+// Emmet inherit from LegoCharacter
+export default class Emmet extends LegoCharacter {
+ constructor() {
+ // super lets us call the LegoCharacter's constructor
+ super( { actor: "Chris Pratt", character: "Emmet" } );
+ this.sayings = [
+ "Introducing the double-decker couch!",
+ "So everyone can watch TV together and be buddies!",
+ "We're going to crash into the sun!",
+ "Hey, Abraham Lincoln, you bring your space chair right back!",
+ "Overpriced coffee! Yes!"
+ ];
+ }
+}
+</code></pre>
+<p>Both <i>LegoCharacter.js</i> and <i>emmet.js</i> are separate <em>files</em> in our project &#x2013; this will be case for each module in our example. Depending on how you&#x2019;ve been writing JavaScript, this might seem a bit foreign to you. By the time we&#x2019;re done, though, we&#x2019;ll have a &#x2018;built&#x2019; version that combines them together.</p>
+<h3 id="the-index-js">The index.js <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#the-index-js" class="sr hsl">Link</a></h3>
+<p>Our <i>index.js</i> &#x2013; another file in our project &#x2013; is the main entry point for our library. It imports a few Lego character classes, creates instances of them and provides a generator function to <code>yield</code> a random quote any time a caller asks for one:</p>
+<pre><code class="language-javascript">// index.js
+// Notice that lodash isn't being imported via a relative path
+// but all the other modules are. More on that in a bit :)
+import _ from "lodash";
+import Emmet from "./emmet";
+import Wyldstyle from "./wyldstyle";
+import Benny from "./benny";
+import { getRandom } from "./utils";
+
+// Taking advantage of new scope controls in ES6
+// once a const is assigned, the reference cannot change.
+// Of course, transpiling to ES5, this becomes a var, but
+// a linter that understands ES6 can warn you if you
+// attempt to re-assign a const value, which is useful.
+const emmet = new Emmet();
+const wyldstyle = new Wyldstyle();
+const benny = new Benny();
+const characters = { emmet, wyldstyle, benny };
+
+// Pointless generator function that picks a random character
+// and asks for a random quote and then yields it to the caller
+function* randomQuote() {
+ const chars = _.values( characters );
+ const character = chars[ getRandom( 0, chars.length - 1 ) ];
+ yield `${character.name}: ${character.saySomething()}`;
+}
+
+// Using object literal shorthand syntax, FTW
+export default {
+ characters,
+ getRandomQuote() {
+ return randomQuote().next().value;
+ }
+};
+</code></pre>
+<p>In a nutshell, the <i>index.js</i> module imports lodash, the classes for our three Lego characters and a utility function. It then creates instances of our Lego characters and exports them (makes them available to consuming code) as well as the <code>getRandomQuote</code> method. If all goes well, when this code is transpiled to ES5 it should still do exactly the same thing.</p>
+<h3 id="ok-now-what">OK. Now What? <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#ok-now-what" class="sr hsl">Link</a></h3>
+<p>We have all this shiny new JavaScript, but how do we transpile it to ES5? First, let&#x2019;s install Babel using <a href="https://docs.npmjs.com/getting-started/installing-npm-packages-globally">npm</a><sup class="po" id="note-18"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#18">18</a></sup>:</p>
+<pre><code class="language-bash">npm install -g babel</code></pre>
+<p>Installing Babel globally gives us a <code>babel</code> <a href="http://babeljs.io/docs/usage/cli/">command line interface (CLI) option</a><sup class="po" id="note-19"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#19">19</a></sup>. If we navigate to our project&#x2019;s root directory and type this, we can transpile the modules to ES5 and drop them in the <i>lib/</i> directory:</p>
+<pre><code>babel ./src -d ./lib/</code></pre>
+<p>Looking at our <i>lib</i> folder, we&#x2019;ll see these files listed:</p>
+<pre><code class="language-bash">LegoCharacter.js
+benny.js
+emmet.js
+index.js
+utils.js
+wyldstyle.js
+</code></pre>
+<p>Remember how I mentioned above that we were putting each of our ES6 modules into its own file? Babel has taken each of those files, converted them to ES5 and written them to the same file structure in our <i>lib</i> folder. A quick glance at these files might tell you a couple of things:</p>
+<ul>
+<li>First, these files could be consumed in node right now, as long as the <i><a href="http://babeljs.io/docs/usage/require/">babel/register</a><sup class="po" id="note-20"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#20">20</a></sup></i> runtime dependency was required first. You&#x2019;ll see an example of these running in node before the end of this post. (Transpiling typically involves a runtime dependency even though many &#x2013; but not all &#x2013; of these features are now available natively in <a href="https://nodejs.org/en/docs/es6/">node v4</a><sup class="po" id="note-21"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#21">21</a></sup>.)</li>
+<li>Second, we still have some work to do so that these files can be packaged into <em>one</em> file and wrapped in a <a href="https://github.com/umdjs/umd">universal module definition (UMD)</a><sup class="po" id="note-22"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#22">22</a></sup><sup class="po" id="note-10"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#10">10</a></sup> and used in a browser.</li>
+</ul>
+<h3 id="enter-webpack">Enter webpack <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#enter-webpack" class="sr hsl">Link</a></h3>
+<p>Odds are you&#x2019;ve heard of <a href="http://webpack.github.io/">webpack</a><sup class="po" id="note-23"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#23">23</a></sup><sup class="po" id="note-9"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#9">9</a></sup><sup class="po" id="note-6"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#6">6</a></sup>, whose description calls it &#x201C;a bundler for JavaScript and friends.&#x201D; The most common use case for webpack is to act as a bundler and loader for a website, enabling you to bundle your JavaScript, as well as other assets like CSS and templates, into one (or more) files. webpack has an amazing ecosystem of &#x201C;loaders,&#x201D; which are transformations applied to files loaded by webpack. While building a UMD isn&#x2019;t the <em>most common</em> use case for webpack, it turns out we can use a webpack loader to load our ES6 modules and transpile them to ES5, and webpack&#x2019;s bundling process to build out a single output file of our example project.</p>
+
+<p>Used extensively in webpack, loaders can do things like transpile ES6 to ES5, Less to CSS, load JSON files, render templates and <em>much</em> more. Loaders take a <code>test</code> pattern to use for matching files that they should transform. Many loaders can take additional configuration options as well, which we&#x2019;ll be making use of. (Curious as to what other loaders exist? Check out <a href="http://webpack.github.io/docs/list-of-loaders.html">this list</a><sup class="po" id="note-24"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#24">24</a></sup>.)</p>
+<p>Let&#x2019;s go ahead and install webpack globally (which gives us a webpack <a href="http://webpack.github.io/docs/cli.html">CLI</a><sup class="po" id="note-25"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#25">25</a></sup>):</p>
+<pre><code class="language-bash">npm install -g webpack</code></pre>
+<p>Next we can install <a href="https://www.npmjs.com/package/babel-loader">babel-loader</a><sup class="po" id="note-26"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#26">26</a></sup> to our local project. This loader enables webpack to load our ES6 modules and transpile them to ES5. We can install it, and save it to our package.json&#x2019;s <code>devDependencies</code> by running this:</p>
+<pre><code class="language-bash">npm install --save-dev babel-loader</code></pre>
+<p>Before we can use webpack, though, we need to create a webpack configuration file that tells webpack what we want it to do with our source files. Usually named <i>webpack.config.js</i>, a webpack configuration file is a node.js module that exports a set of configuration values telling webpack what to do.</p>
+<p>Here&#x2019;s our initial <i>webpack.config.js</i> file. I&#x2019;ve commented the code heavily, and we&#x2019;ll also discuss some of the important details below:</p>
+<pre><code class="language-javascript">module.exports = {
+ // entry is the "main" source file we want to include/import
+ entry: "./src/index.js",
+ // output tells webpack where to put the bundle it creates
+ output: {
+ // in the case of a "plain global browser library", this
+ // will be used as the reference to our module that is
+ // hung off of the window object.
+ library: "legoQuotes",
+ // We want webpack to build a UMD wrapper for our module
+ libraryTarget: "umd",
+ // the destination file name
+ filename: "lib/legoQuotes.js"
+ },
+ // externals let you tell webpack about external dependencies
+ // that shouldn't be resolved by webpack.
+ externals: [
+ {
+ // We're not only webpack that lodash should be an
+ // external dependency, but we're also specifying how
+ // lodash should be loaded in different scenarios
+ // (more on that below)
+ lodash: {
+ root: "_",
+ commonjs: "lodash",
+ commonjs2: "lodash",
+ amd: "lodash"
+ }
+ }
+ ],
+ module: {
+ loaders: [
+ // babel loader, testing for files that have a .js extension
+ // (except for files in our node_modules folder!).
+ {
+ test: /\.js$/,
+ exclude: /node_modules/,
+ loader: "babel",
+ query: {
+ compact: false // because I want readable output
+ }
+ }
+ ]
+ }
+};
+</code></pre>
+<p>So let&#x2019;s look at a couple of key values in our configuration.</p>
+<h3 id="output">Output <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#output" class="sr hsl">Link</a></h3>
+<p>A webpack configuration file can be given an <code>output</code> object that describes how webpack should build and package the source. In our example above, we&#x2019;re telling webpack to output a UMD library to our <i>lib/</i> directory.</p>
+<h3 id="externals">Externals <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#externals" class="sr hsl">Link</a></h3>
+<p>You might have noticed our example library uses lodash. We want our built library to be smart enough to require lodash from an external source, rather than have to include lodash itself in the output. The <code>externals</code> option in a webpack config file lets you specify the dependencies that should remain external. In the case of lodash, its global property key (<code>_</code>) is not the same as its name (&#x201C;lodash&#x201D;), so our configuration above tells webpack how to require lodash for each given module scenario (CommonJS, AMD and browser root).</p>
+
+<p>You&#x2019;ll notice that our babel-loader just calls itself &#x201C;babel&#x201D; for the loader name. This is a webpack naming convention: where the module name is &#x201C;myLoaderName-loader&#x201D;, webpack treats it as &#x201C;myLoaderName.&#x201D;</p>
+<p>We&#x2019;re testing for any file ending in <i>.js</i>, except for files that live under our <i>node_modules/</i> folder. The <code>compact</code> option we&#x2019;re passing to the babel loader turns off whitespace compression because I&#x2019;d like our unminified built source to be readable. (We&#x2019;ll add a minified build in a moment.)</p>
+<p>If we run <code>webpack</code> in our console at the project root, it will see our <i>webpack.config.js</i> file and build our library, giving us output similar to this:</p>
+<pre><code class="language-bash">&#xBB; webpack
+Hash: f33a1067ef2c63b81060
+Version: webpack 1.12.1
+Time: 758ms
+ Asset Size Chunks Chunk Names
+lib/legoQuotes.js 12.5 kB 0 [emitted] main
+ + 7 hidden modules
+</code></pre>
+<p>If we look in our <i>lib/</i> folder, we&#x2019;ll see a newly minted <i>legoQuotes.js</i> file. This time, the contents are wrapped in webpack&#x2019;s UMD, which we can see in this snippet:</p>
+<pre><code class="language-javascript">(function webpackUniversalModuleDefinition(root, factory) {
+ if(typeof exports === 'object' &amp;&amp; typeof module === 'object')
+ module.exports = factory(require("lodash"));
+ else if(typeof define === 'function' &amp;&amp; define.amd)
+ define(["lodash"], factory);
+ else if(typeof exports === 'object')
+ exports["legoQuotes"] = factory(require("lodash"));
+ else
+ root["legoQuotes"] = factory(root["_"]);
+})(this, function(__WEBPACK_EXTERNAL_MODULE_1__) {
+
+// MODULE CODE HERE
+
+});
+</code></pre>
+<p>This UMD performs one kind of CommonJS check, then an AMD check, then another style of CommonJS and finally it falls back to plain browser globals. You can see how it knew to look for lodash as &#x201C;lodash&#x201D; if we were in a CommonJS or AMD environment, and to look for <code>_</code> on the window (root) if we were dealing with plain browser globals.</p>
+<h3 id="what-happened-exactly">What Happened, Exactly? <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#what-happened-exactly" class="sr hsl">Link</a></h3>
+<p> When we ran <code>webpack</code> in our console, it looked for the default name of a configuration file (<i>webpack.config.js</i>), and read the configuration. From there it saw that the <i>src/index.js</i> file was our main entry point, and began loading it and its dependencies (except for lodash, which we told webpack was external). Each of these dependencies is a <i>.js</i> file, so the babel loader would be run on the file, transpiling it from ES6 to ES5 as it was loaded. From there, all files loaded were written to a single output file, <i>legoQuotes.js</i>, which is dropped into the <i>lib</i> folder.</p>
+<p>Looking at the module code you&#x2019;ll see that our ES6 source has indeed been transpiled to ES5. For example, our <code>LegoCharacter</code> class is now an ES5 constructor function:</p>
+<pre><code class="language-javascript">// around line 179
+var LegoCharacter = (function () {
+ function LegoCharacter(_ref) {
+ var character = _ref.character;
+ var actor = _ref.actor;
+ _classCallCheck(this, LegoCharacter);
+ this.actor = actor;
+ this.name = character;
+ this.sayings = ["I haven't been given any funny quotes yet."];
+ }
+
+ _createClass(LegoCharacter, [{
+ key: "saySomething",
+ value: function saySomething() {
+ return this.sayings[(0, _utils.getRandom)(0, this.sayings.length - 1)];
+ }
+ }]);
+
+ return LegoCharacter;
+})();
+</code></pre>
+<h3 id="27its-usable"><a id="user-content-its-usable" class="anchor" href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#its-usable"></a><sup class="po" id="note-27"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#27">27</a></sup>It&#x2019;s Usable! <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#27its-usable" class="sr hsl">Link</a></h3>
+<p>At this point we could include this built file in both a browser (IE9+, as a general rule) and node and it would work in either, as long as the babel runtime dependency is included.</p>
+<p>If we wanted to use this in the browser, it would look something like this:</p>
+<pre><code class="language-markup">&lt;!-- index.html --&gt;
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+ &lt;meta charset="utf-8"&gt;
+ &lt;meta http-equiv="X-UA-Compatible" content="IE=edge"&gt;
+ &lt;title&gt;Lego Quote Module Example&lt;/title&gt;
+ &lt;link rel="stylesheet" href="style.css"&gt;
+&lt;/head&gt;
+&lt;body&gt;
+ &lt;div class="container"&gt;
+ &lt;blockquote id="quote"&gt;&lt;/blockquote&gt;
+ &lt;button id="btnMore"&gt;Get Another Quote&lt;/button&gt;
+ &lt;/div&gt;
+ &lt;script src="../node_modules/lodash/index.js"&gt;&lt;/script&gt;
+ &lt;script src="../node_modules/babel-core/browser-polyfill.js"&gt;&lt;/script&gt;
+ &lt;script src="../lib/legoQuotes.js"&gt;&lt;/script&gt;
+ &lt;script src="./main.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+<p>You can see we&#x2019;ve included our <i>legoQuotes.js</i> file (just below babel&#x2019;s <i>browser-polyfill.js</i> file) just like any other <code>&lt;script&gt;</code> tag (above). Our <i>main.js</i> file, which uses our legoQuotes library, looks like this:</p>
+<pre><code class="language-javascript">// main.js
+( function( legoQuotes ) {
+ var btn = document.getElementById( "btnMore" );
+ var quote = document.getElementById( "quote" );
+
+ function writeQuoteToDom() {
+ quote.innerHTML = legoQuotes.getRandomQuote();
+ }
+
+ btn.addEventListener( "click", writeQuoteToDom );
+ writeQuoteToDom();
+} )( legoQuotes );
+</code></pre>
+<p>To use it in node, it would look like this:</p>
+<pre><code class="language-javascript">require("babel/polyfill");
+var lego = require("./lib/legoQuotes.js");
+console.log(lego.getRandomQuote());
+// &gt; Wyldstyle: Come with me if you want to not die.
+</code></pre>
+<h3 id="moving-to-gulp">Moving To Gulp <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#moving-to-gulp" class="sr hsl">Link</a></h3>
+<p>Both Babel&#x2019;s and webpack&#x2019;s CLIs are very useful, but it&#x2019;s common to use a task runner such as Gulp to handle executing these kinds of tasks. This consistency can pay off if you participate in many projects, as the main CLI commands you&#x2019;ll need to remember consist of <code>gulp someTaskName</code>. I don&#x2019;t think there&#x2019;s a right or wrong answer here, for the most part. If you prefer the CLIs, use them. Using Gulp is simply one possible way to go about it.</p>
+<h4 id="28setting-up-a-build-task"><a id="user-content-build-task" class="anchor" href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#build-task"></a><sup class="po" id="note-28"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#28">28</a></sup>Setting Up A Build Task <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#28setting-up-a-build-task" class="sr hsl">Link</a></h4>
+<p>First, let&#x2019;s install gulp:</p>
+<pre><code class="language-bash">npm install -g gulp</code></pre>
+<p>Next, let&#x2019;s create a gulp file that can run what we have done so far. We&#x2019;ll use the <a href="https://www.npmjs.com/package/webpack-stream">webpack-stream</a><sup class="po" id="note-29"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#29">29</a></sup> gulp plugin, which I&#x2019;ve installed by running <code>npm install --save-dev webpack-stream</code>. This plugin can consume our <i>webpack.config.js</i> file and allow webpack to play nicely with gulp.</p>
+<pre><code class="language-javascript">// gulpfile.js
+var gulp = require( "gulp" );
+var webpack = require( "webpack-stream" );
+
+gulp.task( "build", function() {
+ return gulp.src( "src/index.js" )
+ .pipe( webpack( require( "./webpack.config.js" ) ) )
+ .pipe( gulp.dest( "./lib" ) )
+} );
+</code></pre>
+<p>Since I&#x2019;m using gulp to source our <i>index.js</i> and to write to the output directory, I&#x2019;ve tweaked the <i>webpack.config.js</i> file by removing <code>entry</code> and updating the <code>filename</code>. I&#x2019;ve also added a <a href="http://webpack.github.io/docs/configuration.html#devtool"><code>devtool</code></a><sup class="po" id="note-30"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#30">30</a></sup> prop, set to the value of <code>#inline-source-map</code> (this will write a source map at the end of the file in a comment):</p>
+<pre><code class="language-javascript">// webpack.config.js
+module.exports = {
+ output: {
+ library: "legoQuotes",
+ libraryTarget: "umd",
+ filename: "legoQuotes.js"
+ },
+ devtool: "#inline-source-map",
+ externals: [
+ {
+ lodash: {
+ root: "_",
+ commonjs: "lodash",
+ commonjs2: "lodash",
+ amd: "lodash"
+ }
+ }
+ ],
+ module: {
+ loaders: [
+ {
+ test: /\.js$/,
+ exclude: /node_modules/,
+ loader: "babel",
+ query: {
+ compact: false
+ }
+ }
+ ]
+ }
+};
+</code></pre>
+<h4 id="31what-about-minifying"><a id="user-content-minifying" class="anchor" href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#minifying"></a><sup class="po" id="note-31"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#31">31</a></sup>What About Minifying? <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#31what-about-minifying" class="sr hsl">Link</a></h4>
+<p>I&#x2019;m glad you asked! One approach to minifying can be done using the <a href="https://www.npmjs.com/package/gulp-uglify">gulp-uglify</a><sup class="po" id="note-32"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#32">32</a></sup> plugin, along with <a href="https://www.npmjs.com/package/gulp-sourcemaps">gulp-sourcemaps</a><sup class="po" id="note-33"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#33">33</a></sup> (since we&#x2019;d like a source map for our min file) and <a href="https://www.npmjs.com/package/gulp-rename">gulp-rename</a><sup class="po" id="note-34"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#34">34</a></sup> (which lets us target a different file name so we don&#x2019;t overwrite our non-minified build). I&#x2019;ve added both to our project via:</p>
+<pre><code class="language-bash">npm install --save-dev gulp-uglify gulp-sourcemaps gulp-rename</code></pre>
+<p>In this approach, our unminified source will still have an inline source map, but our usage of gulp-sourcemaps below will cause the minified file&#x2019;s source map to be written as a separate file (with a comment in the minified file pointing to the source map file):</p>
+<pre><code class="language-javascript">// gulpfile.js
+var gulp = require( "gulp" );
+var webpack = require( "webpack-stream" );
+var sourcemaps = require( "gulp-sourcemaps" );
+var rename = require( "gulp-rename" );
+var uglify = require( "gulp-uglify" );
+
+gulp.task( "build", function() {
+ return gulp.src( "src/index.js" )
+ .pipe( webpack( require( "./webpack.config.js" ) ) )
+ .pipe( gulp.dest( "./lib" ) )
+ .pipe( sourcemaps.init( { loadMaps: true } ) )
+ .pipe( uglify() )
+ .pipe( rename( "legoQuotes.min.js" ) )
+ .pipe( sourcemaps.write( "./" ) )
+ .pipe( gulp.dest( "lib/" ) );
+} );
+</code></pre>
+<p>If we run <code>gulp build</code> in our console, we should see something similar to:</p>
+<pre><code class="language-bash">&#xBB; gulp build
+[19:08:25] Using gulpfile ~/git/oss/next-gen-js/gulpfile.js
+[19:08:25] Starting 'build'...
+[19:08:26] Version: webpack 1.12.1
+ Asset Size Chunks Chunk Names
+legoQuotes.js 23.3 kB 0 [emitted] main
+[19:08:26] Finished 'build' after 1.28 s
+</code></pre>
+<p>Our <i>lib/</i> directory will now contain three files: <i>legoQuotes.js</i>, <i>legoQuotes.min.js</i> and <i>legoQuotes.min.js.map</i>. Not only does everyone attending the <del>Oprah</del> <ins>webpack</ins> show get a module, but they also get a sourcemap to make debugging the minified file a possibility.</p>
+<h3 id="35webpack-banner-plugin"><a id="user-content-banner-plugin" class="anchor" href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#banner-plugin"></a><sup class="po" id="note-35"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#35">35</a></sup>Webpack Banner Plugin <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#35webpack-banner-plugin" class="sr hsl">Link</a></h3>
+<p>If you need to include a licence comment header at the top of your built files, webpack makes it easy. I&#x2019;ve updated our <i>webpack.config.js</i> file to include the <code><a href="http://webpack.github.io/docs/list-of-plugins.html#bannerplugin">BannerPlugin</a><sup class="po" id="note-36"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#36">36</a></sup></code>. I don&#x2019;t like hardcoding the banner&#x2019;s information if I don&#x2019;t need to, so I&#x2019;ve imported the <i>package.json</i> file to get the library&#x2019;s information. I also converted the <i>webpack.config.js</i> file to ES6, and am using a <a href="http://www.2ality.com/2015/01/template-strings-html.html">template string</a><sup class="po" id="note-37"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#37">37</a></sup> to render the banner. Towards the bottom of the <i>webpack.config.js</i> file you can see I&#x2019;ve added a <code>plugins</code> property, with the <code>BannerPlugin</code> as the only plugin we&#x2019;re currently using:</p>
+<pre><code class="language-javascript">// webpack.config.js
+import webpack from "webpack";
+import pkg from "./package.json";
+var banner = `
+ ${pkg.name} - ${pkg.description}
+ Author: ${pkg.author}
+ Version: v${pkg.version}
+ Url: ${pkg.homepage}
+ License(s): ${pkg.license}
+`;
+
+export default {
+ output: {
+ library: pkg.name,
+ libraryTarget: "umd",
+ filename: `${pkg.name}.js`
+ },
+ devtool: "#inline-source-map",
+ externals: [
+ {
+ lodash: {
+ root: "_",
+ commonjs: "lodash",
+ commonjs2: "lodash",
+ amd: "lodash"
+ }
+ }
+ ],
+ module: {
+ loaders: [
+ {
+ test: /\.js$/,
+ exclude: /node_modules/,
+ loader: "babel",
+ query: {
+ compact: false
+ }
+ }
+ ]
+ },
+ plugins: [
+ new webpack.BannerPlugin( banner )
+ ]
+};
+</code></pre>
+<p><em>(Note: It&#x2019;s worth mentioning that by converting my webpack.config.js file to ES6, I can&#x2019;t run it via the webpack CLI any longer.)</em></p>
+<p>Our updated <i>gulpfile.js</i> includes two additions: the requiring of the babel register hook (on line 1) and the passing of options to the gulp-uglify plugin:</p>
+<pre><code class="language-javascript">// gulpfile.js
+require("babel/register");
+var gulp = require( "gulp" );
+var webpack = require( "webpack-stream" );
+var sourcemaps = require( "gulp-sourcemaps" );
+var rename = require( "gulp-rename" );
+var uglify = require( "gulp-uglify" );
+
+gulp.task( "build", function() {
+ return gulp.src( "src/index.js" )
+ .pipe( webpack( require( "./webpack.config.js" ) ) )
+ .pipe( gulp.dest( "./lib" ) )
+ .pipe( sourcemaps.init( { loadMaps: true } ) )
+ .pipe( uglify( {
+ // This keeps the banner in the minified output
+ preserveComments: "license",
+ compress: {
+ // just a personal preference of mine
+ negate_iife: false
+ }
+ } ) )
+ .pipe( rename( "legoQuotes.min.js" ) )
+ .pipe( sourcemaps.write( "./" ) )
+ .pipe( gulp.dest( "lib/" ) );
+} );
+</code></pre>
+<h3 id="38whats-next"><a id="user-content-whats-next" class="anchor" href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#whats-next"></a><sup class="po" id="note-38"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#38">38</a></sup>What&#x2019;s Next? <a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#38whats-next" class="sr hsl">Link</a></h3>
+<p>We&#x2019;re a good way into our journey! So far we&#x2019;ve stepped through a quick evolution of using babel and webpack&#x2019;s CLIs to build our library, then moved on to use gulp (and related plugins) to handle the build for us. The <a href="https://github.com/ifandelse/legoQuotes/releases/tag/v1.0.0">code related to this post</a><sup class="po" id="note-39"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#39">39</a></sup> includes an <i>example/</i> directory with both a browser- and node-based example of our working transpiled module. In our next post, we&#x2019;ll look at using ESLint and JSCS for linting and formatting, mocha and chai to write tests, Karma to run those tests and istanbul to measure our test coverage. In the meantime, you might want to check out &#x201C;<a href="https://www.smashingmagazine.com/2012/10/designing-javascript-apis-usability/">Designing Better JavaScript APIs</a><sup class="po" id="note-40"><a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/#40">40</a></sup>,&#x201D; a fantastic article that can help guide you in writing better modules.</p>
+<p><em>(rb, jb, ml, og)</em></p>
+
+	
+
+
+	
+	
+<p>
+	<a href="https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/" class="top">&#x2191; Back to top</a>
+	<a class="sot single" href="https://twitter.com/intent/tweet?original_referer=https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/&amp;source=tweetbutton&amp;text=Writing%20Next%20Generation%20Reusable%20JavaScript%20Modules%20in%20ECMAScript%206&amp;url=https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/&amp;via=smashingmag">Tweet it</a><a class="sot single" href="http://www.facebook.com/sharer/sharer.php?u=https://www.smashingmagazine.com/2016/02/writing-next-generation-reusable-javascript-modules/">Share on Facebook</a></p>
+
+</article>
+</div>
+</body></html>

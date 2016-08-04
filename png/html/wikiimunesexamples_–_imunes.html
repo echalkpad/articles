@@ -1,0 +1,171 @@
+<!DOCTYPE html><html><head><title>WikiImunesExamples – IMUNES</title></head><body>
+<h1>WikiImunesExamples – IMUNES</h1><p><a href="http://imunes.net/wiki/wiki/WikiImunesExamples" target="_new">Original URL</a></p>
+<p><blockquote>Examples Examples are available for download on github: &#x200B;https://github.com/imunes/imunes-examples. List of currently available documented examples: Installing additional packages in virtual&hellip;</blockquote></p>
+<div><div id="wikipage" class="trac-content">
+<h2 id="Examples">Examples</h2>
+<p>
+Examples are available for download on github: <a class="ext-link" href="https://github.com/imunes/imunes-examples"><span class="icon">&#x200B;</span>https://github.com/imunes/imunes-examples</a>.
+</p>
+<p>
+List of currently available documented examples:
+</p>
+<h2 id="Installingadditionalpackagesinvirtualnodes">Installing additional packages in virtual nodes</h2>
+<p>
+To install additional packages in the IMUNES virtual nodes the script <tt>pkg_add_imunes</tt> is included in the IMUNES release.
+</p>
+<pre class="wiki"># pkg_add_imunes -r strogswan tshark
+</pre><h2 id="MakingscriptsforIMUNES">Making scripts for IMUNES</h2>
+<p>
+IMUNES experiments can be started without GUI, by using the batch option:
+</p>
+<pre class="wiki"># imunes -b topology.imn
+Creating nodes...
+pc1 router1 router2 pc2 router3 
+Creating links...
+l0 l2 l1 l3 
+Configuring nodes...
+n0 n1 n2 n3 n4 
+Network topology instantiated in 0 seconds (5 nodes and 4 links).
+Experiment ID = i95350
+</pre><p>
+IMUNES includes the following tools that enable easy scripting for virtual topologies:
+</p>
+<ul><li><a class="wiki" href="http://imunes.net/wiki/wiki/WikiImunesExamples#himage">himage</a> - runs a shell or command directly in a virtual node
+</li><li><a class="wiki" href="http://imunes.net/wiki/wiki/WikiImunesExamples#hcp">hcp</a> - copies files to/from (between) virtual nodes (i.e. copying config, log files)
+</li><li><a class="wiki" href="http://imunes.net/wiki/wiki/WikiImunesExamples#vlink">vlink</a> - alters all link properties (bandwidth, delay, BER, duplicate)
+</li><li>cleanupAll - shuts down <strong>all</strong> running experiments
+<pre class="wiki"># cleanupAll
+Terminating processes...
+Shutting down netgraph node 
+Shutting down vimages...
+Cleanup completed in 1 seconds.
+</pre></li></ul><h2 id="himage">himage</h2>
+<p>
+The <tt>himage</tt> command is a wrapper around the standard <tt>jls</tt> and <tt>jexec</tt> tools that are used to manage FreeBSD jails.
+</p>
+<p>
+The default output shows usage possibilities:
+</p>
+<pre class="wiki">$ himage
+
+Command himage can be used as an interface to the command jexec/jls
+for virtual images. Hostname is used instead of jail name.
+Hostname can be in the form: hostname or hostname@eid.
+
+Usage:
+ himage vi_hostname command
+ himage -v vi_hostname ---&gt; vimage name (eid.nodename)
+ himage -n vi_hostname ---&gt; vimage node name (nodename)
+ himage -e vi_hostname ---&gt; vimage eid name (eid)
+ himage -j vi_hostname ---&gt; vimage jail id (jid)
+ himage -d vi_hostname ---&gt; vimage path
+ himage -l ---&gt; running experiments eids 
+</pre><p>
+The main usage scenario of himage is to run applications in IMUNES nodes without GUI by using node names (i.e. pc1, router1, dnsServer, ...) instead of node identificators (i.e. n0, n1, ...). Running a command inside the node named <tt>pc1</tt> in the current topology (must be ran as root):
+</p>
+<pre class="wiki"># himage pc1 ls
+.cshrc		boot.conf	libexec		rescue		usr
+.profile	dev		media		root		var
+COPYRIGHT	etc		mnt		sbin
+bin		home		out.log		sys
+boot		lib		proc		tmp
+</pre><p>
+If there are multiple experiments running with the same node names then a warning will be issued:
+</p>
+<pre class="wiki"># himage pc1
+Error: pc1 is not a unique name.
+It is used (at least) for nodes:
+ 245 - pc1 /var/imunes/i95350/n0
+ 256 - pc1 /var/imunes/ib5b10/n0
+</pre><p>
+Now you need to specify the experiment ID (<tt>@i95350</tt>) you want to run the command in:
+</p>
+<pre class="wiki"># himage pc1@i95350 ls
+.cshrc		boot.conf	libexec		rescue		usr
+.profile	dev		media		root		var
+COPYRIGHT	etc		mnt		sbin
+bin		home		out.log		sys
+boot		lib		proc		tmp
+</pre><p>
+To see the list of running experiments run the following:
+</p>
+<pre class="wiki">$ himage -l
+i95350
+ia0890
+ib5b10
+</pre><p>
+Additional information about experiment nodes can be found using the other <tt>himage</tt> options:
+</p>
+<pre class="wiki">$ himage -v pc1
+i95350.n0
+$ himage -n pc1
+n0
+$ himage -e pc1
+i95350
+$ himage -j pc1
+245
+$ himage -d pc1
+/var/imunes/i95350/n0
+</pre><h2 id="hcp">hcp</h2>
+<p>
+The <tt>hcp</tt> command is a wrapper around the standard <tt>cp</tt> command. It uses node names to refer to virtual node root partitions.
+</p>
+<p>
+Here are two examples that demonstrate copying from the virtual node and to the virtual node:
+</p>
+<pre class="wiki"># hcp router1:boot.conf .
+# hcp start_script.sh router1:/root/
+</pre><p>
+The command can also be used to copy files between virtual nodes and between experiments (using the same notation as <tt>himage</tt>):
+</p>
+<pre class="wiki"># hcp router1:boot.conf router2:root/
+# hcp router1@i84ec0:root/start_script.sh router1@i56ad1:root/
+</pre>
+<p>
+The <tt>vlink</tt> command is a wrapper around <tt>ngctl</tt>, netgraph tool used to create links between virtual nodes in IMUNES.
+</p>
+<p>
+<tt>vlink</tt> is used to change link parameters. The following link parameters are available:
+</p>
+<ul><li>bandwidth (bps, bits-per-second)
+</li><li>bit-error rate, BER (number of bits in which one error will occur)
+</li><li>delay (microseconds)
+</li><li>packet duplication (%, percentage of packets that will be duplicated)
+</li></ul><p>
+A link is identified by the endpoint node names. The link between pc1 and pc2 is identified by <tt>pc1-pc2</tt> or <tt>pc2-pc1</tt>.
+</p>
+<pre class="wiki">Usage:
+vlink [options] link_name[@eid]
+options:
+ -bw value set link bandwidth (bps) &lt;&gt;
+ -BER value set link BER (1/value) &lt;&gt;
+ -dly value set link delay (us) &lt;&gt;
+ -dup value set link duplicate (%) &lt;&gt;
+ -r set link settings to default values
+ -e value specify experiment ID &lt;&gt;
+ -eid value specify experiment ID &lt;&gt;
+ -? Print this message
+</pre><p>
+Setting the bandwidth to 10 Mb/s with a delay of 30 ms to the link connecting router1 and pc1:
+</p>
+<pre class="wiki"># vlink -bw 10000000 -dly 30000 router1-pc1
+</pre><p>
+Generate an error on one bit in a million:
+</p>
+<pre class="wiki"># vlink -BER 1000000 router1-pc1
+</pre><p>
+Set packet duplication to 20%:
+</p>
+<pre class="wiki"># vlink -dup 20 router1-pc1
+</pre><p>
+Modifying a link in a specific experiment (i.e. Experiment ID = i56ad1):
+</p>
+<pre class="wiki"># vlink -dup 20 router1-pc1@i56ad1
+</pre><p>
+To reset the link settings to the default values the <tt>-r</tt> flag is used:
+</p>
+<pre class="wiki"># vlink -r router1-pc1@i56ad1
+</pre></div>
+ 
+ </div>
+</body></html>

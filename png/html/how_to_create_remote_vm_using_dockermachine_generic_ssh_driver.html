@@ -1,0 +1,263 @@
+<!DOCTYPE html><html><head><title>How to Create Remote VM using docker-machine Generic SSH Driver</title></head><body>
+<h1>How to Create Remote VM using docker-machine Generic SSH Driver</h1><p><a href="http://www.thegeekstuff.com/2016/02/docker-machine-create-generic/" target="_new">Original URL</a></p>
+<p><blockquote>Using docker, you can package your enterprise application into one self-contained container, which is guaranteed to run on any environment. This makes it easy for both developer and sysadmins to&hellip;</blockquote></p>
+<div><div class="post_content">
+
+<p><img src="http://static.thegeekstuff.com/wp-content/uploads/2016/02/docker-logo.png" alt="Docker" width="348" class="alignright size-full wp-image-16768">Using docker, you can package your enterprise application into one self-contained container, which is guaranteed to run on any environment.</p>
+<p>This makes it easy for both developer and sysadmins to manage the application. If you are an administrator, you don&#x2019;t have to hear this excuse from developer anymore: &#x201C;But, it works on my dev environment!&#x201D;<br>
+<br>
+Using Docker Machine, you can install and configure Docker Engine on a remote server. Once docker is installed, from your local machine (laptop), you can remotely manage the docker.</p>
+<p>In this tutorial, we&#x2019;ll specifically talk about the Generic driver used by docker-machine, which will use SSH client to manage the remote docker host.</p>
+<h3>1. Create dockeradmin user on Remote Host</h3>
+<p>First, create a Linux user account on the remote server. You don&#x2019;t really have to use &#x201C;dockeradmin&#x201D; as the username, it can be anything. You can even use your own user name.</p>
+<pre>adduser dockeradmin
+
+passwd dockeradmin
+</pre>
+<h3>2. Generate SSH Public-Private Key Pair on Local Host</h3>
+<p>Next, on your local host (laptop), create a public and private SSH key using ssh-keygen. You should also copy the private key to the remote server. </p>
+<p>We explained how to do this in this article: <a href="http://www.thegeekstuff.com/2008/11/3-steps-to-perform-ssh-login-without-password-using-ssh-keygen-ssh-copy-id/">Perform Remote SSH Login Without Password</a></p>
+<p>But, in-short, here is what you need to do for this:</p>
+<pre>ssh-keygen
+
+ssh-copy-id dockeradmin@remote-server
+</pre>
+<p>Note: During ssh-keygen, don&#x2019;t give any passphrase. Leave it empty.</p>
+<h3>3. Allow Sudo Access for dockeradmin</h3>
+<p>On your remote server, in the /etc/sudoers file, add the following line, which will give full sudo privilege to dockeradmin account. This means that dockeradmin account can run any root command.</p>
+<pre># visudo
+dockeradmin ALL=(ALL) NOPASSWD: ALL
+</pre>
+<p>Note: visudo command will modify the /ec/sudoers file. You don&#x2019;t have to use &#x201C;vi /etc/sudoers&#x201D;.</p>
+<h3>4. Allow External Access on Remote Server</h3>
+<p>Make sure your remote server can talk to the internet. This is required, as the docker-machine command will invoke several yum commands to install certain require packages.</p>
+<p>So, just for testing purpose, make sure the following works on your server.</p>
+<pre>ping google.com
+</pre>
+<p>If you don&#x2019;t have appropriate nameserver setup, modify your /etc/resolve.conf and add the following line. Or, use one of the nameservers provided by your system administrator.</p>
+<pre># vi /etc/resolv.conf
+nameserver 4.2.2.2
+</pre>
+<h3>5. docker-machine Generic Driver Command Syntax</h3>
+<p>When you are using the Generic driver, the following options are available in docker-machine create command.</p>
+<p>The following docker-machine syntax shows all the mandatory options:</p>
+<pre>docker-machine create -d generic --generic-ip-address {ip-address} {docker-vm-name}
+</pre>
+<p>In the above syntax:</p>
+<ul>
+<li>docker-machine is the command</li>
+<li>create option tells docker-machine to create the remote docker-vm host</li>
+<li>-d option is to specify what type of driver to use. Here, we are using the &#x201C;generic&#x201D; driver, which will use the SSH client to connect to the remote host</li>
+<li>&#x2013;generic-ip-address is to specify the remote ip-address where the docker-vm host should be created.</li>
+<li>docker-vm-name is the name that you want to give to the remote docker-vm that will be created by the docker-machine command. This can be anything.</li>
+</ul>
+<p>The following docker-machine syntax shows all available options:</p>
+<pre>docker-machine create -d generic --generic-ip-address {ip-address} --generic-ssh-key {private-key} --generic-ssh-user {username} --generic-ssh-port {ssh-port} {docker-vm-name}
+</pre>
+<p>In the above syntax:</p>
+<ul>
+<li>&#x2013;generic-ssh-key This is optional. When you don&#x2019;t specify this, it will talk to the ssh-agent running on your local system. If you are not running ssh-agent on your local system (laptop), then use this option, and specify the location of your private key on your local system.</li>
+<li>&#x2013;generic-ssh-user This is optional. By default, it will use root. But, in most situations you might not want to do this. So, specify the username that you want docker-machine to use while connecting to the remote host.</li>
+<li>&#x2013;generic-ssh-port This is the SSH port of the remote server. By default this is 22.</li>
+<li>Other options are explained in the above syntax</li>
+</ul>
+<h3>6. Create the Remote Docker VM Host</h3>
+<p>Now, it is time to create the remote docker-vm host using the docker-machine create command.</p>
+<pre>docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+</pre>
+<p>The following is the same command as above, but I broke it down into multiple line for easy readability.</p>
+<pre>docker-machine create -d generic \
+ --generic-ip-address 192.168.100.2 \ 
+ --generic-ssh-key $HOME/.ssh/id_rsa \
+ --generic-ssh-user dockeradmin \
+ --generic-ssh-port 22 \
+ dev-db
+</pre>
+<p>In the above command:</p>
+<ul>
+<li>We&#x2019;ve explained all the options in the above syntax section.</li>
+<li>192.168.100.2 is the ip-address of our remote host where the docker-vm host should be created.</li>
+<li>$HOME/.ssh/id_rsa is the private key that is located on your local system (laptop)</li>
+<li>dockeradmin is the name of the Linux username on the remote host</li>
+<li>dev-db is the name that I gave for the docker-vm host that I want to create on the remote host. This can be anything.</li>
+</ul>
+<p>Note: Again, you&#x2019;ll be executing the above docker-machine command on your local system. You can use the docker-machine command that came with your Docker Toolbox.</p>
+<h3>7. Successful docker-machine create Output</h3>
+<p>If everything worked properly, you&#x2019;ll see the following output from the docker-machine create command.</p>
+<pre>$ docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+Running pre-create checks...
+Creating machine...
+(dev-db) Importing SSH key...
+Waiting for machine to be running, this may take a few minutes...
+Machine is running, waiting for SSH to be available...
+Detecting operating system of created instance...
+Detecting the provisioner...
+Provisioning with centos...
+Copying certs to the local machine directory...
+Copying certs to the remote machine...
+Setting Docker configuration on the remote daemon...
+Checking connection to Docker...
+Docker is up and running!
+To see how to connect Docker to this machine, run: C:\Program Files\Docker Toolbox\docker-machine.exe env dev-db
+</pre>
+<p>Finally, if everything is working properly, you&#x2019;ll see the remote docker vm host that we created. On your local system, execute the following:</p>
+<pre>$ docker-machine ls
+NAME ACTIVE DRIVER STATE URL SWARM DOCKER ERRORS
+default articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii virtualbox Running tcp://192.168.100.10:2376
+dev-db - generic Running tcp://192.168.100.11:2376
+</pre>
+<p>Note: Well, for most part, nothing goes as planned, and you might get some error message. The following are some typical issues that I faced and the solution for those.</p>
+<h3>8. Error 1: Invalid OS</h3>
+<p>The current version of docker-machine supports only certain version of OS on the remote server.</p>
+<p>For example, if your remote server is running on CentOS 6, you&#x2019;ll get the following &#x201D; /etc/os-release: No such file or directory&#x201D; error message. This is because for CentOS, it is looking for CentOS 7.</p>
+<pre>$ docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+Running pre-create checks...
+Creating machine...
+Waiting for machine to be running, this may take a few minutes...
+(dev-db) Importing SSH key...
+Machine is running, waiting for SSH to be available...
+Detecting operating system of created instance...
+Detecting the provisioner...
+Error creating machine: Error detecting OS: Error getting SSH command: Something
+ went wrong running an SSH command!
+command : cat /etc/os-release
+err : exit status 1
+output : cat: /etc/os-release: No such file or directory
+</pre>
+<h3>9. Error 2: Unable to Execute root Command (No Sudo Access)</h3>
+<p>If you are getting the &#x201C;Error creating machine: Error running provisioning: exit status 1&#x2033; error message, after the &#x201C;Provisioning with centos&#x2026;&#x201D; line, then it is not the connection issue. docker-machine was able to connect to the remote server properly.</p>
+<p>But, in this case, it is unable to execute root command as dockeradmin user. So, use visudo and allow full sudo access to the dockeradmin user as we explained in one of the previous steps.</p>
+<pre>$ docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+Running pre-create checks...
+Creating machine...
+(dev-db) Importing SSH key...
+Waiting for machine to be running, this may take a few minutes...
+Machine is running, waiting for SSH to be available...
+Detecting operating system of created instance...
+Detecting the provisioner...
+Provisioning with centos...
+Error creating machine: Error running provisioning: exit status 1
+</pre>
+<h3>10. Error 3: netstat command is Missing</h3>
+<p>If you are getting the &#x201C;Error running SSH command: exit status 127&#x2033; error message after the &#x201C;Setting Docker configuration on the remote daemon&#x2026;&#x201D; line, this is also not a connection issue.</p>
+<p>In this case, docker-machine connected to the remote SSH, and it has appropriate sudo access to execute root command, but some of the command it is trying failed, because it is missing &#x201C;netstat&#x201D; command.</p>
+<pre>$ docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+Running pre-create checks...
+Creating machine...
+(dev-db) Importing SSH key...
+Waiting for machine to be running, this may take a few minutes...
+Machine is running, waiting for SSH to be available...
+Detecting operating system of created instance...
+Detecting the provisioner...
+Provisioning with centos...
+Copying certs to the local machine directory...
+Copying certs to the remote machine...
+Setting Docker configuration on the remote daemon...
+Error running SSH command: exit status 127
+Error running SSH command: exit status 127
+...
+Error running SSH command: exit status 127
+Error creating machine: Error running provisioning: Unable to verify the Docker
+daemon is listening: Maximum number of retries (10) exceeded
+</pre>
+<p>To fix this problem, install the net-tools package on the remote server, which contains the &#x201C;netstat&#x201D; command.</p>
+<pre>yum install net-tools
+</pre>
+<p>I&#x2019;m hoping in the next version of docker-machine, they&#x2019;ll probably check whether &#x201C;netstat&#x201D; exists on the remote server or not, at the beginning and give appropriate valid error message.</p>
+<h3>11. Error 4: Docker Client Version Mis-match</h3>
+<p>If you are getting the following &#x201C;Error creating machine: Error running provisioning: exit status 1&#x2033; error message, there is a possibility that the docker client on your local system (laptop) is not matching with the docker client on the remote system.</p>
+<pre>$ docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+Running pre-create checks...
+Creating machine...
+(dev-db) Importing SSH key...
+Waiting for machine to be running, this may take a few minutes...
+Machine is running, waiting for SSH to be available...
+Detecting operating system of created instance...
+Detecting the provisioner...
+Provisioning with centos...
+Error creating machine: Error running provisioning: exit status 1
+</pre>
+<p>For example, on local system:</p>
+<pre>$ docker version
+Client:
+ Version: 1.9.1
+</pre>
+<p>On remote server:</p>
+<pre>
+# docker version
+Client:
+ Version: 1.8.2
+</pre>
+<p>In the above example, local docker version is 1.9.1, but the remote docker version is an older 1.8.2. So, here we have a mis-match, and docker-machine create will not work and fail as shown above.</p>
+<p>In the above scenario, the docker engine was installed separately on the remote server, which had a different docker client version than the docker client version that came with the docker-machine (docker toolbox) on the local system.</p>
+<p>So, in this case, remove the docker from your remote system as shown below.</p>
+<pre># rpm -qa | grep docker
+docker-selinux-1.8.2-10.el7.centos.x86_64
+docker-1.8.2-10.el7.centos.x86_64
+
+# rpm -ev docker-selinux
+Preparing packages...
+docker-selinux-1.8.2-10.el7.centos.x86_64
+
+# rpm -ev docker
+Preparing packages...
+docker-1.8.2-10.el7.centos.x86_64
+</pre>
+<p>Now, when you execute the docker-machine command on your local system, it will automatically install the appropriate docker engine and the docker client on the remote server that will be compataible with the docker client on the local machine.</p>
+<h3>12. Error 5: SELinux or Firewall Blocking Access</h3>
+<p>By default, the new docker vm machine that we created will be running on TCP port 2376.</p>
+<p>On your remote server, make sure you have appropriate firewall rule which will allow TCP port 2376. If you still have problem, just temporarily to rule-out the possibility of firewalld blocking access, stop firewalld and see what happens.</p>
+<pre>systemctl stop firewalld
+</pre>
+<p>Again, just for debugging purpose, for some reason, if you like to disable the firewalld, you can do it as shown below:</p>
+<pre>systemctl disable firewalld
+</pre>
+<p>The latest version of Docker works beautifully with SELinux, no issues there. But, in an earlier version of docker, there were some bugs related to docker and SELinux.</p>
+<p>So, if you are facing any issues, try <a href="http://www.thegeekstuff.com/2009/06/how-to-disable-selinux-redhat-fedora-debian-unix/">disabling SELinux temporarily</a> and see whether it fixes the issue. To permanently disable SELinux, modify the /etc/selinux/config file accordingly.</p>
+<pre>setenforce Permissive
+
+getenforce
+</pre>
+<p>Also, note that if SSH is not able to make connection from your local system to the remote server, docker-machine will display the following &#x201C;Error waiting for SSH: Too many retries waiting for SSH&#x201D; error message. To fix this, make sure, you implement the SSH password less authentication as explained in one of the above steps.</p>
+<pre>$ docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+Running pre-create checks...
+Creating machine...
+Waiting for machine to be running, this may take a few minutes...
+Machine is running, waiting for SSH to be available...
+Error creating machine: Error waiting for SSH: Too many retries waiting for SSH
+to be available. Last error: Maximum number of retries (60) exceeded
+</pre>
+<p>When all of the above issues are fixed, docker-machine will work without any issues as shown below:</p>
+<pre>$ docker-machine create -d generic --generic-ip-address 192.168.100.2 --generic-ssh-key $HOME/.ssh/id_rsa --generic-ssh-user dockeradmin --generic-ssh-port 22 dev-db
+
+$ docker-machine ls
+NAME ACTIVE DRIVER STATE URL SWARM DOCKER ERRORS
+default articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii virtualbox Running tcp://192.168.100.10:2376
+dev-db - generic Running tcp://192.168.100.11:2376
+</pre>
+
+<h3>If you enjoyed this article, you might also like..</h3>
+
+<br>
+
+<table id="booktable">
+<tr>
+<td>
+<a rel="nofollow" href="http://www.thegeekstuff.com/bash-101-hacks-ebook/"><img title="Bash 101 Hacks Book" src="http://static.thegeekstuff.com/images/bash-132.png" alt="Bash 101 Hacks Book"></a>
+</td>
+<td>
+<a rel="nofollow" href="http://www.thegeekstuff.com/sed-awk-101-hacks-ebook/"><img title="Sed and Awk 101 Hacks Book" src="http://static.thegeekstuff.com/images/sed-and-awk-132.png" alt="Sed and Awk 101 Hacks Book"></a>
+</td>
+<td>
+<a rel="nofollow" href="http://www.thegeekstuff.com/nagios-core-ebook/"><img title="Nagios Core 3 Book" src="http://static.thegeekstuff.com/images/nagios-core-132.png" alt="Nagios Core 3 Book"></a>
+</td>
+<td>
+<a rel="nofollow" href="http://www.thegeekstuff.com/vim-101-hacks-ebook/"><img title="Vim 101 Hacks Book" src="http://static.thegeekstuff.com/images/vim-101-hacks-132.png" alt="Vim 101 Hacks Book"></a>
+</td>
+</tr>
+</table>
+
+<br>
+				</div>
+				</div>
+</body></html>

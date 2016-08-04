@@ -1,0 +1,143 @@
+<!DOCTYPE html><html><head><title>VueJs: Filters</title></head><body>
+<h1>VueJs: Filters</h1><p><a href="http://coligo.io/vuejs-filters/" target="_new">Original URL</a></p>
+<p><blockquote>In this tutorial we take a look filters in VueJs and how we can use them through a number of examples. We explore some of the powerful built-in filters such as orderBy and filterBy and how we can&hellip;</blockquote></p>
+<div><div class="post-content">
+<p>In this tutorial we take a look filters in VueJs and how we can use them through a number of examples. We explore some of the powerful built-in filters such as orderBy and filterBy and how we can chain several filters to one another. We then go on to defining our own custom filters and using them throughout our Vue instance.</p>
+<p>Be sure to read <a href="http://coligo.io/vuejs-the-basics/">VueJs: The Basics</a> tutorial before diving into this one to have a solid understanding of the basic concepts in VueJs.</p>
+<h2 id="the-basics-of-filters-in-vuejs">The Basics of Filters in VueJs</h2>
+<p>Filters are simply functions that you can pass data into which gets processed and a filtered version of this data is returned. Vue conveniently has a number of built in filters that you can check out in the <a href="http://vuejs.org/api/#Filters">filters section of the VueJs guide</a>. The pipe symbol (<code>|</code>) is used to denote a filter like so:</p>
+<pre><code class="lang-javascript hljs"><span class="hljs-template-variable">{{ <span class="hljs-string">'coligo'</span> | uppercase }}</span>
+</code></pre>
+<p>In this case we are using the built-in VueJs filter called <strong>uppercase</strong> and we are passing a string into it, which is transformed into all uppercase characters (COLIGO) and rendered onto the page.</p>
+<p>Of course you are not restricted to hardcoding strings. In the example below we bind the user input to the <code>message</code> variable and pass it into the uppercase filter. Go ahead and try it for yourself:</p>
+
+<h2 id="chaining-filters">Chaining Filters</h2>
+<p>VueJs allows you to chain multiple filters to each other, passing the output of one filter to another. Let's take a look at less trivial example in which we use Vue's <code>filterBy</code> filter chained to an <code>orderBy</code> filter to display all products that belong to the <strong>electronics</strong> category in <strong>alphabetical order</strong> of name.</p>
+
+<p>Let's take a second and break down the demo. We have an array of products that we wish to iterate over and display in a list. This is easily achieved using the <code>v-for</code> directive like so:</p>
+<pre><code class="lang-html hljs">&lt;li v-<span class="hljs-keyword">for</span>=<span class="hljs-string">"product in products"</span>&gt;
+ <span class="hljs-template-variable">{{ product.name | capitalize }}</span> - <span class="hljs-template-variable">{{ product.price | currency }}</span>
+&lt;<span class="hljs-regexp">/li&gt;</span>
+</code></pre>
+<p>We're using the <code>capitalize</code> and <code>currency</code> filters to display the product name and price in a nicely formatted manner.</p>
+<p>To get only the products that belong to the <strong>electronics</strong> category we can use the <code>filterBy</code> method on the products array:</p>
+<pre><code class="lang-html hljs">&lt;li v-<span class="hljs-keyword">for</span>=<span class="hljs-string">"product in products | filterBy 'electronics' in 'category'"</span>&gt;
+ <span class="hljs-template-variable">{{ product.name | capitalize }}</span> - <span class="hljs-template-variable">{{ product.price | currency }}</span>
+&lt;<span class="hljs-regexp">/li&gt;</span>
+</code></pre>
+<p>In the above snippet we are telling the <code>filterBy</code> method to look for the <em>string</em> 'electronics' within the 'category' key of the objects in our products array. This will return a filtered array that contains only 'electronics' and no 'accessories'.</p>
+<p>In case you're wondering, you can also search across multiple keys in an object:</p>
+<pre><code class="lang-html hljs">&lt;li v-<span class="hljs-keyword">for</span>=<span class="hljs-string">"product in products | filterBy 'electronics' in 'category' 'name'"</span>&gt;
+ <span class="hljs-template-variable">{{ product.name | capitalize }}</span> - <span class="hljs-template-variable">{{ product.price | currency }}</span>
+&lt;<span class="hljs-regexp">/li&gt;</span>
+</code></pre>
+<p>This would search for the word 'electronics' in both the category and name properties.</p>
+<p>The last thing we need to do is order them alphabetically. Vue makes this extremely easy using the <code>orderBy</code> filter. We can simply chain this to the output of <code>filterBy</code> to sort the filtered array alphabetically:</p>
+<pre><code class="lang-html hljs">&lt;ul&gt;
+ &lt;li v-<span class="hljs-keyword">for</span>=<span class="hljs-string">"product in products
+ | filterBy 'electronics' in 'category'
+ | orderBy 'name'"</span>
+ &gt;
+ <span class="hljs-template-variable">{{ product.name | capitalize }}</span> - <span class="hljs-template-variable">{{ product.price | currency }}</span>
+ &lt;<span class="hljs-regexp">/li&gt;
+&lt;/ul</span>&gt;
+</code></pre>
+<p><code>filterBy</code> takes the products array and returns a filtered array that only contains 'electronics'. This new array is then fed into the <code>orderBy</code> filter which sorts it alphabetically according to the product name.</p>
+<p>The <code>orderBy</code> filter in VueJs sorts items in ascending order by default. If you would like to reverse that and have it in <em>descending</em> order instead you can simply pass a <code>-1</code> argument to it:</p>
+<pre><code class="lang-html hljs">&lt;li <span class="hljs-keyword">v</span>-<span class="hljs-keyword">for</span>=<span class="hljs-string">"product in products
+</span> | filterBy <span class="hljs-string">'electronics'</span> in <span class="hljs-string">'category'</span>
+ | orderBy <span class="hljs-string">'name'</span> -<span class="hljs-number">1</span> <span class="hljs-string">"
+</span>&gt;
+</code></pre>
+<h2 id="custom-filters">Custom Filters</h2>
+<p>Although VueJs gives us a bunch of handy, built-in filters, you will quickly realize that those filters aren't enough. Thankfully, Vue gives us a clean and elegant way of defining our own filters that we can use with the pipe (<code>|</code>) notation.</p>
+<p>A global, custom filter is defined using the <code>Vue.filter()</code> constructor that takes 2 parameters:</p>
+<ol>
+<li><strong>filterID</strong>, which is simply a unique name for your filter</li>
+<li><strong>filter function</strong> - a function that takes a value as a parameter and returns the transformed value</li>
+</ol>
+<p>Let's go back to our products example:</p>
+<blockquote>
+<p>Imagine we have a online store and we are having a 50% discount on all our products</p>
+</blockquote>
+<p>To achieve this we can:</p>
+<ul>
+<li>Create a filter called <strong>discount</strong> using the <code>Vue.filter()</code> constructor</li>
+<li>Pass in the original price of each product and return the discounted price</li>
+</ul>
+<pre><code class="lang-javascript hljs">Vue.filter(<span class="hljs-string">'discount'</span>, function(value){
+ <span class="hljs-keyword">return</span> value articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii <span class="hljs-number">0.5</span>;
+});
+
+<span class="hljs-keyword">new</span> Vue({
+<span class="hljs-symbol"> el:</span> <span class="hljs-string">'body'</span>,
+<span class="hljs-symbol"> data:</span> {
+<span class="hljs-symbol"> products:</span> [
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'microphone'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">25</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'laptop case'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">15</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'accessories'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'screen cleaner'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">17</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'accessories'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'laptop charger'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">70</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'mouse'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">40</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'earphones'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">20</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'monitor'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">120</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>}
+ ]
+ }
+});
+</code></pre>
+<p>You can now use the custom filter in the same way you would use any of the built-in VueJs filters:</p>
+<pre><code class="lang-html hljs">&lt;ul&gt;
+ &lt;li v-<span class="hljs-keyword">for</span>=<span class="hljs-string">"product in products"</span>&gt;
+ <span class="hljs-template-variable">{{ product.name | capitalize }}</span> - <span class="hljs-template-variable">{{ product.price | discount | currency }}</span>
+ &lt;<span class="hljs-regexp">/li&gt;
+&lt;/ul</span>&gt;
+</code></pre>
+<p>This will now apply a 50% discount to all our products and pass the discounted price to the currency filter to maintain the formatting.</p>
+
+<p>So that's great - we were able to define a discount filter to automatically apply a 50% discount. What if we wanted to apply a 25% discount? or a 10% discount?</p>
+<p>Since this is a global filter and it can be used by any Vue instance, it doesn't make much sense to hard code the discount percentage because that would mean any Vue instance using this filter is forced to apply a 50% discount.</p>
+<p>To avoid this, we can pass the amount of discount as an inline argument to our <code>discount</code> filter. We can now define our filter with a <strong>discount</strong> argument:</p>
+<pre><code class="lang-javascript hljs">Vue.filter(<span class="hljs-string">'discount'</span>, <span class="hljs-function"><span class="hljs-keyword">function</span><span class="hljs-params">(value, discount)</span></span>{
+ <span class="hljs-keyword">return</span> value articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii (discount / <span class="hljs-number">100</span>);
+});
+</code></pre>
+<p>and we can simply pass in the amount of discount like so:</p>
+<pre><code class="lang-html hljs">&lt;ul&gt;
+ &lt;li v-<span class="hljs-keyword">for</span>=<span class="hljs-string">"product in products"</span>&gt;
+ <span class="hljs-template-variable">{{ product.name | capitalize }}</span> - <span class="hljs-template-variable">{{ product.price | discount <span class="hljs-number">25</span> | currency }}</span>
+ &lt;<span class="hljs-regexp">/li&gt;
+&lt;/ul</span>&gt;
+</code></pre>
+<p>Here's what the finished product looks like:</p>
+
+<p>Filters can also be defined locally within an instance so that it is not shared with every other Vue instance. It is usually better to define a filter in this way if you don't intend to use it in other instances. To define the <code>discount</code> filter as a local one, we can simply add it to the <code>filters</code> object within our Vue instance:</p>
+<pre><code class="lang-javascript hljs">Vue.filter(<span class="hljs-string">'discount'</span>, function(value, discount){
+ <span class="hljs-keyword">return</span> value articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii (discount / <span class="hljs-number">100</span>);
+});
+
+<span class="hljs-keyword">new</span> Vue({
+<span class="hljs-symbol"> el:</span> <span class="hljs-string">'body'</span>,
+<span class="hljs-symbol"> data:</span> {
+<span class="hljs-symbol"> products:</span> [
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'microphone'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">25</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'laptop case'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">15</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'accessories'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'screen cleaner'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">17</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'accessories'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'laptop charger'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">70</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'mouse'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">40</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'earphones'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">20</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>},
+ {<span class="hljs-string">name:</span> <span class="hljs-string">'monitor'</span>, <span class="hljs-string">price:</span> <span class="hljs-number">120</span>, <span class="hljs-string">category:</span> <span class="hljs-string">'electronics'</span>}
+ ]
+ },
+<span class="hljs-symbol"> filters:</span> {
+<span class="hljs-symbol"> discount:</span> function(value, discount){
+ <span class="hljs-keyword">return</span> value articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata playground start-thesrc swift thesrc ucii (discount / <span class="hljs-number">100</span>);
+ }
+ }
+});
+</code></pre>
+<p>Now you can use it anywhere within that specific Vue instance in exactly the same way as we did earlier. The only difference is that no other instance has access to this filter.</p>
+<h2 id="wrapping-up">Wrapping Up</h2>
+<p>That's it folks! Filters in VueJs are incredibly simple thanks to the clean and elegant pipe notation and the flexible <code>Vue.filter()</code> constructor. Now that you have the main concepts of filters down, you can start building your own custom filters and utilizing them within your projects for cleaner and more maintainable code.</p>
+<p>If you haven't checked out the <a href="http://coligo.io/vuejs-components/">Components in VueJs</a> tutorial yet, I'd encourage you to read it as they are just as easy to use, yet extremely powerful.</p>
+</div>
+</div>
+</body></html>

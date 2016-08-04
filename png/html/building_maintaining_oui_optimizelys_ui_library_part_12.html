@@ -1,0 +1,156 @@
+<!DOCTYPE html><html><head><title>Building & Maintaining OUI (Optimizely's UI Library): Part 1/2</title></head><body>
+<h1>Building & Maintaining OUI (Optimizely's UI Library): Part 1/2</h1><p><a href="https://css-tricks.com/optimizelys-ui-library-oui-1-of-2/" target="_new">Original URL</a></p>
+<p><blockquote>The following is a guest post by Tom Genoni. Tom is going to introduce us to the thinking and process behind Optimizely's new UI library / Sass framework. Part 2, by Daniel O'Connor, looks at some of&hellip;</blockquote></p>
+<div><div class="e-content">
+
+ 
+
+ <p><em class="explanation">The following is a guest post by <a href="http://atomeye.com/">Tom Genoni</a>. Tom is going to introduce us to the thinking and process behind <a href="https://www.optimizely.com/">Optimizely's</a> new UI library / Sass framework. <a href="https://css-tricks.com/optimizelys-ui-library-oui-2-of-2">Part 2</a>, by <a href="https://danoc.me/">Daniel O'Connor</a>, looks at some of the technical and integration bits.</em></p>
+<p>When I first started working on web projects, stylesheets were seen as a necessary evil. It was neither a <em>real</em> language to be taken seriously by a computer-science minded engineer nor simple enough for a designer to fully own and understand. With few best practices, organization of the CSS was always ad hoc&#x2014;&#x201C;type styles in this section, colors in that section&#x201D;&#x2014;and every company did it differently. But as web applications, and the teams building them, grew larger and more complex it became harder to manage ballooning codebases while maintaining consistency across teams and projects. </p>
+
+<p>Among the first popular CSS frameworks that emerged to address this problem is <a href="http://getbootstrap.com/">Bootstrap</a>. Many similar frameworks have followed but the purpose has always been the same: instead of writing CSS from scratch on a project by project basis, start with a styled set of the most common components&#x2014;grids, buttons, form elements, breadcrumbs&#x2014;that are cross-browser compatible and easily combined into larger interfaces. </p>
+<p>At Optimizely we wrote and actively maintain our own Sass framework called <a href="https://github.com/optimizely/oui">OUI</a> (pronounced like the French word for &#x201C;yes&#x201D;) based on the work of innumerable members of the web community including Mark Otto, Jonathan Snooks, Nicole Sullivan, and Harry Roberts and the philosophies of scalable, object-oriented CSS and HTML espoused by <a href="https://css-tricks.com/bem-101/">BEM</a> and <a href="https://smacss.com/">SMACSS</a>.</p>
+<figure id="post-237599" class="align-none media-237599"><img src="https://cdn.css-tricks.com/wp-content/uploads/2016/02/open-eyes.svg" alt=""><br>
+<figcaption>Figure 1: Meet Louis, the official mascot of OUI.</figcaption>
+</figure>
+<h3>The ongoing goals for OUI are to provide code that is...</h3>
+<ul>
+<li><strong>Abstracted.</strong> Component names shouldn't be derived from the content they contain. Class names should convey structural meaning.</li>
+<li><strong>Reusable.</strong> Components should be generic enough to be reused throughout the site. They should make no assumptions what page/view they will be used on. Problems solved in one area should be easily applied elsewhere.</li>
+<li><strong>Mixable.</strong> Components should be able to join together to create larger blocks.</li>
+<li><strong>Powered by variables.</strong> All common design elements&#x2014;colors, fonts, spacings, shadows&#x2014;should be defined using the pre-existing variables.</li>
+<li><strong>Scalable.</strong> Reusing patterns means new elements can be created faster and with minimal additional CSS.</li>
+<li><strong>Consistent.</strong> Developers will be better able to read each other's code and will contribute to more reliable end-user experiences.</li>
+<li><strong>Small and <a href="https://en.wikipedia.org/wiki/Don%27t_repeat_yourself">DRY</a>.</strong> Since we're reusing low-level components to build larger objects we cut down on CSS bloat. Less code means fewer bugs.</li>
+</ul>
+<p>In this post I&#x2019;ll discuss the practical steps and the partnerships with engineers and designers it took to build it along with some problems we encountered along the way and, in Part II, my colleague Daniel O&#x2019;Connor and fellow <a href="https://medium.com/design-optimizely/why-we-hire-ui-engineers-on-optimizely-s-design-team-b2a789553b79#.mxps7rnrz">UI Engineer</a> will describe the technical details of how we test, version, and integrate it into projects. </p>
+<h3>Phase 1: Get Your Designers On Board</h3>
+<p>Arguably the most important phase of creating a UI library is establishing close collaboration with your design team. Designing with a framework often requires a workflow shift away from pixel-perfect mocks and can lead to what might seem like a loss of design freedom. Fortunately there&#x2019;s a way to address this: audit your site and present your findings.</p>
+<p>Devote a day or two to taking screenshots of your site. Scour every nook and cranny for all instances of buttons, forms, tables, font sizes, colors, tags, icons, etc., and group them together. What you&#x2019;ll likely surface will leave your designers aghast: buttons of all shapes and sizes, headings with little regularity, 27 shades of blue, and many other examples of good intentions gone bad. Putting your designers in charge of consolidating these inconsistencies will make them partners in the framework&#x2019;s construction and allies in rallying others around the effort. </p>
+<h3>Phase 2: Own the Front end</h3>
+<p>Decide with your engineering team who &#x201C;owns&#x201D; the visual front end. Because your framework&#x2019;s CSS and HTML are tied together we&#x2019;ve found it&#x2019;s important to have a smaller group, familiar with the framework&#x2019;s patterns, responsible for delivering code to often thankful engineers who no longer have to wrestle with uncooperative z-indexes. </p>
+<p>At Optimizely it&#x2019;s our <a href="https://medium.com/design-optimizely/why-we-hire-ui-engineers-on-optimizely-s-design-team-b2a789553b79#.h3opdbld1">UI Engineers</a>, who are officially <a href="https://medium.com/design-optimizely/the-structure-of-optimizely-s-design-team-97e5eb3ed712#.dwaxqmqrf">part of the design team</a>, that fill this role. With this tighter control we&#x2019;ve dramatically cut the new CSS we have to write, our code is cleaner and more consistent, and we experience far fewer bugs. Over time the responsibility for writing HTML and CSS can widen as engineers understand how to use the library effectively and as the framework matures. </p>
+<h3>Phase 3: Identify Your Components</h3>
+<p>Bootstrap contains just about everything you&#x2019;d need to build most sites. But maybe you don&#x2019;t want breadcrumbs or perhaps you can use newer CSS properties because of your browser support. Either way we recommend referencing existing frameworks and creating a list of only the components required to cover your use cases. By building it yourself you&#x2019;ll more easily identify potential trouble spots and will learn a ton in the process. </p>
+<p>OUI was built with only the components and variables we decided were universal. Each Optimizely project that uses OUI adds any custom CSS code on top of it, only in that project&#x2019;s repository. This allows each project to meet its unique design needs while keeping OUI lean and untouched. If different projects introduce similar components we have the option to &#x201C;graduate&#x201D; them into OUI, though this has rarely happened. In Part II we&#x2019;ll describe our integration and versioning system in more detail.</p>
+<h3>Phase 4: Organize &amp; Build</h3>
+<p>CSS preprocessors have been a boon for organizing code by supporting partial files containing only what&#x2019;s needed for a given component. But it&#x2019;s still a challenge to decide how to name things and where to put them. With OUI we currently use the following structure:</p>
+<li><strong>_oui-partials.scss:</strong> A rollup of all the partials to be included.</li>
+<li><strong>_oui-variables.scss:</strong> Variables for virtually everything. This includes a custom function to retrieve values from nested variable objects.</li>
+<li><strong>oui.scss:</strong> A root Sass file that includes all the rollups (used just for testing and not referenced by projects that use OUI).</li>
+<li><strong>library:</strong> Third party libraries (we will likely remove this)</li>
+<li><strong>partials:</strong> A directory of all the partial files.
+<ul>
+<li><em>elements:</em> Mixins and functions. Since we&#x2019;re using node-sass for compilation we also include the mixins we need for animations, tints, and prefixes that would ordinarily come from Compass.</li>
+<li><em>base:</em> Resets and minimal HTML element styling (links, tables, lists)</li>
+<li><em>components:</em> Low-level bits that help form objects (grid, media, nav)</li>
+<li><em>objects:</em> The fully formed and styled pieces (buttons, spinner, dropdown)</li>
+<li><em>trumps:</em> Helper classes for layout (margins, paddings, font styling)</li>
+</ul>
+</li>
+<p>In the Sass we don&#x2019;t use IDs, selector depth is kept to a <a href="http://thesassway.com/intermediate/avoid-nested-selectors-for-more-modular-css">minimum</a>, and the source order helps us keep <a href="https://css-tricks.com/strategies-keeping-css-specificity-low/">specificity low</a>. You can take a closer look at the <a href="https://github.com/optimizely/oui">OUI repository</a>. </p>
+<h3>Phase 5: Document &amp; Evangelize</h3>
+<p>All this work won&#x2019;t help streamline your code if nobody knows about it or how to use it. Here are a few suggestions that have helped OUI gain traction at Optimizely. </p>
+<ol>
+<li><strong>Pick a code name.</strong> Like any good engineering project, your framework should have an internal code name. It&#x2019;s probably not something you usually do with CSS projects but, hey, this one is important! If it&#x2019;s short enough you can use it as a prefix for namespacing classes.</li>
+<li><strong>Provide good documentation.</strong> As anyone who has ever tried it knows, writing and more importantly maintaining good documentation with code samples, usage guidelines, and a changelog, is not easy. Incomplete or out-of-date documentation will only frustrate your developers and can undermine trust in the project. To combat this, nominate owners and have clear expectations about what to document and how to keep it accessible and current.
+<p>This is an on-going challenge for us, but we&#x2019;re inching closer. Unhappy with existing solutions, Daniel O&#x2019;Connor has been leading the effort to build a robust living style guide script, called ScribeSass, that parses comments and code in Sass source files and renders code samples and examples. We&#x2019;ll be releasing that as an open source project soon.</p></li>
+<li><strong>Evangelize.</strong> With your pithy code name and documentation in place, start spreading the word. Give tech talks using real examples that demonstrate the speed and consistency benefits of reusing existing styles and patterns. If you have the budget for it, make stickers, t-shirts, or posters. Each month collect statistics on the size, rules, and specificity of your CSS and the number of bugs and time your team spent fixing them and share the results. We saw drops across the board.</li>
+</ol>
+<h3>Lessons Learned</h3>
+<p>Like any web project we made lots of mistakes, fixes and additions along the way. Here are a few of the challenges we faced, adjustments we made, and issues we continue to confront.</p>
+<ul>
+<li><strong>Namespacing.</strong> OUI worked well for new projects but as we started refactoring existing projects we realized we could have class-name collisions. To avoid this we added the option of a namespaced Sass variable that will add a prefix to most classes in the final CSS output. For example, if &#x201C;oui-&#x201D; is the namespace value, the class &#x201C;.media&#x201D; becomes &#x201C;.oui-media&#x201D;. This gave us the flexibility to more freely mix OUI with legacy code.</li>
+<li><strong>Versioning.</strong> For a while we weren&#x2019;t convinced the overhead of introducing formal versioning was worth the effort. There were only a few projects using OUI and we didn&#x2019;t want to add too much friction to making changes. But pushing fixes&#x2014;especially ones that might cause breaks&#x2014;and communicating their impact became problematic. We decided to adopt <a href="http://semver.org/">Semantic Versioning</a> and with the help of a well-maintained <a href="https://github.com/optimizely/oui/blob/devel/CHANGELOG.md">changelog</a> and a few Gulp packages we are able to add features and fix bugs without fear of breaking projects using OUI. In Part II, Daniel O&#x2019;Connor will discuss setting up versioning in more detail.</li>
+<li><strong>Sass mixins vs extend.</strong> Initially OUI was setup using a fair number of extends. We were aware of their <a href="http://www.sitepoint.com/avoid-sass-extend/">pitfalls</a> and introduced them carefully, always with placeholders. But using extends can move CSS classes around in unwanted ways and despite our best efforts we did eventually have a few issues with source order and specificity. We decided to convert many of the extends to mixins and although it&#x2019;s slightly more code we&#x2019;re less concerned about future gotchas.
+</li>
+<li><strong>Responsiveness.</strong> This one is tricky. We&#x2019;ve included media query mixins and optional breakpoints to a handful of our patterns, like grids. But since so much of responsive design is unavoidably complex, often requiring a good amount of custom code, there isn&#x2019;t much more OUI can provide beyond the basic building blocks. Despite this inherent challenge, we will continue to evaluate ways of making the framework responsive friendly.</li>
+<li><strong>Custom vs reusable patterns.</strong><br>
+ As new designs and layouts are created, falling on a spectrum between reusing an existing pattern to completely custom, it&#x2019;s up to the UI Engineer to decide how best to build it. Ultimately the goal of building a UI library is keeping your CSS codebase as small and manageable as possible, but you also have to weigh the needs and flexibility required by your brand and products. Can the design be altered slightly to fall into an existing pattern? If this isn&#x2019;t the case, should this be a new pattern or is it entirely unique? Negotiating this is more art than science and underscores the importance of collaboration and compromise between Designers and UI Engineers. </li>
+<li><strong>Stick to it.</strong> Over time it&#x2019;s easy to let standards slide. A few hard-coded values and magic numbers here and there won&#x2019;t bring down your application. But since many CSS bugs arise from the unintended consequences of code written long ago it&#x2019;s important to keep those little time bombs out. That discipline will pay off.</li>
+</ul>
+<h3>Results So Far</h3>
+<p>Though the following comparison isn&#x2019;t quite &#x201C;apples to apples&#x201D;, these CSS statistics* come from two similarly visually complex products at Optimizely. The first is an older application built prior to OUI and the second used OUI exclusively. </p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Product without OUI</th>
+<th>Product with OUI</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>Gzip Size</th>
+<td>101 KB</td>
+<td>33 KB</td>
+<td>-68%</td>
+</tr>
+<tr>
+<th>Stylesheet Size</th>
+<td>618 KB</td>
+<td>193 KB</td>
+<td>-69%</td>
+</tr>
+<tr>
+<th>Rules</th>
+<td>3259</td>
+<td>1757</td>
+<td>-46%</td>
+</tr>
+<tr>
+<th>Selectors</th>
+<td>5183</td>
+<td>2407</td>
+<td>-54%</td>
+</tr>
+<tr>
+<th>Identifiers</th>
+<td>21375</td>
+<td>4009</td>
+<td>-81%</td>
+</tr>
+<tr>
+<th>Declarations</th>
+<td>9356</td>
+<td>4429</td>
+<td>-53%</td>
+</tr>
+<tr>
+<th>Specificity Per Selector</th>
+<td>87</td>
+<td>15</td>
+<td>-83%</td>
+</tr>
+<tr>
+<th>Top Selector Specificity</th>
+<td>641</td>
+<td>50</td>
+<td>-92%</td>
+</tr><tr>
+<th>ID Selectors</th>
+<td>3135</td>
+<td>0</td>
+<td>-100%</td>
+</tr>
+</tbody>
+</table>
+<p><small><em>* Most values generated using <a href="https://github.com/katiefenn/parker">Parker</a>, a "stylesheet analysis tool".</em></small></p>
+<h3>Summary</h3>
+<p>Managing a framework at your company, either by forking an existing one or writing your own, can be daunting. But for design and engineering teams concerned about maintaining consistency between projects, the benefits are too numerous to ignore. By relying on predefined patterns you&#x2019;ll get uniformity in visuals and in code, faster HTML builds, fewer bugs, less CSS bloat, and it allows product designers to spend less time on specifications and more time on the bigger challenges of user experience and information architecture.</p>
+
+ 
+ 
+
+ <a class="share-on-link share-on-twitter" href="https://twitter.com/intent/tweet?text=Building%20&amp;%20Maintaining%20OUI%20(Optimizely&#x2019;s%20UI%20Library):%20Part%201/2&amp;url=https://css-tricks.com/optimizelys-ui-library-oui-1-of-2/&amp;via=real_css_tricks">Twitter</a>
+
+ <a class="share-on-link share-on-facebook" href="https://www.facebook.com/sharer/sharer.php?u=https://css-tricks.com/optimizelys-ui-library-oui-1-of-2/">Facebook</a>
+
+ <a class="share-on-link share-on-googleplus" href="https://plus.google.com/share?url=https://css-tricks.com/optimizelys-ui-library-oui-1-of-2/">Google+</a>
+
+ 
+ </div>
+
+ </div>
+</body></html>

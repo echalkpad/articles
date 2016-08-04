@@ -1,0 +1,107 @@
+<!DOCTYPE html><html><head><title>spectro… adventures in Go (lang)</title></head><body>
+<h1>spectro… adventures in Go (lang)</h1><p><a href="http://markcrossfield.co.uk/2015-08-22-spectro-adventures-in-go.html" target="_new">Original URL</a></p>
+<p><blockquote>My latest spare time project has been writing a general purpose command line heat map tool designed to visualise the distribution of streams of decimal numbers (not necessarily integers) representing&hellip;</blockquote></p>
+<div><div class="post">
+ 
+
+<p>My latest spare time project has been writing a general purpose command line heat map tool designed to visualise the distribution of streams of decimal numbers (not necessarily integers) representing something like latency, duration or size. I&#x2019;ve called it <a href="https://github.com/mrmanc/spectro">spectro</a> as it&#x2019;s output resembles a <a href="https://en.wikipedia.org/wiki/Spectrogram">spectrogram</a>.</p>
+
+<p>It was inspired by <a href="https://twitter.com/sysdig/status/618826906310324224">this Sysdig tweet</a> for a monitoring tool with built in command line visualisation, and follows on from my <a href="https://github.com/mrmanc/log-ninja#distribution">distribution Awk script</a> which displays an actual histogram (although it also has some real-time functionality).</p>
+
+<blockquote class="twitter-tweet" lang="en"><p lang="en" dir="ltr">You've never seen a command line tool do this. Visualizing real-time latency spectrograms: <a href="https://t.co/KiLRNxMnmW">https://t.co/KiLRNxMnmW</a> <a href="http://t.co/TSMrLAGWmM">pic.twitter.com/TSMrLAGWmM</a></p>&#x2014; Sysdig (@sysdig) <a href="https://twitter.com/sysdig/status/618826906310324224">July 8, 2015</a></blockquote>
+
+
+
+<p>I decided to use this as an excuse to experiment with Go/golang for the following reasons:</p>
+
+<ul>
+<li>built in simple dependency management (just import and you are good to go)</li>
+<li>easy distribution system (<code>go get github.com/mrmanc/spectro/spectro</code>)</li>
+<li>builds monolithic binaries containing required dependencies</li>
+<li>good set of libraries available</li>
+</ul>
+
+<p>These things combined make it an interesting choice for writing command line tools. You can be sure the tools will work on your system, as they are compiled by <code>go get</code> for your environment. You can be sure that the programs will not be affected by changes in your system packages, as the dependencies are contained in the executable it bakes.</p>
+
+<p>The end result was successful, although I did later find an <a href="https://github.com/jclulow/terminal-heatmap">existing alternative</a> (although this does not do everything I wanted, namely replaying existing log files).</p>
+
+<h2>Working with Go</h2>
+
+<p>Thankfully there is an Alpha release <a href="https://plugins.jetbrains.com/plugin/5047">IntelliJ Idea Go plugin</a>. It provides some assistance with built in types, very basic refactors and syntax checking.</p>
+
+<p>Go has an interesting syntax, and a few quirky features (some good, some hmmm). While I may not agree with all the decisions, it is clear that the language features have been given a lot of thought and display a lot of wisdom. For example, I particularly liked that since map iteration order is not guaranteed, it is <a href="https://blog.golang.org/go-maps-in-action#TOC_7.">actively randomised</a> at runtime to make that clear.</p>
+
+<p>I think the most frustrating part of the language was the constant conversion between various ints, floats etc. The <a href="http://golang.org/doc/faq#conversions">faq</a> elaborates:</p>
+
+<p>&#x201C;For reasons of portability, we decided to make things clear and straightforward at the cost of some explicit conversions in the code. The definition of constants in Go&#x2014;arbitrary precision values free of signedness and size annotations&#x2014;ameliorates matters considerably, though.&#x201D; &#x2014; <a href="http://golang.org/doc/faq#conversions">http://golang.org/doc/faq#conversions</a></p>
+
+<p>So a trade off has been made against clean code to simplify the compiler, ensure portability and mitigate overflows. Okay, <a href="https://en.wikipedia.org/wiki/Cluster_(spacecraft)">overflows</a> are a bad thing, and something that most developers don&#x2019;t consider so that seems like a good idea. But I would have loved not to have to cast an int returned by an external function to a 64 bit int (where there is no risk of overflow), simply so my code could be less cluttered like the snippet below.</p>
+<div class="highlight"><pre><code class="language-text"> fmt.Fprintf(os.Stderr, "%"+strconv.FormatInt(int64(paddingWidth), 10)+"s %s\r", "", legend)
+</code></pre></div>
+<h2>What does it do?</h2>
+
+<p>You can use the provided normal command to generate some test data based on a normal distribution:</p>
+
+<p><img alt="normal distribution spectrograph" src="http://markcrossfield.co.uk/images/spectro/normal.gif"></p>
+
+<p>Using <code>dtrace</code> to simulate some real time data for spectro to plot like this: (dtrace example borrowed from <a href="https://github.com/brendangregg/HeatMap">this HeatMap tool</a>)</p>
+<div class="highlight"><pre><code class="language-text">$ sudo dtrace -qn 'syscall::read:entry { self-&gt;ts = timestamp; }
+ syscall::read:return /self-&gt;ts/ {
+ printf("%d\n", (timestamp - self-&gt;ts) / 1000); self-&gt;ts = 0; }' | spectro -scale exponential
+</code></pre></div>
+<p>will display something a bit like this in your terminal :</p>
+
+<p><img src="http://markcrossfield.co.uk/images/spectro/dtrace.gif" alt="dtrace spectrograph"></p>
+
+<p>But it really comes into it&#x2019;s own if you have historic logs with a formatted time in the line. Here you can use the pacemaker command to indicate to spectro how to sample the data. The pacemaker command will add extra lines to the streamed output as a signal to the spectro command. Pacemaker will look for a time matching something like this: <code>10:14:52</code>. It&#x2019;s tolerant of times out of order, but this will result in repeated periods. You can leave the time text in the output, so long as the number you wish to visualise is the last thing in the line.</p>
+
+<p>You can run something like <code>cat sample.log | pacemaker | spectro</code> on the provided <code>sample.log</code> which looks like this:</p>
+<div class="highlight"><pre><code class="language-text">Tue Nov 11 15:56:20.945 65
+Tue Nov 11 15:56:20.989 39
+Tue Nov 11 15:56:21.066 41
+Tue Nov 11 15:56:21.197 42
+Tue Nov 11 15:56:21.245 154
+</code></pre></div>
+<p>Resulting in output like this:</p>
+
+<p><img alt="normal distribution spectrograph" src="http://markcrossfield.co.uk/images/spectro/sample.gif"></p>
+
+<p>You can use <code>pacemaker -nowait</code> to analyse the file as quickly as possible (otherwise it sleeps between times), and if the log file is still being written to you could just use <code>tail -f sample.log | spectro</code>.</p>
+
+<h2>Design</h2>
+
+<p>I appreciated the line by line output of <a href="https://sysdig.com/aws-storage-latency-sysdig-spectrogram/">sysdig</a>, especially as it allows the user to scroll back as far as their screen history allows. It also means you only have to modify one line of text at once, rather than re-plotting the whole screen.</p>
+
+<p>I decided early on I wanted to find a decent gradient of ANSI colours which covered the visible spectrum. That took a fair time to work out, since there is a lot of bad information out there about ANSI colours, and no list of &#x2018;rainbow&#x2019; colours came forward in any search I did. And the rainbow scheme is very attractive when testing with a normal distribution. Frustratingly though, it turned out that lots of colours is actually very difficult to read with a less organised distribution, so I limited it to blue through red.</p>
+
+<p>I was keen to allow data to be streamed in in real time, or replayed via an existing log file. While I&#x2019;m not proud of the hacky time code (which just watches for times like <code>15:30:05</code> in the output) it is quite effective at processing an existing log, which can be done ASAP or with simulated pauses.</p>
+
+<p>I was also keep that the charts would adapt to changes in input, so that it is not necessary for the user to provide configuration flags. If the range of inputs changes, the scale will be replotted (an a message printed). Similarly, if the number of points in each bucket changes the magnitude scale will adapt. It is however possible for the user to start these two values at appropriate levels to prevent constant changes.</p>
+
+<p>I pulled the log replay functionality out into a separate command named <code>pacemaker</code> as I can see myself using it again in the future, and also to follow the <a href="https://en.wikipedia.org/wiki/Single_responsibility_principle">Single Responsibility Principle</a> and the second of the <a href="http://www.ru.j-npcs.org/usoft/WWW/LJ/Articles/unixtenets.html">Tenets of the UNIX Philosophy</a>: &#x2018;Make each program do one thing well&#x2019;. Communication between pacemaker and spectro is via extra plain text lines to keep things readable, and both are designed to work as filters in a pipeline (tenet nine).</p>
+
+<h2>Summary</h2>
+
+<p>I think I would recommend using Go for a similar task in the future, simply for the cross platform distribution mechanism, lack of dependency issues and freedom from packaging pain.</p>
+
+<p>I wouldn&#x2019;t recommend it without further experimenting for large scale projects, or where another language had some distinct advantage in the libraries available.</p>
+
+<h2>Go get it</h2>
+
+<p>You can find out more, including install instructions at <a href="https://github.com/mrmanc/spectro">https://github.com/mrmanc/spectro</a>.</p>
+
+
+
+<h2>Future improvements</h2>
+
+<ul>
+<li>Potentially split the summarisation (histogram) functionality from the rendering, since it is useful on it&#x2019;s own and can allow you to use much less space to store a replay of a period in plain text</li>
+<li>Normalise the amplitude using the time since last sample to smooth out results when processing is slow</li>
+<li>Try using a static logarithmic scale for the amplitude scaling to provide consistency and better resolution on small amplitudes</li>
+<li>Allow the user to switch scales dynamically when the command is running</li>
+<li>Use rank based rendering as suggested by this <a href="http://dtrace.org/blogs/dap/2011/06/20/heatmap-coloring/">blog post by Dave Pacheco</a>.</li>
+</ul>
+
+ </div>
+ </div>
+</body></html>

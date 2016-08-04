@@ -1,0 +1,168 @@
+<!DOCTYPE html><html><head><title>Create a Text-to-Speech Chrome Extension</title></head><body>
+<h1>Create a Text-to-Speech Chrome Extension</h1><p><a href="https://www.sitepoint.com/create-text-to-speech-chrome-extension/" target="_new">Original URL</a></p>
+<p><blockquote>This article was peer reviewed by Marc Towler. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be! Converting text to speech, also known as Speech&hellip;</blockquote></p>
+<div>
+
+ 
+ <div class="ArticleCopy language-javascript">
+ <p><em>This article was peer reviewed by <a href="https://twitter.com/marctowler">Marc Towler</a>. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be!</em></p>
+<p>Converting text to speech, also known as Speech Synthesis or TTS (text-to-speech), is an artificial way to produce human speech. It is not something new, as people have tried to create machines which produce human speech for at least a thousand years according to <a href="https://en.wikipedia.org/wiki/Speech_synthesis#History">Wikipedia</a>.</p>
+
+<p>Today, TTS is becoming more and more ubiquitous in our lives and everybody can take advantage of it. We will demonstrate this by creating a Chrome extension which converts text to speech. HTML5 brought us the <a href="https://dvcs.w3.org/hg/speech-api/raw-file/tip/speechapi.html">Speech Synthesis API</a> which allows any Web application to convert some arbitrary text string to speech and play it to its users without a cost.</p>
+<p>An extension for Chrome typically consists of the following things:</p>
+<ol>
+<li>A manifest (a required file with metadata)</li>
+<li>Images (such as the extension&#x2019;s icon)</li>
+<li>HTML files (such as a popup that will be shown when the users click on the extension&#x2019;s icon)</li>
+<li>JavaScript files (such as content and/or background scripts which will be explained in a bit)</li>
+<li>Any other asset that may be used by your application (such as a stylesheet)</li>
+</ol>
+<h2 id="aboutthepagetospeechextension">About the Page to Speech Extension</h2>
+<p>Because of Chrome&#x2019;s popularity and the rise of TTS, we will be creating a Chrome extension which converts text to speech. The extension is going to wait until the user clicks on its icon or presses a special hotkey (<code>shift + Y</code>) and then it will try to either find what the user has highlighted on the page that they are currently viewing or it will try to find what is copied to their clipboard. If anything is there, it will convert it to speech by first trying to use the HTML5 Speech Synthesis API and if that is not available &#x2013; by calling a third-party API. </p>
+<h2 id="chromeextensionbasics">Chrome Extension Basics</h2>
+<p>Each Chrome extension needs to have a file called <a href="https://developer.chrome.com/apps/manifest">manifest.json</a>. The manifest is a JSON-formatted file which contains data crucial to the application ranging from things such as the name, description, icons, and the author of the extension to data defining the needs of the extension &#x2013; which websites should the extension be able to run on (those would be the permissions which the user must grant) or what files to run when the user is browsing a particular website.</p>
+<pre><code class="javascript language-javascript">{
+ "manifest_version": 2,
+
+ "name": "Page to Speech",
+ "description": "This extension will produce English speech to whatever text you highlight on a webpage.Highlight text and click the extension's icon",
+ "author": "Ivan Dimov",
+ "version": "1.0",
+ "icons": { 
+ "16": "icon16.png",
+ "48": "icon48.png",
+ "128": "icon128.png"
+ },
+</code></pre>
+<p>Our manifest starts by documenting the name, the description, the author, the version and the icons of the extension. You can provide numerous icons that respond to different sizes in the <code>icons</code> object. </p>
+<pre><code class="javascript language-javascript"> "background": {
+ "scripts": ["background.min.js"]
+ },
+ "content_scripts": [
+ {
+ "matches": ["http://*/*", "https://*/*"],
+ "js": [ "polyfill.min.js", "ext.min.js"],
+ "run_at": "document_end"
+ }],
+</code></pre>
+<p>
+Then, we have a background script called <code>background.min.js</code> (notice that we use minified files) defined in the <code>background</code> object. <a href="https://developer.chrome.com/extensions/background_pages">Background scripts</a> are scripts which are long-running and will continue to run until the user&#x2019;s browser is closed or the extension is disabled. </p>
+<p>Afterwards, we have a <code>content_scripts</code> array which instructs Chrome to load two JavaScript files on every website request due to the wild-cards <code>"http://*/*"</code> and <code>"https://*/*"</code>. <a href="https://developer.chrome.com/extensions/content_scripts">Content scripts</a>, unlike background scripts, have access to the DOM of the actual website which the user is visiting. Content scripts can both read and make modifications to the DOM of any webpage that they are embedded in. Therefore, our <code>polyfill.min.js</code> and <code>ext.min.js</code> would be able to read and modify all data on every webpage. </p>
+<pre><code class="json language-json"> "browser_action": {
+ "default_icon": "speech.png"
+ },
+ "permissions": [
+ "activeTab",
+ "clipboardRead"
+ ]
+}
+</code></pre>
+<p>Not so fast! We have another array called <code>permissions</code> with which we request to have access only to the webpage that is currently opened by the user (the active tab). We also ask for another permission called <code>clipboardRead</code> which would allow us to read the clipboard of the user (so we can convert its contents to speech). </p>
+<h2 id="codingthepagetospeechchromeextension">Coding the Page to Speech Chrome Extension</h2>
+<p>Firstly, we create our one and only background script which hooks up an event listener that will be fired when a user clicks on the extension&#x2019;s icon. When this happens we call the <code>sendMessage</code> function which sends a message to our content script (the content script can read the DOM and find out what the user has highlighted or/and what the user has placed on their clipboard) with the help of the <code>chrome.tabs.sendMessage(tabId, message, callback)</code> method. We send the message to the currently opened tab &#x2013; as this is what interests us and it is what we have access to &#x2013; with the help of the <code>chrome.tabs.query</code> method whose arguments involve a callback that will be called with an argument that contains the tabs that match the query. </p>
+<pre><code class="javascript language-javascript">chrome.browserAction.onClicked.addListener(function (tab) {
+ //fired when the user clicks on the ext's icon
+ sendMessage();
+});
+function sendMessage() {
+ chrome.tabs.query({active: true, currentWindow: true}, function(tabs){
+ chrome.tabs.sendMessage(tabs[0].id, {action: "pageToSpeech"}, function(response) {});
+ });
+}
+</code></pre>
+<p>Now, the lengthier part is our content script. We create an object which will hold some of the data involved with the extension and then define our initialization method.</p>
+<pre><code class="javascript language-javascript">initialize: function() {
+ if (!pageToSpeech.hasText()) { return;}
+ if (!pageToSpeech.trySpeechSynthesizer()) {
+ pageToSpeech.trySpeechApi();
+ }
+},
+</code></pre>
+<p>The method checks if the user has not highlighted text or if they do not have anything on their clipboard and just returns in such a case. Otherwise, it tries to produce speech with the HTML5 Speech Synthesis API. If that fails too, it finally tries to use a third-party API.</p>
+<p>The method that checks for text does several things. It tries to get an object with the highlighted text with the help of the built-in <code>getSelection()</code> method and convert it to a text string with <code>toString()</code>. Then, if no text is highlighted it attempts to find the text on the user&#x2019;s clipboard. It does this by adding an input element to the page, focusing it, firing up a paste event with the help of <code>execCommand('paste')</code> and then saving the pasted text inside that input in a property. Then it empties the input. In either case, it returns whatever it has found.</p>
+<pre><code class="javascript language-javascript"> hasText: function() {
+ this.data.highlightedText = window.getSelection().toString();
+ if (!this.data.highlightedText) {
+ var input = document.createElement("input");
+ input.setAttribute("type", "text");
+ input.id = "sandbox";
+ document.getElementsByTagName("body")[0].appendChild(input);
+ var sandbox = document.getElementById("sandbox");
+ sandbox.value = "";
+ sandbox.style.opacity = 0;
+ sandbox.focus();
+ if (document.execCommand('paste')) {
+ this.data.highlightedText = sandbox.value;
+ }
+ sandbox.value = "";
+ }
+ return this.data.highlightedText;
+
+ },
+</code></pre>
+<p>To enable the user to run the text to speech conversion with a hotkey (hardcoded to <code>shift + Y</code>) we initialize an array and set an event listener for the <code>onkeydown</code> and <code>onkeyup</code> events. In the listeners, we store an index corresponding to the <code>keyCode</code> of the pressed key whose value results from the comparison of the type of event <code>e.type</code> to <code>keydown</code> and is a boolean. Therefore, whenever a key is down, the corresponding key index&#x2019;s value will be set to <code>true</code> and whenever a key is released &#x2013; the index&#x2019;s value will be changed to <code>false</code>. Thus, if both indices 16 and 84 are holding a truthy value &#x2013; we know that the user is using our hotkeys so we initialize the text to speech conversion. </p>
+<pre><code class="javascript language-javascript"> addHotkeys: function() {
+ var activeKeys = [];
+ onkeydown = onkeyup = function(evt) {
+ var e = evt || event;
+ activeKeys[e.keyCode] = e.type == 'keydown';
+ if (activeKeys[16] &amp;&amp; activeKeys[84]) {
+ pageToSpeech.initialize();
+ }
+ };
+ }
+</code></pre>
+<p>To convert the text to speech we rely on the <code>trySpeechSynthesizer()</code> method. If HTML5 Speech Synthesis exists in the user&#x2019;s browser (<code>window.speechSynthesis</code>) we know that the user is able to use it and so we check if a speech is currently running (we know if it is running through the <code>pageToSpeech.data.speechInProgress</code> boolean). We stop the current speech if it is in progress (as the <code>trySpeechSynthesizer</code> will start a new speech and we do not want two simultaneous sounds). Then, we set <code>speechInProgress</code> to <code>true</code> and whenever the speech finishes set the property to a falsy value again.</p>
+<p>Now, I do not want to go into details as to why we are using <code>speechUtteranceChunker</code> but it is <a href="http://stackoverflow.com/questions/21947730/chrome-speech-synthesis-with-longer-texts">a bug fix</a> related to Chrome stopping the speech synthesis while still in progress after 200-300 hundred words are uttered. Basically, it splits our text string into many smaller chunks (of 120 words in our case) and calls the Speech Synthesis API with one chunk after another.</p>
+<pre><code class="javascript language-javascript"> trySpeechSynthesizer: function() {
+ if (window.speechSynthesis ) {
+ //new speech is about to get started
+ if (this.data.speechInProgress) {
+ polyfills.speechUtteranceChunker.cancel = true;
+ }
+ this.data.speechInProgress = true;
+ var msg = new SpeechSynthesisUtterance(this.data.highlightedText);
+ //speechSynthesis.speak(msg);
+ // Chrome Implementation BUG: http://stackoverflow.com/questions/21947730/chrome-speech-synthesis-with-longer-texts
+ polyfills.speechUtteranceChunker(msg, {
+ chunkLength: 120
+ },function() {
+ //speech has finished
+ pageToSpeech.data.speechInProgress = false;
+ });
+</code></pre>
+<p>Finally, if the HTML5 Speech Synthesis API is not available, we try an API. We have the same property which is used to know if it is necessary to stop an already running audio. Then, we directly create a new <code>Audio</code> object and pass it the URL to the desired API endpoint since the API we have chosen for demonstration directly streams the audio. We just pass it our API key and the text to convert. We also check if the audio fires an error. In such a case, we just display an <code>alert</code> to the user saying that at this time we cannot help (this particular API, <a href="http://www.voicerss.org/">Voice RSS</a>, allows 300 requests on the free tier with which we tested the code). </p>
+<pre><code class="javascript language-javascript">trySpeechApi: function() {
+ if (this.data.speechInProgress) {
+ this.data.fallbackAudio.pause();
+ }
+ this.data.speechInProgress = true;
+ this.data.fallbackAudio = new Audio("http://api.voicerss.org/?key=your_api_key&amp;src=" + this.data.highlightedText);
+ this.data.fallbackAudio.addEventListener("error", function(evt) {
+ alert("Sorry, we cannot produce speech right now. Try upgrading your Chrome browser!");
+ })
+ this.data.fallbackAudio.play();
+ this.data.fallbackAudio.onended = function() {
+ pageToSpeech.data.speechInProgress = false;
+ }
+
+ },
+</code></pre>
+<p>In the end, outside of any local scope we call the <code>addHotkeys</code> method which will start waiting for the user to press the right hotkey and we set up a listener which will wait until a message is received from the background script. If the right message is received (<em>speakHighlight</em>) or the hotkey is pressed, we will initialize our text to speech conversion object.</p>
+<pre><code class="javascript language-javascript">chrome.extension.onMessage.addListener(function(msg, sender, sendResponse) {
+ if (msg.action == 'pageToSpeech') {
+ pageToSpeech.initialize();
+ }
+});
+pageToSpeech.addHotkeys();
+</code></pre>
+<h2 id="conclusion">Conclusion</h2>
+<p>And voil&#xE0;, we have a nice Chrome extension that converts text to speech. The concepts here can be used to create Chrome extensions for different purposes. Have you built any interesting Chrome extensions or do you want to built one? Let me know in the comments!</p>
+<p>If you liked the idea and want to develop it further, you can find the complete code in our <a href="https://github.com/sitepoint-editors/page-to-speech">GitHub repository</a>. The production version of the extension can be found in the <a href="https://chrome.google.com/webstore/detail/page-to-speech/ncillngfchljkeoiaefmncdcgkpogbhh">Chrome Web Store</a> if you want to test it out.</p>
+<p>References:<br>
+https://en.wikipedia.org/wiki/Speech_synthesis#History<br>
+http://stackoverflow.com/questions/21947730/chrome-speech-synthesis-with-longer-texts</p>
+ </div>
+
+ </div>
+</body></html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html><html><head><title>Checkpoint and restore Docker container with CRIU</title></head><body>
+<h1>Checkpoint and restore Docker container with CRIU</h1><p><a href="http://blog.circleci.com/checkpoint-and-restore-docker-container-with-criu/" target="_new">Original URL</a></p>
+<p><blockquote>TL;DR: Simple demo of Docker checkpoint &amp; restore Start a container $ export cid=$(docker run -d busybox tail -f /dev/null) Checkpoint the container $ docker checkpoint $cid 7cc692f22c11&hellip;</blockquote></p>
+<div><section id="main-content" class="left">
+						
+																			
+								
+			
+									
+			
+									<h2>TL;DR: Simple demo of Docker checkpoint &amp; restore</h2>
+<h2>Start a container</h2>
+<p><code>$ export cid=$(docker run -d busybox tail -f /dev/null)</code></p>
+<h2>Checkpoint the container</h2>
+<p><code>$ docker checkpoint $cid<br>
+7cc692f22c11</code></p>
+<h2>It&#x2019;s not running anymore</h2>
+<p><code>$ docker ps --quiet<br>
+No containers shown here</code></p>
+<h2>Restore the container</h2>
+<p><code>$ docker restore $cid<br>
+7cc692f22c11</code></p>
+<h2>It&#x2019;s running again!!</h2>
+<p><code>$ docker ps --quiet<br>
+7cc692f22c11</code></p>
+<h2>What is CR and CRIU?</h2>
+<p>CR (checkpoint and restart) is a technology that saves the memory state of process into files and resume the processes from the saved state. <a href="https://github.com/xemul/criu">CRIU</a> is a tool originally developed to CR LXC containers.</p>
+<p>Since Docker can run LXC containers, we should be able to CR Docker containers by using CRIU, right? I&#x2019;ve experimented this before and wrote <a href="http://localhost:4000/blog/en/criu/experiment-to-suspend-and-resume-docker-container-with-criu/">this post</a>. Unfortunately, the experiment didn&#x2019;t succeed because CRIU didn&#x2019;t support Docker very well at that moment.</p>
+<p>More than a year has passed since then and CRIU team made a lot of effort to support Docker.</p>
+<p>In this post, I will show you how Docker checkpoint/restore works with CRIU and why I&#x2019;m excited about it with use cases.</p>
+<h2>CRIU Vagrant box</h2>
+<p>CR Docker by using CRIU is still under the experiment, so you need to build Docker with experimental feature enabled. Also, it&#x2019;s not fully merged into Docker, so you need to use a fork of Docker that one of developers in CRIU team created. In addition to that, you also need to compile Kernel with special kernel modules enabled.</p>
+<p>It&#x2019;s not very fun to do all these things, but don&#x2019;t worry! I&#x2019;ve created a Vagrant box with all these things done and uploaded for you! You just need to download the box and run on your local machine.</p>
+<h2>Spin up Vagrant box</h2>
+<p>Assuming that the name of VM is <strong>vg-1</strong>, run the following commands.</p>
+<p><code>vagrant box add https://atlas.hashicorp.com/kimh/boxes/criu<br>
+mkdir &lt;path to vg-1&gt;<br>
+cd &lt;path to vg-1&gt;<br>
+vagrant init kimh/criu<br>
+vagrant up<br>
+vagrant ssh</code></p>
+<p>That&#x2019;s all you have to do to try CRIU!</p>
+<h2>docker restore/checkpoint commands</h2>
+<p>Docker running on <strong>vg-1</strong> is enabled experimental features and has two commands you&#x2019;ve never seen before.</p>
+<p><code>$ docker checkpoint --help</code></p>
+<p>Usage: docker checkpoint [OPTIONS] CONTAINER [CONTAINER...]</p>
+<p>Checkpoint one or more running containers<br>
+....</p>
+<p><code>$ docker restore --help</code></p>
+<p>Usage: docker restore [OPTIONS] CONTAINER [CONTAINER...]</p>
+<p>Restore one or more checkpointed containers<br>
+....</p>
+<p>These <code>checkpoint</code> and <code>restore</code> commands use the CRIU executable which I compiled and installed on the vagrant box.</p>
+<p><code>$ criu --help</code></p>
+<p>Usage:<br>
+ criu dump|pre-dump -t PID [<options>]<br>
+ criu restore [<options>]<br>
+ criu check [--ms]<br>
+ criu exec -p PID <syscall-string><br>
+ criu page-server<br>
+ criu service [<options>]<br>
+ criu dedup</options></syscall-string></options></options></p>
+<p>....</p>
+<p>Here&#x2019;s a very simple example of how to CR a Docker container.</p>
+<h2>Starting a container</h2>
+<p><code>docker run \<br>
+ --name np \<br>
+ --rm \<br>
+ busybox:latest \<br>
+ /bin/sh -c \<br>
+ 'i=0; while true; do echo $i; i=$(expr $i + 1); sleep 1; done'</code></p>
+<p>This command download busybox image andruns a number-printer container which keeps printing incremental numbers.</p>
+<h2>Checkpointing a container</h2>
+<p>Now, let&#x2019;s checkpoint this container. You can do this with <code>docker checkpoint</code> command. Because the number-printer container is running in the foreground, do this from other terminal.</p>
+<p><code>docker checkpoint np</code></p>
+<p>Once you checkpoint the container, you will see that it stops printing numbers. <code>docker ps</code> command doesn&#x2019;t show the container anymore.</p>
+<h2>Restoring a container</h2>
+<p>Let&#x2019;s restore the number-printing container with <code>docker restore</code> command.</p>
+<p><code>docker restore np</code></p>
+<p>If restoring succeeded, the number-printing container again starts printing numbers. It&#x2019;s also back in the result of <code>docker ps</code>. We succeeded in checkpointing and restoring the container!</p>
+<h2>Pause/Unpause VS Checkpoint/Restore</h2>
+<p>You may say, <i>&#x201C;Wait, you can already do this with docker pause/unpause commands&#x201D;.</i></p>
+<p>That&#x2019;s right and you don&#x2019;t see a behavior difference between pause/unpause and checkpoint/restore in the previous example. Both commands stop a job of container in the middle and resume later.</p>
+<p>The difference is while checkpoint/restart saves the memory state of containers into a disk while pause/unpause doesn&#x2019;t.</p>
+<p>You can think of pause/unpause as sending SIGSTOP and SIGCONT to UNIX process. You can run a process in foreground and hitting Ctrl+z will stop the process. You can also restore the process with <code>fg job-id</code>. Pause/unpause commands do the similar thing to running containers.</p>
+<p>Checkpoint/restore does more complicated things. It dumps the memory state of running containers into the disk and restore the containers by reading the memory dump.</p>
+<p>Because checkpoint/restore saves the state of containers into the disk, we can do more interesting things that we cannot do with pause/unpase. We will see these interesting use cases in the next section.</p>
+<h2>Use cases</h2>
+<p>Here are some use cases of CR Docker containers.</p>
+<h2>(1) Resuming long-running containers</h2>
+<p>You sometimes want to run tasks that take very long time. For example, if you run a program that calculates digits of Pi on a Docker container, the container need to be long-running to calculate trillion digits.</p>
+<p>But what if you accidentally shutdown your host machine? This will shutdown the Pi container and you will lose trillion digits that the container has calculated.</p>
+<p>CRIU is a great tool to solve this problem. You can periodically checkpoint the container and be prepared for the accident. If the accident happens, you just need to restore the container and resume the calculation in the middle.</p>
+<h2>(2) Speeding up slow-start containers</h2>
+<p>There are applications that take very long time to start. You can speed up such containers by checkpointing the containers after slow applications started.</p>
+<p>Here is an example that demonstrates this use case. Let&#x2019;s assume that redis is super slow to start (This is completely not true in reality!!).</p>
+<p>We just start a redis container as usual.</p>
+<p><code>cid=$(docker run -d redis)</code></p>
+<p>Because redis is slow to start in the world of this blog, we need to wait for 20 secs before redis is ready to accept connections. After wating 20 secs, we checkpoint the container.</p>
+<p><code>docker checkpoint --image-dir=/tmp/redis $cid</code></p>
+<p>We need to restore the redis container into a new container so that you can start multiple containers from the saved container. To do this, you need to use <strong>&#x2013;force=true</strong> and pass a new container id.</p>
+<p><code>docker create --name=redis-0 redis<br>
+docker restore --force=true --image-dir=/tmp/redis redis-0</code></p>
+<p>The started container is immediately ready to accept the connection without waiting 20 secs.</p>
+<p>The cool thing is that you can repeat the same process to start multiple containers very fast.</p>
+<p><code>for i in 1 2 3 4 5; do<br>
+ docker create --name=redis-$i redis<br>
+ docker restore --force=true --image-dir=/tmp/redis redis-$i<br>
+done</code></p>
+<p>The above example theoretically takes 100 secs (20 sec x 5) to finish without CR. With CR, the five containers start in the blink of an eye.</p>
+<h2>(3) Container migration</h2>
+<p>You can do the Docker container migration with CRIU.</p>
+<p>To see how this works, you need to run two vagrant VMs. You should be already running <strong>vg-1</strong>, so you need to run one more VM <strong>vg-2</strong>.</p>
+<p><code># Create vg-2<br>
+mkdir &lt;path to vg-2&gt;<br>
+cd &lt;path to vg-2&gt;<br>
+vagrant init kimh/criu<br>
+vagrant up</code></p>
+<p>Once <strong>vg-2</strong> is up, run the following command to run a container. This is needed because of a bug in CRIU. Otherwise, the following exmaples don&#x2019;t work. So, please don&#x2019;t forget to do this.</p>
+<p><code>vagrant ssh -- 'docker run --name=foo -d busybox tail -f /dev/null &amp;&amp; docker rm -f foo'</code></p>
+<p>You are now running two vagrant VMs <strong>vg-1</strong> and <strong>vg-2</strong>. Run a number-printer container on <strong>vg-1</strong>.</p>
+<p><code>docker run \<br>
+ -d \<br>
+ --name np busybox:latest \<br>
+ /bin/sh -c \<br>
+ 'i=0; while true; do echo $i; i=$(expr $i + 1); sleep 1; done'</code></p>
+<p>You can see that the number-printer container is keep printing numbers.</p>
+<p><code>$ docker logs -f np<br>
+1<br>
+2<br>
+3<br>
+4<br>
+5<br>
+....</code></p>
+<p>Now let&#x2019;s migrate the container to <strong>vg-2</strong>. I made a <a href="https://gist.github.com/kimh/79f7bcb195466acea39a">helper shell script</a> to do this, so you need to download it to your local machine.</p>
+<p><code>curl -L -o docker-migrate.sh https://gist.githubusercontent.com/kimh/79f7bcb195466acea39a/raw/ca0965d90c850dcbe54654a6002678fff333d408/docker-migrate.sh<br>
+chmod +x docker-migrate.sh</code></p>
+<p>You need to pass three arguments to use the script.</p>
+<p>The first argument is the name of the container to migrate. In our case, it&#x2019;s <strong>np</strong>.</p>
+<p>The second and third arguments are path to vagrant directories that you migrate from and to.</p>
+<p><code>docker-migrate.sh np &lt;path to vg-1&gt; &lt;path to vg-2&gt;</code></p>
+<p>Ex. /tmp/docker-migrate.sh np /Users/kimh/vagrant/vg1 /Users/kimh/vagrant/vg2</p>
+<p>Once the script successfully finished, you can go to <strong>vg-2</strong> and check with <code>docker logs -f np</code> command. You should see that the number-printing container resumes printing numbers from the place that it&#x2019;s paused on vg-1.</p>
+<p><a href="http://blog.circleci.com/wp-content/uploads/2015/09/Migration_Succeeded.jpg"><img src="http://blog.circleci.com/wp-content/uploads/2015/09/Migration_Succeeded-1024x319.jpg" alt="Migration_Succeeded" width="640" class="alignleft size-large wp-image-412"></a><br>
+The migration succeeded!</p>
+<h2>Wrapping up</h2>
+<p>We&#x2019;ve seen how to CR Docker container with CRIU and some use cases. I hope people will come up more interesting use cases and develop tools that takes the advantages of CR.</p>
+<p>Here are useful resources to learn more about CR Docker with CRIU.</p>
+<p><a href="http://criu.org/Docker">Main website of CRIU</a><br>
+<a href="https://github.com/boucher/docker/blob/cr-combined/experimental/checkpoint_restore.md">Docker fork with CRIU support</a><br>
+<a href="http://blog.kubernetes.io/2015/07/how-did-quake-demo-from-dockercon-work.html">Kubernetes blog about CRIU</a></p>
+<p class="special-message">Need fast, easy-to-setup Continuous Integration? Try <a href="https://circleci.com">Circle</a> and set up your CI server in 20 seconds!</p><div class="addtoany_share_save_container addtoany_content_bottom"><div class="a2a_kit addtoany_list a2a_target" id="wpa2a_1"><a class="a2a_button_twitter" href="http://www.addtoany.com/add_to/twitter?linkurl=http%3A%2F%2Fblog.circleci.com%2Fcheckpoint-and-restore-docker-container-with-criu%2F&amp;linkname=Checkpoint%20and%20restore%20Docker%20container%20with%20CRIU" title="Twitter" rel="nofollow" target="_blank"><img src="http://blog.circleci.com/wp-content/plugins/add-to-any/icons/twitter.png" width="16" alt="Twitter"></a><a class="a2a_button_facebook" href="http://www.addtoany.com/add_to/facebook?linkurl=http%3A%2F%2Fblog.circleci.com%2Fcheckpoint-and-restore-docker-container-with-criu%2F&amp;linkname=Checkpoint%20and%20restore%20Docker%20container%20with%20CRIU" title="Facebook" rel="nofollow" target="_blank"><img src="http://blog.circleci.com/wp-content/plugins/add-to-any/icons/facebook.png" width="16" alt="Facebook"></a><a class="a2a_button_google_plus" href="http://www.addtoany.com/add_to/google_plus?linkurl=http%3A%2F%2Fblog.circleci.com%2Fcheckpoint-and-restore-docker-container-with-criu%2F&amp;linkname=Checkpoint%20and%20restore%20Docker%20container%20with%20CRIU" title="Google+" rel="nofollow" target="_blank"><img src="http://blog.circleci.com/wp-content/plugins/add-to-any/icons/google_plus.png" width="16" alt="Google+"></a><a class="a2a_button_reddit" href="http://www.addtoany.com/add_to/reddit?linkurl=http%3A%2F%2Fblog.circleci.com%2Fcheckpoint-and-restore-docker-container-with-criu%2F&amp;linkname=Checkpoint%20and%20restore%20Docker%20container%20with%20CRIU" title="Reddit" rel="nofollow" target="_blank"><img src="http://blog.circleci.com/wp-content/plugins/add-to-any/icons/reddit.png" width="16" alt="Reddit"></a>
+
+</div></div>												
+																					
+																	
+										
+					</section>
+	
+				
+	</div>
+</body></html>

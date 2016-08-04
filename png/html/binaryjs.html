@@ -1,0 +1,87 @@
+<!DOCTYPE html><html><head><title>BinaryJS</title></head><body>
+<h1>BinaryJS</h1><p><a href="http://binaryjs.com/" target="_new">Original URL</a></p>
+<p><blockquote>Binary data for the web is here BinaryJS is bidrectional realtime binary data with binary websockets A year ago if someone asked you "how do I stream binary data / audio / video / files to&hellip;</blockquote></p>
+<div><section>
+ <h3>Binary data for the web is here</h3>
+ <p><strong>BinaryJS is bidrectional realtime binary data with binary websockets</strong></p>
+ <p>A year ago if someone asked you "how do I stream binary data / audio / video / files to Javascript?" the answer would have been "Flash" or "no" (or "Java applets")</p>
+ <p>But as of Chrome 15+, Firefox 11+, Internet Explorer 10, and Safari nightly builds, that is no longer true.</p><p>BinaryJS is a lightweight framework that utilizes websockets to send, stream, and pipe binary data bidirectionally between browser javascript and Node.js.</p>
+ <ul>
+ <li>BinaryPack serialization format is fast, binary, and JSON-type compatible. Data stays binary end to end</li>
+ <li>Automatically chunks large binary data buffers for streaming performance</li>
+ <li>Send multiple streams of data concurrently over multiplexed websocket connection</li>
+ <li>API implements Node.js read/write Streams. You can pipe any stream into BinaryJS streams (and vice-versa)</li>
+ <li>"pause," "resume," and "end" as in the Streams API</li>
+ </ul>
+ <h3>Show me the API</h3>
+ <p>BinaryJS allows multiple streams (of pure binary data!) over a single realtime websocket connection. Either the client or server can create a stream that both client and server can write to.</p>
+Node.js server<br>
+<pre><code>var server = BinaryServer({port: 9000});
+server.on('connection', function(client){
+ client.on('stream', function(stream, meta){
+ var file = fs.createWriteStream(meta.file);
+ stream.pipe(file);
+ }); 
+});
+</code></pre> 
+
+Browser:<br>
+<pre><code>var client = BinaryClient('ws://localhost:9000');
+client.on('open', function(stream){
+ var stream = client.createStream({file: 'hello.txt'});
+ stream.write('Hello');
+ stream.write('World!');
+ stream.end();
+});
+</code></pre>
+ <p>
+ <a href="https://github.com/binaryjs/binaryjs/blob/master/doc/start.md">View the "Getting Started" guide</a>
+ </p>
+ <p>
+ <a href="https://github.com/binaryjs/binaryjs/blob/master/doc/api.md">View the API reference</a>
+ </p>
+ <p>
+ <a href="https://github.com/binaryjs/binaryjs/tree/master/examples/helloworld">View the "Hello world" example</a>
+ </p>
+ <p>
+ <a href="https://github.com/binaryjs/binaryjs/tree/master/examples">See more examples</a>
+ </p>
+ 
+ <h3>What can you do with this?</h3>
+ <p>You have just as much flexibility as a full TCP socket between client and server</p>
+ <p>Here are some ideas that are now possible (beta-testers are already working on some!):</p>
+ <ul>
+ <li>Realtime multiplayer video games without expensive stringifying</li>
+ <li>Streaming FLAC into HTML5 WebAudio api</li>
+ <li>Progressive image loading (for retina displays and high-res photorgraphy)</li>
+ <li>Streaming file uploads <a href="https://github.com/binaryjs/binaryjs/tree/master/examples/fileupload">Example</a></li>
+ <li>Live HTML &lt;video&gt; streaming</li>
+ <li>PJAX with no HTTP requests. Not even for image assets</li>
+ <li>Video / audio chat over websockets</li>
+ </ul>
+ <h3>Additional details</h3>
+ <p>BinaryJS employs `BinaryPack` a modified version of the MessagePack protocol. The Node.js server uses a modified version of the `ws` library enhanced to pass through the status of the socket buffer so adherence to Node.js Stream API is possible.</p>
+ <p>Both the server and the client can write or accept any arbitrary JSON type or structure &#x2013; Objects, arrays, null, booleans, strings &#x2013; and also binary data. Because BinaryPack is a binary protocol, the wire format has negligible serialization/deserialization overhead for large chunks of binary data. This also means binary data types such as Buffer in Node.js and Blob or ArrayBuffer in the client can be serialized and deserialized (without the inefficiencies of JSON or Base64!).</p>
+ <p>On the client, feature detection is employed to choose between using BlobBuilder, the Blob constructor, and ArrayBufferViews or ArrayBuffers themselves for assembling Blobs for transport.</p>
+ <p>When using `stream.write` data chunking is up to the caller. When a stream is piped, it is up to the source stream to chunk data. When sending a larger binary type using `client.send` a new stream is created and the buffer will piped into the stream in chunks automatically.</p>
+ <p>For piped streams, BinaryJS correctly provides boolean return values from `stream.write` calls so that if the socket buffer is full, the incoming stream is paused. This powerful cascade of stream throttling allows large streams to be transferred without excessive memory use.</p>
+ <h3>Future plans</h3>
+ <p>The items below are in no particular order. If you would like to contribute go ahead and issue a pull request or email me at <a href="mailto:really.ez+1010@gmail.com">really.ez+1010@gmail.com</a></p>
+ <ul>
+ <li>Improved <a href="https://github.com/binaryjs/js-binarypack">BinaryPack</a> serialization performance, including a native C++ module for <a href="https://github.com/binaryjs/node-binarypack">node-binarypack</a></li>
+ <li>Fallbacks (either with Flash or XHR2) for non-binary-websocket browsers</li>
+ <li>iOS and Android clients</li>
+ <li>Ruby, Python, Java servers</li>
+ </ul>
+ <h3>Limitations and issues</h3>
+ <ul>
+ <li>Currently supports Chrome 15+ and Firefox 11+, IE10. Fallbacks that will support Safari, mobile iOS and Android, and older FF/Chrome versions are in the works</li>
+ <li>Performance is largely untested. Though BinaryPack serialization results in smaller data, I have not compared to native JSON serialization performance. C++ BinaryPack Node.js module is in the works</li>
+ 
+ </ul>
+ <h3>Support and questions</h3>
+ <p>If you want you can email me at <a href="mailto:really.ez+1010@gmail.com">really.ez+1010@gmail.com</a></p>
+ <p>Please file a <a href="https://github.com/binaryjs/binaryjs/issues">GitHub issue</a> for the bugs you find.</p>
+ </section>
+ </div>
+</body></html>

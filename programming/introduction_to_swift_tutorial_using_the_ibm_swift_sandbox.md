@@ -1,0 +1,155 @@
+# Introduction to Swift Tutorial Using the IBM Swift Sandbox
+
+[Original URL](https://developer.ibm.com/swift/2015/12/08/introduction-to-swift-tutorial-using-the-ibm-swift-sandbox/)
+
+> About this Tutorial This tutorial offers developers with a basic understanding of another language some insights on how to get familiar with Swift. Swift is a powerful and expressive language,...
+
+**About this Tutorial**
+
+This tutorial offers developers with a basic understanding of another language some insights on how to get familiar with Swift.
+
+Swift is a powerful and expressive language, originally targeted toward iOS mobile apps, and growing into new uses. You can read about some of its core benefits from one of my colleagues, Andrew Trice, [here](https://developer.ibm.com/swift/2015/12/03/why-im-excited-about-swift-and-you-should-be-too/).
+
+This tutorial also supports the [Hour of Code](https://hourofcode.com), which is a one-hour introduction to computer science fundamentals for students. We are building off our [#Hour Of Code introductory article](http://developer.ibm.com/swift/2015/12/08/hour-of-code-in-swift/) here for beginners to Swift. You will learn about Swift concepts, and use the [IBM Swift Sandbox](http://swiftlang.ng.bluemix.net/) to enhance your learning by writing code in the cloud.
+
+We will use a baseball-oriented example to illustrate the concepts. No worries if you aren't a diehard fan, though! To get started, access the [IBM Swift Sandbox](http://swiftlang.ng.bluemix.net/). The Sandbox provides a quick and easy way to write Swift code in the cloud. Write code in the Source Code panel, click Run, and see your results immediately in the Output panel!
+
+There are a variety of samples to choose from. First, select the hour_of_code.swift sample. This sample provides a starting point for our exercise. There is also an hour_of_code_solution.swift file with answers to our exercises; do your best to hold off from peeking at it now!
+
+[![Sandbox for Hour of Code](http://developer.ibm.com/swift/wp-content/uploads/sites/69/2015/12/Screen-Shot-2015-12-08-at-4.48.16-PM-1024x494.png)](http://developer.ibm.com/swift/wp-content/uploads/sites/69/2015/12/Screen-Shot-2015-12-08-at-4.48.16-PM.png)
+
+**Player Class** The first object we'll look at is the Player class. Scroll through the sample to find the Player definition.
+
+_Variables_
+
+First, we are going to focus on the Player class and variables. We will discuss Protocols later. Let is used when a value will only be set once, and var is used for variables that can be changed (mutable). Also, note that Swift has type interference, meaning that the compiler can infer what the variable type is from the context, without it being explicitly defined. You can see examples of that below when hits, atBats, and walks are defined.
+
+Finally, see that the nickName property has a ? symbol after it, meaning that it's an optional variable, which does not have to have a value. We won't cover optional unwrapping in depth in this tutorial. To scratch the surface on this topic, you can use the ! operator to retrieve the value from an optional if you are 100% confident that the value is set, otherwise you will have a runtime exception. For example, to print the nickName, you can use print(nickName!)
+
+```
+// Player class that conforms to Hittable protocol
+public class Player:Hittable {
+ //Immutable variables are defined with let.
+ //They don't have to be initialized when defined.
+ let name:String
+
+ //An optional can hold a value or be nil
+ let nickName:String?
+
+ //Mutable variables are defined with var.
+ var hits = 0
+ var atBats = 0
+```
+
+_Initializer_
+
+Let's now review the initializer. Here, notice that the Player object is initialized with 2 parameters, a name and a String. Name is required, while nickName is an optional, so it can be assigned a nil value. We also provided a default value for the nickName parameter by adding = nil, making it simpler to initialize the Player if there is no nickName. Also, notice the use of self; we are setting the class variable of name using self.name to the parameter name.
+
+```
+ //An initializer is defined with init. The nickName parameter
+ //has a default value of nil if it is not passed in to the function.
+ public init(name:String, nickName:String? = nil) {
+ //Self is used to distinguish between the class property and
+ //the property passed into the initializer
+ self.name = name
+ self.nickName = nickName
+ }
+```
+
+_Computed Properties_
+
+Next, let's review computed properties. Computed properties are similar to functions that are automatically executed when a variable is accessed. We have defined a battingAverage property, which computes the ratio of hits per at bats (attempts at hitting the ball). Since the hits and atBats are stored as integers, they are being cast to doubles for more precision. Also, note the ternary operator used, which follows a format of x ? y : z, where x is an expression, and y is executed if the expression is true, and z is executed if false. In this case, we are using this operator to avoid a divide by 0 error, if the player doesn't have any at bats yet.
+
+```
+ //A computed property calculates rather than stores a value
+ public var battingAverage:Double {
+ return atBats > 0 ? Double(hits) / Double(atBats) : 0
+ }
+
+    public var rating:String {
+     if battingAverage > 0.3 {
+     return Rating.AllStar.rawValue
+     }
+ return Rating.BenchWarmer.rawValue
+ }
+```
+
+_Functions_
+
+Functions enable users of the class to execute capability on the object. In this case, we have defined two functions hit() and out(). The hit function increases the hit and at bat variables, while the out function increments only the at bat variable. Each function has an access level of public, meaning that the function can be called from any module. There are also internal and private access levels, which won't be covered in depth here. Each of these functions does not return a value (void in some languages). If a function returns a value, its declaration is appended with a ->, i.e. public func hit() -> Bool would indicate that hit() returns either a true or false value.
+
+```
+ public func hit() {
+ hits++
+ atBats++
+ }
+
+ public func out() {
+ atBats++
+ }
+```
+
+_Using the class_
+
+Next, we will show how the class can be created and used. Below, see the code which instantiates a player and then calls several functions on it. After the player has a hit, their rating then increases.
+
+```
+//Instantiate a player named Swifty
+let p = Player(name:"Swifty")
+
+//Call the out function on the player
+p.out()
+print(p.rating)
+p.out()
+p.hit()
+//The player's rating has improved!
+print(p.rating)
+```
+
+_Exercises_
+
+1. Update the initializer to also include a nickname, and print out the nickname.
+2. In baseball, walks are when a player receives 4 balls, or pitches outside of the strike zone, and goes to first base without it counting as an at bat. Add a variable for walks, and create a walk() function that increases walks, but not at bats.
+3. Create an onBasePercentage() function, similar to the battingAverage() function. It uses the formula (slightly simplified for this example): Hits + Walks / At Bats.
+
+**Protocol** A protocol is a guideline of methods and properties that a class must conform to. Protocols can help classes that implement the requirements defined in the protocol to follow a consistent pattern. In our example, we have defined 2 functions hit() and out(), and the battingAverage property, that must be defined in any class adopting the Hittable protocol. Now, notice how the Player class definition references the Hittable protocol.
+
+```
+//Define variables and functions that classes must conform to
+public protocol Hittable {
+
+ func hit()
+ func out()
+
+ //A variable of type Double with only a getter
+ var battingAverage:Double { get } 
+}
+```
+
+_Exercises_
+
+1. Add walk and onBasePercentage to the Hittable protocol.
+2. One of the standard protocols defined in Swift is CustomStringConvertible. By implementing a description property in the class, you can provide a textual representation of the object that is helpful for printing. Update the Player class to implement CustomStringConvertible, and create a description computed property which returns a string with the name and rating of the player. Then, print out the object.
+
+**Enumerations**
+
+Enumerations allow you to define a group of related values. In this example, we have defined Rating as an enumeration with 2 values, AllStar and BenchWarmer. A player needs a batting average of .300 or higher to be considered an AllStar. We have also provided raw values, which can be used for printing the enum values in a more human-readable way.
+
+```
+//An enum lists defines discrete values. A raw value can also be provided
+//for each value, in this case a String.
+public enum Rating:String {
+ case AllStar = "All Star"
+ case BenchWarmer = "Bench Warmer"
+}
+```
+
+_Exercises_
+
+1. Add a new value MVP to the enumeration. Then, update rating property in the Player class with the following logic.
+
+  - If the player has >= .400 On Base Percentage (OBP) and >= .300 batting average (BA), they are an MVP
+  - < .400 OBP and >= .300 BA, All Star
+  - < .300 BA, a Bench Warmer
+
+**Summary** In this Swift tutorial, you have used common language concepts like classes, protocols, functions, and enumerations. You've also gotten exposure to some more advanced concepts like computed properties and optionals. The IBM Swift Sandbox also makes it easy to get familiar with Swift and to try out code in the cloud. We hope you enjoyed the tutorial and that you'll come back again for more from [IBM Swift Engineering](https://developer.ibm.com/swift).

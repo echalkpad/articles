@@ -1,0 +1,149 @@
+<!DOCTYPE html><html><head><title>Gulp as a Development Web Server - Tuts+ Code Tutorial</title></head><body>
+<h1>Gulp as a Development Web Server - Tuts+ Code Tutorial</h1><p><a href="https://code.tutsplus.com/tutorials/gulp-as-a-development-web-server--cms-20903" target="_new">Original URL</a></p>
+<p><blockquote>The task runner Gulp.js is getting more and more popular lately. It can be used for many things, like concatenating JavaScript files or minifying images. If you are new to Gulp.js, I recommend you to&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>The task runner <a href="http://gulpjs.com">Gulp.js</a> is getting more and more popular lately. It can be used for many things, like concatenating JavaScript files or minifying images. If you are new to Gulp.js, I recommend you to start off with <a href="http://code.tutsplus.com/tutorials/managing-your-build-tasks-with-gulpjs--net-36910" target="_self">Managing Your Build Tasks With Gulp.js</a>.&#xA0;</p><p>In this tutorial, you will learn how to use Gulp.js, in order to run a local web server with built-in, <code class="inline">livereload</code> support.</p>
+
+<h2>The Old Way</h2>
+
+<p>Let's assume we want to develop a single page application. The entry point for this app is a simple <code>index.html</code> file. Our goal is to access this file through the browser, by going to <code>localhost</code>. In the past, perhaps you&#xA0;<i>setup an Apache or Nginx server</i>. Well, that's not needed anymore.</p>
+
+<h2>A Better Way</h2>
+
+<p>Today, an implementation in JavaScript exists for almost everything, even for a web server. The most popular one is called <a href="https://github.com/senchalabs/connect">Connect</a>. We will be using it, by utilizing a Gulp.js plugin called <a href="https://github.com/AveVlad/gulp-connect">gulp-connect</a>.&#xA0;</p><p>In the following sections, we will setup a local web server for a single page application, so I'll&#xA0;assume you have already setup the basic files, like the <code>gulpfile.js</code>&#xA0;file.</p>
+
+<h2>Initial Setup</h2>
+
+<p>We start off by installing the Connect plugin with the command below. Everything we need will be installed with this single command.</p><pre class="brush: bash noskimlinks noskimwords">npm install --save-dev gulp-connect</pre>
+
+<p><i>Tip</i>:&#xA0;<code>npm install --save-dev</code>&#xA0;can be abbreviated with&#xA0;<code class="inline">npm i -D</code>.<br></p>
+
+<p>Now, let's define a task for the web server. Our <code>gulpfile.js</code> should then look like this:</p><pre class="brush: javascript noskimlinks noskimwords">var gulp = require('gulp'),
+ connect = require('gulp-connect');
+
+gulp.task('webserver', function() {
+ connect.server();
+});
+
+gulp.task('default', ['webserver']);</pre>
+
+<p>We can now start the web server by simply running <code>gulp</code> in the terminal. We can open up <code>localhost:8080</code> in our browser, where we should see <code>index.html</code>. The web server mounts the file structure of the folder, where the <code>gulpfile.js</code> lives in, to the root of <code>localhost:8080</code>. The server will run until you stop the task by pressing <b>Ctrl + c</b> on your keyboard. Great!</p>
+
+<p>You can find the source code for this and all following examples on <a href="https://github.com/schickling/gulp-webserver-article">Github</a>. Each example contains all necessary files to reproduce a working setup. You just need to run <code>npm install</code> in the respective directory.</p>
+
+<h3>Adding <code class="inline">livereload</code> Support</h3>
+
+<p>Setting up the basic web server was easy, right? So let's continue to get <code class="inline">livereload</code> running. We need to do two things: first tell the web server to start with <code class="inline">livereload</code> support and secondly, we tell <code class="inline">livereload</code> when to refresh the page with new content.</p>
+
+<p>The first step is simple. Just set the <code>livereload</code> property to <code>true</code>. The <code>webserver</code> task then looks like this:</p><pre class="brush: javascript noskimlinks noskimwords">gulp.task('webserver', function() {
+ connect.server({
+ livereload: true
+ });
+});</pre><p>The second step depends on your use case. In this example, we will setup automatic compilation of LESS files to a CSS stylesheet and inject it into the browser. Let's break down this example into its parts. We need a "watcher", which checks if some LESS files got changed. This watcher should then trigger the LESS compiler, which outputs a CSS file. This CSS file should then be injected via <code class="inline">livereload</code>.<br></p>
+
+<p>For this example, we will use the <a href="https://github.com/plus3network/gulp-less">gulp-less</a> plugin. You can install it by running <code>npm install --save-dev gulp-less</code>. The watcher comes already shipped with Gulp.js. Our app file structure should roughly look like this:</p><pre class="brush: plain noskimlinks noskimwords">.
+&#x251C;&#x2500;&#x2500; node_modules
+&#x2502;&#xA0;&#xA0; &#x2514;&#x2500;&#x2500; ...
+&#x251C;&#x2500;&#x2500; styles
+&#x2502;&#xA0;&#xA0; &#x2514;&#x2500;&#x2500; main.less
+&#x251C;&#x2500;&#x2500; gulpfile.js
+&#x251C;&#x2500;&#x2500; index.html
+&#x2514;&#x2500;&#x2500; package.json</pre><p>In the <code>watch</code> task, Gulp.js listens for changes in all <code>*.less</code> files in the <code>styles</code> folder and triggers the <code>less</code> task. Here, the <code>main.less</code> file is the entry point for LESS. After each compile step, the result will be automatically injected into the browser. The code for the <code>gulpfile.js</code> looks like the following, feel free to <em>copy and paste</em> it, to your project.</p><pre class="brush: javascript noskimlinks noskimwords">var gulp = require('gulp'),
+ connect = require('gulp-connect'),
+ less = require('gulp-less');
+
+gulp.task('webserver', function() {
+ connect.server({
+ livereload: true
+ });
+});
+
+gulp.task('less', function() {
+ gulp.src('styles/main.less')
+ .pipe(less())
+ .pipe(gulp.dest('styles'))
+ .pipe(connect.reload());
+});
+
+gulp.task('watch', function() {
+ gulp.watch('styles/*.less', ['less']);
+})
+
+gulp.task('default', ['less', 'webserver', 'watch']);</pre>
+
+<p>Let's rerun <code>gulp</code> in the terminal and open up again <code>localhost:8080</code> in the browser. We can now make some changes to a LESS file in the <code>styles</code> folder. It will be instantly compiled and refreshed in the browser. Note that <i>you don't need any browser extensions</i>.&#xA0;<code class="inline">livereload</code> works out of the box.</p>
+
+<h3>A Few Adjustments</h3>
+
+<p>Please keep in mind that the previous <code>gulpfile.js</code> is just a minimal demonstration of how to use Gulp.js as a web server with <code class="inline">livereload</code>. I highly recommend playing around with some other plugins. You should also try to rearrange the task structure and use the non-builtin <a href="https://github.com/floatdrop/gulp-watch">gulp-watch</a> plugin, which allows you to process just the changed files. This becomes important if you're working with a bigger code base. Later in this tutorial, we will see what an alternative task structure might look like. </p>
+
+<h4>Changing the Hostname &amp; Port</h4>
+
+<p>The <code>gulp-connect</code> plugin itself has many configuration options. For example, you can modify the web server port or hostname. You can even use a custom hostname with port <code>80</code> (default is <code>localhost:8080</code>).</p><pre class="brush: javascript noskimlinks noskimwords">connect.server({
+ port: 80,
+ host: 'gulp.dev'
+});</pre>
+
+<p>To get this working, we need to have&#xA0;<code>gulp.dev</code> in our hosts file and run the command <code>sudo gulp</code>. Administrator rights are needed in order to use port <code>80</code>. </p>
+
+<h3>Some Advanced Features</h3>
+
+<p>You can go even further using the connect plugin for spawning multiple web servers at the same time. This becomes useful, for example, if you want to run a development web server and run integration tests, <i>simultaneously</i>.</p>
+
+<p><code>gulp-connect</code> also provides the possibility to use several directories as a root folder. For example, when you're using CoffeeScript and you want to save the compiled JavaScript files in a temporary folder, you can then mount this folder without polluting your source folder.</p>
+
+<p>For more examples, please checkout the <a href="https://github.com/AveVlad/gulp-connect">GitHub repository</a>.</p>
+
+<h2>Refactoring Our Code</h2>
+
+<p>In the previous example we setup a minimal <code>gulpfile.js</code> to compile LESS files to CSS and inject them immediately into the browser. It worked, but we can do better. It might be problematic that we mixed the <i>compile</i> and <i><code class="inline">livereload</code></i> steps into one task. So, let's split them up and watch for changes in the generated files. For that, we will be using the previously mentioned <code>gulp-watch</code> plugin.</p>
+
+<p>Let's go even a step further and add a CoffeeScript compile step. With this additional step, the new structure should be more clear. We install the new plugins in one batch via:</p><pre class="brush: bash noskimlinks noskimwords">npm install --save-dev gulp-watch gulp-coffee </pre><p>And <code>require</code> them in the top of our <code>gulpfile.js</code>. In the following setup, I assume you already have some <code>.coffee</code> files in a directory called <code>scripts</code>. For an example setup, please checkout <a href="https://github.com/schickling/gulp-webserver-article/tree/master/03-livereload-refactored">this repo</a>. The refactored <code>gulpfile.js</code> could look like the following. We'll go through the changes, step by step.</p><pre class="brush: javascript noskimlinks noskimwords">var gulp = require('gulp'),
+ connect = require('gulp-connect'),
+ watch = require('gulp-watch'),
+ less = require('gulp-less'),
+ coffee = require('gulp-coffee');
+
+gulp.task('webserver', function() {
+ connect.server({
+ livereload: true,
+ root: ['.', '.tmp']
+ });
+});
+
+gulp.task('livereload', function() {
+ gulp.src(['.tmp/styles/*.css', '.tmp/scripts/*.js'])
+ .pipe(watch())
+ .pipe(connect.reload());
+});
+
+gulp.task('less', function() {
+ gulp.src('styles/main.less')
+ .pipe(less())
+ .pipe(gulp.dest('.tmp/styles'));
+});
+
+gulp.task('coffee', function() {
+ gulp.src('scripts/*.coffee')
+ .pipe(coffee())
+ .pipe(gulp.dest('.tmp/scripts'));
+});
+
+gulp.task('watch', function() {
+ gulp.watch('styles/*.less', ['less']);
+ gulp.watch('scripts/*.coffee', ['coffee']);
+})
+
+gulp.task('default', ['less', 'coffee', 'webserver', 'livereload', 'watch']);</pre>
+
+<p>The biggest change we see is the additional <code>livereload</code> task. This task just watches (via the <code>gulp-watch</code> plugin) for changes in the compiled files and refreshes them in the browser. The custom <code>watch()</code> function allows us to just reload the changed files, whereas the built-in <code>gulp.watch()</code> command would reload all files and not just the changed ones.</p>
+
+<p>Because of this single additional task, we don't need a <code>.pipe(connect.reload())</code> command after each compile step. So we separated the tasks by their concerns, which is always a good idea in software development.</p>
+
+<p>We also noticed that the compiled files aren't saved in their respective source folder any more. They are now stored in a temporary folder named <code>.tmp</code>. The contents of this folder are just generated files and won't pollute the <code>styles</code> or <code>scripts</code> directories any longer. It's also recommended to exclude this folder from your revision control system. All we have to do to get this working, is to also mount <code>.tmp</code> as a root folder, which is done by</p><pre class="brush: javascript noskimlinks noskimwords">root: ['.', '.tmp']</pre>
+
+<p>This refactored setup should work just like the one before. But it's way cleaner and easier to extend.</p>
+
+<h2>Conclusion</h2>
+
+<p>You've just learned how to use Gulp.js as a web server.&#xA0;</p><p>You can combine this technique with many other use cases, like testing or building your single page application. Note that this web server is just meant for local development. For production purposes, you should use a more performant solution like Nginx or a CDN.&#xA0;</p><p>Notice that all the presented features are also possible with Grunt or similar projects. Gulp.js just provides a <i>very simple and elegant</i> way of doing things.</p></div></div>
+</body></html>

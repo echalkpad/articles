@@ -1,0 +1,1383 @@
+<!DOCTYPE html><html><head><title>GIMP - A Tutorial for GIMP-Perl Users</title></head><body>
+<h1>GIMP - A Tutorial for GIMP-Perl Users</h1><p><a href="https://www.gimp.org/tutorials/Basic_Perl/" target="_new">Original URL</a></p>
+<p><blockquote>GIMP Tutorial - A Tutorial for GIMP-Perl Users (text &amp; images) by Ed J is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License. Updated for Gimp 2.8 / Gimp-Perl 2.3 Table&hellip;</blockquote></p>
+<div><div class="column full">
+ <p><small>
+<a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US">
+<img class="cc-badge" src="http://i.creativecommons.org/l/by-sa/3.0/80x15.png" alt="Creative Commons By Share Alike">
+</a>
+<span><span class="caps">GIMP</span> Tutorial - A Tutorial for <span class="caps">GIMP</span>-Perl Users (text <span class="amp">&amp;</span> images)</span> 
+by <a href="https://metacpan.org/author/ETJ">Ed J</a> is licensed under a <a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US">Creative Commons Attribution-ShareAlike 3.0 Unported License</a>.
+</small></p>
+<p><small>Updated for Gimp 2.8 / Gimp-Perl 2.3</small></p>
+<p><strong>Table of&#xA0;contents</strong></p>
+
+<h2 id="1-version-notes">1. Version notes<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#1-version-notes" title="Permanent link">&#xB6;</a></h2>
+<p>This work is a slightly modified version of Dov Grobgeld&#x2019;s excellent tutorial. It has been updated to Gimp-Perl 2.3 and <span class="caps">GIMP</span>&#xA0;2.8.</p>
+<h2 id="2-background">2. Background<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#2-background" title="Permanent link">&#xB6;</a></h2>
+<p>One of the wonderful features of <span class="caps">GIMP</span> is that it all its functionality may be accessed through scripting. Available scripting environments include Scheme through Script-Fu and&#xA0;Python.</p>
+<p>Perl has <span class="caps">CPAN</span>, giving access to vast numbers of modules to get things done. Now, <span class="caps">GIMP</span> may also be scripted in Perl. This tutorial will describe how to write such plug-ins and scripts for&#xA0;Gimp.</p>
+<p>As there are several excellent tutorial texts describing the perl language, this tutorial will assume a working knowledge of Perl, and will instead concentrate on the use of <span class="caps">GIMP</span> together with the perl modules Gimp and&#xA0;Gimp::Fu.</p>
+<h2 id="3-what-you-need">3. What you need<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#3-what-you-need" title="Permanent link">&#xB6;</a></h2>
+<p>The tutorial scripts have been tested on Linux (a Windows version is in the works) with the following&#xA0;versions:</p>
+
+<p>Perl and all its associated modules are available in source form from the Comprehensive Perl Archive network, <span class="caps">CPAN</span>.</p>
+<h2 id="4-the-gimp-module">4. The Gimp module<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#4-the-gimp-module" title="Permanent link">&#xB6;</a></h2>
+<p>Most scripts make use of the simplified interface Gimp::Fu provided with the Gimp module. Gimp::Fu provides a framework for entering parameters to the script in a dialog-box interface, just like Script-Fu, but also allows running of the script in batch mode from the command line. This tutorial will go into detailed descriptions of the construction of a Gimp::Fu script, but before we do this, here is the general framework of such a&#xA0;script.</p>
+<table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35</pre></div></td><td class="code"><div class="codehilite"><pre><span class="c1">#!/usr/bin/perl -w</span>
+
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Gimp::</span><span class="n">Fu</span><span class="p">;</span>
+
+<span class="n">podregister</span> <span class="p">{</span>
+ <span class="c1"># code...</span>
+<span class="p">};</span>
+
+<span class="nb">exit</span> <span class="n">main</span><span class="p">;</span> 
+<span class="cp">__END__</span>
+
+<span class="cp">=head1 NAME</span>
+
+<span class="cp">test_exception - exercise gimp-perl filter testing exceptions</span>
+
+<span class="cp">=head1 SYNOPSIS</span>
+
+<span class="cp">&lt;Image&gt;/Filters/Languages/_Perl/_Test/Exception</span>
+
+<span class="cp">=head1 DESCRIPTION</span>
+
+<span class="cp">Exercise Gimp-Perl exceptions.</span>
+
+<span class="cp">=head1 AUTHOR</span>
+
+<span class="cp">The Author.</span>
+
+<span class="cp">=head1 DATE</span>
+
+<span class="cp">20140310</span>
+
+<span class="cp">=head1 LICENSE</span>
+
+<span class="cp">The licensing terms.</span>
+</pre></div>
+</td></tr></table>
+
+<p>The key points to note in the script&#xA0;are:</p>
+<ul>
+<li>the use of the two modules <code>Gimp</code> and <code>Gimp::Fu</code>,</li>
+<li>the podregister function, which will be described in detail&#xA0;below,</li>
+<li>the way the control is handed over to <code>Gimp</code> module on line 8,&#xA0;and</li>
+<li>the <span class="caps">POD</span> documentation below the <code>__END__</code> line.</li>
+</ul>
+<h2 id="5-the-gimp-pdb">5. The <span class="caps">GIMP</span> <span class="caps">PDB</span><a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#5-the-gimp-pdb" title="Permanent link">&#xB6;</a></h2>
+<p>Before going into the details of the Gimp::Fu script, we will describe how to access the functionality of <span class="caps">GIMP</span>. All functions known to <span class="caps">GIMP</span> are available through the procedural database (<span class="caps">PDB</span>). All the <span class="caps">PDB</span> functions may be called from perl, as will be seen below. These <span class="caps">PDB</span> functions are either internal to <span class="caps">GIMP</span>, or have been made available through a plug-in or a script extension, but as far as the caller is concerned there is no difference. As we will see below, when a perl function is registered through the <code>podregister</code> function, it will appear in the <span class="caps">PDB</span> as&#xA0;well.</p>
+<p>Gimp comes with a <span class="caps">PDB</span> browser available in <strong>Help/Procedure Browser</strong>. This browser provides a way of seeing all the functions in the <span class="caps">PDB</span>, as well as their input and output parameters. E.g. the <span class="caps">DB</span> Browser entry for <code>plug-in-gauss-iir</code>, which will be used in the example below looks like&#xA0;this:</p>
+<table>
+<tbody><tr><th valign="top">Name:</th><td colspan="3">plug-in-gauss-iir</td></tr>
+<tr><th valign="top">Blurb:</th><td colspan="3" valign="top">Apply a gaussian blur</td></tr>
+<tr>
+<th valign="top">In:</th><td valign="top"><span class="caps">INT32</span></td><td valign="top">run-mode</td><td valign="top">The run mode { <span class="caps">RUN</span>-<span class="caps">INTERACTIVE</span> (0), <span class="caps">RUN</span>-<span class="caps">NONINTERACTIVE</span> (1) }</td>
+</tr>
+<tr>
+<th valign="top"></th><td valign="top"><span class="caps">IMAGE</span></td><td valign="top">image</td><td valign="top">Input image (unused)</td>
+</tr>
+<tr>
+<th valign="top"></th><td valign="top"><span class="caps">DRAWABLE</span></td><td valign="top">drawable</td><td valign="top">Input drawable</td>
+</tr>
+<tr>
+<th valign="top"></th><td valign="top"><span class="caps">FLOAT</span></td><td valign="top">radius</td><td valign="top">Radius of gaussian blur (in pixels, &gt; 0.0)</td>
+</tr>
+<tr>
+<th valign="top"></th><td valign="top"><span class="caps">INT32</span></td><td valign="top">horizontal</td><td valign="top">Blur in horizontal direction</td>
+</tr>
+<tr>
+<th valign="top"></th><td valign="top"><span class="caps">INT32</span></td><td valign="top">vertical</td><td valign="top">Blur in vertical direction</td>
+</tr>
+<tr><th valign="top">Help:</th><td colspan="3">Applies a gaussian blur to the drawable, with specified radius of affect. The standard deviation of the normal distribution used to modify pixel values is calculated based on the supplied radius. Horizontal and vertical blurring can be independently invoked by specifying only one to run. The <span class="caps">IIR</span> gaussian blurring works best for large radius values and for images which are not computer-generated.</td>
+</tr>
+</tbody>
+</table>
+
+<p>All the the constants mentioned in the <span class="caps">PDB</span> Explorer have been defined within Gimp::Fu and may be used within perl. E.g. a call to blur an image looks as&#xA0;follows:</p>
+<div class="codehilite"><pre><span class="n">Gimp</span><span class="p">::</span><span class="n">Plugin</span><span class="o">-&gt;</span><span class="n">gauss_iir</span><span class="p">(</span>$<span class="n">image</span><span class="p">,</span> $<span class="n">drawable</span><span class="p">,</span> 50<span class="p">,</span> 6<span class="p">,</span> 6<span class="p">);</span>
+</pre></div>
+
+
+<p>Note that Perl is using underline characters where the <span class="caps">DB</span> browser uses hyphens! The <span class="caps">PDB</span> entry above shows that <code>plug-in-gauss-iir</code> is called with various parameters, of various types. These will be explained&#xA0;below.</p>
+<p>You will also see that the first parameter, <code>run-mode</code>, was omitted. This is a feature of Gimp-Perl, which will automatically supply that parameter if you leave it off. This will make your code a lot&#xA0;tidier-looking.</p>
+<p>Script-Fu scripts are called just like any other script according to the <span class="caps">PDB</span> signature in the <span class="caps">PDB</span> browser. E.g. to run the script-fu-basic1-logo just&#xA0;do:</p>
+<div class="codehilite"><pre><span class="n">script_fu_basic1_logo</span><span class="p">(</span>"<span class="n">Hello</span>"<span class="p">,</span> 72<span class="p">,</span>
+ "<span class="n">Utopia</span> 72"<span class="p">,</span> 
+ <span class="p">[</span>0<span class="p">,</span>0<span class="p">,</span>0<span class="p">],[</span>255<span class="p">,</span>255<span class="p">,</span>255<span class="p">]);</span>
+</pre></div>
+
+
+<h3 id="51-gimpfu-and-the-podregister-function">5.1. Gimp::Fu and the podregister function<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#51-gimpfu-and-the-podregister-function" title="Permanent link">&#xB6;</a></h3>
+<p>Gimp::Fu is Perl&#x2019;s answer to Script-Fu. It provides a simplified method for accepting parameters for a script through a Gtk2 interface, just like script-fu, but as we shall see below, it has some additional bells and&#xA0;whistles.</p>
+<p>The main function for a Gimp-Fu script is the <tt>podregister</tt> function. This function declares the interface of the script to <span class="caps">GIMP</span>. The <tt>podregister</tt> function provides <span class="caps">GIMP</span> with the following information, from various sections of its <a href="http://perldoc.perl.org/perlpod.html"><span class="caps">POD</span> (plain old documentation)</a>:</p>
+<ul>
+<li>
+<p>The name of the function. It comes from the first part of the <tt><span class="caps">NAME</span></tt> section, before the dash. Tells <span class="caps">GIMP</span> the name by which the function will be known in the <span class="caps">PDB</span>.</p>
+</li>
+<li>
+<p>A small description, from the <tt><span class="caps">NAME</span></tt> section, after the&#xA0;dash.</p>
+</li>
+<li>
+<p>A help text, from the <tt><span class="caps">DESCRIPTION</span></tt> section.</p>
+</li>
+<li>
+<p>The author&#x2019;s name, from the <tt><span class="caps">AUTHOR</span></tt> section.</p>
+</li>
+<li>
+<p>The copyright of the script, from the <tt><span class="caps">LICENSE</span></tt> section.</p>
+</li>
+<li>
+<p>Creation date - any text, from the <tt><span class="caps">DATE</span></tt> section.</p>
+</li>
+<li>
+<p>Menu path - a string, from the <tt><span class="caps">SYNOPSIS</span></tt> section. The path can take these forms, though there are other&#xA0;options:</p>
+<ul>
+<li><span class="dquo">&#x201C;</span>&lt;Image&gt;/Filters/Menu/Script&#xA0;Name&#x201D;</li>
+<li><span class="dquo">&#x201C;</span>&lt;Toolbox&gt;/Xtns/Perl/Script Name&#x201D;If you specify &#x201C;&lt;Image&gt;&#x201D;, then the script is expecting to operate on, or create, an image. In this case Gimp::Fu will add as the first two parameters to the script the image and the drawable active when the script was invoked. If, however, the &#x201C;image types&#x201D; is left as blank or not specified, the plugin is expected to create and therefore return an image (and it will normally be placed under the <tt>File/Create</tt> menu).</li>
+</ul>
+<p>If you specify &#x201C;&lt;Toolbox&gt;&#x201D;, then the script is a standalone script that appears in the menu hierarchy under Filters (this is a historical thing) and takes all its inputs through the Gimp::Fu interface&#xA0;dialog.</p>
+</li>
+<li>
+<p>The acceptable image types, from the <tt><span class="caps">IMAGE</span> <span class="caps">TYPES</span></tt> section - a string. 
+This list contains a list of image types acceptable.
+This field is only used for scripts that are in the &#x201C;&lt;Image&gt;&#x201D; hieararchy. Some possible values are listed in the table&#xA0;below:</p>
+<table>
+<tbody>
+<tr>
+<th>value</th>
+<th>meaning</th>
+</tr>
+<tr>
+<td valign="top">*</td>
+<td valign="top">Any images are accepted</td>
+</tr>
+<tr>
+<td valign="top"><span class="caps">RGB</span></td>
+<td valign="top"><span class="caps">RGB</span> images</td>
+</tr>
+<tr>
+<td valign="top"><span class="caps">RGBA</span></td>
+<td valign="top"><span class="caps">RGB</span> images with alpha channels</td>
+</tr>
+<tr>
+<td valign="top"><span class="caps">GREY</span></td>
+<td valign="top">Grey level images</td>
+</tr>
+<tr>
+<td></td>
+<td valign="top">(left empty or no such section) Does not take image as input, <strong>does</strong> return an image. <tt>Gimp::Fu</tt> will automatically add that return value.</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p>Parameters, from the <tt><span class="caps">PARAMETERS</span></tt> section. This will be Perl code, which Gimp::Fu evaluates as a list of parameters. Each parameter in turn is a reference to an array containing the following four or five values (A reference to an array in Perl is simply an array written within square&#xA0;brackets):</p>
+<ul>
+<li>
+<p>The type of the parameter. The types recognized by Gimp::Fu and their Perl counterparts are given in the following&#xA0;table:</p>
+<table>
+<tbody>
+<tr>
+<th>Type</th>
+<th width="30%">Possible forms</th>
+<th width="50%">Comment</th>
+</tr>
+<tr>
+<td valign="top">PF_INT32<br>
+ PF_INT16<br>
+ PF_INT8<br>
+</td>
+<td valign="top">42</td>
+<td valign="top">An integer.</td>
+</tr>
+<tr>
+<td valign="top">PF_FLOAT<br>
+</td>
+<td valign="top">3.141</td>
+<td valign="top">A floating point number.</td>
+</tr>
+<tr>
+<td valign="top">PF_TOGGLE</td>
+<td valign="top">0<br>
+1</td>
+<td valign="top">A boolean value.</td>
+</tr>
+<tr>
+<td valign="top">PF_SLIDER<br>
+ PF_SPINNER</td>
+<td valign="top">An integer value through a slider and a spinner interface. The range parameter should be specified and is interpreted as minimum, maximum, and step, e.g. [0,100,1].</td>
+<td valign="top"><img alt="tpix" src="https://www.gimp.org/tutorials/Basic_Perl/tpix.gif"></td>
+</tr>
+<tr>
+<td valign="top">PF_FONT</td>
+<td valign="top">&#x201C;Arial&#x201D;</td>
+<td valign="top">A font name.</td>
+</tr>
+<tr>
+<td valign="top">PF_STRING</td>
+<td valign="top">&#x201C;A string&#x201D;</td>
+<td valign="top">A string</td>
+</tr>
+<tr>
+<td valign="top">PF_COLOR<br>
+ PF_COLOUR</td>
+<td valign="top">[255,127,0]<br>
+ <tt>#ff7f00</tt></td>
+<td valign="top">A color may either be expressed as a reference to an array of three components, or as a hexadecimal triple, proceeded by the hash sign.</td>
+</tr>
+<tr>
+<td valign="top">PF_TOGGLE</td>
+<td valign="top">0<br>
+1</td>
+<td valign="top">A boolean toggle</td>
+</tr>
+<tr>
+<td valign="top">PF_IMAGE</td>
+<td valign="top">-</td>
+<td valign="top">An image</td>
+</tr>
+<tr>
+<td valign="top">PF_DRAWABLE</td>
+<td valign="top">-</td>
+<td valign="top">A drawable.</td>
+</tr>
+<tr>
+<td valign="top">PF_BRUSH</td>
+<td valign="top"><img alt="tpix" src="https://www.gimp.org/tutorials/Basic_Perl/tpix.gif"></td>
+<td valign="top">A brush</td>
+</tr>
+<tr>
+<td valign="top">PF_GRADIENT</td>
+<td valign="top"><img alt="tpix" src="https://www.gimp.org/tutorials/Basic_Perl/tpix.gif"></td>
+<td valign="top">A gradient</td>
+</tr>
+<tr>
+<td valign="top">PF_PATTERN</td>
+<td valign="top"><img alt="tpix" src="https://www.gimp.org/tutorials/Basic_Perl/tpix.gif"></td>
+<td valign="top">A pattern</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p>The name of the parameter - a&#xA0;string.</p>
+</li>
+<li>A help text for the&#xA0;parameter.</li>
+<li>Default value for the parameter. This should be given in the form listed in the table&#xA0;above.</li>
+<li>An array defining allowed range for the value. This is only used for PF_SLIDER and&#xA0;PF_SPINNER.</li>
+</ul>
+</li>
+<li>
+<p>Optionally, the return types of the function can be provided, from a <tt><span class="caps">RETURN</span> <span class="caps">VALUES</span></tt> section. This is specified in the same way as the Parameters above. There is no default or extra argument&#xA0;required.</p>
+</li>
+<li>
+<p>The perl code implementing the function - most commonly with a sub-reference, surrounded by &#x201C;{&#x201D; and &#x201C;};&#x201D;, as below - thanks to Perl&#x2019;s prototyping, you don&#x2019;t need to specify &#x201C;sub&#x201D;. 
+This will be called when the associated menu entry declared through the <em>Menu path</em> described above. 
+When the sub is called it is passed a list of parameters as declared in field 9. 
+In the case of a &#x201C;&lt;Image&gt;&#x2026;&#x201D; script, the active image and drawable (layer or channel) will be passed as first and second parameters. Thanks to the magic of Perl source filtering, you do not need to declare your variables but may simply use&#xA0;them:</p>
+<div class="codehilite"><pre><span class="n">podregister</span> <span class="p">{</span>
+ <span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">gauss_iir</span><span class="p">(</span><span class="nv">$radius</span><span class="p">,</span> <span class="nv">$horizontal</span><span class="p">,</span> <span class="nv">$vertical</span><span class="p">);</span>
+<span class="p">};</span>
+<span class="c1"># ...</span>
+<span class="o">=</span><span class="n">head1</span> <span class="n">PARAMETERS</span>
+
+ <span class="p">[</span> <span class="n">PF_FLOAT</span><span class="p">,</span> <span class="s">'radius'</span><span class="p">,</span> <span class="s">"Radius"</span><span class="p">,</span> <span class="mf">50.0</span> <span class="p">],</span>
+ <span class="p">[</span> <span class="n">PF_INT32</span><span class="p">,</span> <span class="s">'horizontal'</span><span class="p">,</span> <span class="s">'Horizontal blur'</span><span class="p">,</span> <span class="mi">6</span> <span class="p">],</span>
+ <span class="p">[</span> <span class="n">PF_INT32</span><span class="p">,</span> <span class="s">'vertical'</span><span class="p">,</span> <span class="s">'Vertical blur'</span><span class="p">,</span> <span class="mi">6</span> <span class="p">],</span>
+</pre></div>
+
+
+<p>You will also note that &#x201C;plug_in_&#x201D; has been omitted from the method call above, and that not all its parameters appear to be getting passed! This is thanks to the object-oriented implementation in Gimp-Perl, which when given a method name, searches various prefixes for the underlying function including the plug-in related ones (including <tt>script_fu_</tt>).</p>
+<p>The code will normally display a new image if it creates one, and also return the new image, in accordance with the return types declared in parameter 10 of the <tt>podregister</tt> call described above. This enables Gimp::Fu scripts to be used noninteractively by other scripts. More about that behaviour&#xA0;below.</p>
+</li>
+</ul>
+<h3 id="52-podregister-parameters">5.2. podregister parameters<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#52-podregister-parameters" title="Permanent link">&#xB6;</a></h3>
+<p>You will have noticed above that the parameters to the function given to <tt>podregister</tt> used parameters either named in the <span class="caps">POD</span>, or supplied by <tt>Gimp::Fu</tt>, such as <tt>$drawable</tt>. This is because <tt>podregister</tt> automatically makes available to your function all the variables declared either in the <span class="caps">POD</span> documentation (the &#x201C;<span class="caps">PARAMETERS</span>&#x201D; section) or added depending on your &#x201C;image&#xA0;types&#x201D;.</p>
+
+<p>The following Gimp::Fu script example shows the steps described in the previous section. It registers a script that takes two values, the size of the image and a color, and then produces an image of the requested size with the requested color. Quite useless, but it shows the important steps of how to register a script, how to create a new image, and how to access some <span class="caps">PDB</span>&#xA0;functions.</p>
+<table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49</pre></div></td><td class="code"><div class="codehilite"><pre><span class="c1">#!/usr/bin/perl -w</span>
+
+<span class="k">use</span> <span class="n">strict</span><span class="p">;</span> 
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Gimp::</span><span class="n">Fu</span><span class="p">;</span>
+
+<span class="n">podregister</span> <span class="p">{</span> 
+ <span class="c1"># no need to have my ($size, $color) = @_; </span>
+ <span class="k">my</span> <span class="nv">$img</span> <span class="o">=</span> <span class="nn">Gimp::</span><span class="n">Image</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="nv">$size</span><span class="p">,</span> <span class="nv">$size</span><span class="p">,</span> <span class="n">RGB</span><span class="p">);</span> <span class="c1"># Create a new image </span>
+ <span class="c1"># Create a new layer </span>
+ <span class="k">my</span> <span class="nv">$layer</span> <span class="o">=</span> <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">layer_new</span><span class="p">(</span><span class="nv">$size</span><span class="p">,</span> <span class="nv">$size</span><span class="p">,</span> <span class="n">RGB</span><span class="p">,</span> <span class="s">"Layer 1"</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">NORMAL_MODE</span><span class="p">);</span> 
+ <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">insert_layer</span><span class="p">(</span><span class="nv">$layer</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span> <span class="c1"># add the layer to the image </span>
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_background</span><span class="p">(</span><span class="nv">$color</span><span class="p">);</span> <span class="c1"># Set background to required color </span>
+ <span class="nv">$layer</span><span class="o">-&gt;</span><span class="n">edit_fill</span><span class="p">(</span><span class="n">BACKGROUND_FILL</span><span class="p">);</span> <span class="c1"># Paint the layer </span>
+ <span class="nn">Gimp::</span><span class="n">Display</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="nv">$img</span><span class="p">);</span> 
+ <span class="k">return</span> <span class="nv">$img</span><span class="p">;</span> <span class="c1"># Return image - return implied by no IMAGE TYPES </span>
+<span class="p">};</span>
+
+<span class="nb">exit</span> <span class="n">main</span><span class="p">;</span> 
+<span class="cp">__END__</span>
+
+<span class="cp">=head1 NAME</span>
+
+<span class="cp">img_uni - Create a uniform image</span>
+
+<span class="cp">=head1 SYNOPSIS</span>
+
+<span class="cp">&lt;Image&gt;/File/Create/Tutorial/Img Uni</span>
+
+<span class="cp">=head1 DESCRIPTION</span>
+
+<span class="cp">A tutorial script.</span>
+
+<span class="cp">=head1 PARAMETERS</span>
+
+<span class="cp">[PF_INT32, "size", "Img size", 100], </span>
+<span class="cp">[PF_COLOR, "color", "Img color", [255,127,0]]</span>
+
+<span class="cp">=head1 AUTHOR</span>
+
+<span class="cp">Dov Grobgeld</span>
+
+<span class="cp">=head1 DATE</span>
+
+<span class="cp">2004-03-27</span>
+
+<span class="cp">=head1 LICENSE</span>
+
+<span class="cp">Dov Grobgeld (c)</span>
+</pre></div>
+</td></tr></table>
+
+<p>Most of these commands are directly copied out the <span class="caps">PDB</span>.</p>
+<p>This script shows the essential steps of producing a stand-alone&#xA0;script:</p>
+<table>
+<tbody>
+<tr>
+<th>line(s)</th>
+<th>Description</th>
+</tr>
+<tr>
+<td>7</td>
+<td>Registration of the extension</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Creating a new image.</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Creating one or more layers.</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Attaching the layer to the image.</td>
+</tr>
+<tr>
+<td>13-14</td>
+<td>Do some painting operations in the layers.</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Display the new image</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Return the image to the caller</td>
+</tr>
+</tbody>
+</table>
+
+<p>To test the script, save it in the directory <tt>$<span class="caps">HOME</span>/.gimp-2.8/plug-ins</tt>. (A more official way to add scripts is to use the <tt>gimptool-2.0 --install-bin</tt> command). It must then be made executable through the&#xA0;command:</p>
+<div class="codehilite"><pre><span class="n">chmod</span> <span class="o">+</span><span class="n">x</span> $<span class="n">HOME</span><span class="o">/</span><span class="p">.</span><span class="n">gimp</span><span class="o">-</span>2<span class="p">.</span>8<span class="o">/</span><span class="n">plug</span><span class="o">-</span><span class="n">ins</span><span class="o">/</span><span class="n">uni</span>
+</pre></div>
+
+
+<p>Then start <span class="caps">GIMP</span>. It is generally a good idea to test the syntax of the script with <tt>perl -c</tt> before starting <span class="caps">GIMP</span>.</p>
+<p><strong>Note:</strong> Due to the way <span class="caps">GIMP</span> works, it is not possible to add scripts once <span class="caps">GIMP</span> is running. On the other hand, it is possible to change a script which has already been registered, as long as the parameters don&#x2019;t&#xA0;change.</p>
+<p>The script is now accessible through the menu system through the <strong>File/Create/Tutorial</strong> top&#xA0;menu:</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Basic_Perl/uni-menu.png" alt="uni-menu.png">
+</figure>
+
+<p>When choosing this menu entry the following screen is popped&#xA0;up:</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Basic_Perl/uni-entry.png" alt="uni-entry.png">
+</figure>
+
+<p>Choosing the default values results in the&#xA0;image:</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Basic_Perl/uni-result.png" alt="uni-result.png">
+</figure>
+
+<h2 id="6-object-oriented-syntax">6. Object oriented syntax<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#6-object-oriented-syntax" title="Permanent link">&#xB6;</a></h2>
+<p>Gimp-Perl provides an alternative object-oriented syntax for the image and the drawable commands. Here is a table showing the procedural vs the object oriented syntax for a few&#xA0;commands:</p>
+<table>
+<tbody>
+<tr>
+<th>procedural syntax</th>
+<th>object oriented syntax</th>
+</tr>
+<tr>
+<td>gimp_image_insert_layer($drw,0,0);</td>
+<td>$img-&gt;insert_layer($drw,0,0);</td>
+</tr>
+<tr>
+<td>gimp_drawable_width($drw);</td>
+<td>$drw-&gt;width;</td>
+</tr>
+</tbody>
+</table>
+
+<p>The substitution rule for converting a <span class="caps">PDB</span> into a method is as simple as erasing <code>gimp_image_</code> (or sometimes <code>gimp_</code>) from the beginning of the function call and calling this method through the image object. Similarly for the <tt>gimp_drawable_...</tt> functions. See the <a href="http://search.cpan.org/dist/Gimp/Gimp.pm#OBJECT-ORIENTED_SYNTAX">Gimp-Perl docs</a> for more&#xA0;detail.</p>
+<p>Note that the object-oriented syntax appears to be only syntactic sugar that makes the calling syntax cleaner. The error messages are still given in the procedural format. What is going on is that <span class="caps">GIMP</span>, and the library on which it is implemented (Glib), use C in an object-oriented&#xA0;fashion.</p>
+<h2 id="7-painting-areas-with-selections">7. Painting areas with selections<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#7-painting-areas-with-selections" title="Permanent link">&#xB6;</a></h2>
+<p>In the <tt>uni</tt> script the function <tt>gimp_edit_fill</tt> was called to fill the whole image. Looking at the info for <tt>gimp_edit_fill</tt> in the <span class="caps">DB</span> browser we find the&#xA0;following:</p>
+<table>
+<tbody>
+<tr>
+<th valign="top">Name:</th>
+<td colspan="3">gimp_edit_fill</td>
+</tr>
+<tr>
+<th valign="top">Blurb:</th>
+<td colspan="3" valign="top">Fill selected area of drawable</td>
+</tr>
+<tr>
+<th valign="top">In:</th>
+<td valign="top"><span class="caps">DRAWABLE</span></td>
+<td valign="top">drawable</td>
+<td valign="top">The drawable to fill from</td>
+</tr>
+<tr>
+<th></th>
+<td valign="top"><span class="caps">INT32</span></td>
+<td valign="top">fill_type</td>
+<td valign="top">The type of fill { <span class="caps">FOREGROUND</span>-<span class="caps">FILL</span> (0), <span class="caps">BACKGROUND</span>-<span class="caps">FILL</span> (1), <span class="caps">WHITE</span>-<span class="caps">FILL</span> (2), <span class="caps">TRANSPARENT</span>-<span class="caps">FILL</span> (3), <span class="caps">PATTERN</span>-<span class="caps">FILL</span> (4), <span class="caps">NO</span>-<span class="caps">FILL</span> (5) }</td>
+</tr>
+<tr>
+<th valign="top">Help:</th>
+<td colspan="3">This procedure fills the specified drawable with the fill mode. If the fill mode is foreground, the current foreground color is used. If the fill mode is background, the current background color is used. Other fill modes should not be used. This procedure only affects regions within a selection if there is a selection active. If you want to fill the whole drawable, regardless of the selection, use &#x2018;gimp-drawable-fill&#x2019;.</td>
+</tr>
+</tbody>
+</table>
+
+<p>Thus, if a selection is active when <tt>gimp_edit_fill</tt> is called, only the selected region of the drawable is painted. Note also that you must substitute &#x201C;_&#x201D; for &#x201C;-&#x201D; in the&#xA0;names.</p>
+<p>There are lots of ways of choosing a selection as can be seen when searching for a &#x201C;select&#x201D; in the <span class="caps">PDB</span>. The example below uses <tt>gimp_image_select_rectangle</tt>, whose entry in the <span class="caps">PDB</span> looks as&#xA0;follows:</p>
+<table>
+<tbody>
+<tr>
+<td>
+<table>
+<tbody>
+<tr>
+<th valign="top">Name:</th>
+<td colspan="3">gimp-image-select-rectangle</td>
+</tr>
+<tr>
+<th valign="top">Blurb:</th>
+<td colspan="3" valign="top">Create a rectangular selection over the specified image</td>
+</tr>
+<tr>
+<th valign="top">In:</th>
+<td valign="top"><span class="caps">IMAGE</span></td>
+<td valign="top">image</td>
+<td valign="top">The image</td>
+</tr>
+<tr>
+<th></th>
+<td valign="top"><span class="caps">INT32</span></td>
+<td valign="top">operation</td>
+<td valign="top">The selection operation { <span class="caps">CHANNEL</span>-<span class="caps">OP</span>-<span class="caps">ADD</span> (0), <span class="caps">CHANNEL</span>-<span class="caps">OP</span>-<span class="caps">SUBTRACT</span> (1), <span class="caps">CHANNEL</span>-<span class="caps">OP</span>-<span class="caps">REPLACE</span> (2), <span class="caps">CHANNEL</span>-<span class="caps">OP</span>-<span class="caps">INTERSECT</span> (3) }</td>
+</tr>
+<tr>
+<th></th>
+<td valign="top"><span class="caps">FLOAT</span></td>
+<td valign="top">x</td>
+<td valign="top">x coordinate of upper-left corner of rectangle</td>
+</tr>
+<tr>
+<th></th>
+<td valign="top"><span class="caps">FLOAT</span></td>
+<td valign="top">y</td>
+<td valign="top">y coordinate of upper-left corner of rectangle</td>
+</tr>
+<tr>
+<th></th>
+<td valign="top"><span class="caps">FLOAT</span></td>
+<td valign="top">width</td>
+<td valign="top">the width of the rectangle: width &gt;= 0</td>
+</tr>
+<tr>
+<th></th>
+<td valign="top"><span class="caps">FLOAT</span></td>
+<td valign="top">height</td>
+<td valign="top">the height of the rectangle: width &gt;= 0</td>
+</tr>
+<tr>
+<th valign="top">Help:</th>
+<td colspan="3">This tool creates a rectangular selection over the specified image. The rectangular region can be either added to, subtracted from, or replace the contents of the previous selection mask. This procedure is affected by the following context setters: &#x2018;gimp-context-set-feather&#x2019;, &#x2018;gimp-context-set-feather-radius&#x2019;.</td>
+</tr>
+</tbody>
+</table>
+</td>
+</tr>
+</tbody>
+</table>
+
+<p>A simple use of this function which selects a rectangle in the middle of an image and paints that rectangle with a user defined color. This example also introduces a couple of new features we haven&#x2019;t seen&#xA0;before:</p>
+<ul>
+<li>The script is associated with an image since its menu path starts with &#x201C;&lt;Image&gt;/&#x2026;&#x201D;. Note that as a result of this the callback sub in line 6 receives two additional parameters, the active image and the selected&#xA0;drawable.</li>
+<li>The use of the <span class="caps">PDB</span> functions <tt>gimp_image_undo_group_start</tt> and <tt>gimp_image_undo_group_end</tt>. These functions declare an undo group. When an undo is done on the image, instead of having the individual operators undo, all the actions between the undo start and the undo end calls will be undone at&#xA0;once.</li>
+</ul>
+<table>
+<tbody>
+<tr>
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/paint-select">paint-select</a></th>
+</tr>
+<tr>
+<td>
+<table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55</pre></div></td><td class="code"><div class="codehilite"><pre><span class="c1">#!/usr/bin/perl -w</span>
+
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Gimp::</span><span class="n">Fu</span><span class="p">;</span>
+
+<span class="n">podregister</span> <span class="p">{</span> 
+ <span class="k">my</span> <span class="p">(</span><span class="nv">$width</span><span class="p">,</span> <span class="nv">$height</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="nv">$image</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">,</span> <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">height</span><span class="p">);</span> 
+ <span class="c1"># Select a rectangle inside the image and paint it with color </span>
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">undo_group_start</span><span class="p">;</span> 
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">select_rectangle</span><span class="p">(</span> 
+ <span class="n">CHANNEL_OP_REPLACE</span><span class="p">,</span> <span class="nv">$width</span><span class="sr">/4, $height/</span><span class="mi">4</span><span class="p">,</span> <span class="nv">$width</span><span class="sr">/2, $height/</span><span class="mi">2</span><span class="p">,</span> 
+ <span class="p">);</span> 
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_background</span><span class="p">(</span><span class="nv">$color</span><span class="p">);</span> 
+ <span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">edit_fill</span><span class="p">(</span><span class="n">BACKGROUND_FILL</span><span class="p">);</span> 
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">selection_none</span><span class="p">;</span> 
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">undo_group_end</span><span class="p">;</span> 
+ <span class="p">();</span> 
+<span class="p">};</span>
+
+<span class="nb">exit</span> <span class="n">main</span><span class="p">;</span> 
+<span class="cp">__END__</span>
+
+<span class="cp">=head1 NAME</span>
+
+<span class="cp">img_paint_select - Paints the selection</span>
+
+<span class="cp">=head1 SYNOPSIS</span>
+
+<span class="cp">&lt;Image&gt;/Filters/Tutorial/Paint Select</span>
+
+<span class="cp">=head1 DESCRIPTION</span>
+
+<span class="cp">Paints the selection</span>
+
+<span class="cp">=head1 PARAMETERS</span>
+
+<span class="cp">[PF_COLOR, "color", "Rectangle color", [0,0,255]],</span>
+
+<span class="cp">=head1 RETURN VALUES</span>
+
+<span class="cp">=head1 IMAGE TYPES</span>
+
+<span class="cp">*</span>
+
+<span class="cp">=head1 AUTHOR</span>
+
+<span class="cp">Dov Grobgeld</span>
+
+<span class="cp">=head1 DATE</span>
+
+<span class="cp">1999-05-14</span>
+
+<span class="cp">=head1 LICENSE</span>
+
+<span class="cp">Dov Grobgeld</span>
+</pre></div>
+</td></tr></table>
+
+</td>
+</tr>
+</tbody>
+
+</table>
+<p>The result when run on our previous&#xA0;image:</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Basic_Perl/paint-select.png" alt="paint-select.png">
+</figure>
+
+<h3 id="71-complex-selections">7.1. Complex selections<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#71-complex-selections" title="Permanent link">&#xB6;</a></h3>
+<p>Besides rectangular selections elliptical selections may also be created through the <span class="caps">PDB</span> functions <tt>gimp_image_select_ellipse</tt> and <tt>gimp_image_select_polygon</tt> which allows the selection of ellipses and&#xA0;polygons.</p>
+<p>More complex selections may be created through the channel mechanism. The <span class="caps">PDB</span> <tt>gimp_channel_new()</tt> (<tt>Gimp::Channel-&gt;new</tt>) creates a new channel. The channel is a drawable that may be painted into, just like any other drawable, but with the difference that it is always a grey level image. Once the channel is finished, the channel may be loaded into the selection through the <span class="caps">PDB</span> function <tt>gimp_image_select_item</tt>.</p>
+<p>Search for &#x201C;select&#x201D; in the <span class="caps">DB</span> Browser to see a list of all the selection related&#xA0;functions.</p>
+<h3 id="72-loops">7.2. Loops<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#72-loops" title="Permanent link">&#xB6;</a></h3>
+<p>In perl it is trivial to write loops that together with the various selection tools gives powerful creative possibilities. Here is an example that mixes colors in circles. There is nothing really new here, but it shows the power of what we have described&#xA0;above.</p>
+<table>
+<tbody>
+<tr>
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/circles">circles</a></th>
+</tr>
+<tr>
+<td>
+<table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60</pre></div></td><td class="code"><div class="codehilite"><pre><span class="c1">#!/usr/bin/perl</span>
+
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Gimp::</span><span class="n">Fu</span><span class="p">;</span>
+
+<span class="n">podregister</span> <span class="p">{</span> 
+ <span class="c1"># Create the background </span>
+ <span class="k">my</span> <span class="nv">$img</span> <span class="o">=</span> <span class="nn">Gimp::</span><span class="n">Image</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="nv">$size</span><span class="p">,</span> <span class="nv">$size</span><span class="p">,</span> <span class="n">RGB</span><span class="p">);</span> 
+ <span class="nv">$layer</span> <span class="o">=</span> <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">layer_new</span><span class="p">(</span><span class="nv">$size</span><span class="p">,</span> <span class="nv">$size</span><span class="p">,</span> <span class="n">RGB</span><span class="p">,</span> <span class="s">"Layer 1"</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">NORMAL_MODE</span><span class="p">);</span> 
+ <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">insert_layer</span><span class="p">(</span><span class="nv">$layer</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span> 
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_background</span><span class="p">(</span><span class="nv">$bgcolor</span><span class="p">);</span> 
+ <span class="nv">$layer</span><span class="o">-&gt;</span><span class="n">edit_fill</span><span class="p">(</span><span class="n">BACKGROUND_FILL</span><span class="p">);</span> 
+ <span class="k">my</span> <span class="nv">$ncircles</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nv">$size</span><span class="sr">/$radius/</span><span class="mi">2</span><span class="p">);</span> 
+ <span class="k">for</span> <span class="p">(</span><span class="nv">$i</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="nv">$i</span><span class="o">&lt;</span><span class="nv">$ncircles</span><span class="p">;</span> <span class="nv">$i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span> 
+ <span class="k">for</span> <span class="p">(</span><span class="nv">$j</span><span class="o">=</span><span class="mi">0</span><span class="p">;</span> <span class="nv">$j</span><span class="o">&lt;</span><span class="nv">$ncircles</span><span class="p">;</span> <span class="nv">$j</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span> 
+ <span class="c1"># Select a circle </span>
+ <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">select_ellipse</span><span class="p">(</span> 
+ <span class="n">CHANNEL_OP_REPLACE</span><span class="p">,</span> <span class="nv">$i</span><span class="o">*</span><span class="nv">$radius</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="nv">$j</span><span class="o">*</span><span class="nv">$radius</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="nv">$radius</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="nv">$radius</span><span class="o">*</span><span class="mi">2</span> 
+ <span class="p">);</span> 
+ <span class="k">my</span> <span class="nv">$color</span> <span class="o">=</span> <span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">30</span><span class="p">,</span> <span class="p">(</span><span class="nv">$ncircles</span><span class="o">-</span><span class="nv">$j</span><span class="p">)</span><span class="o">*</span><span class="mi">25</span><span class="p">,</span> <span class="p">(</span><span class="nv">$i</span><span class="o">+</span><span class="nv">$j</span><span class="p">)</span><span class="o">*</span><span class="mi">15</span><span class="p">];</span> <span class="c1"># mix colors </span>
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_background</span><span class="p">(</span><span class="nv">$color</span><span class="p">);</span> 
+ <span class="nv">$layer</span><span class="o">-&gt;</span><span class="n">edit_fill</span><span class="p">(</span><span class="n">BACKGROUND_FILL</span><span class="p">);</span> 
+ <span class="p">}</span> 
+ <span class="p">}</span> 
+ <span class="nn">Gimp::</span><span class="n">Display</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="nv">$img</span><span class="p">);</span> 
+ <span class="k">return</span> <span class="nv">$img</span><span class="p">;</span> 
+<span class="p">};</span>
+
+<span class="nb">exit</span> <span class="n">main</span><span class="p">;</span> 
+<span class="cp">__END__</span>
+
+<span class="cp">=head1 NAME</span>
+
+<span class="cp">circles - a loop</span>
+
+<span class="cp">=head1 SYNOPSIS</span>
+
+<span class="cp">&lt;Image&gt;/File/Create/Tutorial/Circles</span>
+
+<span class="cp">=head1 DESCRIPTION</span>
+
+<span class="cp">a loop</span>
+
+<span class="cp">=head1 PARAMETERS</span>
+
+<span class="cp">[PF_INT32, "size", "Image size", 100], </span>
+<span class="cp">[PF_COLOR, "bgcolor", "Background color", [40,180,60]], </span>
+<span class="cp">[PF_INT32, "radius", "Circle radius", 10]</span>
+
+<span class="cp">=head1 AUTHOR</span>
+
+<span class="cp">Dov</span>
+
+<span class="cp">=head1 DATE</span>
+
+<span class="cp">1999-05-14</span>
+
+<span class="cp">=head1 LICENSE</span>
+
+<span class="cp">Dov</span>
+</pre></div>
+</td></tr></table>
+
+</td>
+
+</tr>
+
+</tbody>
+<p>The&#xA0;result:</p>
+</table>
+<figure>
+<img src="https://www.gimp.org/tutorials/Basic_Perl/circles.png" alt="circles.png">
+</figure>
+
+<h2 id="8-creating-text">8. Creating text<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#8-creating-text" title="Permanent link">&#xB6;</a></h2>
+<h3 id="81-hello-world-writing-text-in-an-image">8.1. Hello World - writing text in an image<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#81-hello-world-writing-text-in-an-image" title="Permanent link">&#xB6;</a></h3>
+<p>To create text the <span class="caps">PDB</span> function <tt>gimp_text_fontname()</tt> may be&#xA0;used.</p>
+<p>Here is an example of a script that creates an image containing &#x201C;Hello&#xA0;world&#x201D;.</p>
+<table>
+<tbody>
+<tr>
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/hello-world1">hello-world1</a></th>
+</tr>
+<tr>
+<td>
+<table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52</pre></div></td><td class="code"><div class="codehilite"><pre><span class="c1">#!/usr/bin/perl</span>
+
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Gimp::</span><span class="n">Fu</span><span class="p">;</span>
+
+<span class="n">podregister</span> <span class="p">{</span> 
+ <span class="k">my</span> <span class="nv">$img</span> <span class="o">=</span> <span class="nn">Gimp::</span><span class="n">Image</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="mi">350</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">RGB</span><span class="p">);</span> 
+ <span class="k">my</span> <span class="nv">$drw</span> <span class="o">=</span> <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">layer_new</span><span class="p">(</span><span class="nv">$img</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">,</span> <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">height</span><span class="p">,</span> 
+ <span class="n">RGB</span><span class="p">,</span> <span class="s">"BG"</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">NORMAL_MODE</span><span class="p">);</span> 
+ <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">insert_layer</span><span class="p">(</span><span class="nv">$drw</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span> 
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_background</span><span class="p">(</span><span class="s">"black"</span><span class="p">);</span> 
+ <span class="nv">$drw</span><span class="o">-&gt;</span><span class="n">edit_fill</span><span class="p">(</span><span class="n">BACKGROUND_FILL</span><span class="p">);</span> 
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_foreground</span><span class="p">([</span><span class="mi">255</span><span class="p">,</span><span class="mi">255</span><span class="p">,</span><span class="mi">0</span><span class="p">]);</span> <span class="c1"># Choose color of text </span>
+ <span class="c1"># Create the text </span>
+ <span class="k">my</span> <span class="nv">$textlayer</span> <span class="o">=</span> <span class="nv">$drw</span><span class="o">-&gt;</span><span class="n">text_fontname</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nv">$text</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nv">$size</span><span class="p">,</span> <span class="n">POINTS</span><span class="p">,</span> <span class="nv">$font</span><span class="p">);</span> 
+ <span class="nv">$textlayer</span><span class="o">-&gt;</span><span class="n">floating_sel_anchor</span><span class="p">;</span> 
+ <span class="nn">Gimp::</span><span class="n">Display</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="nv">$img</span><span class="p">);</span> 
+ <span class="k">return</span> <span class="nv">$img</span><span class="p">;</span> 
+<span class="p">};</span>
+
+<span class="nb">exit</span> <span class="n">main</span><span class="p">;</span> 
+<span class="cp">__END__</span>
+
+<span class="cp">=head1 NAME</span>
+
+<span class="cp">hello_world1 - basic text</span>
+
+<span class="cp">=head1 SYNOPSIS</span>
+
+<span class="cp">&lt;Image&gt;/File/Create/Tutorial/Basic text 1</span>
+
+<span class="cp">=head1 DESCRIPTION</span>
+
+<span class="cp">basic text</span>
+
+<span class="cp">=head1 PARAMETERS</span>
+
+<span class="cp">[PF_FONT, "font", "Font", "Sans"], </span>
+<span class="cp">[PF_INT32, "size", "Font size", 70], </span>
+<span class="cp">[PF_STRING, "text", "Text", "Hello world!"]</span>
+
+<span class="cp">=head1 AUTHOR</span>
+
+<span class="cp">Dov</span>
+
+<span class="cp">=head1 DATE</span>
+
+<span class="cp">2004-03-27</span>
+
+<span class="cp">=head1 LICENSE</span>
+
+<span class="cp">Dov</span>
+</pre></div>
+</td></tr></table>
+
+</td>
+</tr>
+</tbody>
+
+
+</table>
+<p>The&#xA0;result:</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Basic_Perl/hello-world1.png" alt="hello-world1.png">
+</figure>
+
+<p>One thing to note in this script is that the text that is created on line 15 is a <em>floating layer</em>, that needs to be anchored to its parent layer. This is done in line 16 through the call to <tt>gimp_floating_sel_anchor()</tt>.</p>
+<p>This script suffers from the problem that the image size is unrelated to the text size. This is taken care of in the following more complex example which shows the basic steps for a logo generating&#xA0;script:</p>
+<ul>
+<li>Creation of an image of arbitrary&#xA0;size</li>
+<li>Creation of a background drawable of an arbitrary&#xA0;size</li>
+<li>Creation of text layer which exactly fits the text with the command <tt>gimp_text_fontname</tt>.</li>
+<li>Resizing the image and the background to the size of the text&#xA0;layer.</li>
+</ul>
+<p>The result is an image composed of two layers; a transparent text layer on top of a uniform&#xA0;background.</p>
+<table>
+<tbody>
+<tr>
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/basic-logo">basic-logo</a></th>
+</tr>
+<tr>
+<td>
+<table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63</pre></div></td><td class="code"><div class="codehilite"><pre><span class="c1">#!/usr/bin/perl</span>
+
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Gimp::</span><span class="n">Fu</span><span class="p">;</span>
+
+<span class="n">podregister</span> <span class="p">{</span> 
+ <span class="k">my</span> <span class="nv">$img</span> <span class="o">=</span> <span class="nn">Gimp::</span><span class="n">Image</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">RGB</span><span class="p">);</span> <span class="c1"># any old size </span>
+ <span class="k">my</span> <span class="nv">$background</span> <span class="o">=</span> <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">layer_new</span><span class="p">(</span> 
+ <span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">RGB</span><span class="p">,</span> <span class="s">"Background"</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">NORMAL_MODE</span> 
+ <span class="p">);</span> 
+ <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">insert_layer</span><span class="p">(</span><span class="nv">$background</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span> 
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_foreground</span><span class="p">(</span><span class="nv">$fgcolor</span><span class="p">);</span> <span class="c1"># Choose color of text </span>
+ <span class="c1"># Create the text layer. Using -1 as the drawable creates a new layer. </span>
+ <span class="k">my</span> <span class="nv">$text_layer</span> <span class="o">=</span> <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">text_fontname</span><span class="p">(</span> 
+ <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nv">$text</span><span class="p">,</span> <span class="nv">$border</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nv">$size</span><span class="p">,</span> <span class="n">POINTS</span><span class="p">,</span> <span class="nv">$font</span> 
+ <span class="p">);</span> 
+ <span class="c1"># Get size of the text drawable and resize the image and the </span>
+ <span class="c1"># background layer to this size. </span>
+ <span class="k">my</span> <span class="p">(</span><span class="nv">$width</span><span class="p">,</span> <span class="nv">$height</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="nv">$text_layer</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">,</span> <span class="nv">$text_layer</span><span class="o">-&gt;</span><span class="n">height</span><span class="p">);</span> 
+ <span class="nv">$img</span><span class="o">-&gt;</span><span class="n">resize</span><span class="p">(</span><span class="nv">$width</span><span class="p">,</span> <span class="nv">$height</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span> 
+ <span class="nv">$background</span><span class="o">-&gt;</span><span class="n">resize</span><span class="p">(</span><span class="nv">$width</span><span class="p">,</span> <span class="nv">$height</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span> 
+ <span class="c1"># Fill the background layer now when it has the right size. </span>
+ <span class="nn">Gimp::</span><span class="n">Context</span><span class="o">-&gt;</span><span class="n">set_background</span><span class="p">(</span><span class="nv">$bgcolor</span><span class="p">);</span> 
+ <span class="nv">$background</span><span class="o">-&gt;</span><span class="n">edit_fill</span><span class="p">(</span><span class="n">BACKGROUND_FILL</span><span class="p">);</span> 
+ <span class="nn">Gimp::</span><span class="n">Display</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="nv">$img</span><span class="p">);</span> 
+ <span class="k">return</span> <span class="nv">$img</span><span class="p">;</span> 
+<span class="p">};</span>
+
+<span class="nb">exit</span> <span class="n">main</span><span class="p">;</span> 
+<span class="cp">__END__</span>
+
+<span class="cp">=head1 NAME</span>
+
+<span class="cp">basic_logo - Basic logo</span>
+
+<span class="cp">=head1 SYNOPSIS</span>
+
+<span class="cp">&lt;Image&gt;/File/Create/Tutorial/Basic Logo</span>
+
+<span class="cp">=head1 DESCRIPTION</span>
+
+<span class="cp">Make a basic logo.</span>
+
+<span class="cp">=head1 PARAMETERS</span>
+
+<span class="cp">[PF_FONT, "font", "Font", "Utopia Bold"], </span>
+<span class="cp">[PF_INT32, "size", "Font size", 10], </span>
+<span class="cp">[PF_INT32, "border", "Border", 10], </span>
+<span class="cp">[PF_STRING, "text", "Text", "Hello world!"], </span>
+<span class="cp">[PF_COLOR, "bgcolor", "Background color", [40,180,160]], </span>
+<span class="cp">[PF_COLOR, "fgcolor", "Foreground color", [255,255,0]],</span>
+
+<span class="cp">=head1 AUTHOR</span>
+
+<span class="cp">Dov Grobgeld</span>
+
+<span class="cp">=head1 DATE</span>
+
+<span class="cp">2004-03-27</span>
+
+<span class="cp">=head1 LICENSE</span>
+
+<span class="cp">Dov Grobgeld</span>
+</pre></div>
+</td></tr></table>
+
+</td>
+
+</tr>
+
+</tbody>
+<p>Note the special syntax of <tt>gimp_image_text_fontname</tt> in line 14 in <tt>basic-logo</tt> with the drawable = -1. The special case drawable=-1 means that instead of creating a floating layer, a new image layer will be&#xA0;created.</p>
+</table>
+<p>The dialog and the resulting&#xA0;image:</p>
+<figure>
+<img src="https://www.gimp.org/tutorials/Basic_Perl/basic-logo-dialog.png" alt="basic-logo-dialog.png">
+</figure>
+
+<h2 id="9-floating-selections">9. Floating selections<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#9-floating-selections" title="Permanent link">&#xB6;</a></h2>
+<p>When a region has been selected through one of the selection routines, the area outlined by the selection may be copied to the cut-buffer through the <tt>gimp_edit_copy</tt> command. The cut-buffer may subsequently be pasted into a different layer through the <tt>gimp_edit_paste</tt> command. When a layer is pasted it becomes a floating selection. This floating selection may be moved to its required position by the command <tt>gimp_layer_set_offsets</tt>, and finally it is pasted by the <tt>gimp_floating_sel_anchor</tt> command. Another way of determining the position of a pasted layer is to create a selection in the target image before the cut-buffer is&#xA0;pasted.</p>
+<p>This is illustrated in the following program, which works on one image and takes as a parameter another image, which it concatenates to the right of the first image. The lines 28-38 shows how the second image is copied and glued into the first&#xA0;image.</p>
+<table>
+<tbody>
+<tr>
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/horiz-cat">horiz-cat</a></th>
+</tr>
+<tr>
+<td>
+<div class="codehilite"><pre><span class="c1">#!/usr/bin/perl</span>
+
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Gimp::</span><span class="n">Fu</span><span class="p">;</span>
+
+<span class="n">podregister</span> <span class="p">{</span> 
+ <span class="nb">die</span> <span class="s">"Must select layer.\n"</span> <span class="k">unless</span> <span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">is_layer</span><span class="p">;</span> 
+ <span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">become</span><span class="p">(</span><span class="s">'Gimp::Layer'</span><span class="p">);</span> 
+ <span class="k">my</span> <span class="nv">$image2</span> <span class="o">=</span> <span class="nv">$drawable2</span><span class="o">-&gt;</span><span class="n">get_image</span><span class="p">;</span> 
+ <span class="k">my</span> <span class="p">(</span><span class="nv">$w1</span><span class="p">,</span> <span class="nv">$h1</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">,</span> <span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">height</span><span class="p">);</span> 
+ <span class="k">my</span> <span class="p">(</span><span class="nv">$w2</span><span class="p">,</span> <span class="nv">$h2</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="nv">$drawable2</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">,</span> <span class="nv">$drawable2</span><span class="o">-&gt;</span><span class="n">height</span><span class="p">);</span> 
+ <span class="k">my</span> <span class="nv">$hmax</span> <span class="o">=</span> <span class="nv">$h1</span> <span class="o">&gt;</span> <span class="nv">$h2</span> <span class="p">?</span> <span class="nv">$h1</span> <span class="p">:</span> <span class="nv">$h2</span><span class="p">;</span> <span class="c1"># new height is maximum height of the images </span>
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">undo_group_start</span><span class="p">;</span> <span class="c1"># Create an undo group </span>
+ <span class="c1"># Resize the drawable layer to make room for the image </span>
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">resize</span><span class="p">(</span><span class="nv">$w1</span><span class="o">+</span><span class="nv">$w2</span><span class="p">,</span> <span class="nv">$hmax</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">(</span><span class="nv">$hmax</span><span class="o">-</span><span class="nv">$h1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">);</span> 
+ <span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">resize</span><span class="p">(</span><span class="nv">$w1</span><span class="o">+</span><span class="nv">$w2</span><span class="p">,</span> <span class="nv">$hmax</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">(</span><span class="nv">$hmax</span><span class="o">-</span><span class="nv">$h1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">);</span> 
+ <span class="c1"># Copy $drawable2 and paste it into the new space of $drawable1 </span>
+ <span class="nv">$image2</span><span class="o">-&gt;</span><span class="n">selection_all</span><span class="p">;</span> <span class="c1"># select all of image2 </span>
+ <span class="nv">$drawable2</span><span class="o">-&gt;</span><span class="n">edit_copy</span><span class="p">;</span> 
+ <span class="nv">$image2</span><span class="o">-&gt;</span><span class="n">selection_none</span><span class="p">;</span> 
+ <span class="c1"># make a selection in image 1 where $drawable2 is to be pasted </span>
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">select_rectangle</span><span class="p">(</span><span class="n">CHANNEL_OP_ADD</span><span class="p">,</span> <span class="nv">$w1</span><span class="p">,</span> <span class="p">(</span><span class="nv">$hmax</span><span class="o">-</span><span class="nv">$h2</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="nv">$w2</span><span class="p">,</span> <span class="nv">$h2</span><span class="p">);</span> 
+ <span class="nv">$drawable</span><span class="o">-&gt;</span><span class="n">edit_paste</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">floating_sel_anchor</span><span class="p">;</span> <span class="c1"># paste and then anchor it </span>
+ <span class="nv">$image</span><span class="o">-&gt;</span><span class="n">undo_group_end</span><span class="p">;</span> <span class="c1"># Close the undo group </span>
+ <span class="k">return</span><span class="p">;</span> 
+<span class="p">};</span>
+
+<span class="nb">exit</span> <span class="n">main</span><span class="p">;</span> 
+<span class="cp">__END__</span>
+
+<span class="cp">=head1 NAME</span>
+
+<span class="cp">horiz_cat - Horizontal concat</span>
+
+<span class="cp">=head1 SYNOPSIS</span>
+
+<span class="cp">&lt;Image&gt;/Filters/Tutorial/Horizontal Concat</span>
+
+<span class="cp">=head1 DESCRIPTION</span>
+
+<span class="cp">Horizontal concatenation of images.</span>
+
+<span class="cp">=head1 PARAMETERS</span>
+
+<span class="cp">[PF_DRAWABLE, "drawable2", "Drawable to concatenate", undef],</span>
+
+<span class="cp">=head1 IMAGE TYPES</span>
+
+<span class="cp">*</span>
+
+<span class="cp">=head1 AUTHOR</span>
+
+<span class="cp">Dov Grobgeld</span>
+
+<span class="cp">=head1 DATE</span>
+
+<span class="cp">2004-03-27</span>
+
+<span class="cp">=head1 LICENSE</span>
+
+<span class="cp">Dov Grobgeld</span>
+</pre></div>
+
+
+</td>
+</tr>
+</tbody>
+
+</table>
+<p>You might notice something very important on lines 7 and 8: we &#x201C;know&#x201D; that we&#x2019;ll always pass a layer as the first drawable, but we&#x2019;re checking that anyway. Then we&#x2019;re telling Gimp-Perl the drawable definitely <em>is</em> a layer. The reason for that is that (obviously) <tt>Gimp::Layer</tt> and <tt>Gimp::Drawable</tt> have different methods available to them, and what matters here is that <tt>Gimp::Drawable</tt> does not have a resize method. (i.e. The <span class="caps">PDB</span> does not have a <tt>gimp_drawable_resize</tt> function)</p>
+<h2 id="10-the-perl-server-and-stand-alone-scripts">10. The Perl Server and stand-alone scripts<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#10-the-perl-server-and-stand-alone-scripts" title="Permanent link">&#xB6;</a></h2>
+<p>So far the scripts have all been started from the menu structure within <span class="caps">GIMP</span>. But using <tt>Gimp::Fu</tt> there is another possibility, and that is to run the scripts from the command line, as a normal Perl program. When run this way the script tries to connect to the Perl-Server, and if it fails it will launch a <span class="caps">GIMP</span> of its own. If you plan to run several scripts this way, it is obviously much faster to run the Perl-Server since launching <span class="caps">GIMP</span> takes quite a bit of time. The Perl-Server may be started from the <tt>Filters/Perl</tt> menu.</p>
+<p>When a <tt>Gimp::Fu</tt> script is run from the command line, the result is the same as when it is run through the menus, except that it may be run with the <tt>--output</tt> parameter. This will save the result to a file instead of displaying it within <span class="caps">GIMP</span>. This is great for batch creation of logos,&#xA0;etc.</p>
+<p>The filename for the <tt>--output</tt> has some special magic that allows to set some special image saving parameters, like interlace, quality factor, etc. See the <a href="http://search.cpan.org/dist/Gimp/Gimp/Fu.pm#MISCELLANEOUS_FUNCTIONS"><tt>Gimp::Fu</tt> docs</a> for more&#xA0;detail</p>
+<p>Here are two invocations of the scripts declared above, but with output written to a jpg file and a png&#xA0;file.</p>
+<table border="None">
+<tbody>
+<tr>
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/perl-gimp-from-shell">perl-gimp-from-shell</a></th>
+</tr>
+<tr>
+<td>
+<pre> 1: uni -o /tmp/uni.png --size 100 --color purple 
+ 2: basic-logo --font 'utopia 100' -o /tmp/bl.ppm --size 20 --text "Perl rules" </pre>
+</td>
+</tr>
+</tbody>
+</table>
+
+<p>Another important use of this interface is that it enables running the Perl debugger on the perl&#xA0;scripts.</p>
+<h3 id="101-a-shell-for-gimp-perl">10.1. A shell for Gimp-Perl<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#101-a-shell-for-gimp-perl" title="Permanent link">&#xB6;</a></h3>
+<p>When using the Perl-Server it is not necessary to use <tt>Gimp::Fu</tt> and the <tt>podregister</tt> function. Instead you may call <tt>Gimp::on_net</tt>, which takes as a parameter a reference to a sub routine that is called when your script has connected to a <span class="caps">GIMP</span> (or started one&#xA0;up).</p>
+<p>For a simple but powerful example of the use of the Gimp without Fu, here is a an interactive Gimp-Perl shell that may be run from the command&#xA0;line:</p>
+<table>
+<tbody>
+<tr>
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/pg-shell">pg-shell</a></th>
+</tr>
+<tr>
+<td>
+<table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17</pre></div></td><td class="code"><div class="codehilite"><pre><span class="c1">#!/usr/bin/perl</span>
+
+<span class="c1"># An interactive command line shell to GIMP. </span>
+<span class="k">use</span> <span class="n">Gimp</span><span class="p">;</span> 
+<span class="k">use</span> <span class="nn">Term::</span><span class="n">ReadLine</span><span class="p">;</span>
+
+<span class="nn">Gimp::</span><span class="n">on_net</span> <span class="p">{</span> 
+ <span class="nv">$term</span> <span class="o">=</span> <span class="k">new</span> <span class="nn">Term::</span><span class="n">ReadLine</span><span class="p">(</span><span class="s">"Gimp"</span><span class="p">);</span> 
+ <span class="k">while</span><span class="p">(</span> <span class="nb">defined</span> <span class="p">(</span><span class="nv">$_</span> <span class="o">=</span> <span class="nv">$term</span><span class="o">-&gt;</span><span class="nb">readline</span><span class="p">(</span><span class="s">"Gimp&gt; "</span><span class="p">)))</span> <span class="p">{</span> 
+ <span class="nv">$res</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="nv">$_</span><span class="p">)</span> <span class="o">.</span> <span class="s">"\n"</span><span class="p">;</span> 
+ <span class="k">print</span><span class="p">(</span><span class="s">"Error: $@"</span><span class="p">),</span> <span class="k">next</span> <span class="k">if</span> <span class="vg">$@</span><span class="p">;</span> 
+ <span class="k">print</span> <span class="s">"\n"</span><span class="p">;</span> 
+ <span class="n">Gimp</span><span class="o">-&gt;</span><span class="n">displays_flush</span><span class="p">();</span> 
+ <span class="p">}</span> 
+ <span class="p">};</span>
+
+ <span class="nb">exit</span> <span class="nn">Gimp::</span><span class="n">main</span><span class="p">;</span>
+</pre></div>
+</td></tr></table>
+
+</td>
+</tr>
+</tbody>
+
+</table>
+<p>Here is an example of an interactive session with this&#xA0;shell:</p>
+<table border="None">
+
+<tbody>
+
+<tr>
+
+<th><a href="https://www.gimp.org/tutorials/Basic_Perl/interact">interact</a></th>
+
+</tr>
+
+<tr>
+
+<td>
+
+<pre> 1: Gimp&gt; $img = Gimp::Image-&gt;new(100,100,RGB) 
+ 2: Gimp&gt; $drw = $img-&gt;layer_new(100,100,RGB_IMAGE, "bg", 100, NORMAL_MODE) 
+ 3: Gimp&gt; $img-&gt;insert_layer($drw,-1, 0) 
+ 4: Gimp&gt; Gimp::Display-&gt;new($img) 
+ 5: Gimp&gt; $drw-&gt;edit_clear 
+ 6: Gimp&gt; print Gimp::Image-&gt;list 
+ 7: Gimp::Image-&gt;existing(1) </pre>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h2 id="11-end-notes">11. End notes<a class="headerlink" href="https://www.gimp.org/tutorials/Basic_Perl/#11-end-notes" title="Permanent link">&#xB6;</a></h2>
+<p>This tutorial has covered only a small part of the possibilities available to a script writer. In particular the following issues available to Gimp::Perl scripts have not been&#xA0;covered:</p>
+<ul>
+<li>The possibility of writing customized Gtk interfaces (see <tt><a href="http://search.cpan.org/dist/Gimp/examples/example-no-fu">examples/example-no-fu</a></tt> in the Gimp-Perl&#xA0;distribution).</li>
+<li>Writing fully-fledged plug-ins that manipulate the tile data through the Perl Data Language (<span class="caps">PDL</span>) module (see <tt><a href="http://search.cpan.org/dist/Gimp/examples/map_to_gradient">examples/map_to_gradient</a></tt> in the Gimp-Perl&#xA0;distribution).</li>
+<li>Using Gimp-Perl in a <span class="caps">CGI</span>&#xA0;environment.</li>
+<li>How to fill with gradients in a plugin (see <tt><a href="http://search.cpan.org/dist/Gimp/examples/randomblends">examples/randomblends</a></tt> in the Gimp-Perl&#xA0;distribution).</li>
+<li>How to do polygon selections (see <tt><a href="http://search.cpan.org/dist/Gimp/examples/triangle">examples/triangle</a></tt> in the Gimp-Perl&#xA0;distribution).</li>
+</ul>
+<p>The Gimp-Perl distribution also has over 50 more example scripts supplied. Take a look through those for further&#xA0;inspiration!</p>
+
+
+
+<p><small>Please send your comments to <a href="mailto:dov.grobgeld@gmail.com">dov.grobgeld@gmail.com</a>.</small></p>
+<p><small>
+<a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US">
+<img class="cc-badge" src="http://i.creativecommons.org/l/by-sa/3.0/80x15.png" alt="Creative Commons By Share Alike">
+</a>
+<span><span class="caps">GIMP</span> Tutorial - A Tutorial for <span class="caps">GIMP</span>-Perl Users (text <span class="amp">&amp;</span> images)</span> 
+by <a href="https://metacpan.org/author/ETJ">Ed J</a> is licensed under a <a href="http://creativecommons.org/licenses/by-sa/3.0/deed.en_US">Creative Commons Attribution-ShareAlike 3.0 Unported License</a>.
+</small></p>
+
+ </div>
+ </div>
+</body></html>

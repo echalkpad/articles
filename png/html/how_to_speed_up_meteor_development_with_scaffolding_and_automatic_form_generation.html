@@ -1,0 +1,561 @@
+<!DOCTYPE html><html><head><title>How to Speed Up Meteor Development with Scaffolding And Automatic Form Generation</title></head><body>
+<h1>How to Speed Up Meteor Development with Scaffolding And Automatic Form Generation</h1><p><a href="https://scotch.io/tutorials/how-to-speed-up-meteor-development-with-scaffolding-and-automatic-form-generation" target="_new">Original URL</a></p>
+<p><blockquote>Meteor is a web development platform built on top of Node.js and MongoDB. It covers client and server development in JavaScript and fully supports real time behavior and reactivity (automatic update&hellip;</blockquote></p>
+<div><div class="page-content-primary">
+
+										
+										
+					<p>Meteor is a web development platform built on top of Node.js and MongoDB. It covers client and server development in JavaScript and fully supports real time behavior and reactivity (automatic update of components when necessary). If you are new to Meteor you can find an introduction <a href="https://scotch.io/tutorials/learn-meteor-js-from-scratch-build-a-polling-app">here</a>.</p>
+<h2>Faster Development with Scaffolding</h2>
+<p>This article is about Meteor scaffolding. With the <em>iron-cli</em> tool scaffolding of Meteor apps becomes super easy. It automatically creates project structure, files and boilerplate code to speed up your development process significantly. In this article we&#x2019;ll use the <em>iron-cli</em> tool to build a simple Meteor web application from scratch. Furthermore we will use the AutoForms extension to automatically generate HTML forms.</p>
+<h2>Getting Started</h2>
+<p>First of all you need to have Meteor installed:</p>
+<ol>
+<li>Install on Windows: Download from <em>https://install.meteor.com/windows</em></li>
+<li>Install on Linux / OS X: Use command <em>curl https://install.meteor.com/ | sh</em></li>
+</ol>
+<p>Second we&#x2019;ll install the scaffolding tool <em>iron-cli</em> which is available on <a href="https://github.com/iron-meteor/iron-cli">GitHub</a>. Install is done via command line:</p>
+<pre><code class="language-javascript">
+npm install -g iron-meteor
+</code></pre>
+<p>After successful install, the <em>iron</em> command is available. You can test it by executing:</p>
+<pre><code class="language-javascript">
+iron help
+</code></pre>
+<p>As a result you can see the following output giving you an brief overview of command parameters:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_01.png" alt="Iron Command"></p>
+<p>The most important options are:</p>
+<ul>
+<li>
+<p><strong>create</strong>: Creates a new project structure. The project name needs to be specified as a second parameter, e.g. <code>iron create myprojectname</code>.</p>
+</li>
+<li>
+<p><strong>generate</strong>: Generates files and boilerplate code for your project. The <em>generate</em> parameter is followed by colon and the type of component you want to create, e.g. <em>generate:view</em> (can also be shortened to <em>g:view</em>) to create a new view. The name of the component is specified as second parameter, e.g <code>iron g:view myfirstview</code>.</p>
+</li>
+<li>
+<p><strong>run</strong>: Runs the app.</p>
+</li>
+</ul>
+<h2>Create a Project Structure</h2>
+<p>As the <em>iron</em> command is available we&#x2019;ll start by creating a new project:</p>
+<pre><code class="language-javascript">
+iron create ironapp01
+</code></pre>
+<p>From the command output you can see that a bunch of files is created and that packages (e.g. the <em>iron:router</em> package) are added to the new project automatically:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_02.png" alt="New project is created with iron command line tool"></p>
+<p>Change to the newly created project directory <em>ironapp01</em> and enter command <em>ls -al</em> to get a first impression of how the project structure looks like:</p>
+<pre><code class="language-javascript">
+| .iron // iron configuration folder
+| app // Meteor application folder
+| bin 
+| build // builds of your applications 
+| config // environment configuration 
+ &#xA0;|----- development/
+ |--- env.sh
+ |--- settings.json
+</code></pre>
+<p>As you can see, the Meteor application is generated into the subfolder <em>app/</em>. If you take a look into <em>app/</em> you can find the following structure:</p>
+<pre><code class="language-javascript">
+| app
+ |----- client
+ |----- lib
+ |----- packages
+ |----- private
+ |----- public
+ |----- server
+ </code></pre>
+<p><strong>client/</strong>: This is the place where the client code of the Meteor application is stored. The subfolder <em>templates</em> is containing a default home view (<em>home.css</em>, <em>home.html</em> and <em>home.js</em>), a application master layout (<em>master_layout.html</em> and <em>master_layout.js</em>), a template to display a loading message (<em>loading.html</em>) and a template to display a not found error message (<em>not_found.html</em>).</p>
+<pre><code class="language-javascript">
+| app
+ |--- client/
+ |---- head.html
+ |---- collections/
+ |---- lib/
+ |---- stylesheets/ // main stylesheets
+ |--- main.css
+ |---- templates/ // all views are stored here
+ |--- home/ // home view is created by default
+ |-- home.css
+ |-- home.html
+ |-- home.js
+ |--- layouts/ // contains a master layout
+ |-- master_layout/
+ |- master_layout.html
+ |- master_layout.js
+ |--- shared/ // templates for displaying loading message / not found message 
+ |-- loading/
+ |- loading.html
+ |-- not_found/
+ |- not_found.html
+</code></pre>
+<p><strong>lib/</strong>: The <em>lib/</em> directory contains the application code which is executed both on client and server. By default the scaffolding tool creates the subfolder <em>collections/</em> and <em>controllers/</em> within <em>lib/</em>. Within <em>app/lib/controllers</em> you can find the generated file <em>home_controller.js</em> with the following code inside:</p>
+<pre><code class="language-javascript">
+HomeController = RouteController.extend({
+ layoutTemplate: 'MasterLayout',
+
+ subscriptions: function() {
+ },
+
+ action: function() {
+this.render('Home');
+ }
+});
+</code></pre>
+<p>The HomeController contains a property <em>layoutTemplate</em> which is set to <em>&#x2019;MasterLayout&#x2019;</em> by default. With this setting in place it is ensured that the master layout from file <em>app/client/templates/layouts/master_layout/master_layout.html</em> is used every time the router is calling a HomeController function to render a view template. The <em>subscriptions</em> property of HomeController is a function which is empty by default and used later to subscribe to data collections published by the server. The <em>action</em> function is calling <code>this.render('Home')</code> to output the Home template (stored in <em>app/client/templates/home)</em>.</p>
+<p>Inside the <em>lib/</em> directory there are two more files:</p>
+<ul>
+<li>
+<p><strong>methods.js</strong>: Used to implement client and server methods, empty by default.</p>
+</li>
+<li>
+<p><strong>router.js</strong>: Contains the routing configuration.</p>
+</li>
+</ul>
+<p>Take a look into <em>router.js</em> and you&#x2019;ll find the initial <em>iron:router</em> configuration:</p>
+<pre><code class="language-javascript"> 
+Router.configure({
+ layoutTemplate: 'MasterLayout',
+ loadingTemplate: 'Loading',
+ notFoundTemplate: 'NotFound'
+});
+
+Router.route('/', {
+ name: 'home',
+ controller: 'HomeController',
+ action: 'action',
+ where: 'client'
+});
+</code></pre>
+<p><em>Note:</em> The <em>iron:router</em> package is added to the iron project by default. It is one of the most popular Meteor packages and makes it extremely easy to configure URLs you want to use in your Meteor application. The <em>iron:router</em> is able to handle both, client and server routes at the same time.</p>
+<p>First, <em>Router.configure()</em> is used to set the <em>general layout</em>, <em>loading</em> and <em>not found template</em>. Second, the default application route &#x2018;/&#x2019; is configured. Route property <em>controller</em> is set to value &#x2018;HomeController&#x2018; to ensure that this controller is used for processing the request. The <em>action</em> property defines the function of the controller which is called to render the browser output.</p>
+<p><em>Note</em>: As seen before, the <em>action</em> method of HomeController is displaying the home view, so all the different parts of the application are wired together by the routing configuration.</p>
+<p><strong>public/</strong>: This folder is used to store any static assets of your applications like images etc.</p>
+<p><strong>server/</strong>: Place to store all your Meteor server code. The following structure can be found in <em>server/</em>:</p>
+<pre><code class="language-javascript">
+| app
+ |--- server/
+ |---- collections/ // folder to store store collection code 
+ |---- controllers/ 
+ |---- bootstrap.js // Meteor startup code can be placed here
+ |---- methods.js // contains all server methods 
+ |---- publish.js // use to publish data collections to the client
+</code></pre>
+<p>Now, that you have a basic understanding of the predefined project structure and the automatically created files we can move on with implementing our sample application. First of all we&#x2019;ll extend the project by adding some Meteor packages.</p>
+<h2>Adding, Removing Some Packages</h2>
+<p>Meteor packages are an easy way to add functionality or external libraries to your project. In the following we&#x2019;ll use the Meteor package manager to add three packages to our project:</p>
+<ul>
+<li>aldeed:autoform</li>
+<li>aldeed:collection2</li>
+<li>twbs:bootstrap</li>
+</ul>
+<p><strong>aldeed:autoform</strong>: Easily create forms with automatic insert and update, and automatic reactive validation.</p>
+<p><strong>aldeed:collection2</strong>: Automatic validation of insert and update operations on the client and server.</p>
+<p><strong>twbs:bootstrap</strong>: Contains the Bootstrap framework. One of the most popular front-end frameworks for developing responsive, mobile first projects on the web.</p>
+<p>Execute the following commands to add the packages:</p>
+<pre><code class="language-javascript">
+iron add aldeed:autoform
+iron add aldeed:collection2
+iron add twbs:bootstrap
+</code></pre>
+<p><em>Note</em>: Executing <em>iron add</em> in the top level folder of the iron project has the same effect as executing <em>meteor add</em> in the <em>app/</em> subfolder. In this case the <em>iron</em> command is just acting as a proxy to the <em>meteor</em> command to make it a little bit easier for you (you do not have to change directories and you do not have to remember in which case use <em>meteor</em> and in which case use <em>iron</em> command). In fact you can use the <em>iron</em> command with all parameters which are available for the <em>meteor</em> command.</p>
+<p>To ensure packages are installed successfully execute the following command:</p>
+<pre><code class="language-javascript">
+iron list
+</code></pre>
+<p>As a result you will see a list of all installed packages in the current project.</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_03.png" alt="Get a list of all Meteor packages installed in project"></p>
+<p><em>Note:</em> From the list of packages you can also see that the <em>autopublish</em> and <em>insecure</em> packages are installed. The <em>autopublish</em> package publishes the entire database to all clients. The <em>insecure</em> package allows all database writes by default. Both, automatic publishing and allowing all database writes by default, is not recommendable for a production app. We&#x2019;ll remove both packages and take back control of data publishing and write access in the next step:</p>
+<pre><code class="language-javascript">
+iron remove autopublish
+iron remove insecure
+</code></pre>
+<h2>Creating a Cars Collection</h2>
+<p>As the main purpose of the application is to manage a list of cars we&#x2019;ll start the implementation by creating a cars collection. We&#x2019;ll do this by using the iron scaffolding command line tool again:</p>
+<pre><code class="language-javascript">
+iron g:collection cars
+</code></pre>
+<p>A new file <em>app/lib/collection/cars.js</em> is created. Open this file, delete the <em>Cars.deny</em> rules and return <em>true</em> for the <em>Cars.allow</em> rules (insert, update and remove):</p>
+<pre><code class="language-javascript">
+Cars = new Mongo.Collection('cars');
+
+if (Meteor.isServer) {
+ Cars.allow({
+ insert: function (userId, doc) {
+ return true;
+ },
+
+ update: function (userId, doc, fieldNames, modifier) {
+ return true;
+ },
+
+ remove: function (userId, doc) {
+ return true;
+ }
+ });
+}
+</code></pre>
+<p>With this configuration in place all actions (insert, update and remove) are allowed for Cars collection on the server.</p>
+<h2>Attaching a Schema and Publishing Cars Collection</h2>
+<p>Next step is to define a data schema for our cars collection. Insert the following schema code in file <em>cars.js</em>:</p>
+<pre><code class="language-javascript">
+Cars.attachSchema(new SimpleSchema({
+ brand: {
+ type: String,
+ label: "Brand",
+ max: 100
+ },
+ model: {
+ type: String,
+ label: "Model",
+ max: 100
+ },
+ fueltype: {
+ type: String,
+ label: "Fuel Type",
+ allowedValues: ['Petrol', 'Diesel', 'Hybrid', 'Electric'],
+ },
+ bodystyle: {
+ type: String,
+ label: "Body Style",
+ allowedValues: ['Convertibles', 'Coupes', 'Hatchbacks', 'Vans', 'Sedans', 'Suvs', 'Trucks', 'Wagons'],
+ optional: true
+ },
+ topspeed: {
+ type: Number,
+ label: "Top Speed (mph)",
+ optional: true
+ },
+ power: {
+ type: Number,
+ label: "Power (HP)",
+ optional: true
+ }
+}));
+</code></pre>
+<p>The data schema is the prerequisite for automatic form generation and automatic form validation which we&#x2019;ll use in a moment.</p>
+<h2>Publish Collection</h2>
+<p>As we have removed the <em>autopublish</em> package from our project we now need to publish our data collection explicitly to make data available on the client. Again, we will accomplish this task by using the iron scaffolding command line tool:</p>
+<pre><code class="language-javascript">
+iron g:publish cars
+ </code></pre>
+<p>This command automatically generates the following call of method <em>Meteor.pubish()</em> in file <em>app/server/publish.js</em>:</p>
+<pre><code class="language-javascript">
+Meteor.publish('cars', function (/* args */) {
+ return Cars.find();
+});
+</code></pre>
+<p>As you can see, publishing on server is quite simple. The call of method <em>publish</em> takes as a first parameter a string which contains the name of the publication. The second parameter is a function returning the data which are published.</p>
+<h2>Creating an Insert Form</h2>
+<p>As our newly created car collection is empty right now there is nothing to display so far. To enable the user to insert new cars we&#x2019;ll create an insert form next. With the Cars schema in place and the <em>aldeed:autoforms</em> package installed it&#x2019;s a simple process. First, create a new template for the insert form:</p>
+<pre><code class="language-javascript">
+iron g:template cars/create_car
+</code></pre>
+<p>This will create three new files in <em>app/client/template/cats/create_car</em>:</p>
+<ul>
+<li>create_car.css</li>
+<li>create_car.html</li>
+<li>create_car.js</li>
+</ul>
+<p>Open <em>create_car.html</em> and insert the following code:</p>
+<pre><code class="language-javascript">
+&lt;template name="CreateCar"&gt;
+ &lt;h1&gt;Create New Car&lt;/h1&gt;
+ {{&gt; quickForm collection="Cars" id="insertCarForm" type="insert" buttonContent="Create"}}
+&lt;/template&gt;
+</code></pre>
+<p>That&#x2019;s it! No more code needed to get an insert form. Quite simple, isn&#x2019;t it? The <em>quickForms</em> inclusion is doing all the work for us generating a html form with validation (based on the Cars schema) for us.</p>
+<p>Next, let&#x2019;s add a new controller to our application:</p>
+<pre><code class="language-javascript">
+iron g:controller Cars
+</code></pre>
+<p>This command creates the file <em>cars_crontroller.js</em> in <em>app/lib/controllers</em>. Insert a new method <em>create</em> and subscribe to the <em>cars</em> publication:</p>
+<pre><code class="language-javascript">
+CarsController = RouteController.extend({
+ subscriptions: function () {
+ this.subscribe('cars');
+ },
+ data: function () {
+ },
+ create: function() {
+ this.render('CreateCar', {});
+ }
+});
+</code></pre>
+<p>This <em>create</em> methods renders the <em>CreateCar</em> template to the browser. Subscriping to the <em>Cars</em> collection is done by calling <code>this.subscribe('cars')</code> in the <em>subscription</em> function.<br>
+In the next step we will connect the <em>create</em> method to the new route <code>/cars/create</code>. Open file <em>route.js</em> and add the following route configuration:</p>
+<pre><code class="language-javascript">
+Router.route('/cars/create', {
+ name: 'createCar',
+ controller: 'CarsController',
+ action: 'create',
+ where: 'client'
+});
+</code></pre>
+<p>With this configuration in place we can start the application by executing the following command:</p>
+<pre><code class="language-javascript">
+iron run
+</code></pre>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_04.png" alt="Meteor server is running"></p>
+<p>If you now open the browser and access URL <code>http://localhost:3000/cars/create</code> you can see the form:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_05.png" alt="Automatically generated form"></p>
+<p>Without writing HTML form code the output was automatically generated by the <em>AutoForms</em> package. The best thing about it &#x2013; it&#x2019;s not only the form&#x2019;s HTML code, it&#x2019;s also the logic behind which is automatically generated. You can start right away creating records in the database by filling out the form.</p>
+<p>To test if everything is working correctly lets first try to submit the form without filling in a <em>brand</em> value (remember: the brand information is mandatory in our schema):</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_06.png" alt="Error message because of missing value"></p>
+<p>As you can see an error message is printed out stating that a value for field <em>brand</em> is required. The form is not submitted and further processing is aborted.</p>
+<p>Next add some car records by filling in all input fields and submitting the form. If no validation errors occur the form is cleared after successful submission. To check if data records have been created first open the browser console end enter the following command:</p>
+<pre><code class="language-javascript">
+Cars.find().fetch()
+</code></pre>
+<p>An array object is returned containing items for every car record created:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_07.png" alt="Query collection in browser console"></p>
+<p>The same check can be done on the server. Go to console and enter</p>
+<pre><code class="language-javascript">
+meteor mongo
+</code></pre>
+<p>in <em>app/</em> directory of the project and query the server collection by using the following command:</p>
+<pre><code class="language-javascript">
+db.cars.find().pretty()
+</code></pre>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_08.png" alt="Query collection in MongoDB console"></p>
+<p>Again, as a result we get a list of all car records. This shows that the content of the client collection is automatically submitted to the server and stored in the MongoDB database correctly.</p>
+<h2>Changing the Master Layout</h2>
+<p>So far our application only consists of one site, displaying a form for creating new car records. Before moving on and adding additional functionality (and templates) we&#x2019;ll change the <em>MasterLayout</em> to contain some Bootstrap elements to display an application menu. The default <em>MasterLayout</em> template is available in <em>app/client/templates/layouts/master_layout/master_layout.html</em> and contains the following code by default:</p>
+<pre><code class="language-javascript">
+&lt;template name="MasterLayout"&gt;
+ {{&gt; yield}}
+&lt;/template&gt;
+</code></pre>
+<p>The <code>{{&gt; yield}}</code> inclusion is placed in the template code and a generic element which is replaced by the content of the route-specific template. To make our application look a little bit nicer we add a Bootstrap application menu (responsive) in the header and a footer area at the bottom. Replace the content of <em>master_layout.html</em> with the following template code:</p>
+<pre><code class="language-javascript">
+&lt;template name="MasterLayout"&gt;
+ &lt;nav class="navbar navbar-inverse navbar-fixed-top" role="navigation"&gt;
+ &lt;div class="container"&gt;
+ &lt;div class="navbar-header"&gt;
+ &lt;button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navigationbar"&gt;
+ &lt;span class="sr-only"&gt;Toggle navigation&lt;/span&gt;
+ &lt;span class="icon-bar"&gt;&lt;/span&gt;
+ &lt;span class="icon-bar"&gt;&lt;/span&gt;
+ &lt;span class="icon-bar"&gt;&lt;/span&gt;
+ &lt;/button&gt;
+ &lt;a class="navbar-brand" href="#"&gt;Meteor Car Manager&lt;/a&gt;
+ &lt;/div&gt;
+ &lt;div class="collapse navbar-collapse" id="navigationbar"&gt;
+ &lt;ul class="nav navbar-nav navbar-right"&gt;
+ &lt;li&gt;{{#linkTo route="home"}}Home{{/linkTo}}&lt;/li&gt;
+ &lt;li&gt;{{#linkTo route="carsList"}}Cars{{/linkTo}}&lt;/li&gt;
+ &lt;li&gt;{{#linkTo route="createCar"}}Create New Car{{/linkTo}}&lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;/nav&gt;
+ &lt;div class="container" style="margin-top:40px"&gt;
+ {{&gt; yield}}
+ &lt;/div&gt;
+ &lt;nav class="navbar navbar-default navbar-fixed-bottom"&gt;
+ &lt;div class="container"&gt;
+ &lt;ul class="nav navbar-nav navbar-right"&gt;
+ &lt;li&gt;Built with Meteor&lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/div&gt;
+ &lt;/nav&gt;
+&lt;/template&gt;
+</code></pre>
+<p>Looks much better now:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_09.png" alt="Master layout with menu and footer"></p>
+<p>The menu on top contains three links: <em>Home</em>, <em>Cars</em> and <em>Create New Car</em>. The <em>Create New Car</em> link is pointing to the <em>CreateCar</em> template and the <em>Cars</em> link is pointing to the the <em>carsList</em> route which we&#x2019;ll create later on. To create a link we simply use the <code>{{#linkTo route="[Enter Template Name]"}}[Enter link Text]{/linkTo}}</code> block helper provided by the Iron Router package. The block helper takes the name of the route as parameter and creates an corresponding HTML element in the output.</p>
+<h2>Displaying a List of Cars</h2>
+<p>Now, that we have the menu in place we can move on to the next step and create a new template for outputting a list of all cars. Create the template by using scaffolding:</p>
+<pre><code class="language-javascript">
+iron g:template cars/list_cars
+</code></pre>
+<p>Next we add a <em>/cars</em> route in <em>routes.js</em>:</p>
+<pre><code class="language-javascript">
+Router.route('/cars', {
+ name: 'carsList',
+ controller: 'CarsController',
+ action: 'list',
+ where: 'client'
+});
+</code></pre>
+<p>The <em>list</em> action method is not existing in the <em>CarsController</em> so far. Lets create this method to output the rendered version of our <em>ListCars</em> template:</p>
+<pre><code class="language-javascript">
+list: function() {
+ this.render('ListCars', {});
+}
+</code></pre>
+<p>If you now click on <em>Cars</em> link in the menu the default template is rendered as you can see in the following screenshot:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_10.png" alt="New ListCars template is rendered after clicking on link Cars in menu"></p>
+<p>Next we&#x2019;ll replace the content of <em>list_cars.html</em> with the following code:</p>
+<pre><code class="language-javascript">
+&lt;template name="ListCars"&gt;
+ &lt;h1&gt;Cars List&lt;/h1&gt;
+ &lt;table class="table table-hover"&gt;
+ &lt;thead&gt;
+ &lt;tr&gt;
+ &lt;th&gt;Brand&lt;/th&gt;
+ &lt;th&gt;Model&lt;/th&gt;
+ &lt;th&gt;Fuel Type&lt;/th&gt;
+ &lt;th&gt;Body Style&lt;/th&gt;
+ &lt;th&gt;Top Speed&lt;/th&gt;
+ &lt;th&gt;Power&lt;/th&gt;
+ &lt;/tr&gt;
+ &lt;/thead&gt;
+ &lt;tbody&gt;
+ {{#each cars}}
+ &lt;tr&gt;
+ &lt;td&gt;{{brand}}&lt;/td&gt;
+ &lt;td&gt;{{model}}&lt;/td&gt;
+ &lt;td&gt;{{fueltype}}&lt;/td&gt;
+ &lt;td&gt;{{bodystyle}}&lt;/td&gt;
+ &lt;td&gt;{{topspeed}}&lt;/td&gt;
+ &lt;td&gt;{{power}}&lt;/td&gt;
+ &lt;/tr&gt;
+ {{/each}}
+ &lt;/tbody&gt;
+ &lt;/table&gt;
+&lt;/template&gt;
+</code></pre>
+<p>That&#x2019;s the template code which is needed to print out the table of cars. To iterate over all objects in the cars collection a block helper is used: <code>{{#each cars}} ... {{/each}}</code>. The code inside this block helper is rendered for every item in objects <em>cars</em>. But what about <em>cars</em>? This object has not been defined yet, so we need to change that and make the <em>cars</em> object available to the template. Open file <em>list_cars.js</em> and add <em>cars</em> as a Template Helper:</p>
+<pre><code class="language-javascript">
+Template.ListCars.helpers({
+ cars: function() {
+ return Cars.find();
+ }
+});
+</code></pre>
+<p>With that code in place the <em>cars</em> object is available in the template and the <code>{{#each cars}} ... {{/each}}</code> block will be iterating over all objects in <em>cars</em>. To make sure <em>cars</em> is filled with all data records a function is assigned returning the result of <em>Cars.find()</em>.</p>
+<p>Now you should see a table with all car records in the browser by accessing URL <code>http://localhost:3000/cars</code>:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_11.png" alt="List of all car entries in database"></p>
+<h2>Editing and Deleting</h2>
+<p>To complete our line of business web application we need to add editing and delete capabilities finally. Let&#x2019;s add one more view template to the project:</p>
+<pre><code class="language-javascript">
+iron g:template cars/edit_car
+</code></pre>
+<p>This view will contain an editing form. Again, we&#x2019;ll use the <code>{{&gt; quickForm ...}}</code> inclusion to generate an editing form on the fly. Insert the following code into file <em>edit_car.html</em>:</p>
+<pre><code class="language-javascript">
+&lt;template name="EditCar"&gt;
+ &lt;h1&gt;Edit&lt;/h1&gt;
+ {{&gt; quickForm collection="Cars" doc=this id="editCarForm" type="update" buttonContent="Update"}}
+&lt;/template&gt;
+</code></pre>
+<p>In this case the parameter <em>type</em> is set to value <em>update</em>. This tells quickForm to generate a editing form for updating existing datasets. To access the <em>EditCar</em> template we also need to configure a new route in file <em>app/lib/routes.js</em>:</p>
+<pre><code class="language-javascript">
+Router.route('/cars/:_id', {
+ name: 'editCar',
+ controller: 'CarsController',
+ action: 'edit',
+ where: 'client'
+});
+</code></pre>
+<p>In this case the route string <em>/cars/:_id</em> contains a routing parameter named <em>_id</em>. This parameter takes the identifier of a specific car records as part of the URL. With this information available we can set the data context to this single car records in the <em>CarsController</em>:</p>
+<pre><code class="language-javascript">
+data: function () {
+ return Cars.findOne({_id: this.params._id});
+}
+</code></pre>
+<p>The <em>_id</em> parameter can be accessed via the <em>this.params</em> object. To retrieve the corresponding car entry from the <em>Cars</em> collection the <em>findOne</em> method is called. The resulting data object is returned and assigned to the data property of the controller. Next the <em>edit</em> function is added to the <em>CarsController</em> as this is the function which was assigned to the <em>action</em> property of the <em>editCar</em> routing configuration:</p>
+<pre><code class="language-javascript">
+edit: function() {
+ this.render('EditCar', {});
+}
+</code></pre>
+<p>With the changes made we are now able to access the new edit form in the browser by pointing to URL <code>http://localhost:3000/cars/[ID]</code>. But how to retrieve the identifier of a specific dataset we must include in the URL? You already learned how to query the Cars collection on server by using the Meteor MongoDB Console:</p>
+<pre><code class="language-javascript">
+cd app
+meteor mongo
+db.cars.find().pretty()
+</code></pre>
+<p>The resulting list contains all car records including the <em>_id</em> value:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_12.png" alt="Use MongoDB Console to retrieve IDs"></p>
+<p>Just copy one single ID and complete the URL in browser. As a result you get the prefilled editing form:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_13.png" alt="Form for editing car records"></p>
+<p>Ok, great so far! But maybe we should make it a little bit easier to access the edit form for a specific record. Let&#x2019;s add direct links in the <em>ListCars</em> template:</p>
+<pre><code class="language-javascript">
+&lt;template name="ListCars"&gt;
+ &lt;h1&gt;Cars List&lt;/h1&gt;
+ &lt;table class="table table-hover"&gt;
+ &lt;thead&gt;
+ &lt;tr&gt;
+ &lt;th&gt;Brand&lt;/th&gt;
+ &lt;th&gt;Model&lt;/th&gt;
+ &lt;th&gt;Fuel Type&lt;/th&gt;
+ &lt;th&gt;Body Style&lt;/th&gt;
+ &lt;th&gt;Top Speed&lt;/th&gt;
+ &lt;th&gt;Power&lt;/th&gt;
+ &lt;th&gt;Edit&lt;/th&gt;
+ &lt;/tr&gt;
+ &lt;/thead&gt;
+ &lt;tbody&gt;
+ {{#each cars}}
+ &lt;tr&gt;
+ &lt;td&gt;{{brand}}&lt;/td&gt;
+ &lt;td&gt;{{model}}&lt;/td&gt;
+ &lt;td&gt;{{fueltype}}&lt;/td&gt;
+ &lt;td&gt;{{bodystyle}}&lt;/td&gt;
+ &lt;td&gt;{{topspeed}}&lt;/td&gt;
+ &lt;td&gt;{{power}}&lt;/td&gt;
+ &lt;td&gt;{{#linkTo route='editCar'}}&lt;span class="glyphicon glyphicon-edit" aria-hidden="true"&gt;&lt;/span&gt;{{/linkTo}}&lt;/td&gt;
+ &lt;/tr&gt;
+ {{/each}}
+ &lt;/tbody&gt;
+ &lt;/table&gt;
+&lt;/template&gt;
+</code></pre>
+<p>Another column is added to contain a separate link to the edit form for each table row. Again we are using the <em>linkTo</em> block helper. This time <em>linkTo</em> is pointing to the <em>editCar</em> route, so that a valid URL is generated to access the <em>EditCar</em> form template. What is not obvious at first sight, is that the route parameter is set automatically to the current dataset in the generated links. No need to write further code. The result is shown in the following screenshot:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_14.png" alt="Table now includes links to edit form for every dataset"></p>
+<p>That was really easy, wasn&#x2019;t it? Last thing to do is to add delete function so that the user is able to delete existing cars from database. In this case the <em>quickForms</em> generator is no option, as no input form is needed. Instead we just want to add an additional button in the <em>EditCars</em> template enabling the user to delete the current dataset. Let&#x2019;s see what other packages may help us completing that task quickly. A search for &#x201E;delete button&#x201C; on http://atmospherejs.com shows that there is exactly one package which matches our requirements: <em>aldeed:delete-button</em>.</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_15.png" alt='Search for "delete button" on atmospherejs.com'></p>
+<p>The package is installed by using the following command:</p>
+<pre><code class="language-javascript">
+iron add aldeed:delete-button
+</code></pre>
+<p>After the package is added successfully the new inclusion <code>{{&gt; quickRemoveButton}}</code> becomes available and can be used in the existing <em>EditCar</em> template (<em>edit_car.html</em>):</p>
+<pre><code class="language-javascript">
+&lt;template name="EditCar"&gt;
+ &lt;h1&gt;Edit&lt;/h1&gt;
+ {{&gt; quickForm collection="Cars" doc=this id="editCarForm" type="update" buttonContent="Update"}}
+ &lt;hr&gt;
+ {{&gt; quickRemoveButton collection="Cars" _id=this._id beforeRemove=beforeRemove class="btn btn-danger"}}
+&lt;/template&gt;
+</code></pre>
+<p>As you can see the <code>{{&gt; quickRemoveButton}}</code> inclusions takes four parameters: <em>collection</em>, <em>_id</em>, <em>beforeRemove</em> and <em>class</em>.</p>
+<ul>
+<li><strong>collection</strong>: The collection for which a delete button should be generated.</li>
+<li><strong>_id</strong>: The ID of the dataset which should be deleted by clicking on the button.</li>
+<li><strong>beforeRemove</strong>: A function which should be executed everytime a delete operation is executed.</li>
+<li><strong>class</strong>: CSS classes to be applied.</li>
+</ul>
+<p>The <em>beforeRemove</em> function is added because we want to display a confirm message before the record is deleted. The function is implemented as template helper in <em>edit_car.js</em>:</p>
+<pre><code class="language-javascript">
+Template.EditCar.helpers({
+ beforeRemove: function () {
+ return function (collection, id) {
+ var doc = collection.findOne(id);
+ if (confirm('Really delete car: "' + doc.brand + " " + doc.model + '"?')) {
+ this.remove();
+ Router.go('carsList');
+ }
+ };
+ }
+});
+</code></pre>
+<p>That&#x2019;s it. The result can be seen in the following screenshot:</p>
+<p><img src="https://cask.scotch.io/2015/05/meteor_scaffolding_16.png" alt="Deleting a car record"></p>
+
+<p><a href="http://scotchio-meteor-car.meteor.com/" title="View Live Demo">View Live Demo</a></p>
+
+<p><a href="https://github.com/seeschweiler/scotchio-meteor-car" title="View Code on GitHub">View Code on GitHub</a></p>
+<h2>Conclusion</h2>
+<p>Meteor is a great platform for web and mobile development which is easy to learn and fun to use. With iron scaffolding Meteor developments becomes even more fun. Generating project structures, components and boilerplate code with just one command gives a boost to your development process.</p>
+<p>Hopefully this article has given you a good starting point to dive deeper into Meteor scaffolding with iron-cli and helps you to create great realtime, reactive web apps.</p>
+
+					
+
+
+
+					
+				</div>
+
+									
+					</div>
+</body></html>

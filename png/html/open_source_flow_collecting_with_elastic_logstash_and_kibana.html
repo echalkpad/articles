@@ -1,0 +1,119 @@
+<!DOCTYPE html><html><head><title>Open Source Flow Collecting with Elastic, Logstash, and Kibana</title></head><body>
+<h1>Open Source Flow Collecting with Elastic, Logstash, and Kibana</h1><p><a href="https://developer.wordpress.com/2016/02/08/open-source-netflow-with-elastic-logstash-kibana/" target="_new">Original URL</a></p>
+<p><blockquote>Today, most open source network flow tools lack a flexible and easy to use interface. Using Logstash&#x2019;s built-in netflow codec,&#xA0;Kibana&#x2019;s great looking and powerful web interface,&hellip;</blockquote></p>
+<div><div class="entry-content">
+		<p>Today, most open source network flow tools lack a flexible and easy to use interface. Using Logstash&#x2019;s built-in netflow codec,&#xA0;Kibana&#x2019;s great looking and powerful web interface, and the flexibility of Elastic, you can build a tool that rivals commercial flow-collecting products.</p>
+
+<h2>Kibana &#x2013; Analyzing data</h2>
+<h4>Discover</h4>
+<p>Discover is the main screen in Kibana and a good place to test and build queries. You can customize the columns and time displayed, look at the top n of each field in the left column, and open the flow record to see its complete details. From here you can save searches or create queries and pin them to use later in visualizations.</p>
+<p><a href="https://developer.files.wordpress.com/2016/01/discover.png" rel="attachment wp-att-90880"><img class="wp-image-90880 aligncenter" src="https://developer.files.wordpress.com/2016/01/discover.png?w=908&amp;h=440" alt="discover" width="908"></a></p>
+<h4>Visualize</h4>
+<p>There are many ways to present your data in Kibana. The top three for us are line charts, pie charts, and map views.&#xA0;There are a few <a href="https://www.elastic.co/guide/en/kibana/current/visualize.html" target="_blank">few other</a> visualizations as well.</p>
+<p>Line charts are great for displaying bytes per second (bps) or packets per second (pps) over time. The line graph below shows total bps for the matched country (Poland) over the past 5 days. When you choose per-second aggregation, Kibana may change your aggregate values, but it still does the math to give you the correct per second value.</p>
+<p>Pie charts are well suited for showing data relative to the entire result set. There can even be&#xA0;multilayered data on the chart. The inner layer of the pie chart below shows relative traffic per country. The outer layer represents the different WordPress.com data centers where the traffic was received.</p>
+<p>The map is useful to see how <a href="https://en.wikipedia.org/wiki/Anycast" target="_blank">anycast routing</a> is performing. In the map below, the query matches Sydney data center for traffic over the past 24 hours. You can see a few spots in North America. In this case, the cause is international networks that don&#x2019;t have correct geolocation info on their IP addresses. The map data is only as good as the geolocation source.</p>
+<p>There are many other visualization options and the only limit is your imagination!</p>
+<div class="tiled-gallery type-rectangular tiled-gallery-unresized"> <div class="gallery-row"> <div class="gallery-group images-2"> <div class="tiled-gallery-item tiled-gallery-item-large"> <a href="https://developer.files.wordpress.com/2016/01/line-chart.png" border="0"> <img src="https://developer.files.wordpress.com/2016/01/line-chart.png" width="250" title="line chart" alt=""> </a> <p class="tiled-gallery-caption"> Bytes per second to Poland </p> </div> <div class="tiled-gallery-item tiled-gallery-item-large"> <a href="https://developer.files.wordpress.com/2016/01/pie.png" border="0"> <img src="https://developer.files.wordpress.com/2016/01/pie.png" width="250" title="pie" alt=""> </a> <p class="tiled-gallery-caption"> Traffic by country </p> </div> </div> <div class="gallery-group images-1"> <div class="tiled-gallery-item tiled-gallery-item-large"> <a href="https://developer.files.wordpress.com/2016/01/mapview.png" border="0"> <img src="https://developer.files.wordpress.com/2016/01/mapview.png" width="522" title="mapview" alt=""> </a> <p class="tiled-gallery-caption"> Anycast traffic in Sydney </p> </div> </div> </div> </div>
+<p>One real-world example of the visualizations working&#xA0;together is to identify networks that aren&#x2019;t routing traffic to the nearest data center. In the past, we&#x2019;ve found networks peering with foreign route servers and preferring those routes instead of using much closer data centers. Using the Kibana map, we can select a problematic geographical area and create a filter focused on just the specific sources. The query is then used in a pie chart, showing you the top source <a href="https://en.wikipedia.org/wiki/Autonomous_system_%28Internet%29" target="_blank">ASNs</a> and some example source/destination IPs. Filtering further, you can create a line chart to determine how many Mbps could potentially move to another, closer, <a href="https://en.wikipedia.org/wiki/Point_of_presence" target="_blank">PoP</a>. This is just one of nearly limitless use cases of collecting and analyzing your netflow data with ELK.</p>
+<h4>Dashboard</h4>
+<p>It is fun and useful to set up different views in your network by having multiple complimenting charts on your screen. We&#x2019;ve setup a <a href="https://en.wikipedia.org/wiki/Denial-of-service_attack" target="_blank">Denial of Service</a> dashboard that tracks spikes in suspicious traffic, such as DNS, SYN floods, NTP, or any other UDP spikes.</p>
+<p><a href="https://developer.files.wordpress.com/2016/01/ddos-dash.png" rel="attachment wp-att-90881"><img class="alignnone wp-image-90881 " src="https://developer.files.wordpress.com/2016/01/ddos-dash.png?w=898&amp;h=449" alt="ddos-dash" width="898"></a></p>
+<p>In this example there was a spike in UDP traffic.&#xA0; We highlighted the area to zoom in on that period in time. Kibana then redraws the results of all of the charts in the&#xA0;dashboard for that time period which allows us to see details of the traffic spike. We see what routers and interfaces that received the majority of the traffic on the pie chart. The inner layer of the pie chart represents a router, the mid area represents attached interfaces to each router and the outer area of the pie chart represents UDP vs TCP on a given interface. We can see the blue, representing UDP, appear on the dashboard below.</p>
+<p><a href="https://developer.files.wordpress.com/2016/01/dash-zoomed.png" rel="attachment wp-att-90883"><img class="alignnone wp-image-90883 size-full" src="https://developer.files.wordpress.com/2016/01/dash-zoomed.png?w=780" alt="dash-zoomed"></a></p>
+<h2>Logstash &#x2013; Collecting the data and help make it useful</h2>
+<h4>Config</h4>
+<p>The configuration for Logstash can be as simple as just adding an input of the netflow codec and an output of Elastic. Logstash has <a href="https://www.elastic.co/guide/en/logstash/current/filter-plugins.html" target="_blank">many powerful filters</a> that can be combined with conditional statements to add value and readability to your data. Here are a few examples of filters in action:</p>
+<pre class="coding_class"># Private ASN is actually AS2635
+	if [netflow][dst_as] &lt; "65535" and [netflow][dst_as] &gt; "64511" {
+		mutate {
+			replace =&gt; { "[netflow][dst_as]" =&gt; "2635" }
+		}
+	}
+</pre>
+<pre class="coding_class"># Multiply by sampling interval to calculate the total bytes and packets the flow represents
+if [netflow][sampling_interval] &gt; 0 {
+	ruby {
+		code =&gt; "event['netflow']['in_bytes'] = event['netflow']['in_bytes'] articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii event['netflow']['sampling_interval']"
+		add_tag =&gt; [ "multiplied" ]
+	}
+
+	ruby {
+		code =&gt; "event['netflow']['in_pkts'] = event['netflow']['in_pkts'] articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii event['netflow']['sampling_interval']"
+	}
+}
+
+# add a bits field
+if [netflow][in_bytes] {
+	ruby {
+	code =&gt; "event['netflow']['in_bits'] = event['netflow']['in_bytes'] articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 8"
+	}
+}
+</pre>
+<pre class="coding_class">#Protocol friendly naming
+translate {
+field =&gt; "[netflow][protocol]"
+destination =&gt; "[netflow][protocol]"
+override =&gt; "true"
+dictionary =&gt; [ "6", "TCP", "17", "UDP", "1", "ICMP", "47", "GRE", "50", "ESP" ]
+}</pre>
+<pre class="coding_class"># get the datacenter from hostname
+translate {
+field =&gt; "host"
+destination =&gt; "datacenter"
+dictionary =&gt; [
+"hostname", "citycode",
+...]
+}</pre>
+<p>Translate to add friendly names instead of all numbers, such as, tcp flags, tcp/udp ports, interface names and hostnames.</p>
+<pre class="coding_class">if [host] == "hostname" {
+
+translate {
+field =&gt; "[netflow][input_snmp]"
+destination =&gt; "[netflow][interface_in]"
+dictionary =&gt; [ "633", "xe-1/0/0" ]
+add_field =&gt; {
+direction =&gt; "inbound"
+traffic_type =&gt; "transit"
+provider =&gt; "ntt"
+}
+}
+
+translate {
+field =&gt; "[netflow][output_snmp]"
+destination =&gt; "[netflow][interface_out]"
+dictionary =&gt; [ "633", "xe-1/0/0"]
+add_field =&gt; {
+direction =&gt; "outbound"
+traffic_type =&gt; "transit"
+provider =&gt; "ntt"
+}
+}
+</pre>
+<p>The filters can be used to add the GeoIP data, ASN including network name which is useful for routers that don&#x2019;t have full BGP table.</p>
+<pre class="coding_class">if "inbound" == [direction] {
+geoip {
+database =&gt; "/home/logstash/config/GeoLiteCity.dat"
+source =&gt; "[netflow][ipv4_src_addr]"
+target =&gt; "geoip_src"
+}
+</pre>
+<p>CIDR to tell Logstash about prefixes that have special meanings.</p>
+<pre class="coding_class"># Tag Interesting traffic by prefix
+cidr {
+add_field =&gt; { "interesting" =&gt; true }
+address =&gt; [ "%{[netflow][ipv4_src_addr]}", "%{[netflow][ipv4_dst_addr]}" ]
+network =&gt; [ "100.0.0.0/24" ]
+}</pre>
+<h4>Sflow</h4>
+<p>Logstash does not have a native sflow collector, so we used <a href="https://github.com/sflow/sflowtool" target="_blank">Sflow tool</a> to convert sflow to netflow.&#xA0; Another option is to parse the text output of Sflow tool as a pipe input to Logstash and set up the fields using the grok filter.</p>
+<h2>The future</h2>
+<h4>IPv6/IPFIX/NetflowV9</h4>
+<p>Kibana supports NetflowV9 which can include IPv6 addresses and send flow data more efficiently. There is a <a href="https://github.com/logstash-plugins/logstash-codec-netflow/pull/10" target="_blank">patch for IPFIX </a>with support being added soon. There are still some things being worked out, for example the <a href="https://github.com/logstash-plugins/logstash-filter-geoip/issues/12" target="_blank">GeoIP database filter doesn&#x2019;t work with IPv6</a>. This creates some filtering limitations, especially if you don&#x2019;t have a full routing table router and want to group traffic by ASN or location.</p>
+<h4>Alerting</h4>
+<p>This is a new system for us and we are still tweaking and getting used to the data, so alerting is not yet configured. Alerting is definitely an important part of network monitoring. Using flow data to trigger alerts can go well beyond the limitations of SNMP queries and traps.&#xA0; Some have made their own scripts to query Elastic(search), match the response with a threshold value, and then alert if it&#x2019;s exceed. There are even plugins for Nagios that can query Elastic, parse the response and trigger an alert if required. Elastic.co also has a paid tool called Watcher that can serve this purpose.</p>
+			</div>
+
+	
+</div>
+</body></html>

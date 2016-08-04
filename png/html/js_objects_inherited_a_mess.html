@@ -1,0 +1,98 @@
+<!DOCTYPE html><html><head><title>JS Objects: Inherited a Mess</title></head><body>
+<h1>JS Objects: Inherited a Mess</h1><p><a href="https://davidwalsh.name/javascript-objects" target="_new">Original URL</a></p>
+<p><blockquote>JS Objects: TL;DR JavaScript has been plagued since the beginning with misunderstanding and awkwardness around its "prototypal inheritance" system, mostly due to the fact that "inheritance" isn't how&hellip;</blockquote></p>
+<div><article><div class="gb-intro">
+<h3>JS Objects: TL;DR</h3>
+<p>JavaScript has been plagued since the beginning with misunderstanding and awkwardness around its "prototypal inheritance" system, mostly due to the fact that "inheritance" isn't how JS works at all, and trying to do that only leads to gotchas and confusions that we have to pave over with user-land helper libs. Instead, embracing that JS has "behavior delegation" (merely delegation links between objects) fits naturally with how JS syntax works, which creates more sensible code without the need of helpers.</p>
+<p>When you set aside distractions like mixins, polymorphism, composition, classes, constructors, and instances, and only focus on the objects that link to each other, you gain a powerful tool in behavior delegation that is easier to write, reason about, explain, and code-maintain. Simpler is better. JS is "objects-only" (OO). Leave the classes to those other languages!</p>
+
+<h3>Due Thanks</h3>
+<p>I'd like to thank the following amazing devs for their generous time in feedback/tech review of this article series: David Bruant, Hugh Wood, Mark Trostler, and Mark McDonnell. I am also honored that David Walsh wanted to publish these articles on his fantastic blog.</p>
+
+<h3>Complete Series</h3>
+
+</div>
+
+<blockquote><p>year 2013: Haskell people are still writing monad tutorials, JavaScript people are still trying to explain inheritance.</p>
+
+<p>&#x2014; Vyacheslav Egorov (@mraleph)&#xA0;<a rel="nofollow" href="https://twitter.com/mraleph/status/322843655381590016">April 12, 2013</a></p></blockquote>
+
+<p>As sad a criticism on JS as that quote is, it's quite true. (I have no perspective on Haskell or Monads, so I'm only talking about the JS and inheritance part). Of all the confusing and, depending on your biases, "bad", parts of this JS language, the behaviors of&#xA0;<code>this</code>&#xA0;and the&#xA0;<code>[[Prototype]]</code>&#xA0;chain have remained some of the most elusive to explain and use accurately.</p>
+
+<p>As a bit of background, I've been developing JS full time since 2007. The first major epiphany I had back then was the understanding of how closures work, and how they enable the classic module pattern. The first open-source project I wrote (early 2008) was&#xA0;<a rel="nofollow" href="https://github.com/flensed/flXHR">flXHR</a>, a cross-domain Ajax&#xA0;<a rel="nofollow" href="https://twitter.com/SlexAxton/status/257543702124306432">prollyfill</a>&#xA0;using the standard Ajax (XHR) interface (via a hidden flash element) that relied heavily upon the module pattern.</p>
+
+<p>It's quite possibly my "ah-ha!" moment around the module pattern that satisfied me enough that I never really felt a strong need to also apply the "inheritance" pattern to my JS design.</p>
+
+<p>Nevertheless, like most JS developers, I've read lots of blogs and books over the years that have tried (and mostly failed) to explain the appeal and mystery that is "JavaScript inheritance" (aka, "prototypal inheritance").</p>
+
+<p>But if it's so hard to understand, and even harder to actually do correctly, the&#xA0;<em>point</em>&#xA0;yet eludes me. And apparently I'm not alone in that frustration.</p>
+
+<h2>OO in JavaScript</h2>
+<p>In traditional&#xA0;<a rel="nofollow" href="http://en.wikipedia.org/wiki/Object-oriented_programming">Object-oriented languages</a>, the&#xA0;<a rel="nofollow" href="http://www.cs.bu.edu/teaching/cpp/inheritance/intro/">syntax of classes</a>&#xA0;matches the semantics. You can express the object-oriented concepts of classes, inheritance, and polymorphism directly and explicitly using the language's syntax. There's no need to use some helper library to fake your way into OO-like behavior through work-arounds of other language facilities.</p>
+
+<p>JavaScript on the other hand has&#xA0;<a rel="nofollow" href="https://developer.mozilla.org/en-US/docs/JavaScript/Introduction_to_Object-Oriented_JavaScript">a set of syntax that looks somewhat OO</a>, but which behaves in frustratingly different ways (which we will cover throughout this article series). As a result, the common way that you implement OO patterns in JS is through any of a variety of user-land helper libraries which let you express the desired semantic relationships between your "objects". The reason most JS developers use them is because the underlying JS syntax makes those semantic expressions awkward. It's nice to just let a library handle paving over the confusing syntax hiccups.</p>
+
+<p>Libraries like jQuery are useful because they hide the ugly details of dealing with&#xA0;<strong>cross-browser differences in JS engines</strong>. But these OO-helper libraries are different: they're going to great lengths to&#xA0;<strong>hide the true nature of JavaScript's OO mechanisms</strong>, instead masking them in a set of patterns that are more familiar to other languages.</p>
+
+<p>At this point of understanding, we should really ask ourselves: is the difficulty of&#xA0;<a rel="nofollow" href="http://javascript.crockford.com/inheritance.html">expressing classes and inheritance in pure JavaScript</a>&#xA0;a failure of the language (one which can&#xA0;<a rel="nofollow" href="http://prototypejs.org/learn/class-inheritance">temporarily</a>&#xA0;be&#xA0;<a rel="nofollow" href="http://mootools.net/docs/core/Class/Class">solved</a>&#xA0;with&#xA0;<a rel="nofollow" href="http://ejohn.org/blog/simple-javascript-inheritance/">user libraries</a>and ultimately solved by&#xA0;<a rel="nofollow" href="http://wiki.ecmascript.org/doku.php?id=strawman:maximally_minimal_classes">additions to the language like&#xA0;<code>class { .. }</code></a>&#xA0;syntax),&#xA0;<a rel="nofollow" href="https://c9.io/site/blog/2011/11/the-time-has-come-to-add-classes-to-javascript/">as many</a>&#xA0;devs&#xA0;<a rel="nofollow" href="http://www.nczonline.net/blog/2012/10/16/does-javascript-need-classes/">feel</a>, or is it something deeper? Is it indicative of a more fundamental disparity, that we're trying to&#xA0;<a rel="nofollow" href="http://www.kirupa.com/html5/objects_classes_javascript.htm">do something in JS</a>&#xA0;that it's<a rel="nofollow" href="http://webreflection.blogspot.com/2010/01/better-javascript-classes.html">just not meant to do</a>?</p>
+
+<p><a rel="nofollow" href="http://www.2ality.com/2011/11/javascript-classes.html">Not everyone</a>&#xA0;drank the JS classes kool-aid, so the rest of this article series will favor a different perspective.</p>
+<h2>Blueprint</h2>
+<p>One of the most common metaphors used in&#xA0;<a rel="nofollow" href="http://www.tutorialspoint.com/cplusplus/cpp_inheritance.htm">traditional class/inheritance OO</a>&#xA0;is that the&#xA0;<a rel="nofollow" href="http://msdn.microsoft.com/en-us/library/ee5edha0%28v=vs.80%29.aspx">class represents a "blueprint"</a>&#xA0;for a house to be built, but once you instantiate that class, you are basically copying all the characteristics from the blueprint into the actual built house. This metaphor partially matches, to an extent, what actually happens at a language level when the code is compiled, in that it sort-of flattens the definition of a class (sans "virtual" methods) inheritance hierarchy into the instance.</p>
+
+<p>Of course, a main pillar of&#xA0;<a rel="nofollow" href="http://www.alexonlinux.com/how-inheritance-encapsulation-and-polymorphism-work-in-cpp">inheritance-oriented coding is overriding and polymorphism</a>, which allows an object to<em>automatically</em>&#xA0;access the most descendant definition for a method, but also to use&#xA0;<code>super</code>-style relative references to access ancestor (aka "virtual") versions of the&#xA0;<em>same-named</em>&#xA0;method. In those cases, the compiler maintains lookup tables for the virtual methods, but it flattens out the non-virtual parts of the class/inheritance definition. The compiler can determine a lot about what needs to be preserved and not and highly optimize the definition structure it creates in the compiled code.</p>
+
+<p>For our purposes, we can think of traditional class-inheritance as basically a flattening "copy" of behavior down the chain to the instance. Here's a diagram to illustrate the inheritance relationship between a parent/base class<code>Foo</code>, and child class&#xA0;<code>Bar</code>, and then instances of each, respectively named&#xA0;<code>foo1</code>,&#xA0;<code>foo2</code>,&#xA0;<code>bar1</code>, and<code>bar2</code>. Visually, the arrows (aka, "copying") point from left-to-right and top-to-bottom:</p>
+
+<p><a rel="nofollow" href="https://davidwalsh.name/demo/InheritanceArrows.png" target="_blank"><img alt="Inheritance Arrows" src="https://davidwalsh.name/demo/InheritanceArrows.png"></a></p>
+<h2>What's in a name?</h2>
+<p>Despite the borrowed implications of the common name "prototypal inheritance", JavaScript's mechanism works quite differently, which we'll see in just a moment.</p>
+
+<p>Both&#xA0;<a rel="nofollow" href="http://dictionary.reference.com/browse/inheritance?s=t">definitionally</a>&#xA0;("...characteristics transmitted from parent to offspring") and behaviorally (as described above), "inheritance" is most closely associated with the idea of "copying" from parent to child.</p>
+
+<p>When you then take "inheritance" and apply it to a mechanism which has some very different behavior, you are asking for the confusion which has plagued "JavaScript inheritance"&#xA0;<a rel="nofollow" href="https://developer.mozilla.org/en-US/docs/JavaScript/Introduction_to_Object-Oriented_JavaScript">documentation</a>,&#xA0;<a rel="nofollow" href="http://blog.rjzaworski.com/2013/03/composition-in-javascript/">education</a>, and&#xA0;<a rel="nofollow" href="http://tobyho.com/2011/11/11/js-object-inheritance/">usage</a>&#xA0;for nearly 2 decades.</p>
+
+<p>To try to wade through this mess, let's set aside the label "inheritance" and its implications for JS, and hopefully we can arrive at something that is both conceptually more accurate and functionally more useful.</p>
+<h2>A.B.D's: Always Be Delegating</h2>
+<p>JavaScript's OO-like property mechanism for&#xA0;<a rel="nofollow" href="http://www.ecma-international.org/ecma-262/5.1/#sec-8.6">objects</a>&#xA0;is notated by&#xA0;<code>[[Prototype]]</code>, which is the internal characteristic of&#xA0;<strong>any object</strong>&#xA0;called its prototype-chain -- a special link to another object. It's kind of like a scope mechanism, in that the&#xA0;<code>[[Prototype]]</code>&#xA0;linkage&#xA0;<a rel="nofollow" href="http://www.ecma-international.org/ecma-262/5.1/#sec-8.12.2">describes which alternate object should be referred to</a>&#xA0;if you request a property or method on your object which doesn't exist.</p>
+
+<p>In other words, you're indicating an object to&#xA0;<strong>delegate</strong>&#xA0;behavior to if that behavior isn't defined on the object in question.</p>
+
+<p>The above class-oriented&#xA0;<code>Foo</code>&#xA0;and&#xA0;<code>Bar</code>&#xA0;example, expressed in JS, relates object&#xA0;<code>Bar.prototype</code>&#xA0;to<code>Foo.prototype</code>, and then the&#xA0;<code>foo1</code>,&#xA0;<code>foo2</code>,&#xA0;<code>bar1</code>&#xA0;and&#xA0;<code>bar2</code>&#xA0;objects to their respective&#xA0;<code>[[Prototype]]</code>s. The arrows (not copies but live-links) point in a right-to-left, bottom-to-top fashion in JS:</p>
+
+<p><a rel="nofollow" href="https://dl.dropboxusercontent.com/u/2474669/jsdiagrams/DelegationArrows.png" target="_blank"><img alt="Delegation Arrows" src="https://davidwalsh.name/demo/DelegationArrows.png"></a></p>
+
+<p>"Behavior delegation" is a more accurate term to describe JavaScript's&#xA0;<code>[[Prototype]]</code>. This is not just a matter of word semantics, it's a fundamentally different type of functionality.</p>
+
+<p>If you try to illustrate behavior delegation in terms of the "blueprint" metaphor, you quickly see how it totally breaks down. There's no way that my home, lacking a guest bedroom, could simply refer to another house, or to the original blueprints, to provide a bedroom for my mother-in-law when she comes to visit. Though the outcomes you can achieve have&#xA0;<strong><em>some</em></strong>&#xA0;respective similarities, the concepts of "inheritance" and "behavior delegation"&#xA0;<em>are quite different</em>.</p>
+
+<p>Some devs insist that "delegation" is just the dynamic version of "inheritance", like two sides of the same coin, but I see them&#xA0;<strong>as orthagonal systems</strong>.</p>
+
+<h3>How to delegate?</h3>
+<p>We'll revisit this later in the article series, but&#xA0;<a rel="nofollow" href="https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Object/create"><code>Object.create(..)</code>&#xA0;was added to ES5</a>&#xA0;to assist with creating an object and then optionally linking its&#xA0;<code>[[Prototype]]</code>&#xA0;to another object. The link that is created is a delegation link, as opposed to an inheritance-by-copy.</p>
+
+<p><strong>Note:</strong>&#xA0;Once an object has its&#xA0;<code>[[Prototype]]</code>&#xA0;chain set at its creation, it&#xA0;<em>should</em>&#xA0;for the most part be considered set in stone and not changeable. Technically, browsers which support&#xA0;<a rel="nofollow" href="https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Object/proto">the&#xA0;<code>__proto__</code>&#xA0;property</a>, a public representation of the internal link, allow you to change at any time where an object is linked to. However, this practice is littered with landmines and generally frowned upon -- it's almost certainly something you'd want to<strong>avoid</strong>&#xA0;in your code.</p>
+
+<a name="spade-spade" id="spade-spade"></a>
+<h2>Spade a Spade</h2>
+<p>You've seen how the mechanisms in JavaScript are comparitively different from the mechanisms in other languages. But is it ok to just hand-waive over these differences so we can keep using the term "inheritance" for JS?</p>
+
+<p>The fact is, it's just&#xA0;<strong>not</strong>&#xA0;an accurate usage of the term. By insisting that JavaScript has "inheritance", we're really saying that the meaning of the word "inheritance" doesn't matter, or is rather soft.</p>
+
+<p>JS doesn't statically analyze what parts of an inheritance chain it can safely flatten out&#xA0;<strong>and copy</strong>, it maintains links to the entire delegation chain throughout runtime,&#xA0;<strong>as distinct objects</strong>, which means our code can take advantage of&#xA0;<a rel="nofollow" href="http://michaux.ca/articles/early-mixins-late-mixins">a variety of powerful "late binding" dynamic patterns</a>.</p>
+
+<p>If we keep trying to mimic inheritance in JavaScript (syntax hurdles be damned), we get&#xA0;<em>distracted</em>&#xA0;and&#xA0;<strong>miss out on&#xA0;<em>all that power</em>&#xA0;that was built into our language from the start</strong>.</p>
+
+<p>I say: let's call it what it is, and stop trying to pile on JavaScript these other concepts that the "inheritance" label implies.
+</p><h2>So What?</h2>
+<p>So far, I've tried to identify some misconceptions about JS's&#xA0;<code>[[Prototype]]</code>&#xA0;mechanism and how "inheritance" is not a helpful label.</p>
+
+<p>You may still be skeptical why it&#xA0;<em>actually</em>&#xA0;matters what we call this OO-like mechanism in JS? In&#xA0;the <a href="https://davidwalsh.name/javascript-objects-distractions">next part</a>&#xA0;of the article series, I'm going to address many of the trappings of traditional "class-based" programming which I think are distractions that lead us to missing out on the essence of how JS objects interoperate. In fact, we could even say that&#xA0;<a rel="nofollow" href="http://www.infoq.com/presentations/Classes-Are-Premature-Optimization">classes/inheritance are a premature optimization</a>&#xA0;for JavaScript.</p>
+
+<p>Clearing those distractions out of the way leads us to&#xA0;<a href="https://davidwalsh.name/javascript-objects-deconstruction">part 3</a>, where we'll see a simpler and more robust pattern for our JS code, and more importantly,&#xA0;<strong>our code will actually match our semantics</strong>&#xA0;<em>without</em>&#xA0;us having to jump through hoops to hide the ugly mismatches.</p>
+
+<div class="gb-intro"><p>Look forward to <a href="https://davidwalsh.name/javascript-objects-distractions">parts 2</a> and 3 later this week!</p></div>
+
+</article><div class="article-block"><div class="x x-long x-terciary"><a href="https://dwf.tw/raygun"><img alt="Raygun Pulse"></a></div>
+</div></div>
+</body></html>

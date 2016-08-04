@@ -1,0 +1,171 @@
+<!DOCTYPE html><html><head><title>How to Generate Millions of HTTP Requests</title></head><body>
+<h1>How to Generate Millions of HTTP Requests</h1><p><a href="http://dak1n1.com/blog/14-http-load-generate" target="_new">Original URL</a></p>
+<p><blockquote>Created: 21 May 2012 Written by dakini Hits: 32881 This article is part 1 of a series about building a high-performance web cluster powerful enough to handle 3 million requests per second. This first&hellip;</blockquote></p>
+<div><div class="item-page ">
+		
+						
+				
+						
+			<div class="rt-articleinfo">
+				<div class="rt-articleinfo2">
+										
+															<div class="rt-article-icons">
+						<ul class="actions">
+																				<li class="print-icon">
+								<a href="http://dak1n1.com/blog/14-http-load-generate?tmpl=component&amp;print=1&amp;layout=default&amp;page=" title="Print" rel="nofollow"><img src="http://dak1n1.com/media/system/images/printButton.png" alt="Print"></a>							</li>
+									
+														<li class="email-icon">
+								<a href="http://dak1n1.com/component/mailto/?tmpl=component&amp;template=rt_paradox_j16&amp;link=9ee47eebefca433e2965c13e4e65338e7b0960b0" title="Email"><img src="http://dak1n1.com/media/system/images/emailButton.png" alt="Email"></a>							</li>
+													
+																				</ul>
+					</div>
+									</div>
+			</div>
+						
+							
+			
+							
+				
+				
+				
+							<p>This article is part 1 of a series about building a high-performance web cluster powerful enough to handle 3 million requests per second. This first article describes my limited experience with a few load generator tools, and will hopefully save someone the time of having to stumble through each one like I did.</p>
+ 
+<p>Load generators are programs that generate traffic of some type for the purpose of testing. They can show you how your server performs under heavy loads and can give you an idea of where the server's weaknesses may be. Learning your server's limitations through load testing is an excellent way to gauge your server's resilience and can help you be prepared for anything. </p>
+
+<h2>Load-Generating Tools</h2>
+<p>One important thing to keep in mind when load-testing is that there are only so many socket connections you can have in Linux. This is a hard-coded kernel limitation, known as the <a href="http://aleccolocco.blogspot.com/2008/11/ephemeral-ports-problem-and-solution.html">Ephemeral Ports Issue</a>. You can extend it (to some extent) in /etc/sysctl.conf; but basically, a Linux machine can only have about 64,000 sockets open at once. So when load testing, we have to make the most of those sockets by making as many requests as possible over a single connection. In addition to that, we'll need more than one machine to do the load generation. Otherwise, the load generators will run out of available sockets and fail to generate enough load.</p>
+<h4>Apache Bench</h4>
+<p>I started with 'ab', Apache Bench. This is the simplest general-use http benchmarking tool that I know of. And it ships with Apache, so it's probably already on your system. Unfortunately, I could only get about 900 requests/sec using this. I've seen other people get up to 2,000 with it, but I could tell right away that 'ab' wasn't the tool for this job.</p>
+<h4>Httperf</h4>
+<p>Next, I tried 'httperf'. This tool is more powerful, but still relatively simple and limited in its capabilities. Figuring out how many req/sec you'll be generating is not as straightforward as just passing it a number. It took me several tries to get more than a couple hundred req/sec. For example:</p>
+<p>This creates 100,000 sessions, at a rate of 1,000 per second. Each session makes 5 calls, which are spread out by 2 seconds.&#xA0;</p>
+<pre>httperf --hog --server=192.168.122.10 --wsess=100000,5,2 --rate 1000 --timeout 5</pre>
+<pre>Total: connections 117557 requests 219121 replies 116697 test-duration 111.423 s
+<p>Connection rate: 1055.0 conn/s (0.9 ms/conn, &lt;=1022 concurrent connections)<br>Connection time [ms]: min 0.3 avg 865.9 max 7912.5 median 459.5 stddev 993.1<br>Connection time [ms]: connect 31.1<br>Connection length [replies/conn]: 1.000</p>
+<p><span>Request rate: 1966.6 req/s (0.5 ms/req)</span><br>Request size [B]: 91.0</p>
+<p>Reply rate [replies/s]: min 59.4 avg 1060.3 max 1639.7 stddev 475.2 (22 samples)<br>Reply time [ms]: response 56.3 transfer 0.0<br>Reply size [B]: header 267.0 content 18.0 footer 0.0 (total 285.0)<br>Reply status: 1xx=0 2xx=116697 3xx=0 4xx=0 5xx=0</p>
+<p>CPU time [s]: user 9.68 system 101.72 (user 8.7% system 91.3% total 100.0%)<br>Net I/O: 467.5 KB/s (3.8*10^6 bps)</p></pre>
+<p>Eventually, I was able to get 6,622 connections/sec with these settings:</p>
+<pre>httperf --hog --server 192.168.122.10 --num-conn 100000 --ra 20000 --timeout 5</pre>
+<p>(A total of 100,000 connections created, and the connections are created at a fixed rate of 20,000 per second.)</p>
+<p>It has potential, and a few more features than 'ab'. But not quite the heavy-lifter that I need for this project. I need something that supports multiple load-testing nodes in a distributed fashion. Hence, my next attempt: Jmeter.</p>
+<h4>Apache Jmeter</h4>
+<p>This is a full-featured web application test suite, that can simulate all kinds of real-life user behavior. You can use Jmeter's proxy to visit your website, click around, login, do whatever users do, and then have Jmeter record that behavior as the test case. Jmeter then performs those actions over and over, using as many simulated "users" as you like. This was very interesting to see! Though considerably more complex to <a href="http://jmeter.apache.org/usermanual/test_plan.html">configure</a> than 'ab' and 'httperf'.</p>
+<p>Immediately upon running this test, I was getting 14,000 requests per second! This was definitely a step in the right direction.&#xA0;</p>
+<p>I used some of the plugins from the <a href="http://code.google.com/p/jmeter-plugins/wiki/">Google Code project</a>, and eventually was able to generate about 30,000 req/sec using their "Stepping Threads", and "HTTP RAW" requests. But at that point I hit a ceiling, and moved on. Here is one of my old <a href="http://pastebin.com/54vJTNVE">Jmeter configs</a>, in case that helps anyone else. It's far from perfect, but sometimes a starting point is all you need.</p>
+<h4>Tsung: the heavy-duty, distributed, multi-protocol testing tool</h4>
+<p>This was a clear winner. Almost instantly, I was getting 40,000 requests/sec with this tool. Like Jmeter, you can record behaviors for the tests to run through, and test many protocols like SSL,&#xA0;HTTP, WebDAV, SOAP, PostgreSQL, MySQL, LDAP and Jabber/XMPP. Unlike Jmeter, there's no confusing GUI to get lost in. Just an XML config file, and some SSH keys to the distributed nodes of your choice. The minimalism and efficiency of this tool appealed to me as much as its robustness and scalability. I found it to be extremely powerful, generating millions of http requests per second with the right config.</p>
+<p>In addition to all that, Tsung also generates graphs and writes out a detailed report of your test runs in html. Test results are easy to understand, and there's pictures so you can even show your boss! ;)</p>
+<p>This is the tool I'll be referencing in the remainder of this 3-part article. See configuration instructions below, or skip to the <a href="http://dak1n1.com/blog/12-nginx-performance-tuning">next page</a>.</p>
+<h3>Installing Tsung in CentOS 6.2</h3>
+<p>The first thing you'll need is the EPEL repository (for Erlang). So&#xA0;<a href="http://dak1n1.com/blog/3-getting-more-from-yum-with-rpmforge-and-epel-repos">set those up</a> before continuing. Once that's done, install the required packages on each of the nodes that you'll be using to generate load. If you don't already have passwordless SSH keys set up between the nodes, do that too.</p>
+<pre>yum -y install erlang perl perl-RRD-Simple.noarch perl-Log-Log4perl-RRDs.noarch gnuplot perl-Template-Toolkit firefox</pre>
+<p>Download the latest Tsung from Github, or from their website.<br></p><pre>wget&#xA0;http://tsung.erlang-projects.org/dist/tsung-1.4.2.tar.gz</pre>
+<p>Untar and compile.<br></p><pre>tar zxfv &#xA0;tsung-1.4.2.tar.gz<br>cd tsung-1.4.2<br>./configure &amp;&amp; make &amp;&amp; make install</pre>
+<p>Copy the example config into ~/.tsung. This is the location of the Tsung config files, and log files.<br></p><pre>cp &#xA0;/usr/share/doc/tsung/examples/http_simple.xml /root/.tsung/tsung.xml</pre>
+<p>You can edit this file to your specifications, or use the one that works for me. This is my config that, after much trial and error, now generates 5 million http requests per second, when used with 7 distributed nodes.</p>
+<pre class="brush:xml">&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE tsung SYSTEM "/usr/share/tsung/tsung-1.0.dtd"&gt;
+&lt;tsung loglevel="notice" version="1.0"&gt;
+
+&lt;clients&gt;
+ &lt;client host="localhost" weight="1" cpu="10" maxusers="40000"&gt;
+ &lt;ip value="192.168.122.2"/&gt;
+ &lt;/client&gt;
+ &lt;client host="loadnode1" weight="1" cpu="9" maxusers="40000"&gt;
+ &lt;ip value="192.168.122.2"/&gt;
+ &lt;/client&gt;
+ &lt;client host="loadnode2" weight="1" maxusers="40000" cpu="8"&gt;
+ &lt;ip value="192.168.122.3"/&gt;
+ &lt;/client&gt;
+ &lt;client host="loadnode3" weight="1" maxusers="40000" cpu="9"&gt;
+ &lt;ip value="192.168.122.21"/&gt;
+ &lt;/client&gt;
+ &lt;client host="loadnode4" weight="1" maxusers="40000" cpu="9"&gt;
+ &lt;ip value="192.168.122.11"/&gt;
+ &lt;/client&gt;
+ &lt;client host="loadnode5" weight="1" maxusers="40000" cpu="9"&gt;
+ &lt;ip value="192.168.122.12"/&gt;
+ &lt;/client&gt;
+ &lt;client host="loadnode6" weight="1" maxusers="40000" cpu="9"&gt;
+ &lt;ip value="192.168.122.13"/&gt;
+ &lt;/client&gt;
+ &lt;client host="loadnode7" weight="1" maxusers="40000" cpu="9"&gt;
+ &lt;ip value="192.168.122.14"/&gt;
+ &lt;/client&gt;
+ &lt;/clients&gt;
+
+ &lt;servers&gt;
+ &lt;server host="192.168.122.10" port="80" type="tcp"/&gt;
+ &lt;/servers&gt;
+
+ &lt;load&gt;
+ &lt;arrivalphase phase="1" duration="10" unit="minute"&gt;
+ &lt;users maxnumber="15000" arrivalrate="8" unit="second"/&gt;
+ &lt;/arrivalphase&gt;
+
+ &lt;arrivalphase phase="2" duration="10" unit="minute"&gt;
+ &lt;users maxnumber="15000" arrivalrate="8" unit="second"/&gt;
+ &lt;/arrivalphase&gt;
+
+ &lt;arrivalphase phase="3" duration="30" unit="minute"&gt;
+ &lt;users maxnumber="20000" arrivalrate="3" unit="second"/&gt;
+ &lt;/arrivalphase&gt;
+
+ &lt;/load&gt;
+
+ &lt;sessions&gt;
+ &lt;session probability="100" name="ab" type="ts_http"&gt;
+ &lt;for from="1" to="10000000" var="i"&gt;
+ &lt;request&gt; &lt;http url="/test.txt" method="GET" version="1.1"/&gt; &lt;/request&gt;
+ &lt;/for&gt;
+ &lt;/session&gt;
+ &lt;/sessions&gt;
+&lt;/tsung&gt;</pre>
+<p>It's a lot to take in at first, but it's really quite simple once you understand it.&#xA0;</p>
+<ul>
+<li><strong>&lt;client&gt;</strong> is simply the host(s) to run Tsung on. You can specify IPs, and the max number of CPUs that you want Tsung to use. You can also set a limit on the number of users that the node will simulate with <strong>maxusers</strong>. Each of these users will perform an operation that we will define later.&#xA0;</li>
+<li><strong>&lt;servers&gt;</strong> is the name(s) of the [http] server you want to test. We will be using this option to test the cluster IP, as well as individual servers.</li>
+<li><strong>&lt;load&gt;</strong>defines when our simulated users will "arrive" at our website, and how quickly they will arrive.
+<ul>
+<li><strong>&lt;arrivalphase&gt;</strong>&#xA0;In phase 1, which lasts 10 minutes, 15,000 users will arrive, at a rate of 8 per second.<br>&lt;arrivalphase phase="1" duration="10" unit="minute"&gt;<br>&lt;users maxnumber="15000" arrivalrate="8" unit="second"/&gt;</li>
+<li>There are two more arrivalphases, in which users arrive in a similar fashion.&#xA0;</li>
+<li>Altogether, these arrivalphases make up a &lt;load&gt;, which controls how many requests per second we'll be generating.</li>
+</ul>
+</li>
+<li><strong>&lt;sessions&gt;</strong> This section defines what those users will be doing once they've arrived at your website.</li>
+<li><strong>probability</strong> allows you to define random things that users might do. Sometimes they may click this, other times they may click that. <strong>Probabilities must add up to equal</strong> <strong>100%</strong>.</li>
+<li>In the configuration above, the users only ever do one thing, so it has a probability of 100%.&#xA0;</li>
+<li><strong>&lt;for from="1" to="10000000" var="i"&gt;</strong>&#xA0;This is what the users do, 100% of the time. They loop through&#xA0;10,000,000 times and <strong>&lt;request&gt;</strong> a single web page, /test.txt.</li>
+<li>This looping construct allows us to use less user-connections to achieve a very high number of requests per second.</li>
+</ul>
+<p>Once you've got that in place, you can create this handy alias to quickly view your Tsung reports.</p>
+<pre>vim ~/.bashrc<br>alias treport="/usr/lib/tsung/bin/tsung_stats.pl; firefox report.html"</pre>
+<pre>source ~/.bashrc</pre>
+<p>Then start up Tsung.</p>
+<pre>[root@loadnode1 ~] tsung start<br>Starting Tsung<br>"Log directory is: /root/.tsung/log/20120421-1004"</pre>
+<p>And view the report when finished.</p>
+<pre>cd&#xA0;/root/.tsung/log/20120421-1004<br>treport</pre>
+<p><a href="http://zim.gina.alaska.edu/temp/tsung-8.3mil/report.html"><img src="http://dak1n1.com/images/tsung-thumb.png" alt="tsung-thumb" width="700"></a></p>
+<h4>Using Tsung to Plan Your Cluster Build</h4>
+<p>Now that we have a powerful enough load-testing tool, we can plan the rest of the cluster build:</p>
+<ol>
+<li>Use Tsung to test a single http server. Get a base benchmark.</li>
+<li>Tune the heck out of those web servers, testing with Tsung regularly to see improvements.</li>
+<li>Tune the TCP sockets of those systems to obtain optimal network performance. Again, test, test, test.</li>
+<li>Build the LVS cluster, which contains those fully-tuned web servers.</li>
+<li>Stress-test LVS by using Tsung on the cluster IP.</li>
+</ol>
+<p>In the next two articles, I'll show you how to get your web server performing at top speed, and how to bring it altogether with the LVS cluster software.</p>
+<p class="rt-readon-surround">
+<a class="readon" href="http://dak1n1.com/blog/12-nginx-performance-tuning"><span>Part 2: Tuning Nginx for Best Performance</span></a>
+</p>
+ 		
+ 		
+ 						
+								
+						
+						
+				</div>
+</div>
+</body></html>

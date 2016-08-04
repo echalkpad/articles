@@ -1,0 +1,164 @@
+<!DOCTYPE html><html><head><title>Setting up Master-Master Replication with MySQL on Debian 8 (Jessie)</title></head><body>
+<h1>Setting up Master-Master Replication with MySQL on Debian 8 (Jessie)</h1><p><a href="https://www.howtoforge.com/tutorial/mysql-master_master-replication-on-debian-jessie/" target="_new">Original URL</a></p>
+<p><blockquote>This tutorial describes a replicated MySQL setup (Mater/Master replication) with 2 nodes where data can be read and written to both nodes at the same time. MySQL takes care to replicate the data to&hellip;</blockquote></p>
+<div><div id="htfContentPage">
+
+
+<p>This tutorial describes a replicated MySQL setup (Mater/Master replication) with 2 nodes where data can be read and written to both nodes at the same time. MySQL takes care to replicate the data to the other node and ensures that primary auto increment keys don't collide.</p>
+<p>Since version 5, MySQL comes with built-in support for master-master replication, solving the problem that can happen with self-generated keys. In former MySQL versions, the problem with master-master replication was that conflicts arose immediately if node A and node B both inserted an auto-incrementing key on the same table. The advantages of master-master replication over the traditional master-slave replication are that you don't have to modify your applications to make write accesses only to the master, and that it is easier to provide high-availability because if the master fails, you still have the other master.</p>
+
+<h2 id="-preliminary-note">1 Preliminary Note</h2>
+<p>In this tutorial I will show how to replicate the database <span class="system">exampledb</span> from the server <span class="system">server1.example.com</span> with the IP address <span class="system">192.168.1.101</span>&#xA0;to the server <span class="system">server2.example.com</span> with the IP address <span class="system">192.168.1.102</span>&#xA0;and vice versa. Each system is the slave of the other master and the master of the other slave at the same time. Both systems are running Debian 8; however, the configuration should apply to almost all distributions with little or no modifications.</p>
+
+<h2 id="-installing-mysql-">2 Installing MySQL 5.5</h2>
+<p>If MySQL isn't already installed on <span class="system">server1</span> and <span class="system">server2</span>, install it now:</p>
+<p class="highlight">server1/server2:</p>
+<p class="command">apt-get -y install mysql-server-5.5 mysql-client-5.5</p>
+<p>To make sure that the replication can work, we must make MySQL listen on all interfaces, therefore we comment out the line <span class="system">bind-address = 127.0.0.1</span> in <span class="system">/etc/mysql/my.cnf</span>:</p>
+<p><span class="highlight">server1/server2:</span></p>
+<p class="command">nano /etc/mysql/my.cnf</p>
+<pre>[...]
+# Instead of skip-networking the default is now to listen only on
+# localhost which is more compatible and is not less secure.
+#bind-address = 127.0.0.1
+[...]</pre>
+<p>Restart MySQL afterwards:</p>
+<p><span class="highlight">server1/server2:</span></p>
+<p class="command">service&#xA0;mysql restart</p>
+<p>Then check with</p>
+<p><span class="highlight">server1/server2:</span></p>
+<p class="command">netstat -tap | grep mysql</p>
+<p>that MySQL is really listening on all interfaces:</p>
+<p class="system">netstat -tap | grep mysql<br>tcp 0 0 *:mysql *:* LISTEN 15437/mysqld<br>server1:~#</p>
+<p>Now we set up a replication user <span class="system">slave2_user</span> that can be used by <span class="system">server2</span> to access the MySQL database on <span class="system">server1.</span></p>
+<p><span class="highlight">server1:</span></p>
+<p>Login to the MySQL shell:</p>
+
+<p class="command">mysql --defaults-file=/etc/mysql/debian.cnf</p>
+<p>On the MySQL shell, run the following commands:</p>
+<p><span class="highlight">server1: </span></p>
+<p class="command">GRANT REPLICATION SLAVE ON 10_misconceptions_about_neural_networks.md a_developer’s_journey_into_linux_containers.md aerofsgockerize.md andrewchildsovercast.md an_introduction_to_visual_programming_using_noflo.md artificial_neural_networks_for_beginners_»_loren_on_the_art_of_matlab.md automating_docker_logging_elasticsearch_logstash_kibana_and_logspout.md a_valid_ssl_certificate_for_every_ip_address__pivotal_pov.md a_walk_through_the_sais_algorithm__screwtapes_notepad.md b2_cloud_storage.md better_logging_in_nodejs_using_bunyan.md be_with_130_premade_layouts_the_hard_work_was_already_done_for_you.md binaryjs.md brief_survey_on_methods_for_attacking_tor_hidden_service.md building_frontend_web_apps_with_plain_javascript.md checkpoint_and_restore_docker_container_with_criu.md clipboardjs.md containers_101.md cooking_with_docker_and_coreos_on_os_x.md coreos__kubernetes_step_by_step.md create_a_rest_api_with_nodejs.md create_your_own_streaming_service_with_emby.md cryptdbcryptdb.md cyrusandgdbdashboard.md dask__parallel_processing_through_blocked_algorithms¶.md data.json delightimfreegeodb.md develop_command_line_application_using_nodejs.md digitaloceangodo.md document_clustering_with_python.md dosa_by_shon.md dosnapshot.md economic_secrets_of_the_dark_web—the_safe_easy_way_for_anyone_to_be_a_little_drug_lord.md eivind88prm.md even_easier_restful_api_with_nodejs_and_express_framework.md exploring_the_relationship_between_javascript_and_the_modern_html_dom.md extending_layer_2_across_container_hosts.md file_input_to_gnuplot_through_python.md fix_time_machine_sparsebundle_nas_based_backup_errors.md flaskpotion.md flowchartjs.md free_ssltls_certificates.md gernestutron.md get_coreos_logs_into_elk_in_5_minutes.md getting_started_·_bootstrap_table.md getting_started.md google_project_hosting.md grammarlyrockercompose.md hacker_codex.md headroomjs.md how_can_i_repair_my_hard_drive_if_my_mac_won’t_start.md how_to_create_a_fullscreen_video_opening_animation.md how_to_create_a_network_backup_with_apples_timemachine.md how_to_create_an_os_x_mavericks_install_drive_updated.md how_to_split_large_audio_files_on_linux.md httpie_parse_url.sh httpsmediumcombibblioorg60youtubechannelsthatwillmakeyousmarter44d8315c2548.md icodeforlovedoapi.md imjasonhghfs.md install_sandstorm.md introducing_lemur.md introduction__building_web_apps_with_go.md introduction__getting_started_guide.md introduction.md introduction_to_monte_carlo_tree_search.md intro_to_webgl_with_threejs.md jack000expose.md jamiehdigitaloceancsharp.md javascript_animation_physics_and_input_tracking.md jmschreipomegranate.md jquery_responsive_lightbox.md jquery_treetable.md json_lines.md jssequencediagrams.md just_a_theory.md jwagnersmartcropjs.md keendashboards.md koalalorenzopythondigitalocean.md launching_nginscript_and_looking_ahead__nginx.md learning_jquery.md let’s_write_a_web_extension.md let_your_applications_fly.md links_list.txt mangoslideout.md many_js_frameworks_but_vuejs_is_different.md mateogianoliosshync.md meteor_react_tutorial_updated__match_made_in_heaven.md micc83edittable.md mistiomistio.md natural_language_basics_with_textblob.md null.md open_source_slackalternative_adopts_markdown.md openvswitchovs.md opsing_with_packer_and_terraform.md parse_urls_json.sh prototype_interaction_and_animation.md pyra_full_prototypes_soon.md quench.md quintus_javascript_html5_game_engine.md reclaiming_a_timemachine_volume’s_disk_space.md resilient_substructure_for_your_microservice.md selzplyr.md setting_up_nginx_with_docker.md silentbicycleguff.md single_page_apps_in_depth.md smdahlenvagrantdigitalocean.md snapcraft_tutorial.md sqljs.md storejs.md tgriesserbookshelf.md the_incomplete_collection_of_nodejs_performance_tips_—_node_and_beyond.md the_javascript_library_for_modern_browsers_and_touch_devices_no jquery.md the_javascript_tutorial.md the_math_i_learned_after_i_thought_had_already_learned_math.md the_new_art_of_war_how_trolls_hackers_and_spies_are_rewriting_the_rules_of conflict.md the_power_of_pcap__retrospection_in_practice.md the_what_how_and_why_of_single_var_pattern_in_javascript.md time_machine_for_every_unix_out_there.md timothycrosleyhug.md top_15_facebook_open_source_projects_you_must_know_and_use_for_your_maker’s_projects.md ˈtræfɪk_·_ˈtræfɪk.md tugboat.md url_to_filename.csv using_an_offline_gnupg_master_key.md using_feathersjs_as_an_open_source_alternative_to_firebase_—_all_about_feathersjs.md using_the_office_ui_fabric_with_angular_js_to_create_an_office_addin.md valerylisaydigitaloceanapi.md webxray.md whose_xterm_is_it_anyway.md wikiimunesexamples_–_imunes.md wmiradropkit.md write_vanilla_comments_that_automagically_convert_into_full_test_spec_files.md wso2_machine_learner_why_would_you care.md yahoogryffin.md yoannmoinetnipplejs.md zenit.md TO repl@'%' IDENTIFIED BY 'secretpassword';<br>FLUSH PRIVILEGES;<br>quit;</p>
+<p>Replace the word "<em>secretpassword</em>" with a secure password of your choice. Now we do the last two steps again on <span class="system">server2</span>:</p>
+<p class="highlight">server2:</p>
+<p class="command">mysql --defaults-file=/etc/mysql/debian.cnf</p>
+<p class="command"><span>GRANT REPLICATION SLAVE ON 10_misconceptions_about_neural_networks.md a_developer’s_journey_into_linux_containers.md aerofsgockerize.md andrewchildsovercast.md an_introduction_to_visual_programming_using_noflo.md artificial_neural_networks_for_beginners_»_loren_on_the_art_of_matlab.md automating_docker_logging_elasticsearch_logstash_kibana_and_logspout.md a_valid_ssl_certificate_for_every_ip_address__pivotal_pov.md a_walk_through_the_sais_algorithm__screwtapes_notepad.md b2_cloud_storage.md better_logging_in_nodejs_using_bunyan.md be_with_130_premade_layouts_the_hard_work_was_already_done_for_you.md binaryjs.md brief_survey_on_methods_for_attacking_tor_hidden_service.md building_frontend_web_apps_with_plain_javascript.md checkpoint_and_restore_docker_container_with_criu.md clipboardjs.md containers_101.md cooking_with_docker_and_coreos_on_os_x.md coreos__kubernetes_step_by_step.md create_a_rest_api_with_nodejs.md create_your_own_streaming_service_with_emby.md cryptdbcryptdb.md cyrusandgdbdashboard.md dask__parallel_processing_through_blocked_algorithms¶.md data.json delightimfreegeodb.md develop_command_line_application_using_nodejs.md digitaloceangodo.md document_clustering_with_python.md dosa_by_shon.md dosnapshot.md economic_secrets_of_the_dark_web—the_safe_easy_way_for_anyone_to_be_a_little_drug_lord.md eivind88prm.md even_easier_restful_api_with_nodejs_and_express_framework.md exploring_the_relationship_between_javascript_and_the_modern_html_dom.md extending_layer_2_across_container_hosts.md file_input_to_gnuplot_through_python.md fix_time_machine_sparsebundle_nas_based_backup_errors.md flaskpotion.md flowchartjs.md free_ssltls_certificates.md gernestutron.md get_coreos_logs_into_elk_in_5_minutes.md getting_started_·_bootstrap_table.md getting_started.md google_project_hosting.md grammarlyrockercompose.md hacker_codex.md headroomjs.md how_can_i_repair_my_hard_drive_if_my_mac_won’t_start.md how_to_create_a_fullscreen_video_opening_animation.md how_to_create_a_network_backup_with_apples_timemachine.md how_to_create_an_os_x_mavericks_install_drive_updated.md how_to_split_large_audio_files_on_linux.md httpie_parse_url.sh httpsmediumcombibblioorg60youtubechannelsthatwillmakeyousmarter44d8315c2548.md icodeforlovedoapi.md imjasonhghfs.md install_sandstorm.md introducing_lemur.md introduction__building_web_apps_with_go.md introduction__getting_started_guide.md introduction.md introduction_to_monte_carlo_tree_search.md intro_to_webgl_with_threejs.md jack000expose.md jamiehdigitaloceancsharp.md javascript_animation_physics_and_input_tracking.md jmschreipomegranate.md jquery_responsive_lightbox.md jquery_treetable.md json_lines.md jssequencediagrams.md just_a_theory.md jwagnersmartcropjs.md keendashboards.md koalalorenzopythondigitalocean.md launching_nginscript_and_looking_ahead__nginx.md learning_jquery.md let’s_write_a_web_extension.md let_your_applications_fly.md links_list.txt mangoslideout.md many_js_frameworks_but_vuejs_is_different.md mateogianoliosshync.md meteor_react_tutorial_updated__match_made_in_heaven.md micc83edittable.md mistiomistio.md natural_language_basics_with_textblob.md null.md open_source_slackalternative_adopts_markdown.md openvswitchovs.md opsing_with_packer_and_terraform.md parse_urls_json.sh prototype_interaction_and_animation.md pyra_full_prototypes_soon.md quench.md quintus_javascript_html5_game_engine.md reclaiming_a_timemachine_volume’s_disk_space.md resilient_substructure_for_your_microservice.md selzplyr.md setting_up_nginx_with_docker.md silentbicycleguff.md single_page_apps_in_depth.md smdahlenvagrantdigitalocean.md snapcraft_tutorial.md sqljs.md storejs.md tgriesserbookshelf.md the_incomplete_collection_of_nodejs_performance_tips_—_node_and_beyond.md the_javascript_library_for_modern_browsers_and_touch_devices_no jquery.md the_javascript_tutorial.md the_math_i_learned_after_i_thought_had_already_learned_math.md the_new_art_of_war_how_trolls_hackers_and_spies_are_rewriting_the_rules_of conflict.md the_power_of_pcap__retrospection_in_practice.md the_what_how_and_why_of_single_var_pattern_in_javascript.md time_machine_for_every_unix_out_there.md timothycrosleyhug.md top_15_facebook_open_source_projects_you_must_know_and_use_for_your_maker’s_projects.md ˈtræfɪk_·_ˈtræfɪk.md tugboat.md url_to_filename.csv using_an_offline_gnupg_master_key.md using_feathersjs_as_an_open_source_alternative_to_firebase_—_all_about_feathersjs.md using_the_office_ui_fabric_with_angular_js_to_create_an_office_addin.md valerylisaydigitaloceanapi.md webxray.md whose_xterm_is_it_anyway.md wikiimunesexamples_–_imunes.md wmiradropkit.md write_vanilla_comments_that_automagically_convert_into_full_test_spec_files.md wso2_machine_learner_why_would_you care.md yahoogryffin.md yoannmoinetnipplejs.md zenit.md TO repl@'%' IDENTIFIED BY '</span><span>secretpassword</span><span>';</span><br>FLUSH PRIVILEGES;<br>quit;</p>
+<p><span>Replace the word "</span><em>secretpassword</em><span>" with a secure password here as well. Note down the passwords as we need them later.</span>&#xA0;</p>
+
+<h2 id="-some-notes">3 Some Notes</h2>
+<p>In the following I will assume that both MySQL servers are empty (don't contain any database yet except of the 'mysql' database).</p>
+<p>If that's not the case on your server, then you have to lock and dump the databases on the first server and import them on the second one before you continue. Don't unlock the databases before the replication is setup. Below a few commands that show how to copy over all databases to a new server in case you don't start with a "clean" MySQL setup.</p>
+<p>Example on how to lock all database tables in a MySQL database.</p>
+<pre>FLUSH TABLES WITH READ LOCK;<br>SET GLOBAL read_only = ON;</pre>
+<p>&#xA0;Example on how to dump all databases into a file all_databases.sql.</p>
+<p class="command">mysqldump --defaults-file=/etc/mysql/debian.cnf -cCeQ --hex-blob --quote-names --routines --events --triggers --all-databases -r all_databases.sql</p>
+<p>Example on how to import all tables on the second server from file all_databses.sql.</p>
+<p class="command">mysql --defaults-file=/etc/mysql/debian.cnf &lt; all_databases.sql</p>
+
+<h2 id="-setting-up-replication">4 Setting Up Replication</h2>
+<p>Now we set up master-master replication in <span class="system">/etc/mysql/my.cnf</span>. The crucial configuration options for master-master replication are <span class="system">auto_increment_increment</span> and <span class="system">auto_increment_offset</span>:</p>
+<ul>
+<li><span class="system">auto_increment_increment</span> controls the increment between successive AUTO_INCREMENT values.</li>
+<li><span class="system">auto_increment_offset</span> determines the starting point for AUTO_INCREMENT column values.</li>
+</ul>
+<p>Let's assume we have N MySQL nodes (N=2 in this example), then <span class="system">auto_increment_increment</span> has the value N on all nodes, and each node must have a different value for <span class="system">auto_increment_offset</span> (1, 2, ..., N).</p>
+<p>Now let's configure our two MySQL nodes:</p>
+<p class="highlight">server1:</p>
+<p class="command">nano /etc/mysql/my.cnf</p>
+<p>Search for the section that starts with <span class="system">[mysqld]</span>, and put the following options into it (commenting out all existing <b>conflicting</b> options):</p>
+<pre>[...]
+[mysqld]
+<br># Unique Server ID<br>server-id = 1<p># Do not replicate the following databases<br>binlog-ignore-db = mysql<br>replicate-ignore-db = mysql</p><p># Auto increment offset<br>auto-increment-increment = 2</p><p># Do not replicate sql queries for the local server ID<br>replicate-same-server-id = 0</p><p># Beginne automatisch inkrementelle Werte mit 1<br>auto-increment-offset = 1</p><p># Delete binlog data after 10 days<br>expire_logs_days = 10</p><p># Max binlog size<br>max_binlog_size = 500M</p><p># Binlog file path<br>log_bin = /var/log/mysql/mysql-bin.log</p><p>[...]</p></pre>
+<p>Then restart MySQL:</p>
+<p><span class="highlight">server1:</span></p>
+<p class="command">service&#xA0;mysql restart</p>
+<p>Now do the same on <span class="system">server2</span>:</p>
+<p class="highlight">server2:</p>
+<p class="command">nano /etc/mysql/my.cnf</p>
+<pre>[...]<p># Unique Server ID<br>server-id = 2</p><p># Do not replicate the following databases<br>binlog-ignore-db = mysql<br>replicate-ignore-db = mysql</p><p># Auto increment offset<br>auto-increment-increment = 2</p><p># Do not replicate sql queries for the local server ID<br>replicate-same-server-id = 0</p><p># Beginne automatisch inkrementelle Werte mit 1<br>auto-increment-offset = 1</p><p># Delete binlog data after 10 days<br>expire_logs_days = 10</p><p># Max binlog size<br>max_binlog_size = 500M</p><p># Binlog file path<br>log_bin = /var/log/mysql/mysql-bin.log</p><p>[...]</p></pre>
+<p><span class="highlight">server2:</span></p>
+<p class="command">service&#xA0;mysql restart</p>
+<p>Next we lock the <span class="system">exampledb</span> database on <span class="system">server1</span>, find out about the master status of <span class="system">server1</span>, create an SQL dump of <span class="system">exampledb</span> (that we will import into <span class="system">exampledb</span> on <span class="system">server2</span> so that both databases contain the same data), and unlock the database so that it can be used again:</p>
+<p class="highlight">server2:</p>
+<p>Now we start the replication on Server 2. Open the MySQL shell:</p>
+<p class="command"><span>mysql --defaults-file=/etc/mysql/debian.cnf</span></p>
+<p><span>And execute the following SQL command to activate the replication from server1 to server2:</span></p>
+<pre><span>CHANGE MASTER TO MASTER_HOST='192.168.1.101', MASTER_USER='repl', MASTER_PASSWORD='secretpassword';</span></pre>
+<p>Replace <em>secretpassword</em>&#xA0;with the password for the <em>repl</em> MySQL user that you have set in chapter 2.</p>
+<p>Now check the slave status by executing the command "show slave status\G" in the MySQL shell.</p>
+<p class="command">show slave status\G</p>
+<p>The output will be similar to this:</p>
+<pre>mysql&gt; show slave status\G<br>*************************** 1. row ***************************<br> Slave_IO_State:<br> Master_Host: 192.168.1.101<br> Master_User: repl<br> Master_Port: 3306<br> Connect_Retry: 60<br> Master_Log_File: mysql-bin.000001<br> Read_Master_Log_Pos: 107<br> Relay_Log_File: mysqld-relay-bin.000003<br> Relay_Log_Pos: 253<br> Relay_Master_Log_File: mysql-bin.000001<br> Slave_IO_Running: No<br> Slave_SQL_Running: No<br> Replicate_Do_DB:<br> Replicate_Ignore_DB: mysql<br> Replicate_Do_Table:<br> Replicate_Ignore_Table:<br> Replicate_Wild_Do_Table:<br> Replicate_Wild_Ignore_Table:<br> Last_Errno: 0<br> Last_Error:<br> Skip_Counter: 0<br> Exec_Master_Log_Pos: 107<br> Relay_Log_Space: 410<br> Until_Condition: None<br> Until_Log_File:<br> Until_Log_Pos: 0<br> Master_SSL_Allowed: No<br> Master_SSL_CA_File:<br> Master_SSL_CA_Path:<br> Master_SSL_Cert:<br> Master_SSL_Cipher:<br> Master_SSL_Key:<br> Seconds_Behind_Master: NULL<br>Master_SSL_Verify_Server_Cert: No<br> Last_IO_Errno: 0<br> Last_IO_Error:<br> Last_SQL_Errno: 0<br> Last_SQL_Error:<br> Replicate_Ignore_Server_Ids:<br> Master_Server_Id: 1<br>1 row in set (0.00 sec)</pre>
+<p>The Lines that you should check are these:</p>
+<pre>Master_Host: 192.168.1.101<br>Master_User: repl<br>Master_Port: 3306<br>Master_Log_File: mysql-bin.000001<br>Relay_Log_File: mysqld-relay-bin.000003<br>Slave_IO_Running: No<br>Slave_SQL_Running: No</pre>
+<p>Now start the replication with this command on the MySQL shell:</p>
+<p class="command">start slave;</p>
+<p>and then check the slave status again:</p>
+<p class="command"><span>show slave status\G</span></p>
+<p>The following two lines should show "yes" now:</p>
+<pre>Slave_IO_Running: Yes<br>Slave_SQL_Running: Yes<br>Seconds_Behind_Master: 0</pre>
+<p>If "Seconds_Behind_Master" is not 0, then wait a few seconds and check the status again. This field shows if master and slave are in sync.</p>
+<p>For the next step, we need to know the values of "Master_Log_File" and "Read_Master_Log_Pos" the "<span>show slave status\G" command. In my case these are:</span></p>
+<pre><span>Master_Log_File: mysql-bin.000001<br>Read_Master_Log_Pos: 107<br></span></pre>
+<p>Write down the values that you get on your server, we need it for the next step on server 1.</p>
+<p>Afterward you can leave the MySQL shell:</p>
+<p class="command">quit</p>
+
+<p><span class="highlight">server1:</span></p>
+<p>We continue on the first server,&#xA0;open the MySQL shell on server1:</p>
+<p class="command"><span>mysql --defaults-file=/etc/mysql/debian.cnf</span></p>
+<p>And execute the following MySQL command:</p>
+<pre>CHANGE MASTER TO MASTER_HOST='192.168.1.102', MASTER_USER='repl', MASTER_PASSWORD='secretpassword', MASTER_LOG_FILE='mysql-bin.000001', MASTER_LOG_POS=107;</pre>
+<p>You have to replace a few things in the above command:</p>
+<ol>
+<li>The IP address has to be the IP of your second MySQL server.</li>
+<li>The password "secretpassword" has to be the one that you have choosen in chapter 2 for the user repl.</li>
+<li>The MASTER_LOG_FILE and MASTER_LOG_POS have to be the values that we have written down in the last step.</li>
+</ol>
+<p>Now check with:</p>
+<p class="command"><span>show slave status\G</span></p>
+<p>on the MySQL shell if there are no errors.</p>
+<pre>mysql&gt; show slave status\G<br>*************************** 1. row ***************************<br> Slave_IO_State:<br> Master_Host: 192.168.1.102<br> Master_User: repl<br> Master_Port: 3306<br> Connect_Retry: 60<br> Master_Log_File: mysql-bin.000001<br> Read_Master_Log_Pos: 107<br> Relay_Log_File: mysqld-relay-bin.000001<br> Relay_Log_Pos: 4<br> Relay_Master_Log_File: mysql-bin.000001<br> Slave_IO_Running: No<br> Slave_SQL_Running: No<br> Replicate_Do_DB:<br> Replicate_Ignore_DB: mysql<br> Replicate_Do_Table:<br> Replicate_Ignore_Table:<br> Replicate_Wild_Do_Table:<br> Replicate_Wild_Ignore_Table:<br> Last_Errno: 0<br> Last_Error:<br> Skip_Counter: 0<br> Exec_Master_Log_Pos: 107<br> Relay_Log_Space: 107<br> Until_Condition: None<br> Until_Log_File:<br> Until_Log_Pos: 0<br> Master_SSL_Allowed: No<br> Master_SSL_CA_File:<br> Master_SSL_CA_Path:<br> Master_SSL_Cert:<br> Master_SSL_Cipher:<br> Master_SSL_Key:<br> Seconds_Behind_Master: NULL<br>Master_SSL_Verify_Server_Cert: No<br> Last_IO_Errno: 0<br> Last_IO_Error:<br> Last_SQL_Errno: 0<br> Last_SQL_Error:<br> Replicate_Ignore_Server_Ids:<br> Master_Server_Id: 0<br>1 row in set (0.00 sec)</pre>
+<p>And start the slave.</p>
+<p class="command"><span>start slave;</span></p>
+<p>Check the slave status again:</p>
+<p class="command"><span>show slave status\G</span></p>
+<p>The following two lines should show "yes" now:</p>
+<pre>Slave_IO_Running: Yes<br>Slave_SQL_Running: Yes</pre>
+<p>Afterward you can leave the MySQL shell:</p>
+<p class="command">quit</p>
+<p>If nothing went wrong, MySQL master-master replication should now be working. If it isn't, please check <span class="system">/var/log/syslog</span> for MySQL errors on <span class="system">server1</span> and <span class="system">server2</span>.</p>
+
+<h2 id="-test-the-replication">5 Test the Replication</h2>
+<p>&#xA0;Now it's time to test our replication setup. I will create a database&#xA0;<span>exampledb1 on server1 and then check on server2 if the database has been replicated to the second server:</span></p>
+<p class="highlight">server1:</p>
+<p><span>Login to the MySQL console on server1 and create the database:</span></p>
+<p class="command"><span>mysql --defaults-file=/etc/mysql/debian.cnf</span></p>
+<pre>CREATE DATABASE exampledb1;</pre>
+<p><span class="highlight">server2</span></p>
+<p>Now login to the MySQL console on server2 and check if exampledb1 exists there now:</p>
+<p class="command"><span>mysql --defaults-file=/etc/mysql/debian.cnf</span></p>
+<pre>show databases;</pre>
+<p>As we can see, the new database shows up on server2 as well.</p>
+<pre>mysql&gt; show databases;<br>+--------------------+<br>| Database |<br>+--------------------+<br>| information_schema |<br>| exampledb1 |<br>| mysql |<br>| performance_schema |<br>+--------------------+<br>4 rows in set (0.00 sec)</pre>
+<p>Next I'll test if the replication works in the other direction as well. We are still logged in on server2 and create there a database exampledb2:</p>
+<pre>CREATE DATABASE exampledb2;</pre>
+<p>Now go back to server1 and run "show databases" in the MySQL console:</p>
+<p><span class="highlight">server1</span></p>
+<pre>show databases;</pre>
+<p>The result shows our new database exampledb2, so the replication is working in both directions.</p>
+<pre>mysql&gt; show databases;<br>+--------------------+<br>| Database |<br>+--------------------+<br>| information_schema |<br>| exampledb1 |<br>| exampledb2 |<br>| mysql |<br>| performance_schema |<br>+--------------------+<br>5 rows in set (0.01 sec)</pre>
+
+
+<ul>
+<li>MySQL: <a href="http://www.mysql.com" target="_blank">http://www.mysql.com</a></li>
+<li>Debian: <a href="http://www.debian.org/" target="_blank">http://www.debian.org</a></li>
+</ul>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+
+</div>
+ 
+ 
+</div>
+</body></html>

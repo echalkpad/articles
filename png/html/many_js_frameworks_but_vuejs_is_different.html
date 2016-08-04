@@ -1,0 +1,561 @@
+<!DOCTYPE html><html><head><title>Many JS Frameworks but Vue.js Is Different</title></head><body>
+<h1>Many JS Frameworks but Vue.js Is Different</h1><p><a href="http://taha-sh.com/blog/many-js-frameworks-but-vuejs-is-different" target="_new">Original URL</a></p>
+<p><blockquote>Nowadays, we have countless Javascript libraries available for us to use. Every once in a while we get a new framework/library for Javascript. I&#x2019;ve used many Javascript frameworks, but&hellip;</blockquote></p>
+<div><div class="post-body">
+ 
+<p>Nowadays, we have countless Javascript libraries available for us to use. Every once in a while we get a new framework/library for Javascript. I&#x2019;ve used many Javascript frameworks, but I&#x2019;ve never seen something as simple and flexible as <a href="http://vuejs.org/">Vue.js</a>.</p>
+
+<p>You&#x2019;ll be amazed by how a few lines you need to write to accomplish common tasks in Javascript with Vue.js.</p>
+
+<img src="http://taha-sh.com/images/blog/1438789978many-js-frameworks-but-vue-js-is-different-1.png" alt="Vue.js website">
+
+<p>In this tutorial, I&#x2019;m going to show you all of that by building a simple tasks app. To see what we&#x2019;re going to build, check out the <a href="http://jsfiddle.net/dvvzhLh4/">demo</a>. You can also get the source code on <a href="https://github.com/TahaSh/Tasks-App-With-VueJS">github</a>.</p>
+
+<img src="http://taha-sh.com/images/blog/1438790026many-js-frameworks-but-vue-js-is-different-2.png" alt="Tasks App">
+
+<p><strong>Note:</strong> If you feel that you don&#x2019;t understand everything here, don&#x2019;t worry, this tutorial is just intended to show you how awesome Vue.js is. Maybe, in the future, there&#x2019;ll be more tutorials that review the basics of Vue.js.</p>
+
+<h3>Setting Up The Project</h3>
+
+<p>For this app, we need three files: <code>index.html</code>, <code>app.js</code> and <code>app.css</code>.</p>
+
+<p>As a start, here&#x2019;s how <code>index.html</code> should look like:</p>
+
+<h4>index.html</h4>
+
+<pre><code>&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+ &lt;meta charset="UTF-8"&gt;
+ &lt;title&gt;Tasks App&lt;/title&gt;
+ &lt;link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css"/&gt;
+ &lt;link rel="stylesheet" href="app.css"&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+
+ &lt;script src="https://cdnjs.cloudflare.com/ajax/libs/vue/0.12.9/vue.min.js"&gt;&lt;/script&gt;
+ &lt;script src="app.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+<p>All we have here is a basic HTML5 boilerplate. For this tutorial, I pulled in <code>vue.js</code> via CDN &#x2014; but feel free to use bower if you want. Also for better styling, I included bootstrap.</p>
+
+<h3>Define a Vue Instance</h3>
+
+<p>To start things off, we have to declare a Vue instance and tell it which DOM element it controls.</p>
+
+<p>In <code>index.html</code>, add <code>&lt;div id="app"&gt;&lt;/div&gt;</code> which will be the view for our Vue instance.</p>
+
+<h4>index.html</h4>
+
+<pre><code>&lt;!-- ... --&gt;
+
+&lt;body&gt;
+
+&lt;div id="app"&gt;&lt;/div&gt;
+
+&lt;!-- ... --&gt;
+</code></pre>
+
+<p>Now to create the Vue instance, go to <code>app.js</code> and put this in.</p>
+
+<h4>app.js</h4>
+
+<pre><code>new Vue({
+ el: '#app'
+});
+</code></pre>
+
+<p>With that, we have created a Vue instance and associated it with the <code>div#app</code> tag from <code>index.html</code>. This means the Vue instance will control the tag <code>div#app</code> and everything it houses.</p>
+
+<p>For this app we need a little bit of styling. So go to <code>app.css</code> and add this code.</p>
+
+<pre><code>#app {
+ padding: 2em;
+}
+
+#app input[type=text] {
+ margin-bottom: 1em
+}
+
+#app h1 {
+ margin-bottom: 0.5em;
+}
+
+.task:hover .remove-btn {
+ display: block;
+}
+
+.remove-btn {
+ display: none;
+ background: transparent;
+ border: 0;
+ color: darkred;
+}
+
+.completed {
+ color: silver;
+ text-decoration: line-through;
+}
+</code></pre>
+
+<h3>Show a List of Tasks</h3>
+
+<p>Since Vue uses two-way binding, like angular, we need a way to specify what data Vue will use (as a model). We can do that by declaring an object named <code>data</code> in the Vue instance. Like this:</p>
+
+<pre><code>new Vue({
+ el: '#app',
+
+ data: {
+
+ }
+});
+</code></pre>
+
+<p>We need a list of tasks, so we have to declare an array of tasks in that <code>data</code> object.</p>
+
+<pre><code>new Vue({
+ el: '#app',
+
+ data: {
+ tasks: []
+ }
+});
+</code></pre>
+
+<p>Each task will have a <code>title</code> and <code>completed</code> property to specify if the task is completed. So each task object will look like this: <code>{ title: 'My task', completed: false }</code>.</p>
+
+<p>For now, let&#x2019;s just add a bunch of tasks in that array as hard-coded values.</p>
+
+<pre><code>new Vue({
+ el: '#app',
+
+ data: {
+ tasks: [
+ { title: 'Go to grocery store', completed: false },
+ { title: 'Do the dishes', completed: false },
+ { title: 'Call John', completed: false }
+ ]
+ }
+});
+</code></pre>
+
+<p>We have defined the tasks, but how would we display them? Well, we have two ways: <strong>directives</strong> or <strong>mustache binding</strong>.</p>
+
+<p>For now, I want you to think of directives as html attributes that are prefixed with <code>v-</code>. Examples: <code>v-model</code>, <code>v-text</code>, <code>v-on</code>, etc&#x2026;.</p>
+
+<p>Another way is to use mustache-like syntax. Like this: <code>{{ data }}</code>.</p>
+
+<p>Let&#x2019;s use the latter one. To see how it works, open <code>index.html</code>, and put this <code>{{ tasks[0].title }}</code> inside <code>div#app</code>. After that, if you view the browser, you should see the title of the first task: <strong>Go to grocery store</strong>.</p>
+
+<p>This is to show a single value. However, to show all tasks we have to use the <code>v-repeat</code> directive. Like this:</p>
+
+<h4>index.html</h4>
+
+<pre><code>&lt;div id="app"&gt;
+ &lt;h1&gt;Tasks&lt;/h1&gt;
+ &lt;ul class="list-group"&gt;
+ &lt;li class="list-group-item task"
+ v-repeat="task : tasks"
+ &gt;
+ &lt;input type="checkbox"&gt;
+ {{ task.title }}
+ &lt;/li&gt;
+ &lt;/ul&gt;
+&lt;/div&gt;
+</code></pre>
+
+<p>You can think of the <code>v-repeat</code> directive as a for-in loop. So we access each element in the <code>tasks</code> array as <code>task</code>.</p>
+
+<p>Now if you get back to the browser, you should see all tasks displayed in a list group.</p>
+
+<img src="http://taha-sh.com/images/blog/1438790055many-js-frameworks-but-vue-js-is-different-3.png" alt="Showing a list of tasks">
+
+<h3>Deleting Tasks</h3>
+
+<p>We need a button for each task, when it&#x2019;s clicked, the task should be deleted.</p>
+
+<h4>index.html</h4>
+
+<pre><code>&lt;div id="app"&gt;
+ &lt;ul class="list-group"&gt;
+ &lt;li class="list-group-item task"
+ v-repeat="task : tasks"
+ &gt;
+ &lt;input type="checkbox"&gt;
+ {{ task.title }}
+
+ &lt;button class="remove-btn pull-right" v-on="click: removeTask(task)"&gt;&lt;span class="glyphicon glyphicon-remove"&gt;&lt;/span&gt;&lt;/button&gt;
+
+ &lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+</code></pre>
+
+<p>That button has a <code>v-on</code> directive. This directive is used to bind event listeners to DOM events. So when the button is clicked, we should call <code>removeTask()</code> method passing in the task to be deleted.</p>
+
+<p>But where to define that method? The answer is in a <code>methods</code> object in the Vue instance.</p>
+
+<p>So add this in the Vue instance:</p>
+
+<h4>app.js</h4>
+
+<pre><code>new Vue({
+ el: '#app',
+
+ data: {
+ tasks: [
+ { title: 'Go to grocery store', completed: false },
+ { title: 'Do the dishes', completed: false },
+ { title: 'Call John', completed: false }
+ ]
+ },
+ 
+ methods: {
+ removeTask: function(task) {
+ this.tasks.$remove(task);
+ }
+ }
+});
+</code></pre>
+
+<p>Now when you put the cursor on the task, a delete button should be displayed. When you click on it, the task should be deleted.</p>
+
+<img src="http://taha-sh.com/images/blog/1438790078many-js-frameworks-but-vue-js-is-different-4.png" alt="Showing delete button">
+
+<h3>Completing Tasks</h3>
+
+<p>Now let&#x2019;s see how we can complete tasks. The idea is to toggle a class on each task item. So when the task is completed, we should add a <code>.completed</code> class to it. And when it&#x2019;s uncompleted, we should remove that class.</p>
+
+<p>That action should happen when the user click on the checkbox for each task. So we need to associate some data with each checkbox. For that we use the directive <code>v-model</code>. This directive is used to associate data with form input. The data we should associate is the <code>completed</code> property for each task (<code>task.completed</code>).</p>
+
+<p>So what we want do is to change <code>task.completed</code> to <strong>true</strong> when the checkbox is checked. And back to <strong>false</strong> when it&#x2019;s unchecked.</p>
+
+<p>All we have to do to accomplish this is to add <code>v-model="task.completed"</code> for the checkbox.</p>
+
+<pre><code>&lt;input type="checkbox" v-model="task.completed"&gt;
+</code></pre>
+
+<p>With that, the <code>completed</code> property is changed with the checkbox. But how to determine if we should add or remove (i.e. toggle) the class <code>.completed</code>. This is done simply by using the directive <code>v-class</code>. This directive takes the class and the condition to show that class.</p>
+
+<p>So add <code>v-class="completed: task.completed"</code> to the list item. In this case, the class <code>.completed</code> will be set only when <code>task.completed</code> is a truthy value.</p>
+
+<pre><code>&lt;div id="app"&gt;
+ &lt;ul class="list-group"&gt;
+ &lt;li class="list-group-item task"
+ v-repeat="task : tasks"
+ v-class="completed: task.completed"
+ &gt;
+ &lt;input type="checkbox"&gt;
+ {{ task.title }}
+
+ &lt;button class="remove-btn pull-right" v-on="click: removeTask(task)"&gt;&lt;span class="glyphicon glyphicon-remove"&gt;&lt;/span&gt;&lt;/button&gt;
+
+ &lt;/li&gt;
+ &lt;/ul&gt;
+&lt;/div&gt;
+</code></pre>
+
+<p>Now your tasks can be completed and uncompleted.</p>
+
+<img src="http://taha-sh.com/images/blog/1438790097many-js-frameworks-but-vue-js-is-different-5.png" alt="Completing tasks">
+
+<h3>Adding New Tasks</h3>
+
+<p>For adding new tasks, we need a text input to write in the task&#x2019;s title. By default, each new task should be uncompleted.</p>
+
+<p>Add the input above <code>ul#list-group</code>.</p>
+
+<h4>index.html</h4>
+
+<pre><code>&lt;input type="text"
+ class="form-control"
+ placeholder="New Task"
+ v-model="newTask.title"
+ v-on="keyup: addTask | key 'enter'"
+&gt;
+</code></pre>
+
+<p>The new task&#x2019;s data will be represented by the property <code>newTask</code>. So we have to declare it in the Vue instance.</p>
+
+<h4>app.js</h4>
+
+<pre><code>data: {
+ newTask:{ title: '', completed: false},
+ //...
+}
+</code></pre>
+
+<p>Notice that I&#x2019;ve associated an event listener with the input which will be triggered when the user presses the enter key. I&#x2019;ve specified the key using filters &#x2014; which you probably know from angular.</p>
+
+<p>Now let&#x2019;s define the <code>addTask</code> handler in the methods object.</p>
+
+<h4>app.js</h4>
+
+<pre><code>methods: {
+ addTask: function() {
+ if ( ! this.newTask.title) {
+ return;
+ }
+
+ this.tasks.push({
+ title: this.newTask.title,
+ completed: false
+ });
+
+ this.newTask = { title: '', completed: false};
+ },
+
+ // ...
+}
+</code></pre>
+
+<p>In the <code>addTask</code> method, we first make sure that the task to be added is not empty. If not, then we add the new task to the tasks array using the push method. After that, we clear out the text input by resetting the values of <code>this.newTask</code>.</p>
+
+<p>If you switch back to the browser, you should be able to add a new task by typing in its title and pressing enter.</p>
+
+<img src="http://taha-sh.com/images/blog/1438790135many-js-frameworks-but-vue-js-is-different-6.png" alt="Adding new task">
+
+<h3>Editing Tasks</h3>
+
+<p>The last feature we&#x2019;re going to add is the ability to edit tasks. The way we want to edit tasks is by double-clicking a task from the list. Then that task&#x2019;s title will be editable in the same text input we use to add tasks. After we&#x2019;re done with our changes, we press enter to commit the changes and clear out the text input.</p>
+
+<p>It seems that it&#x2019;s a tough one, but really isn&#x2019;t. All you have to do in <code>index.html</code> is to add this event listener to the task item: <code>v-on="dblclick: startEditingTask(task)"</code>.</p>
+
+<pre><code>&lt;li class="list-group-item task"
+ v-repeat="task : tasks"
+ v-class="completed: task.completed"
+ v-on="dblclick: startEditingTask(task)"
+&gt;
+</code></pre>
+
+<p>Then define that handler in the Vue instance.</p>
+
+<pre><code>methods: {
+ startEditingTask: function(task) {
+ this.newTask = task;
+ this.editingTask = true;
+ },
+ // ...
+}
+</code></pre>
+
+<p>In that handler we assign the task that we want to edit to the <code>newTask</code> property &#x2014; so we can use the same text input to update it. But what about the <code>editingTask</code> property?</p>
+
+<p>Well, this one is used to determine whether the task in the text input is a new one to be added or a task to be updated. But for that to work, we have to define it in the <code>data</code> object.</p>
+
+<pre><code>data: {
+ newTask:{ title: '', completed: false},
+
+ editingTask: false,
+
+ tasks: [
+ { title: 'Go to grocery store', completed: false },
+ { title: 'Do the dishes', completed: false },
+ { title: 'Call John', completed: false }
+ ]
+}
+</code></pre>
+
+<p>The last change we&#x2019;ll do in <code>index.html</code> is to change the event handler of the text input (when the enter is pressed) to another method &#x2014; called <code>pressedEnter</code>.</p>
+
+<pre><code>&lt;input type="text"
+ class="form-control"
+ placeholder="New Task"
+ v-model="newTask.title"
+ v-on="keyup: pressedEnter | key 'enter'"
+&gt;
+</code></pre>
+
+<p>Now in your Vue instance add this method.</p>
+
+<pre><code>pressedEnter: function() {
+ if ( ! this.editingTask) {
+ this.addTask();
+ }
+ 
+ this.newTask = { title: '', completed: false};
+ this.editingTask = false;
+}
+</code></pre>
+
+<p>Notice that I moved <code>this.newTask = { title: '', completed: false};</code> from the <code>addTask</code> method to the <code>pressedEnter</code>. Also, in the last line, I changed <code>editingTask</code> back to false so users would be able to add more tasks in case they were editing a task before that.</p>
+
+<p>Now we&#x2019;re able to edit tasks.</p>
+
+<img src="http://taha-sh.com/images/blog/1438790156many-js-frameworks-but-vue-js-is-different-7.png" alt="Edit tasks">
+
+<h3>Removing Tasks When They Are Empty</h3>
+
+<p>Now what if the user provided an empty string when editing the task. In this case we should just remove that task because empty tasks will help nobody.</p>
+
+<img src="http://taha-sh.com/images/blog/1438790195many-js-frameworks-but-vue-js-is-different-8.png" alt="Update task with empty string">
+
+<p>To tackle that, update <code>pressedEnter</code> accordingly:</p>
+
+<pre><code>pressedEnter: function() {
+ if (this.editingTask) {
+ this.removeIfEmpty();
+ } else {
+ this.addTask(); 
+ }
+ 
+ this.newTask = { title: '', completed: false};
+ this.editingTask = false;
+}
+</code></pre>
+
+<p>Then create that <code>removeIfEmpty</code> method and put this into it.</p>
+
+<pre><code>removeIfEmpty: function() {
+ if ( ! this.newTask.title) {
+ this.removeTask(this.newTask);
+ }
+}
+</code></pre>
+
+<h3>All The Code</h3>
+
+<p>Here are the three files that we&#x2019;ve been working on.</p>
+
+<h4>index.html</h4>
+
+<pre><code>&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+ &lt;meta charset="UTF-8"&gt;
+ &lt;title&gt;Tasks App&lt;/title&gt;
+ &lt;link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css"/&gt;
+ &lt;link rel="stylesheet" href="app.css"&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;div id="app"&gt;
+ &lt;h1&gt;Tasks&lt;/h1&gt;
+
+ &lt;input type="text"
+ class="form-control"
+ placeholder="New Task"
+ v-model="newTask.title"
+ v-on="keyup: pressedEnter | key 'enter'"
+ &gt;
+
+ &lt;ul class="list-group"&gt;
+ &lt;li class="list-group-item task"
+ v-repeat="task : tasks"
+ v-class="completed: task.completed"
+ v-on="dblclick: startEditingTask(task)"
+ &gt;
+ &lt;input type="checkbox" v-model="task.completed"&gt;
+ {{ task.title }}
+
+ &lt;button class="remove-btn pull-right" v-on="click: removeTask(task)"&gt;&lt;span class="glyphicon glyphicon-remove"&gt;&lt;/span&gt;&lt;/button&gt;
+ &lt;/li&gt;
+ &lt;/ul&gt;
+&lt;/div&gt;
+
+
+&lt;script src="https://cdnjs.cloudflare.com/ajax/libs/vue/0.12.9/vue.min.js"&gt;&lt;/script&gt;
+&lt;script src="app.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+<h4>app.js</h4>
+
+<pre><code>new Vue({
+ el: '#app',
+
+ data: {
+ newTask:{ title: '', completed: false},
+
+ tasks: [
+ { title: 'Go to grocery store', completed: false },
+ { title: 'Do the dishes', completed: false },
+ { title: 'Call John', completed: false }
+ ]
+ },
+
+ methods: {
+ pressedEnter: function() {
+ if (this.editingTask) {
+ this.removeIfEmpty();
+ } else {
+ this.addTask(); 
+ }
+ 
+ this.newTask = { title: '', completed: false};
+ this.editingTask = false;
+ },
+
+ addTask: function() {
+ if ( ! this.newTask.title) {
+ return;
+ }
+
+ this.tasks.push({
+ title: this.newTask.title,
+ completed: false
+ });
+ },
+
+ removeTask: function(task) {
+ this.tasks.$remove(task);
+ },
+
+ startEditingTask: function(task) {
+ this.newTask = task;
+ this.editingTask = true;
+ },
+ removeIfEmpty: function() {
+ if ( ! this.newTask.title) {
+ this.removeTask(this.newTask);
+ }
+ }
+ }
+});
+</code></pre>
+
+<h4>app.css</h4>
+
+<pre><code>#app {
+ padding: 2em;
+}
+
+#app input[type=text] {
+ margin-bottom: 1em
+}
+
+#app h1 {
+ margin-bottom: 0.5em;
+}
+
+.task:hover .remove-btn {
+ display: block;
+}
+
+.remove-btn {
+ display: none;
+ background: transparent;
+ border: 0;
+ color: darkred;
+}
+
+.completed {
+ color: silver;
+ text-decoration: line-through;
+}
+</code></pre>
+
+<h3>Wrap Up</h3>
+
+<p>With that, we&#x2019;re done with our little tasks app. I hope you can see how easy it is to accomplish things in Vue.js. </p>
+
+<p>Actually, we&#x2019;ve barely scratched the surface in this tutorial. Vue has many more things to learn. Anyway, the purpose of this tutorial was to show you the basic workflow of building apps in Vue.js.</p>
+
+<p>As I said at the beginning, don&#x2019;t worry if it doesn&#x2019;t all make sense to you. This tutorial was just to whet your appetite to learn more about Vue. So if you found this library very interesting to you, and you want to learn it from scratch, please let me know this in the comments.</p>
+ </div>
+</div>
+</body></html>

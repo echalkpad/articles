@@ -1,0 +1,657 @@
+<!DOCTYPE html><html><head><title>Testing in Go from the Ground Up Part 1: The basics of Go testing and Testify</title></head><body>
+<h1>Testing in Go from the Ground Up Part 1: The basics of Go testing and Testify</h1><p><a href="http://csfortheslothful.blogspot.com/2016/05/testing-in-go-from-ground-up-part-1.html?utm_source=golangweekly" target="_new">Original URL</a></p>
+<p><blockquote>One great language feature of Go is that it has a built-in testing package for writing tests and the command-line tool go test for running them. This means if you want your Go code to have automated&hellip;</blockquote></p>
+<div><div class="post-body entry-content" id="post-body-7875593010442501234">
+
+<div class="separator">
+<a href="https://2.bp.blogspot.com/-xHzgjnDMNxE/VygGG2aRsWI/AAAAAAAAArM/xk0rZ1JuquAu5FHjL5MviU4q78v6rKrpACLcB/s1600/Screenshot%2Bfrom%2B2016-05-02%2B21%253A43%253A34.png"><img border="0" src="https://2.bp.blogspot.com/-xHzgjnDMNxE/VygGG2aRsWI/AAAAAAAAArM/xk0rZ1JuquAu5FHjL5MviU4q78v6rKrpACLcB/s640/Screenshot%2Bfrom%2B2016-05-02%2B21%253A43%253A34.png" width="640"></a></div>
+<p>
+<span>One
+great language feature of Go is that it has a built-in testing
+package for writing tests and the command-line tool go test for
+running them. This means if you want your Go code to have automated
+tests, you don't need to download any extra tools to run tests. Not
+only that, but the main testing library is very simple, so your tests
+are just regular Go code.</span></p>
+
+<p>
+<span>If
+you're learning Go, and especially if you are learning testing for
+the first time, this tutorial is for you. It's also for programmers
+who are experienced in another language, but are trying to figure out
+testing for the first time.</span></p>
+
+
+<p>
+<b><span>Why
+automated testing?</span></b></p>
+
+
+<p>
+<span><span>If
+you haven't written automated tests before, you might wonder why
+people do automated tests. On my early web development projects, I
+didn't write tests and relied solely on my eyeballs to confirm that
+my code worked, but as a result, I missed a lot of glaring errors.
+Here are some reasons why you should have automated tests in your
+code:</span></span></p>
+<br>
+<ul><div>
+<li>
+<p>
+<span>The
+ obvious one: So you know your code works</span></p>
+</li>
+<li>
+<p>
+<span>As
+ your projects grow, simply relying on the eyeball test takes <b>forever</b>
+ and you're more likely to miss bugs in your code</span></p>
+</li>
+<li>
+<p>
+<span>As
+ your projects grow, your tests can show exactly when a bug shows up
+ in part of your code so you can fix it. This lets you <b>detect bugs
+ early</b> in the development cycle!</span></p>
+</li>
+<li>
+<p>
+<span>Writing
+ tests makes you think clearly about what your code's really <b>supposed
+ to</b> do</span></p>
+</li>
+<li>
+<p>
+<span>In
+ the Go community, your tests can serve as &#x201C;the other
+ documentation&#x201D; for showing people examples of how to use your code</span></p>
+</li>
+</div></ul>
+
+<br>
+<div>
+<span><span>At
+<a href="https://www.meta.sc/">Meta Search</a>, where I work, we write a lot of automated tests for all
+these reasons, and our tests contribute a lot to how we can get code
+out on an enormous codebase very quickly and reliably. So without
+further ado, let's write some tests!</span></span><br>
+<span><span><br></span>
+
+</span>
+<br>
+<p>
+<b><span><span><span>A
+full name first example</span></span></span></b></p>
+
+<p>
+<span><span>For
+a first example, let's say we have a Go function that takes someone's
+first and last name and returns their full name. Write this into
+<span><span>fullname.go</span></span>:</span></span></p>
+
+<pre class="language-go"><span><code class="language-go">package testingtutorial
+
+func FullName(firstName, lastName string) string {
+ return firstName + lastName
+}</code></span></pre>
+
+
+<div>
+<span><span><span>This
+function is supposed to return a string of someone's full name, so if
+I pass in my name and call <span><span>F</span></span><span><span>ullName("</span></span><span><span>And</span></span><span><span>y",
+"Haskell")</span></span>, the string of test I want back is
+<span><span>"</span></span><span><span>And</span></span><span><span>y
+Haskell"</span></span>. Functions like this are common on
+websites, for example when they are displaying your full name on a
+social media profile. But there's a bug in this function, and a test
+will reveal it.</span></span></span><p>
+<span><span><span><span><b><span>Testing our function</span></b></span></span></span></span></p>
+
+
+<br><span><span>As I mentioned, we have an example of something we'd put into the function (my first and last name) and what we expect to get back. That means we know enough to write a test for this function. Put this into <span><span>fullname_test.go:</span></span></span></span>
+
+
+<pre><code class="language-go">package testingtutorial
+
+import "testing"
+
+func TestFullName(t *testing.T) {
+ expectedFullName := "Andy Haskell"
+ fullNameResult := FullName("Andy", "Haskell")
+
+ if expectedFullName != fullNameResult {
+ t.Errorf("Expected full name %s, got %s", expectedFullName, fullNameResult)
+ }
+}</code></pre>
+<br>
+<span><span><span><span><span><span>TestFullName</span></span>
+is the test function we wrote for testing the <span><span>FullName</span></span>
+function. The value <span><span>expectedFullName</span></span>
+is what we want <span><span>FullName</span></span>
+to return when we pass in my first and last name, and the value
+<span><span>fullNameResult</span></span>
+is what it actually returns. In the if statement below, if those
+values are different, we consider the test to have failed by calling
+<span><span>t.Errorf</span></span>,
+and we log a message about the error in <span><span>Errorf</span></span>
+using printf format. </span></span></span></span>
+<span><span><span></span></span></span><br>
+
+<p>
+<span><span><span><span>What's
+that weird <span><span>t</span></span>
+though? <span><span>t</span></span>
+is a <span><span>testing.T</span></span>,
+and it's used for keeping track of a test and telling Go that your
+function is a test. Any function in Go whose <b>name starts with </b><span><b><span>Test</span></b></span><b>
+and takes in a </b><span><b><span>testing.T</span></b></span>
+is <b>considered a test</b>, and the <span><span>testing.T</span></span>
+lets you know whether the test passed or failed. (Similarly, Go knows
+a file contains tests if it ends with <span><span>_test.go</span></span>).</span></span></span></span><br>
+<br>
+<span><span><span><span>The
+rule for a Go test is if a <span><span>T</span></span>'s
+<span><span>Errorf</span></span>,
+<span><span>Fatalf</span></span>,
+or <span><span>Fail</span></span>
+function is called, the test failed. If not, the test passed.</span>&#xA0;</span></span></span><br>
+<br>
+<span><span><span>So
+let's see this test in action. In the command line, run <span><span>go
+test</span></span> and you should get:</span></span></span></p>
+<span></span>
+
+<span></span>
+<pre class="language-go"><span><span><code>--- FAIL: TestFullName (0.00s)
+ fullname_test.go:11: Expected full name Andy Haskell, got AndyHaskell
+FAIL
+exit status 1
+FAIL github.com/AndyHaskell/testing-tutorial 0.004s</code></span></span></pre>
+<span></span>
+<br>
+<p>
+<span><span><span><span>A
+failed test! But that's actually a good thing because that means our
+test unearthed a bug. Here's a play-by-play of the test:</span></span></span></span></p>
+<span>
+</span>
+
+<span></span>
+<br>
+<p>
+<span><span><span>-
+<span><span>go
+test</span></span> runs <span><span>TestFullName</span></span>.
+We run <span><span>FullName</span></span>
+on "Andy" and "Haskell", and get back
+"AndyHaskell"</span></span></span></p>
+<span></span>
+<p>
+<span><span><span>-
+In the if statement, the value of <span><span>expectedFullName</span></span>
+is "Andy Haskell" and the value of <span><span>fullNameResult</span></span>
+is "AndyHaskell".</span></span></span></p>
+<span></span>
+<div>
+<span><span><span>-
+Since these two values are different, <span><span>t.Errorf</span></span>
+is called, and the message &#x201C;Expected full name Andy Haskell, got
+AndyHaskell&#x201D; is logged. Since <span><span>t.Errorf</span></span>
+was called, the test failed.</span></span></span><br>
+<span><span><br></span></span>
+<span><span></span></span><br>
+<p>
+<span><span><span><span><b><span>Fixing
+the bug</span></b></span></span></span></span></p>
+<span>
+</span><br>
+<span>
+</span>
+<p>
+<span><span><span>Now
+that we found the bug, let's fix it. It's a pretty simple bug. All we
+need to do is add in a space between <span><span>firstName</span></span>
+and <span><span>lastName</span></span>
+in <span><span>FullName</span></span>:</span></span></span></p>
+<span>
+</span>
+<span>
+</span>
+<pre class="language-go"><span><span><code class="language-go">func FullName(firstName, lastName string) string {
+ return firstName + " " + lastName
+}</code></span></span></pre>
+<span>
+</span><br>
+
+<span>
+</span>
+<p>
+<span>
+<span><span><span>Now
+with that bug fix, let's confirm that our test now works. Run <span><span>go
+test</span></span> and you should get:</span></span></span></span></p>
+
+<pre class="language-go"><span><code>PASS
+ok github.com/AndyHaskell/testing-tutorial 0.004s</code></span></pre>
+
+
+
+
+
+<p>
+<span><span><span><span>A
+passed test! Since we now got the result we expected for <span><span>fullName</span></span>,
+<span><span>t.Errorf</span></span>
+is never called, so the <span><span>TestFullName</span></span>
+is considered to have passed!</span></span></span></span></p>
+<span></span>
+<br>
+
+<span></span>
+<div>
+<span><span><span>By
+the way, while that was a simple bug, simple bugs like this happen
+all the time in big software projects, and when the bug is simple and
+the codebase is big, they're easy to miss. That's why it's smart to
+write tests!</span></span></span><br>
+<br>
+<div class="separator">
+<span><span><a href="https://2.bp.blogspot.com/-Pt1rzuZaa2o/VygMyB4DBEI/AAAAAAAAArg/ux9mtIGn1Q8bCLuvjbTS2LxplaRDJcr2QCLcB/s1600/lola%2Breaction.jpeg"><img border="0" src="https://2.bp.blogspot.com/-Pt1rzuZaa2o/VygMyB4DBEI/AAAAAAAAArg/ux9mtIGn1Q8bCLuvjbTS2LxplaRDJcr2QCLcB/s400/lola%2Breaction.jpeg" width="400"></a></span></span></div>
+<p>
+<span><span><span>&#xA0;When the bug you spent hours <span>fixing turned out</span></span></span></span></p>
+<p>
+<span><span><span>to be<span> a few keystrokes to f<span>ix</span></span> </span></span></span></p>
+<br>
+<br>
+<p>
+<b><span><span>Multiple
+assertions</span></span></b></p>
+<b></b>
+
+
+<div>
+<span><span>The
+if statement of that test:</span></span><br>
+<pre class="language-go"><span><code class="language-go">if expectedFullName != fullNameResult {
+ t.Errorf("Expected full name %s, got %s", expectedFullName, fullNameResult)
+}</code></span></pre>
+<span></span><br>
+<div>
+<span><span><span>is
+called an assertion, because it asserts what what we want our results
+to be. The test we did had one assertion, but you can have more than
+one in a test. Let's say we wanted to take a pair of latitude and
+longitude coordinates in JSON (a format popular for communicating
+data) into a Go struct. For example if we define the struct:</span></span></span><br>
+<pre class="language-go"><code class="language-go">type Coordinate struct {
+ Lat float64
+ Lng float64
+}</code></pre>
+<span><span></span></span>
+<div>
+
+
+
+<p>
+<span>then
+the JSON <span>{"Lat: 42.</span><span>3</span><span>",
+"Lng:-71.</span><span>1</span><span>"}</span>
+would convert to <span><span>Coordinate{Lat:
+42.</span></span><span><span>3</span></span><span><span>,
+Lng: -71.</span></span><span><span>1</span></span><span><span>}</span></span></span></p>
+
+<p>
+<span>The
+conversion function would look like this<span>:</span></span></p>
+<pre class="language-go"><code class="language-go">package testingtutorial
+
+import "encoding/json"
+
+type Coordinate struct {
+ Lat float64
+ Lng float64
+}
+
+func ConvertCoordinates(coordJSON []byte) (*Coordinate, error) {
+ var c Coordinate
+ if err := json.Unmarshal(coordJSON, &amp;c); err != nil {
+ return nil, err
+ }
+ return &amp;c, nil
+}</code></pre>
+
+
+<p>
+<span><span><span>If
+we were testing <span><span>ConvertCoordinate</span></span><span><span>s</span></span>,
+the things we'd need to test for are:</span></span></span></p>
+<span></span>
+<p>
+<span><span><span>-
+<span><span>ConvertCoordinate</span></span><span><span>s</span></span>
+didn't error</span></span></span></p>
+<span></span>
+<p>
+<span><span><span>-
+<span><span>ConvertCoordinate</span></span><span><span>s</span></span>
+gave us the correct latitude coordinate</span></span></span></p>
+<span></span>
+<p>
+<span><span><span>-
+<span><span>ConvertCoordinate</span></span><span><span>s</span></span>
+gave us the correct longitude coordinate</span></span></span></p>
+<span></span>
+<p>
+<span><span><span>-
+If invalid JSON is passed into <span><span>ConvertCoordinate</span></span><span><span>s</span></span>,
+the function DOES error</span></span></span></p>
+<span></span>
+
+<span></span>
+<div>
+<span><span><span>That's
+four assertions we'll want to make for the test. Here's what the test
+will look like:</span></span></span><br>
+<pre class="language-go"><span><span><code class="language-go">func TestConvertCoordinates(t *testing.T) {
+ validCoordinateJSON := []byte(`{"Lat": 42.3, "Lng": -71.1}`)
+ invalidCoordinateJSON := []byte(`{ThisIsInvalidJSON`)
+ coords, err := ConvertCoordinates(validCoordinateJSON)
+ if err != nil {
+ t.Fatalf("Error unmarshalling valid coordinates: %v", err)
+ }
+ if coords.Lat != 42.3 {
+ t.Errorf("Expected latitude 42.3, got %f", coords.Lat)
+ }
+ if coords.Lng != -71.1 {
+ t.Errorf("Expected longitude -71.1, got %f", coords.Lng)
+ }
+
+ coords, err = ConvertCoordinates(invalidCoordinateJSON)
+ if err == nil {
+ t.Errorf("Unmarshal should have errored for invalid coordinates")
+ }
+}</code></span></span></pre>
+<span><span></span></span><br>
+<p>
+<span><span><span><span>As
+you can see, your test can have as many assertions as you need. The
+first one asserts that there was no error calling <span><span>ConvertCoordinate</span></span><span><span>s</span></span>
+on valid coordinates and the next two assertions make sure we got the
+right coordinates. The last assertion asserts that <span><span>ConvertCoordinate</span></span><span><span>s</span></span>
+returns an error for invalid coordinates. As your codebase for a
+project gets bigger, your tests will get more complex as well, so
+they will have a lot of assertions.</span></span></span></span></p>
+<span>
+</span>
+
+<span>
+</span>
+<p>
+<span><span><span>By
+the way, note that when we check if there was an error calling
+<span>ConvertCoordinate</span><span>s</span>
+on valid coordinates, rather than logging the error with <span><span>Errorf</span></span>
+we use <span><span>Fatalf</span></span>.
+These methods both cause a test to fail, but the difference is with
+<span><span>Errorf</span></span>
+the test <b>keeps going</b> through the other assertions while with
+<span><span>Fatalf</span></span>
+the test <b>stops altogether</b>.</span></span></span></p>
+<span>
+</span>
+
+<span>
+</span>
+<p>
+<span><span><span>I
+chose <span><span>Fatalf</span></span>
+for that assertion because if <span><span>ConvertCoordinate</span></span><span><span>s</span></span>
+errors, we won't have a valid <span><span>Coordinate</span></span>
+struct to test. My general rule is if your test has an assertion
+where the rest of the test <b>depends on that assertion passing</b>,
+use <span><span>Fatalf</span></span>
+in the assertion. Otherwise, stick to <span><span>Errorf</span></span>
+so if your assertion fails you can see how the rest of your test
+goes.</span></span></span></p>
+<span></span>
+
+<span></span>
+<div>
+<span><span><span>Another
+good example of a time to use <span><span>Fatalf</span></span>
+is in a part of your test code that sets the stage for the test. If
+you're testing code that works with a database, your test might begin
+with setting up a mock database. If that fails, your test won't work
+since you don't have a database so you'd do something like:</span><span></span></span></span><br>
+<pre class="language-go"><span><code class="language-go">mockDatabase, err := setupMockDatabase()
+if err != nil {
+ t.Fatalf("Error setting up mock database: %v", err)
+}
+// If we get past this if statement, run the rest of the test!</code></span></pre>
+<span><span></span></span>
+<p>
+
+<span><span><span><span>to
+stop the test if the database setup fails.</span></span></span></span></p>
+<span></span>
+
+<span></span>
+<p>
+<span><span><span><b><span>More
+concise assertions with Testify</span></b></span></span></span></p>
+<span></span>
+<br>
+<div>
+<span></span>
+<span><span><span>Overall
+the basic Go testing package is very simple and flexible so you can
+test your Go code using regular old Go code. However, as your number
+of assertions go up, you can end up with a lot of bulky three-line if
+statements that make your tests taller.</span><span></span></span></span>
+<span><br></span>
+<br>
+<div>
+<span><span>Luckily,
+there's a series of packages called Testify in Go that let you write
+one-line assertions with a readable syntax, and they work with the
+<span><span>testing.T</span></span>
+struct to be a natural extension of the testing package, rather than
+a giant framework with a ton of new rules to learn. Instead of
+writing an assertion like this:</span></span><br>
+<pre class="language-go"><span><code class="language-go">if coords.Lat != 42.3 {
+ t.Errorf("Expected latitude 42.3, got %f", coords.Lat)
+}</code></span></pre>
+<br>
+<p>
+<span><span>You
+can write it like this:</span></span></p>
+<pre class="language-go"><span><code class="language-go">assert.Equal(t, 42.3, coords.Lat, "Expected latitude 42.3, got %f", coords.Lat)</code></span></pre>
+
+
+
+<div>
+<span><span><span>To
+get Testify, run <span><span>go
+get github.com/stretchr/testify/assert</span></span> and go get
+<span><span>github.com/stretchr/testify/require</span></span>.
+Testify Assert is a package for different kinds of testing
+assertions. You can assert two values are equal with <span><span>assert.Equal</span></span>,
+you can assert they are <span><span>NotEqual</span></span>,
+you can assert that a value is <span><span>Nil</span></span>
+or <span><span>NotNil</span></span>,
+you can assert that a slice or map is a certain <span><span>Len</span></span>,
+and there are tons more assertions you can check out in the <a href="https://godoc.org/github.com/stretchr/testify/assert">godoc for Tesitfy Assert</a>!</span></span></span></div>
+<span></span>
+
+<span></span>
+<div>
+<span><span><span>Require
+is almost identical to Assert but if a Require assertion fails, the
+test stops like in <span><span>Fatalf</span></span>,
+while the test keeps going on a fails Assert assertion. So now our
+<span><span>TestConvertCoordinate</span></span><span><span>s</span></span>
+function would now look like:</span></span></span><br>
+<pre class="language-go"><span><span><code class="language-go">package testingtutorial
+
+import (
+ "testing"
+
+ "github.com/stretchr/testify/assert"
+ "github.com/stretchr/testify/require"
+)
+
+func TestConvertCoordinatesTestify(t *testing.T) {
+ validCoordinateJSON := []byte(`{"Lat": 42.3, "Lng": -71.1}`)
+ invalidCoordinateJSON := []byte(`{ThisIsInvalidJSON`)
+
+ coords, err := ConvertCoordinates(validCoordinateJSON)
+ require.Nil(t, err, "Error unmarshalling valid coordinates: %v", err)
+ assert.Equal(t, 42.3, coords.Lat, "Expected latitude 42.3, got %f", coords.Lat)
+ assert.Equal(t, -71.1, coords.Lng, "Expected longitude -71.1, got %f", coords.Lng)
+
+ coords, err = ConvertCoordinates(invalidCoordinateJSON)
+ assert.NotNil(t, err, "Unmarshal should have errored for invalid coordinates")
+}</code></span></span></pre>
+<span><span><br></span></span></div>
+<span></span></div>
+<div>
+<span></span>
+<p>
+<span><span><span>Now
+we have a test that's much cleaner, shorter (19 lines vs. 13 lines),
+and easier to read! And as I mentioned earlier, that's especially
+important in Go testing where your automated tests double as
+documentation.</span></span></span></p>
+<span></span>
+
+<span></span>
+<p>
+<span><span><span>Note
+that our <span><span>Fatalf</span></span>
+test to check that <span><span>ConvertCoordinates</span></span>
+didn't error now checks for the error with <span><span>require.Nil</span></span>.
+Meanwhile we use <span><span>assert.Equal</span></span>
+to check that we got the right coordinates, and <span><span>assert.NotNil</span></span>
+to check that we get an error if we call <span><span>ConvertCoordinates</span></span>
+on invalid JSON. Technically all of those assertions could have used
+<span><span>Equal</span></span>
+or <span><span>NotE</span></span><span><span>qual</span></span>,
+but Testify assert gives us flexibility in how we write our tests.</span></span></span></p>
+<span></span>
+
+<span></span>
+<p>
+<span><span><span>Another
+convenient feature of Testify assertions is that if an assertion
+fails, Testify gives us an error message showing the call stack that
+led up to the assertion failure so we can track bugs more easily.</span></span></span></p>
+<span></span>
+
+<span></span>
+<div>
+<span><span><span>Let's
+say we wanted to move both coordinate assertions to a helper
+function:</span></span></span><br>
+<pre class="language-go"><span><span><code class="language-go">func assertCoordinates(t *testing.T, lat, lng float64, coords *Coordinate) {
+ assert.Equal(t, lat, coords.Lat, "Expected latitude %f, got %f",
+ lat, coords.Lat)
+ assert.Equal(t, lng, coords.Lng, "Expected longitude %f, got %f",
+ lng, coords.Lng)
+}</code></span></span></pre>
+<span><span><br></span></span>
+<span><span></span></span>
+<p>
+<span><span><span><span>And
+in the main test, we call these assertions (but expect the wrong
+coordinates)</span><span>:</span></span></span></span></p>
+<pre class="language-go"><span><code class="language-go">require.Nil(t, err, "Error unmarshalling valid coordinates: %v", err)
+assertCoordinates(t, 39.7, -71.1, coords)</code></span></pre>
+
+
+<div>
+<span><span>We
+would get the error:</span></span><br>
+<pre class="language-go"><span><code class="language-go">--- FAIL: TestConvertCoordinatesWithHelper (0.00s)
+ Error Trace: coords_testify_helper_test.go:11
+ coords_testify_helper_test.go:21
+ Error: Not equal: 39.7 (expected)
+ != 42.3 (actual)
+ Messages: Expected latitude 39.700000, got 42.300000</code></span></pre>
+<span></span><br>
+<p>
+<span><span><span>This
+tells us not only that the assertion failed in <span><span>assertCoordinates</span></span>,
+but also that the call to <span><span>assertCoordinates</span></span>
+was on line 21. As your tests get bigger and more complex, helper
+functions are incredibly useful for keeping your tests easier to read
+and keeping redundant code out of the way of the meat of the tests.
+As we have just seen, this Testify assert call stack can be extremely
+useful for tracking assertion failures that happen inside a helper
+function!</span></span></span></p>
+<span>
+</span>
+
+<span>
+</span>
+<p>
+<span><span><span>So
+now we've seen the basics of how to write Go tests with the built-in
+Go testing package and Testify Assert and Require. While it's pretty
+simple, these testing tools are incredibly flexible for writing
+tests. Since all your test code is just regular Go code, you can make
+your tests as simple or complex as they need to be.</span></span></span></p>
+<span>
+</span>
+
+<span></span>
+<p>
+<span><span><span>In
+my next testing tutorial, I will be showing techniques on how to keep
+your tests well-managed as your project evolves and you have more
+code to test. For homework, if you have some Go code you've written,
+try writing some tests with the testing, assert, and require
+packages.</span></span></span></p>
+<span></span>
+<br>
+
+<span></span>
+<div>
+<span><span><span>Stay
+slothful! <span>((.(&#x2299;&#x3C9;&#x2299;)((.</span></span></span></span><br>
+<p>
+<span><b><span><span><span><span>Image credits:</span></span></span></span></b></span><br>
+<br>
+<span><span><span><span>- </span></span></span></span><span><span><span><span><span><span><span><span>The Go Gopher in the top graphic was originally drawn by Renee French and is licensed under <a href="https://creativecommons.org/licenses/by/3.0/us/">CC BY 3.0</a></span></span></span></span></span></span></span></span></p></div>
+<span><div><div>
+<p>
+<span><span>A</span><span>lso,
+shoutout to everyone who helped peer review this blog post, </span><span>both
+Gophers and non-Gophers</span><span>, including my
+parents, Josh Romaker (</span><span>soon to be a</span><span>
+teacher),</span><span> Jason Briggs and Emily Pavlini
+</span><span>(two Meta cofounders)</span><span>,
+</span><span>and</span><span>Jo
+Chasinga, Aaron Schlesinger, and Carlisia Campos who peer reviewed my
+blog post through the Gophers Slack channel! The #GopherDen just
+keeps getting bigger!!</span></span></p></div>
+</div></span><span></span></div>
+</div>
+<span></span><span></span></div>
+</div>
+<span></span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<span><span></span></span></div>
+</div>
+</div>
+
+
+</div>
+
+</div>
+</body></html>

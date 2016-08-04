@@ -1,0 +1,143 @@
+<!DOCTYPE html><html><head><title>Databases are dead, long live the immutable state atom!</title></head><body>
+<h1>Databases are dead, long live the immutable state atom!</h1><p><a href="http://dchambers.github.io/articles/databases-are-dead/" target="_new">Original URL</a></p>
+<p><blockquote>As an app developer, I've always had a dislike of databases, and I've always had this feeling that the best thing would be to not have a database at all, and to just let the program memory be the&hellip;</blockquote></p>
+<div><div class="entry-content">
+ <p>As an app developer, I've always had a dislike of databases, and I've always had this feeling that the best thing would be to not have a database at all, and to just let the program memory be the database, since modifying program state is an order of magnitude simpler than having to do database queries/updates, and having to shuttle program state back and forth between the client program and the database.</p>
+
+<h2>Some Great Resources</h2>
+
+<p>Unfortunately, I could never figure out how to solve the obvious problems with that simpler approach, until I recently found these four separate resources that illuminated the path for me:</p>
+
+
+
+<p>To my surprise, when I subsequently asked the question, "What database would I pair with a full-stack Redux application?", I came to the conclusion: "We don't need databases any more, we can just use the Immutable.js state atom!".</p>
+
+<h2>The Pertinent Bits</h2>
+
+<p>While I highly recommend watching the excellent videos and following the tutorial that led me to this conclusion, the relevant bits as far as this article are concerned are as follows...</p>
+
+<h3>Turning the database inside-out with Apache Samza</h3>
+
+<p>Points of interest:</p>
+
+<ul>
+<li>We currently build databases around the current state of some data, but the most important information is the original set of events that led to that state.</li>
+<li>Databases should just be a set of materialized views built from the original events.</li>
+<li>With functional reactive programming, one can view the domain logic, the view, the DOM, and the browser's video memory as a pipeline of dependent materialized views flowing a stream of live updates from the databases materialized view(s).</li>
+</ul>
+
+<h3>The Value of Values with Rich Hickey</h3>
+
+<p>Points of interest:</p>
+
+<ul>
+<li>Information systems should be built around the processing of facts which are historical records of what happened at a particular time, and are immutable and can't be changed over time.</li>
+<li>A certain percentage of Big Data is probably businesses telling programmers "that database you have is better than the one you gave me, because the one that you gave me only remembers the last thing I told it.".</li>
+</ul>
+
+<h3>Simplicity Matters by Rich Hickey</h3>
+
+<p>Points of interest:</p>
+
+<ul>
+<li>Simplicity is always preferable to complexity, and relational databases and ORMs are much more complex than just having access to the data, and immutable data is much simpler than mutable data.</li>
+</ul>
+
+<h3>Full Stack Redux Tutorial</h3>
+
+<p>Points of interest:</p>
+
+<ul>
+<li>Redux applications have only a single variable containing a reference to an immutable state atom, and this immutable state atom is updated in steps by processing a set of actions.</li>
+<li>Client/Server Redux applications can share large parts of the state-tree between the client and the server, where the server processes the events sent by the various clients, and where the client receives state snapshots from the server as the state changes due to the processing of those events.</li>
+</ul>
+
+<h2>Putting it all Together</h2>
+
+<p>Now, if you consider the server-side immutable state atom to be a materialized view of the historic events received by a server, you can see that we've already got something very close to a Samza style database, but without the event persistence.</p>
+
+<p>Assuming we can do event persistence properly, this approach has a number of interesting properties:</p>
+
+<ol>
+<li>Back-up is just a case of writing the event stream to a replicated disk store.</li>
+<li>Replication of the materialized view can be done by having multiple boxes apply the same set of agreed events.</li>
+<li>Cascaded materialized views can be achieved using the same state synchronization technique used by the client.</li>
+<li>When a bug that produced spurious or invalid data in the state tree is fixed, it becomes possible to re-run the event stream with the fix in place, 'healing' the database.</li>
+<li>Backwards compatibility of new code can be further verified by replaying the entire set of historic events and confirming that the serialized form of the state-tree is equivalent with both the new code and the old code.</li>
+<li>If a system is hacked, but the event stream is written to an un-hackable <em>append-only</em> data store, then the database can be more easily healed by removing or amending the hackers events from the event stream, and rebuilding the materialized views using this modified set of events.</li>
+</ol>
+
+<p>But also, this is a better approach because there's an order of magnitude of productivity gains to be gained due to the fact you avoid all of the state synchronization complexity by killing of the database!</p>
+
+<h2>The Architecture</h2>
+
+<p>This is how I think a simple Redux nodb application is structured:</p>
+
+
+
+<p>and this is what I think it looks like when fail-over, redundancy and scalability are added in:</p>
+
+
+
+<p>Let's take a look at what these boxes all do...</p>
+
+<h3>Chronicler</h3>
+
+<p>The Chronicler forms the accepted history of all client and server events. It only acknowledges receipt of an event after it's been persisted to disk, and it's able to ignore re-sends for events that have already been accepted. Taken together, this allows clients to know if user actions have been received, and to avoid penalization for re-sending if they incorrectly believe an action hasn't been received.</p>
+
+<p>Only one chronicler is active at any time, where an active standby will normally be ready to take ownership of the chronicler's IP address should the heartbeat from the active chronicler stop.</p>
+
+<p>The chronicler writes the records to a NAS, which is the closest thing to a database in this architecture. By setting the sticky bit on the directory the chronicler writes its records to, it becomes impossible to erase history even if the chronicler is compromised.</p>
+
+<h3>Data View</h3>
+
+<p>The Data Views maintain a state-tree based on the event stream from the active chronicler. They are composed of a set of reducer functions and nothing else. In addition to the reducers for the domain actions, data-views must also support two non-domain specific actions:</p>
+
+<ol>
+<li><code>SET_STATE</code> to replace the state-tree with some data provided by the chronicler.</li>
+<li><code>SNAPSHOT</code> to serialize the current state-tree to the SAN.</li>
+</ol>
+
+<p>Clients will normally seek to establish a connection to the data-views before connecting to the chronicler, on the basis that clients can't sensibly seek to affect the state-tree until they first know its current state. Here, round robin DNS is used to evenly share the load between the hosts providing a particular data-view.</p>
+
+<p>For isomorphic apps, the data-views will also effectively be app-servers, as they will need to provide rendered page views for any app URLs, in addition to the streamed state updates. Since there can be multiple data-views publishing updates for the same event stream, each update must include a unique event-identifer, and data-views that don't need to change based on some event will still need to send an empty update message so clients know when it's safe to re-render.</p>
+
+<h3>Envoy</h3>
+
+<p>Envoys are used to communicate to the outside world. Since this involves creating asynchronous actions, some form of Redux middle-ware will normally be used for this purpose. However, the built in Redux middle-ware (e.g. <a href="https://github.com/acdlite/redux-promise">promises</a>, <a href="https://github.com/acdlite/redux-rx">observables</a>, or <a href="https://github.com/gaearon/redux-thunk">thunks</a>) can't be used because the resultant synchronous actions must be channeled back though the chronicler so they can be persisted.</p>
+
+<p>Envoys are purposely not communicated to when the chronicler is time traveling (e.g. if restoring from a crash by pushing a snapshot and then the actions that came after that snapshot) since this would otherwise cause historic actions to be repeated when they shouldn't be.</p>
+
+<h3>Cascaded Data View</h3>
+
+<p>A cascaded data-view provides some derived view based on the contents of one or more up-stream views. They use the same streaming state updates that clients use to access a view. Like normal data views, they are composed from a set of reducer functions and nothing else. They don't require snap-shotting since their state can be computed solely from the current state of one or more data-views.</p>
+
+<p>Cascaded data views are designed to be run on separate hosts from the view(s) they are derived from; instead, <a href="https://github.com/rackt/reselect">reselect</a> can be used if you prefer to have the derived data directly within the primary data-views. So, they are mostly about scalability, but they also have the benefit that they can also be created by third parties since they use the same streaming connection available to clients.</p>
+
+<h2>Scalability</h2>
+
+<p>The chronicler is the only choke point in the system, but since they only need to write events to a disk, and since client authentication can be done when the connection is formed, it should be possible to handle very large numbers of clients when using a single-threaded non-blocking server like Node.js. A consequence of this design is that client events should only describe the client's intention, and not it's affect on the world, since the chronicler does not attempt to verify whether events can be processed or not. For example, the event "George swings his sword at the dragon" is not the same as "George slays the dragon" &#x2014; unfortunately for the hero, the dragon may have already moved on in the meantime!</p>
+
+<p>One of the nice things about this architecture is the data scalability. Traditional databases always end up becoming coupled to the applications they are designed to support, and when new applications are needed new databases are created whose state must be kept aligned with the original databases, which is in fact an endless stream of bug fixing for a team of DBAs!</p>
+
+<p>On the other hand, events are less coupled to an application. When a new application comes along we may find that certain events start to include additional information that the earlier applications didn't need, and include entirely new events too. But this is fine since the materialized views for the original events can continue to ignore these new events, and any new fields on pre-existing events, yet there is always a single unified event-stream for the entire business, and all of the apps and legacy apps that are created along the way.</p>
+
+<h2>Missing Bits</h2>
+
+<p>There are a number of missing bits that, at present, apps would need to implement themselves:</p>
+
+<ul>
+<li>The Chronicler is an entirely re-usable component that could be shared by all apps.</li>
+<li>The full-stack Redux example currently sends the entire state to the client instead of a diff, which is obviously inefficient, so diff/patch primitives would be helpful here.</li>
+<li>The streaming connection for the data-view probably contains some re-usable bits in addition to the diffing/patching.</li>
+<li>A reducer for the <code>SET_STATE</code> and <code>SNAPSHOT</code> actions could be produced.</li>
+</ul>
+
+<h2>Conclusion</h2>
+
+<p>In addition to making it possible to do pure functional programming within GUI apps, the same technologies also make it possible to have something far superior to the traditional database. Redux + Immutable.Js + React really are the gifts that keep on giving!</p>
+
+ 
+ </div>
+ </div>
+</body></html>

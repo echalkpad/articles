@@ -1,0 +1,330 @@
+<!DOCTYPE html><html><head><title>Building a React Universal Blog App: A Step-by-Step Guide</title></head><body>
+<h1>Building a React Universal Blog App: A Step-by-Step Guide</h1><p><a href="http://www.sitepoint.com/building-a-react-universal-blog-app-a-step-by-step-guide/" target="_new">Original URL</a></p>
+<p><blockquote>When we think of single page applications (SPAs) we think browsers, JavaScript, speed and, in my case, invisibility to search engines. This is because a SPA renders a page&#x2019;s content using&hellip;</blockquote></p>
+<div>
+
+ 
+ <div class="ArticleCopy language-">
+ <p>When we think of single page applications (SPAs) we think browsers, JavaScript, speed and, in my case, invisibility to search engines. This is because a SPA renders a page&#x2019;s content using JavaScript and since web crawlers do not use a browser to view web pages, they cannot view and index the content. Or, to better say, most of them can&#x2019;t. This is a problem that some developers have tried to solve in various ways:</p>
+<ol>
+<li>Adding an escaped fragment version of a website which requires all pages to be available in static form and adds a lot of extra work (<a href="https://developers.google.com/webmasters/ajax-crawling/docs/specification?hl=en">now deprecated</a>).</li>
+<li>Using a paid service to un-browserify a SPA into static markup for search engine spiders to crawl.</li>
+<li>Trust that search engines are now advanced enough to read our JavaScript-only content (I wouldn&#x2019;t just yet).</li>
+</ol>
+<p>Using Node.js on the server and React on the client, we can build our JavaScript app to be <strong>universal</strong> (or <strong>isomorphic</strong>). This could offer several benefits from server-side and browser-side rendering, allowing both search engines and humans using browsers to view our SPA content.</p>
+<p>In this step-by-step tutorial, made of two parts, I will show you how to build a React Universal Blog App that will first render markup on the server side to make our content available to search engines. Then, it will let the browser take over in a single page application that is both fast and responsive. </p>
+<h2 id="getting-started">Getting Started</h2>
+<p>Our universal blog app will make use of the following technologies and tools:</p>
+
+<p>To start, run the following commands:</p>
+<pre><code class="language-">mkdir react-universal-blog
+cd react-universal-blog</code></pre>
+<p>Now create a <code>package.json</code> file and add the following content:</p>
+<pre><code class="language-javascript">{
+ "name": "react-universal-blog",
+ "version": "1.0.0",
+ "description": "",
+ "main": "app-server.js",
+ "dependencies": {
+ "babel": "^5.8.29",
+ "babel-core": "^5.8.32",
+ "babel-loader": "^5.3.2",
+ "cosmicjs": "^2.0.0",
+ "events": "^1.1.0",
+ "express": "^4.13.3",
+ "flux": "^2.1.1",
+ "history": "^1.14.0",
+ "hogan-express": "^0.5.2",
+ "lodash": "^3.10.1",
+ "react": "^0.14.1",
+ "react-dom": "^0.14.1",
+ "react-router": "^1.0.1",
+ "webpack": "^1.12.2"
+ },
+ "scripts": {
+ "development": "cp views/index.html public/index.html &amp;&amp; NODE_ENV=development webpack &amp;&amp; webpack-dev-server --content-base public/ --hot --inline --devtool inline-source-map --history-api-fallback"
+ },
+ "author": "",
+ "license": "ISC",
+ "devDependencies": {
+ "react-hot-loader": "^1.3.0",
+ "webpack-dev-server": "^1.12.1"
+ }
+}</code></pre>
+<p>In this file you will notice that we&#x2019;ve added:</p>
+<ol>
+<li><a href="https://babeljs.io/">Babel</a> to package our CommonJS modules and convert our ES6 and React JSX into browser-compatible JavaScript.</li>
+<li>The Cosmic JS official Node.js client to easily serve our blog content from the Cosmic JS cloud-hosted content API.</li>
+<li>Flux for app data management (which is a very important element in our React application).</li>
+<li>React for UI managment on server and browser.</li>
+<li>React Router for routes on server and browser.</li>
+<li><a href="https://github.com/webpack/webpack">webpack</a> for bringing everything together into a <code>bundle.js</code> file.</li>
+</ol>
+
+<p>We&#x2019;ve also added a script in our <code>package.json</code> file. When we run <code>npm run development</code>, the script copies the <code>index.html</code> file from our <code>views</code> folder into our <code>public</code> folder. Then, it sets the content base for our <code>webpack-dev-server</code> to <code>public/</code> and enables hot reloading (on <code>.js</code> file save). Finally, it helps us debug our components at the source and gives us a fallback for pages it can&#x2019;t find (falls back to <code>index.html</code>).</p>
+<p>Now let&#x2019;s set up our webpack configuration file by editing the file <code>webpack.config.js</code>:</p>
+<pre><code class="language-javascript">// webpack.config.js
+if(process.env.NODE_ENV === 'development'){
+ var loaders = ['react-hot','babel']
+} else {
+ var loaders = ['babel']
+}
+module.exports = {
+ devtool: 'eval',
+ entry: './app-client.js',
+ output: {
+ path: __dirname + '/public/dist',
+ filename: 'bundle.js',
+ publicPath: '/dist/'
+ },
+ module: {
+ loaders: [{
+ test: /\.js$/,
+ loaders: loaders,
+ exclude: /node_modules/
+ }]
+ }
+};</code></pre>
+<p>You&#x2019;ll notice that we&#x2019;ve added an <code>entry</code> property with a value of <code>app-client.js</code>. This file serves as our app client entry point, meaning that from this point webpack will bundle our application and output it to <code>/public/dist/bundle.js</code> (as specified in the <code>output</code> property). We also use loaders to let Babel work its magic on our ES6 and JSX code. React Hot Loader is used for hot-loading (no page refresh!) during development.</p>
+<p>Before we jump into React-related stuff, let&#x2019;s get the look-and-feel of our blog ready to go. Since I&#x2019;d like you to focus more on functionality than style in this tutorial, here we&#x2019;ll use a pre-built front-end theme. I&#x2019;ve chosen one from <a href="http://startbootstrap.com/">Start Bootstrap</a> called <a href="http://startbootstrap.com/template-overviews/clean-blog/">Clean Blog</a>.</p>
+<p>Create a folder called <code>views</code> and inside it an <code>index.html</code> file. Open the HTML file and add the following code:</p>
+<pre><code class="language-markup">&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+ &lt;meta charset="utf-8"&gt;
+ &lt;meta http-equiv="X-UA-Compatible" content="IE=edge"&gt;
+ &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
+ &lt;meta name="description" content=""&gt;
+ &lt;meta name="author" content=""&gt;
+ &lt;title&gt;{{ site.title }}{{# page }} | {{ page.title }}{{/ page }}&lt;/title&gt;
+ &lt;!-- Bootstrap Core CSS --&gt;
+ &lt;link href="/css/bootstrap.min.css" rel="stylesheet"&gt;
+ &lt;!-- Custom CSS --&gt;
+ &lt;link href="/css/clean-blog.min.css" rel="stylesheet"&gt;
+ &lt;link href="/css/cosmic-custom.css" rel="stylesheet"&gt;
+ &lt;!-- Custom Fonts --&gt;
+ &lt;link href="//maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css" rel="stylesheet" type="text/css"&gt;
+ &lt;link href="//fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic" rel="stylesheet" type="text/css"&gt;
+ &lt;link href="//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css"&gt;
+ &lt;!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries --&gt;
+ &lt;!-- WARNING: Respond.js doesn't work if you view the page via file:// --&gt;
+ &lt;!--[if lt IE 9]&gt;
+ &lt;script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"&gt;&lt;/script&gt;
+ &lt;script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"&gt;&lt;/script&gt;
+ &lt;![endif]--&gt;
+&lt;/head&gt;
+&lt;body class="hidden"&gt;
+ &lt;div id="app"&gt;{{{ reactMarkup }}}&lt;/div&gt;
+ &lt;script src="/js/jquery.min.js"&gt;&lt;/script&gt;
+ &lt;script src="/js/bootstrap.min.js"&gt;&lt;/script&gt;
+ &lt;script src="/js/clean-blog.min.js"&gt;&lt;/script&gt;
+ &lt;script src="/dist/bundle.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+<p>To get all of the JS and CSS files included in <code>public</code>, you can get them from the <a href="https://github.com/sitepoint-editors/react-universal-blog">GitHub repository</a>. <a href="https://github.com/sitepoint-editors/react-universal-blog/archive/master.zip">Click here to download the files</a>.</p>
+<p>Generally I would use the fantastic <a href="https://react-bootstrap.github.io/">React Bootstrap</a> package and refrain from using jQuery. However, for the sake of brevity we&#x2019;ll keep the theme&#x2019;s pre-built jQuery functionality.</p>
+<p>In our <code>index.html</code> file, we will have our React mount point set up at the <code>div</code> where <code>id="app"</code>. The template variable <code>{{{ reactMarkup }}}</code> will be converted into our server-rendered markup and then once the browser kicks in, our React application will take over and mount to the <code>div</code> with <code>id="app"</code>. To improve the user experience while our JavaScript loads everything, we add <code>class="hidden"</code> to our body. Then, we remove this class once React has mounted. It might sound a bit complicated, but I&#x2019;ll show you how we&#x2019;ll do this in a minute.</p>
+<p>At this point, your app should have the following structure:</p>
+<pre><code class="language-">package.json
+public
+ |-css
+ |-bootstrap.min.css
+ |-cosmic-custom.css
+ |-js
+ |-jquery.min.js
+ |-bootstrap.min.js
+ |-clean-blog.min.js
+views
+ |-index.html
+webpack.config.js</code></pre>
+<p>Now that we have our static pieces done, let&#x2019;s start building some React Components.</p>
+<h2 id="our-blog-app-components-basic-example">Our Blog App Components (Basic Example)</h2>
+<p>Let&#x2019;s begin building the UI for our app by setting up the pages for our blog. Because this is going to be a portfolio blog for a creative professional, our blog will have the following pages:</p>
+
+<p>Let&#x2019;s start by creating a file called <code>app-client.js</code> and add the following content to it:</p>
+<pre><code class="language-javascript">// app-client.js
+import React from 'react'
+import { render } from 'react-dom'
+import { Router } from 'react-router'
+import createBrowserHistory from 'history/lib/createBrowserHistory'
+const history = createBrowserHistory()
+
+// Routes
+import routes from './routes'
+
+const Routes = (
+ &lt;Router history={history}&gt;
+ { routes }
+ &lt;/Router&gt;
+)
+
+const app = document.getElementById('app')
+render(Routes, app)</code></pre>
+<p>To better understand how React Router works, you can visit <a href="https://github.com/rackt/react-router">their GitHub repo</a>. The gist here is that we have in <code>app-client.js</code> our <code>Router</code> component that has a browser history for our client-side routing. Our server-rendered markup won&#x2019;t need browser history, so we&#x2019;ll create a separate <code>routes.js</code> file to be shared between our server and client entry points.</p>
+<p>Add the following to the <code>routes.js</code>file:</p>
+<pre><code class="language-javascript">// routes.js
+import React, { Component } from 'react'
+import { Route, IndexRoute, Link } from 'react-router'
+
+// Main component
+class App extends Component {
+ componentDidMount(){
+ document.body.className=''
+ }
+ render(){
+ return (
+ &lt;div&gt;
+ &lt;h1&gt;React Universal Blog&lt;/h1&gt;
+ &lt;nav&gt;
+ &lt;ul&gt;
+ &lt;li&gt;&lt;Link to="/"&gt;Home&lt;/Link&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;Link to="/about"&gt;About&lt;/Link&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;Link to="/work"&gt;Work&lt;/Link&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;Link to="/contact"&gt;Contact&lt;/Link&gt;&lt;/li&gt;
+ &lt;/ul&gt;
+ &lt;/nav&gt;
+ { this.props.children }
+ &lt;/div&gt;
+ )
+ }
+}
+
+// Pages
+class Home extends Component {
+ render(){
+ return (
+ &lt;div&gt;
+ &lt;h2&gt;Home&lt;/h2&gt;
+ &lt;div&gt;Some home page content&lt;/div&gt;
+ &lt;/div&gt;
+ )
+ }
+}
+class About extends Component {
+ render(){
+ return (
+ &lt;div&gt;
+ &lt;h2&gt;About&lt;/h2&gt;
+ &lt;div&gt;Some about page content&lt;/div&gt;
+ &lt;/div&gt;
+ )
+ }
+}
+class Work extends Component {
+ render(){
+ return (
+ &lt;div&gt;
+ &lt;h2&gt;Work&lt;/h2&gt;
+ &lt;div&gt;Some work page content&lt;/div&gt;
+ &lt;/div&gt;
+ )
+ }
+}
+class Contact extends Component {
+ render(){
+ return (
+ &lt;div&gt;
+ &lt;h2&gt;Contact&lt;/h2&gt;
+ &lt;div&gt;Some contact page content&lt;/div&gt;
+ &lt;/div&gt;
+ )
+ }
+}
+class NoMatch extends Component {
+ render(){
+ return (
+ &lt;div&gt;
+ &lt;h2&gt;NoMatch&lt;/h2&gt;
+ &lt;div&gt;404 error&lt;/div&gt;
+ &lt;/div&gt;
+ )
+ }
+}
+
+export default (
+ &lt;Route path="/" component={App}&gt;
+ &lt;IndexRoute component={Home}/&gt;
+ &lt;Route path="about" component={About}/&gt;
+ &lt;Route path="work" component={Work}/&gt;
+ &lt;Route path="contact" component={Contact}/&gt;
+ &lt;Route path="*" component={NoMatch}/&gt;
+ &lt;/Route&gt;
+)</code></pre>
+<p>From here we have a pretty basic working example of a blog app with a few different pages. Now, let&#x2019;s run our application and check it out! In your terminal run the following commands:</p>
+<pre><code class="language-">mkdir public
+npm install
+npm run development</code></pre>
+<p>Then navigate to <a href="http://localhost:8080">http://localhost:8080</a> in your browser to see your basic blog in action. </p>
+<p>These things done, it&#x2019;s now time to get this to run on the server. Create a file called <code>app-server.js</code> and add this content:</p>
+<pre><code class="language-javascript">// app-server.js
+import React from 'react'
+import { match, RoutingContext } from 'react-router'
+import ReactDOMServer from 'react-dom/server'
+import express from 'express'
+import hogan from 'hogan-express'
+
+// Routes
+import routes from './routes'
+
+// Express
+const app = express()
+app.engine('html', hogan)
+app.set('views', __dirname + '/views')
+app.use('/', express.static(__dirname + '/public/'))
+app.set('port', (process.env.PORT || 3000))
+
+app.get('*',(req, res) =&gt; {
+
+ match({ routes, location: req.url }, (error, redirectLocation, renderProps) =&gt; {
+ 
+ const reactMarkup = ReactDOMServer.renderToStaticMarkup(<routingcontext></routingcontext>)
+ 
+ res.locals.reactMarkup = reactMarkup
+
+ if (error) {
+ res.status(500).send(error.message)
+ } else if (redirectLocation) {
+ res.redirect(302, redirectLocation.pathname + redirectLocation.search)
+ } else if (renderProps) {
+ 
+ // Success!
+ res.status(200).render('index.html')
+ 
+ } else {
+ res.status(404).render('index.html')
+ }
+ })
+})
+
+app.listen(app.get('port'))
+
+console.info('==&gt; Server is listening in ' + process.env.NODE_ENV + ' mode')
+console.info('==&gt; Go to http://localhost:%s', app.get('port'))</code></pre>
+<p>In <code>app-server.js</code> we are loading the basic routes that we&#x2019;ve set up. These are converting the rendered markup into a string and then passing it as a variable to our template.</p>
+<p>The following step will be creating a file, called <code>app.js</code>, that will allow us to use ES6 in Node.js. Such file will have the following code:</p>
+<pre><code class="language-javascript">// app.js
+require('babel/register')
+require('./app-server.js')</code></pre>
+<p>We&#x2019;re ready to start our server and view our code on it, but first, let&#x2019;s create a script to do so.</p>
+<p>Open your <code>package.json</code> file and edit the <code>script</code> section to look like the following:</p>
+<pre><code class="language-javascript">// ...
+"scripts": {
+ "development": "cp views/index.html public/index.html &amp;&amp; NODE_ENV=development webpack &amp;&amp; webpack-dev-server --content-base public/ --hot --inline --devtool inline-source-map --history-api-fallback",
+ "production": "rm -rf public/index.html &amp;&amp; NODE_ENV=production webpack -p &amp;&amp; NODE_ENV=production node app.js",
+ "start": "npm run production"
+}
+// ...</code></pre>
+<p>Now that we have our <code>production</code> script set up, we can run our code on both the server side and the client side. In your terminal execute:</p>
+<pre><code class="language-">npm start</code></pre>
+<p>Navigate in your browser to <a href="http://localhost:3000">http://localhost:3000</a>. You should see your simple blog content and be able to quickly and easily navigate through the pages in SPA mode.</p>
+<p>Go ahead and hit <code>view source</code>. Notice our SPA code is there for all robots to find as well. We get the best of both worlds!</p>
+<h2 id="conclusions">Conclusions</h2>
+<p>In this first part we&#x2019;ve started digging into the world of React and see how we can use it, together with Node.js, to build a React Universal Blog App.</p>
+<p>If you wish to take your blog to the next level and know how to add and edit content, don&#x2019;t forget to read the second part. We&#x2019;ll get into the real meat of how to easily scale our React Universal Blog App using React organizational concepts and the <strong>Flux pattern</strong>.</p>
+ </div>
+
+ 
+
+
+ </div>
+</body></html>

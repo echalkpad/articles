@@ -1,0 +1,392 @@
+<!DOCTYPE html><html><head><title>Modern Methods for Sentiment Analysis</title></head><body>
+<h1>Modern Methods for Sentiment Analysis</h1><p><a href="http://districtdatalabs.silvrback.com/modern-methods-for-sentiment-analysis?cmp=em-data-na-na-newsltr_20150415_oreilly_data&imm_mid=0d030b" target="_new">Original URL</a></p>
+<p><blockquote>Sentiment analysis is a common application of Natural Language Processing (NLP) methodologies, particularly classification, whose goal is to extract the emotional content in text. In this way,&hellip;</blockquote></p>
+<div><div class="all_external_links">
+ <p>Sentiment analysis is a common application of Natural Language Processing (NLP) methodologies, particularly classification, whose goal is to extract the emotional content in text. In this way, sentiment analysis can be seen as a method to quantify qualitative data with some sentiment score. While sentiment is largely subjective, sentiment quantification has enjoyed many useful implementations, such as businesses gaining understanding about consumer reactions to a product, or detecting hateful speech in online comments.</p>
+
+<p>The simplest form of sentiment analysis is to use a dictionary of good and bad words. Each word in a sentence has a score, typically +1 for positive sentiment and -1 for negative. Then, we simply add up the scores of all the words in the sentence to get a final sentiment total. Clearly, this has many limitations, the most important being that it neglects context and surrounding words. For example, in our simple model the phrase &#x201C;not good&#x201D; may be classified as 0 sentiment, given &#x201C;not&#x201D; has a score of -1 and &#x201C;good&#x201D; a score of +1. A human would likely classify &#x201C;not good&#x201D; as negative, despite the presence of &#x201C;good&#x201D;.</p>
+
+<p>Another common method is to treat a text as a &#x201C;bag of words&#x201D;. We treat each text as a 1 by <code>N</code> vector, where <code>N</code> is the size of our vocabulary. Each column is a word, and the value is the number of times that word appears. For example, the phrase &#x201C;bag of bag of words&#x201D; might be encoded as [2, 2, 1]. This could then be fed into a machine learning algorithm for classification, such as logistic regression or SVM, to predict sentiment on unseen data. Note that this requires data with known sentiment to train on in a supervised fashion. While this is an improvement over the previous method, it still ignores context, and the size of the data increases with the size of the vocabulary.</p>
+
+<h2 id="toc_0">Word2Vec and Doc2Vec</h2>
+
+<p>Recently, Google developed a method called <a href="https://code.google.com/p/word2vec/">Word2Vec</a> that captures the context of words, while at the same time reducing the size of the data. Word2Vec is actually two different methods: Continuous Bag of Words (CBOW) and Skip-gram. In the CBOW method, the goal is to predict a word given the surrounding words. Skip-gram is the converse: we want to predict a window of words given a single word (see Figure 1). Both methods use artificial neural networks as their classification algorithm. Initially, each word in the vocabulary is a random N-dimensional vector. During training, the algorithm learns the optimal vector for each word using the CBOW or Skip-gram method.</p>
+
+<p><img alt="CBOW and Skip-gram" src="https://silvrback.s3.amazonaws.com/uploads/60a81cd5-5189-4550-9709-523b3feef3d1/sentiment_01_large.png"></p>
+
+<p><em>Figure 1: Architecture for the CBOW and Skip-gram method, taken from <a href="http://arxiv.org/pdf/1301.3781.pdf">Efficient Estimation of Word Representations in Vector Space</a>. <code>W(t)</code> is the current word, while <code>w(t-2)</code>, <code>w(t-1)</code>, etc. are the surrounding words.</em></p>
+
+<p>These word vectors now capture the context of surrounding words. This can be seen by using basic algebra to find word relations (i.e. &#x201C;king&#x201D; &#x2013; &#x201C;man&#x201D; + &#x201C;woman&#x201D; = &#x201C;queen&#x201D;). These word vectors can be fed into a classification algorithm, as opposed to bag-of-words, to predict sentiment. The advantage is that we now have some word context, and our feature space is much lower (typically ~300 as opposed to ~100,000, which is the size of our vocabulary). We also had to do very little manual feature creation since the neural network was able to extract those features for us. Since text have varying length, one might take the average of all word vectors as the input to a classification algorithm to classify whole text documents.</p>
+
+<p>However, even with the above method of averaging word vectors, we are ignoring word order. As a way to summarize bodies of text of varying length, Quoc Le and Tomas Mikolov came up with the <a href="http://cs.stanford.edu/%7Equocle/paragraph_vector.pdf">Doc2Vec</a> method. This method is almost identical to Word2Vec, except we now generalize the method by adding a paragraph/document vector. Like Word2Vec, there are two methods: Distributed Memory (DM) and Distributed Bag of Words (DBOW). DM attempts to predict a word given its previous words and a paragraph vector. Even though the context window moves across the text, the paragraph vector does not (hence distributed memory) and allows for some word-order to be captured. DBOW predicts a random group of words in a paragraph given only its paragraph vector (see Figure 2).</p>
+
+<p><img alt="Doc2Vec" src="https://silvrback.s3.amazonaws.com/uploads/7b02d9b7-20e3-43f8-bed1-e96146611456/sentiment_02_large.png"></p>
+
+<p><em>Figure 2: Architecture for Doc2Vec, taken from <a href="http://cs.stanford.edu/%7Equocle/paragraph_vector.pdf">Distributed Representations of Sentences and Documents</a>.</em></p>
+
+<p>Once it has been trained, these paragraph vectors can be fed into a sentiment classifier without the need to aggregate words. This method is currently the state-of-the-art when it comes to sentiment classification on the IMDB movie review data set, achieving only a 7.42% error rate. Of course, none of this is useful if we cannot actually implement them. Luckily, a very-well optimized version of Word2Vec and Doc2Vec is available in <a href="https://radimrehurek.com/gensim/">gensim</a>, a Python library.</p>
+
+<h2 id="toc_1">Word2Vec Example in Python</h2>
+
+<p>In this section we show how one might use word vectors in a sentiment classification task. The <code>gensim</code> library comes standard with the Anaconda distribution or can be installed using pip. From there you can train word vectors on your own corpus (a dataset of text documents) or import pre-trained vectors from C text or binary format:</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">gensim.models.word2vec</span> <span class="kn">import</span> <span class="n">Word2Vec</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">Word2Vec</span><span class="o">.</span><span class="n">load_word2vec_format</span><span class="p">(</span><span class="s">'vectors.txt'</span><span class="p">,</span> <span class="n">binary</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span> <span class="c">#C text format</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Word2Vec</span><span class="o">.</span><span class="n">load_word2vec_format</span><span class="p">(</span><span class="s">'vectors.bin'</span><span class="p">,</span> <span class="n">binary</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span> <span class="c">#C binary format</span>
+</pre></div>
+<p>I find this especially useful when loading Google&#x2019;s pre-trained word vectors trained over ~100 billion words from the Google News dataset found in the "Pre-trained word and phrase vectors" section <a href="https://code.google.com/p/word2vec/">here</a>. Note that the file is ~3.5 GB unzipped. Using the Google word vectors we can see some interesting relationships between words:</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">gensim.models.word2vec</span> <span class="kn">import</span> <span class="n">Word2Vec</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">Word2Vec</span><span class="o">.</span><span class="n">load_word2vec_format</span><span class="p">(</span><span class="s">'GoogleNews-vectors-negative300.bin'</span><span class="p">,</span> <span class="n">binary</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+<span class="n">model</span><span class="o">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'woman'</span><span class="p">,</span> <span class="s">'king'</span><span class="p">],</span> <span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'man'</span><span class="p">],</span> <span class="n">topn</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+<span class="p">[(</span><span class="s">u'queen'</span><span class="p">,</span> <span class="mf">0.711819589138031</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'monarch'</span><span class="p">,</span> <span class="mf">0.618967592716217</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'princess'</span><span class="p">,</span> <span class="mf">0.5902432799339294</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'crown_prince'</span><span class="p">,</span> <span class="mf">0.5499461889266968</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'prince'</span><span class="p">,</span> <span class="mf">0.5377323031425476</span><span class="p">)]</span>
+</pre></div>
+<p>What's interesting is that it can find grammatical relationships, for example identifying superlatives or verb stems:<br>
+"biggest" - "big" + "small" = "smallest"</p>
+<div class="highlight"><pre><span class="n">model</span><span class="o">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'biggest'</span><span class="p">,</span><span class="s">'small'</span><span class="p">],</span> <span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'big'</span><span class="p">],</span> <span class="n">topn</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+<span class="p">[(</span><span class="s">u'smallest'</span><span class="p">,</span> <span class="mf">0.6086569428443909</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'largest'</span><span class="p">,</span> <span class="mf">0.6007465720176697</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'tiny'</span><span class="p">,</span> <span class="mf">0.5387299656867981</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'large'</span><span class="p">,</span> <span class="mf">0.456944078207016</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'minuscule'</span><span class="p">,</span> <span class="mf">0.43401968479156494</span><span class="p">)]</span>
+</pre></div>
+<p>"ate" - "eat" + "speak" = "spoke"</p>
+<div class="highlight"><pre><span class="n">model</span><span class="o">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'ate'</span><span class="p">,</span><span class="s">'speak'</span><span class="p">],</span> <span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'eat'</span><span class="p">],</span> <span class="n">topn</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+<span class="p">[(</span><span class="s">u'spoke'</span><span class="p">,</span> <span class="mf">0.6965223550796509</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'speaking'</span><span class="p">,</span> <span class="mf">0.6261293292045593</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'conversed'</span><span class="p">,</span> <span class="mf">0.5754593014717102</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'spoken'</span><span class="p">,</span> <span class="mf">0.570488452911377</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">u'speaks'</span><span class="p">,</span> <span class="mf">0.5630602240562439</span><span class="p">)]</span>
+</pre></div>
+<p>It's clear from the above examples that Word2Vec is able to learn non-trivial relationships between words. This is what makes them powerful for many NLP tasks, and in our case sentiment analysis. Before we move on to using them in sentiment analysis, let us first examine Word2Vec's ability to separate and cluster words. We will use three example word sets: food, sports, and weather words taken from a wonderful website called <a href="http://www.enchantedlearning.com/wordlist/">Enchanted Learning</a>. Since these vectors are 300 dimensional, we will use <a href="http://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html">Scikit-Learn's implementation</a> of a dimensionality reduction algorithm called <a href="http://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding">t-SNE</a> in order to visualize them in 2D.</p>
+
+<p>First we have to obtain the word vectors as follows:</p>
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'food_words.txt'</span><span class="p">,</span> <span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">food_words</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'sports_words.txt'</span><span class="p">,</span> <span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">sports_words</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'weather_words.txt'</span><span class="p">,</span> <span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">weather_words</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="k">def</span> <span class="nf">getWordVecs</span><span class="p">(</span><span class="n">words</span><span class="p">):</span>
+ <span class="n">vecs</span> <span class="o">=</span> <span class="p">[]</span>
+ <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">words</span><span class="p">:</span>
+ <span class="n">word</span> <span class="o">=</span> <span class="n">word</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'</span><span class="se">\n</span><span class="s">'</span><span class="p">,</span> <span class="s">''</span><span class="p">)</span>
+ <span class="k">try</span><span class="p">:</span>
+ <span class="n">vecs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">model</span><span class="p">[</span><span class="n">word</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">300</span><span class="p">)))</span>
+ <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+ <span class="k">continue</span>
+ <span class="n">vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">vecs</span><span class="p">)</span>
+ <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">vecs</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s">'float'</span><span class="p">)</span> <span class="c">#TSNE expects float type values</span>
+
+<span class="n">food_vecs</span> <span class="o">=</span> <span class="n">getWordVecs</span><span class="p">(</span><span class="n">food_words</span><span class="p">)</span>
+<span class="n">sports_vecs</span> <span class="o">=</span> <span class="n">getWordVecs</span><span class="p">(</span><span class="n">sports_words</span><span class="p">)</span>
+<span class="n">weather_vecs</span> <span class="o">=</span> <span class="n">getWordVecs</span><span class="p">(</span><span class="n">weather_words</span><span class="p">)</span>
+</pre></div>
+<p>We can then use TSNE and matplotlib to visualize the clusters with the following code:</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.manifold</span> <span class="kn">import</span> <span class="n">TSNE</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+
+<span class="n">ts</span> <span class="o">=</span> <span class="n">TSNE</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">reduced_vecs</span> <span class="o">=</span> <span class="n">ts</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">food_vecs</span><span class="p">,</span> <span class="n">sports_vecs</span><span class="p">,</span> <span class="n">weather_vecs</span><span class="p">)))</span>
+
+<span class="c">#color points by word group to see if Word2Vec can separate them</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">reduced_vecs</span><span class="p">)):</span>
+ <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">food_vecs</span><span class="p">):</span>
+ <span class="c">#food words colored blue</span>
+ <span class="n">color</span> <span class="o">=</span> <span class="s">'b'</span>
+ <span class="k">elif</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">food_vecs</span><span class="p">)</span> <span class="ow">and</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">food_vecs</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">sports_vecs</span><span class="p">)):</span>
+ <span class="c">#sports words colored red</span>
+ <span class="n">color</span> <span class="o">=</span> <span class="s">'r'</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="c">#weather words colored green</span>
+ <span class="n">color</span> <span class="o">=</span> <span class="s">'g'</span>
+ <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">reduced_vecs</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span> <span class="n">reduced_vecs</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span> <span class="n">marker</span><span class="o">=</span><span class="s">'o'</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+</pre></div>
+<p>The result is as follows:</p>
+
+<p><img alt="t-SNE" src="https://silvrback.s3.amazonaws.com/uploads/8abedf96-3c3c-460a-8dad-eaf37543e40e/sentiment_03_large.png"></p>
+
+<p><em>Figure 3: T-SNE projected clusters of food words (blue), sports words (red), and weather words (green).</em></p>
+
+<p>We can see from the above that Word2Vec does a good job of separating unrelated words, as well as clustering together like words.</p>
+
+<h2 id="toc_2">Analyzing the Sentiment of Emoji Tweets</h2>
+
+<p>Now we will move on to an example in sentiment analysis with tweets gathered using emojis as search terms. We use these emojis as "fuzzy" labels for our data; a smiley emoji (<code>:-)</code>) corresponds to positive sentiment, and a frowny (<code>:-(</code>) to negative. The data consists of an even split between positive and negative with a total of ~400,000 tweets. We randomly sample positive and negative tweets to construct an 80/20, train/test, split. We then train the Word2Vec model on the train tweets. In order to prevent data leakage from the test set, we do not train Word2Vec on the test set until after our classifier has been fit on the training set. To construct inputs for our classifier, we take the average of all word vectors in a tweet. We will be using Scikit-Learn to do a lot of the machine learning.</p>
+
+<p>First we import our data and train the Word2Vec model.</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.cross_validation</span> <span class="kn">import</span> <span class="n">train_test_split</span>
+<span class="kn">from</span> <span class="nn">gensim.models.word2vec</span> <span class="kn">import</span> <span class="n">Word2Vec</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'twitter_data/pos_tweets.txt'</span><span class="p">,</span> <span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">pos_tweets</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'twitter_data/neg_tweets.txt'</span><span class="p">,</span> <span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">neg_tweets</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="c">#use 1 for positive sentiment, 0 for negative</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">pos_tweets</span><span class="p">)),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">neg_tweets</span><span class="p">))))</span>
+
+<span class="n">x_train</span><span class="p">,</span> <span class="n">x_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">train_test_split</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">pos_tweets</span><span class="p">,</span> <span class="n">neg_tweets</span><span class="p">)),</span> <span class="n">y</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
+
+<span class="c">#Do some very minor text preprocessing</span>
+<span class="k">def</span> <span class="nf">cleanText</span><span class="p">(</span><span class="n">corpus</span><span class="p">):</span>
+ <span class="n">corpus</span> <span class="o">=</span> <span class="p">[</span><span class="n">z</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'</span><span class="se">\n</span><span class="s">'</span><span class="p">,</span><span class="s">''</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">]</span>
+ <span class="k">return</span> <span class="n">corpus</span>
+
+<span class="n">x_train</span> <span class="o">=</span> <span class="n">cleanText</span><span class="p">(</span><span class="n">x_train</span><span class="p">)</span>
+<span class="n">x_test</span> <span class="o">=</span> <span class="n">cleanText</span><span class="p">(</span><span class="n">x_test</span><span class="p">)</span>
+
+<span class="n">n_dim</span> <span class="o">=</span> <span class="mi">300</span>
+<span class="c">#Initialize model and build vocab</span>
+<span class="n">imdb_w2v</span> <span class="o">=</span> <span class="n">Word2Vec</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">n_dim</span><span class="p">,</span> <span class="n">min_count</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">imdb_w2v</span><span class="o">.</span><span class="n">build_vocab</span><span class="p">(</span><span class="n">x_train</span><span class="p">)</span>
+
+<span class="c">#Train the model over train_reviews (this may take several minutes)</span>
+<span class="n">imdb_w2v</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">x_train</span><span class="p">)</span>
+</pre></div>
+<p>Next we have to build word vectors for input text in order to average the value of all word vectors in the tweet using the following function:</p>
+<div class="highlight"><pre><span class="c">#Build word vector for training set by using the average value of all word vectors in the tweet, then scale</span>
+<span class="k">def</span> <span class="nf">buildWordVector</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+ <span class="n">vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">size</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="p">))</span>
+ <span class="n">count</span> <span class="o">=</span> <span class="mf">0.</span>
+ <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">text</span><span class="p">:</span>
+ <span class="k">try</span><span class="p">:</span>
+ <span class="n">vec</span> <span class="o">+=</span> <span class="n">imdb_w2v</span><span class="p">[</span><span class="n">word</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="p">))</span>
+ <span class="n">count</span> <span class="o">+=</span> <span class="mf">1.</span>
+ <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+ <span class="k">continue</span>
+ <span class="k">if</span> <span class="n">count</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+ <span class="n">vec</span> <span class="o">/=</span> <span class="n">count</span>
+ <span class="k">return</span> <span class="n">vec</span>
+</pre></div>
+<p>Scaling moves our data set is part of the process of <em>standardization</em> where we move our dataset into a gaussian distribution with a mean of zero, meaning that values above the mean will be positive, and those below the mean will be negative. Many ML models require scaled datasets to perform effectively, especially those with many features (like text classifiers).</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.preprocessing</span> <span class="kn">import</span> <span class="n">scale</span>
+<span class="n">train_vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">buildWordVector</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">n_dim</span><span class="p">)</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">x_train</span><span class="p">])</span>
+<span class="n">train_vecs</span> <span class="o">=</span> <span class="n">scale</span><span class="p">(</span><span class="n">train_vecs</span><span class="p">)</span>
+
+<span class="c">#Train word2vec on test tweets</span>
+<span class="n">imdb_w2v</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">x_test</span><span class="p">)</span>
+</pre></div>
+<p>Finally we have to build our test set vectors and scale them for evaluation.</p>
+<div class="highlight"><pre><span class="c">#Build test tweet vectors then scale</span>
+<span class="n">test_vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">buildWordVector</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">n_dim</span><span class="p">)</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">x_test</span><span class="p">])</span>
+<span class="n">test_vecs</span> <span class="o">=</span> <span class="n">scale</span><span class="p">(</span><span class="n">test_vecs</span><span class="p">)</span>
+</pre></div>
+<p>Next we want to validate our classifier by calculating the prediction accuracy on test data, as well as examining its Receiver Operating Characteristic (ROC) curve. ROC curves measure the true-positive rate vs. the false-positive rate of a classifier while adjusting a parameter of the model. In our case, we adjust the cut-off threshold probability for classifying a tweet as positive or negative sentiment. Generally, the larger the Area Under the Curve (AUC), the better our model does at maximizing true positives while minimizing false positives. More on ROC curves can be found <a href="http://en.wikipedia.org/wiki/Receiver_operating_characteristic">here</a>.</p>
+
+<p>To start we'll train our classifier, in this case using Stochastic Gradient Descent for Logistic Regression.</p>
+<div class="highlight"><pre><span class="c">#Use classification algorithm (i.e. Stochastic Logistic Regression) on training set, then assess model performance on test set</span>
+<span class="kn">from</span> <span class="nn">sklearn.linear_model</span> <span class="kn">import</span> <span class="n">SGDClassifier</span>
+
+<span class="n">lr</span> <span class="o">=</span> <span class="n">SGDClassifier</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="s">'log'</span><span class="p">,</span> <span class="n">penalty</span><span class="o">=</span><span class="s">'l1'</span><span class="p">)</span>
+<span class="n">lr</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">train_vecs</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+
+<span class="k">print</span> <span class="s">'Test Accuracy: </span><span class="si">%.2f</span><span class="s">'</span><span class="o">%</span><span class="n">lr</span><span class="o">.</span><span class="n">score</span><span class="p">(</span><span class="n">test_vecs</span><span class="p">,</span> <span class="n">y_test</span><span class="p">)</span>
+</pre></div>
+<p>We'll then create the ROC curve for evaluation using matplotlib and the roc_curve method of Scikit-Learn's <code>metric</code> package.</p>
+<div class="highlight"><pre><span class="c">#Create ROC curve</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">roc_curve</span><span class="p">,</span> <span class="n">auc</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+
+<span class="n">pred_probas</span> <span class="o">=</span> <span class="n">lr</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">test_vecs</span><span class="p">)[:,</span><span class="mi">1</span><span class="p">]</span>
+
+<span class="n">fpr</span><span class="p">,</span><span class="n">tpr</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">roc_curve</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">pred_probas</span><span class="p">)</span>
+<span class="n">roc_auc</span> <span class="o">=</span> <span class="n">auc</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span><span class="n">tpr</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span><span class="n">tpr</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s">'area = </span><span class="si">%.2f</span><span class="s">'</span> <span class="o">%</span><span class="n">roc_auc</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="s">'k--'</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.05</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s">'lower right'</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+<p>The resulting curve is as follows:</p>
+
+<p><img alt="ROC curve" src="https://silvrback.s3.amazonaws.com/uploads/6af4b7cf-e339-40e8-a2d9-1cdce7046ba5/sentiment_04_large.png"></p>
+
+<p><em>Figure 4: ROC Curve for a logistic classifier on our training data of tweets.</em></p>
+
+<p>Without any type of feature creation and minimal text preprocessing we can achieve 73% test accuracy using a simple linear model provided by Scikit-Learn. Interestingly, removing punctuation actually causes the accuracy to suffer, suggesting Word2Vec can find interesting features when characters such as "?" and "!" are present. Treating these as individual words, training for longer, doing more preprocessing, and adjusting parameters in both Word2Vec and the classifier could all help in improving accuracy. I have found that using Artificial Neural Networks (ANNs) can improve the accuracy by about 5% when using word vectors. Note that Scikit-Learn does not provide an implementation of ANN classifiers so I used a custom library I created:</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">NNet</span> <span class="kn">import</span> <span class="n">NeuralNet</span>
+
+<span class="n">nnet</span> <span class="o">=</span> <span class="n">NeuralNet</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="n">learn_rate</span><span class="o">=</span><span class="mf">1e-1</span><span class="p">,</span> <span class="n">penalty</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">)</span>
+<span class="n">maxiter</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="mi">150</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">nnet</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">train_vecs</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">fine_tune</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">maxiter</span><span class="o">=</span><span class="n">maxiter</span><span class="p">,</span> <span class="n">SGD</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="n">batch</span><span class="p">,</span> <span class="n">rho</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
+
+<span class="k">print</span> <span class="s">'Test Accuracy: </span><span class="si">%.2f</span><span class="s">'</span><span class="o">%</span><span class="n">nnet</span><span class="o">.</span><span class="n">score</span><span class="p">(</span><span class="n">test_vecs</span><span class="p">,</span> <span class="n">y_test</span><span class="p">)</span>
+</pre></div>
+<p>The resulting accuracy is 77%. As with any machine learning task, picking the right model is usually more a matter of art than science. If you'd like to use my custom library you can find it on my <a href="https://github.com/mczerny/NNet">github</a>. Be warned, it is likely very messy and not regularly maintained! If you would like to contribute please feel free to fork the repository. It could definitely use some TLC!</p>
+
+<h2 id="toc_3">Using Doc2Vec to Analyze Movie Reviews</h2>
+
+<p>Using the averages of word vectors worked fine in the case of tweets. This is because tweets are typically only a few to tens of words in length, which allows us to preserve the relevant features even when averaging. Once we go to the paragraph scale, however, we risk throwing away rich features when we ignore word order and context. In this case it is better to use Doc2Vec to create our input features. As an example we will use the <a href="http://ai.stanford.edu/%7Eamaas/data/sentiment/">IMDB movie review dataset</a> to test the usefulness of Doc2Vec in sentiment analysis. The data consists of 25,000 positive movie reviews, 25,000 negative, and 50,000 unlabeled reviews. We first train Doc2Vec over the unlabeled reviews. The methodology then identically follows that of the Word2Vec example above, except now we will use both DM and DBOW vectors as inputs by concatenating them.</p>
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">gensim</span>
+
+<span class="n">LabeledSentence</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">doc2vec</span><span class="o">.</span><span class="n">LabeledSentence</span>
+
+<span class="kn">from</span> <span class="nn">sklearn.cross_validation</span> <span class="kn">import</span> <span class="n">train_test_split</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'IMDB_data/pos.txt'</span><span class="p">,</span><span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">pos_reviews</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'IMDB_data/neg.txt'</span><span class="p">,</span><span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">neg_reviews</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">'IMDB_data/unsup.txt'</span><span class="p">,</span><span class="s">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">infile</span><span class="p">:</span>
+ <span class="n">unsup_reviews</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+<span class="c">#use 1 for positive sentiment, 0 for negative</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">pos_reviews</span><span class="p">)),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">neg_reviews</span><span class="p">))))</span>
+
+<span class="n">x_train</span><span class="p">,</span> <span class="n">x_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">train_test_split</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">pos_reviews</span><span class="p">,</span> <span class="n">neg_reviews</span><span class="p">)),</span> <span class="n">y</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
+
+<span class="c">#Do some very minor text preprocessing</span>
+<span class="k">def</span> <span class="nf">cleanText</span><span class="p">(</span><span class="n">corpus</span><span class="p">):</span>
+ <span class="n">punctuation</span> <span class="o">=</span> <span class="s">""".,?!:;(){}[]"""</span>
+ <span class="n">corpus</span> <span class="o">=</span> <span class="p">[</span><span class="n">z</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'</span><span class="se">\n</span><span class="s">'</span><span class="p">,</span><span class="s">''</span><span class="p">)</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">]</span>
+ <span class="n">corpus</span> <span class="o">=</span> <span class="p">[</span><span class="n">z</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'&lt;br /&gt;'</span><span class="p">,</span> <span class="s">' '</span><span class="p">)</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">]</span>
+
+ <span class="c">#treat punctuation as individual words</span>
+ <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">punctuation</span><span class="p">:</span>
+ <span class="n">corpus</span> <span class="o">=</span> <span class="p">[</span><span class="n">z</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="s">' </span><span class="si">%s</span><span class="s"> '</span><span class="o">%</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">]</span>
+ <span class="n">corpus</span> <span class="o">=</span> <span class="p">[</span><span class="n">z</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">]</span>
+ <span class="k">return</span> <span class="n">corpus</span>
+
+<span class="n">x_train</span> <span class="o">=</span> <span class="n">cleanText</span><span class="p">(</span><span class="n">x_train</span><span class="p">)</span>
+<span class="n">x_test</span> <span class="o">=</span> <span class="n">cleanText</span><span class="p">(</span><span class="n">x_test</span><span class="p">)</span>
+<span class="n">unsup_reviews</span> <span class="o">=</span> <span class="n">cleanText</span><span class="p">(</span><span class="n">unsup_reviews</span><span class="p">)</span>
+
+<span class="c">#Gensim's Doc2Vec implementation requires each document/paragraph to have a label associated with it.</span>
+<span class="c">#We do this by using the LabeledSentence method. The format will be "TRAIN_i" or "TEST_i" where "i" is</span>
+<span class="c">#a dummy index of the review.</span>
+<span class="k">def</span> <span class="nf">labelizeReviews</span><span class="p">(</span><span class="n">reviews</span><span class="p">,</span> <span class="n">label_type</span><span class="p">):</span>
+ <span class="n">labelized</span> <span class="o">=</span> <span class="p">[]</span>
+ <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">reviews</span><span class="p">):</span>
+ <span class="n">label</span> <span class="o">=</span> <span class="s">'</span><span class="si">%s</span><span class="s">_</span><span class="si">%s</span><span class="s">'</span><span class="o">%</span><span class="p">(</span><span class="n">label_type</span><span class="p">,</span><span class="n">i</span><span class="p">)</span>
+ <span class="n">labelized</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LabeledSentence</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="p">[</span><span class="n">label</span><span class="p">]))</span>
+ <span class="k">return</span> <span class="n">labelized</span>
+
+<span class="n">x_train</span> <span class="o">=</span> <span class="n">labelizeReviews</span><span class="p">(</span><span class="n">x_train</span><span class="p">,</span> <span class="s">'TRAIN'</span><span class="p">)</span>
+<span class="n">x_test</span> <span class="o">=</span> <span class="n">labelizeReviews</span><span class="p">(</span><span class="n">x_test</span><span class="p">,</span> <span class="s">'TEST'</span><span class="p">)</span>
+<span class="n">unsup_reviews</span> <span class="o">=</span> <span class="n">labelizeReviews</span><span class="p">(</span><span class="n">unsup_reviews</span><span class="p">,</span> <span class="s">'UNSUP'</span><span class="p">)</span>
+</pre></div>
+<p>These create LabeledSentence type objects:</p>
+<div class="highlight"><pre><span class="o">&lt;</span><span class="n">gensim</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">doc2vec</span><span class="o">.</span><span class="n">LabeledSentence</span> <span class="n">at</span> <span class="mh">0xedd70b70</span><span class="o">&gt;</span>
+</pre></div>
+<p>Next we instantiate our two Doc2Vec models, DM and DBOW. The gensim documentation suggests training over the data multiple times and either adjusting the learning rate or randomizing the order of input at each pass. We then collect the movie review vectors learned by the models.</p>
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">random</span>
+
+<span class="n">size</span> <span class="o">=</span> <span class="mi">400</span>
+
+<span class="c">#instantiate our DM and DBOW models</span>
+<span class="n">model_dm</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">Doc2Vec</span><span class="p">(</span><span class="n">min_count</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">negative</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">model_dbow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">Doc2Vec</span><span class="p">(</span><span class="n">min_count</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">negative</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">dm</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="c">#build vocab over all reviews</span>
+<span class="n">model_dm</span><span class="o">.</span><span class="n">build_vocab</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">x_train</span><span class="p">,</span> <span class="n">x_test</span><span class="p">,</span> <span class="n">unsup_reviews</span><span class="p">)))</span>
+<span class="n">model_dbow</span><span class="o">.</span><span class="n">build_vocab</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">x_train</span><span class="p">,</span> <span class="n">x_test</span><span class="p">,</span> <span class="n">unsup_reviews</span><span class="p">)))</span>
+
+<span class="c">#We pass through the data set multiple times, shuffling the training reviews each time to improve accuracy.</span>
+<span class="n">all_train_reviews</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">x_train</span><span class="p">,</span> <span class="n">unsup_reviews</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+ <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">all_train_reviews</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+ <span class="n">model_dm</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">all_train_reviews</span><span class="p">[</span><span class="n">perm</span><span class="p">])</span>
+ <span class="n">model_dbow</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">all_train_reviews</span><span class="p">[</span><span class="n">perm</span><span class="p">])</span>
+
+<span class="c">#Get training set vectors from our models</span>
+<span class="k">def</span> <span class="nf">getVecs</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+ <span class="n">vecs</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">model</span><span class="p">[</span><span class="n">z</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="p">))</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">]</span>
+ <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">vecs</span><span class="p">)</span>
+
+<span class="n">train_vecs_dm</span> <span class="o">=</span> <span class="n">getVecs</span><span class="p">(</span><span class="n">model_dm</span><span class="p">,</span> <span class="n">x_train</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+<span class="n">train_vecs_dbow</span> <span class="o">=</span> <span class="n">getVecs</span><span class="p">(</span><span class="n">model_dbow</span><span class="p">,</span> <span class="n">x_train</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+
+<span class="n">train_vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">((</span><span class="n">train_vecs_dm</span><span class="p">,</span> <span class="n">train_vecs_dbow</span><span class="p">))</span>
+
+<span class="c">#train over test set</span>
+<span class="n">x_test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">x_test</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+ <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">x_test</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+ <span class="n">model_dm</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">x_test</span><span class="p">[</span><span class="n">perm</span><span class="p">])</span>
+ <span class="n">model_dbow</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">x_test</span><span class="p">[</span><span class="n">perm</span><span class="p">])</span>
+
+<span class="c">#Construct vectors for test reviews</span>
+<span class="n">test_vecs_dm</span> <span class="o">=</span> <span class="n">getVecs</span><span class="p">(</span><span class="n">model_dm</span><span class="p">,</span> <span class="n">x_test</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+<span class="n">test_vecs_dbow</span> <span class="o">=</span> <span class="n">getVecs</span><span class="p">(</span><span class="n">model_dbow</span><span class="p">,</span> <span class="n">x_test</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+
+<span class="n">test_vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">((</span><span class="n">test_vecs_dm</span><span class="p">,</span> <span class="n">test_vecs_dbow</span><span class="p">))</span>
+</pre></div>
+<p>Now we are ready to train a classifier over our review vectors. We will again use sklearn's SGDClassifier.</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.linear_model</span> <span class="kn">import</span> <span class="n">SGDClassifier</span>
+
+<span class="n">lr</span> <span class="o">=</span> <span class="n">SGDClassifier</span><span class="p">(</span><span class="n">loss</span><span class="o">=</span><span class="s">'log'</span><span class="p">,</span> <span class="n">penalty</span><span class="o">=</span><span class="s">'l1'</span><span class="p">)</span>
+<span class="n">lr</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">train_vecs</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+
+<span class="k">print</span> <span class="s">'Test Accuracy: </span><span class="si">%.2f</span><span class="s">'</span><span class="o">%</span><span class="n">lr</span><span class="o">.</span><span class="n">score</span><span class="p">(</span><span class="n">test_vecs</span><span class="p">,</span> <span class="n">y_test</span><span class="p">)</span>
+</pre></div>
+<p>This model gives us a test accuracy of 0.86. We can also build a ROC curve for this classifier as follows:</p>
+<div class="highlight"><pre><span class="c">#Create ROC curve</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">roc_curve</span><span class="p">,</span> <span class="n">auc</span>
+<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+
+<span class="n">pred_probas</span> <span class="o">=</span> <span class="n">lr</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">test_vecs</span><span class="p">)[:,</span><span class="mi">1</span><span class="p">]</span>
+
+<span class="n">fpr</span><span class="p">,</span><span class="n">tpr</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">roc_curve</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">pred_probas</span><span class="p">)</span>
+<span class="n">roc_auc</span> <span class="o">=</span> <span class="n">auc</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span><span class="n">tpr</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span><span class="n">tpr</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s">'area = </span><span class="si">%.2f</span><span class="s">'</span> <span class="o">%</span><span class="n">roc_auc</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="s">'k--'</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.05</span><span class="p">])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s">'lower right'</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+<p><img alt="ROC curve 2" src="https://silvrback.s3.amazonaws.com/uploads/22cde036-f854-4437-b219-ddc7b95e4c7b/sentiment_05_large.png"></p>
+
+<p><em>Figure 5: ROC Curve for a logistic classifier on our training data of IMDB movie reviews.</em></p>
+
+<p>The <a href="http://cs.stanford.edu/%7Equocle/paragraph_vector.pdf">original paper</a> claimed they saw an improvement when using a 50 node neural network over a simple logistic regression classifier:</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">NNet</span> <span class="kn">import</span> <span class="n">NeuralNet</span>
+
+<span class="n">nnet</span> <span class="o">=</span> <span class="n">NeuralNet</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="n">learn_rate</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">)</span>
+<span class="n">maxiter</span> <span class="o">=</span> <span class="mi">500</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="mi">150</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">nnet</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">train_vecs</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">fine_tune</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">maxiter</span><span class="o">=</span><span class="n">maxiter</span><span class="p">,</span> <span class="n">SGD</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="n">batch</span><span class="p">,</span> <span class="n">rho</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
+
+<span class="k">print</span> <span class="s">'Test Accuracy: </span><span class="si">%.2f</span><span class="s">'</span><span class="o">%</span><span class="n">nnet</span><span class="o">.</span><span class="n">score</span><span class="p">(</span><span class="n">test_vecs</span><span class="p">,</span> <span class="n">y_test</span><span class="p">)</span>
+</pre></div>
+<p>Interestingly, here we see no such improvement. The test accuracy is 0.85, and we do not approach their claimed test error of 7.42%. This could be for many reasons: we did not train for enough epochs over the training/test data, their implementation of Doc2Vec/ANN is different, their hyperparameters are different, etc. It's hard to know exactly which since the paper does not go into great detail. In any case, we were able to obtain an 86% test accuracy with very little pre-processing and no feature creation/selection. No fancy convolutions or treebanks necessary!</p>
+
+<h2 id="toc_4">Conclusion</h2>
+
+<p>I hope you have seen not only the utility but ease of use for Word2Vec and Doc2Vec using standard tools like Python and gensim. With a very simple algorithm we can gain rich word and paragraph vectors that can be used in all kinds of NLP applications. What's even better is Google's release of their own pre-trained word vectors trained on a much larger data set than anyone else can hope to obtain. If you want to train your own vectors over large data sets there is already an implementation of Word2Vec in <a href="https://spark.apache.org/mllib/">Apache Spark's MLlib</a>. Happy NLP'ing!</p>
+
+<h2 id="toc_5">Additional Readings</h2>
+
+
+
+<p>If you enjoyed this post and don't want to miss others like it, go to the <a href="http://districtdatalabs.silvrback.com">blog home page</a> and click the <strong>Subscribe</strong> button.</p>
+
+ </div>
+ 
+ 
+ </div>
+</body></html>

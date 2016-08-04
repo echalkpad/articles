@@ -1,0 +1,110 @@
+<!DOCTYPE html><html><head><title>How to set up web-based network traffic monitoring system on Linux</title></head><body>
+<h1>How to set up web-based network traffic monitoring system on Linux</h1><p><a href="http://xmodulo.com/set-web-based-network-traffic-monitoring-linux.html" target="_new">Original URL</a></p>
+<p><blockquote>When you are tasked with monitoring network traffic on the local network, you can consider many different options to do it, depending on the scale/traffic of the local network, monitoring&hellip;</blockquote></p>
+<div><div class="entry-content">
+
+<p>When you are tasked with monitoring network traffic on the local network, you can consider many different options to do it, depending on the scale/traffic of the local network, monitoring platforms/interface, types of backend database, etc.</p>
+<p><a href="http://list.xmodulo.com/ntopng.html" target="_blank"><tt>ntopng</tt></a> is an open-source (GPLv3) network traffic analyzer which provides a web interface for real-time network traffic monitoring. It runs on multiple platforms including Linux and MacOS X. <tt>ntopng</tt> comes with a simple RMON-like agent with built-in web server capability, and uses <a href="http://redis.io/" target="_blank">Redis</a>-backed key-value server to store time series statistics. You can install <tt>ntopng</tt> network traffic analyzer on any designated monitoring server connected to your network, and use a web browser to access real-time traffic reports available on the server.</p>
+<p>In this tutorial, I will describe <strong>how to set up a web-based network traffic monitoring system on Linux by using ntopng</strong>.</p>
+<h2>Features of ntopng</h2>
+<ul>
+<li>Flow-level, protocol-level real-time analysis of local network traffic.
+</li><li>Domain, AS (Autonomous System), VLAN level statistics.
+</li><li>Geolocation of IP addresses.
+</li><li>Deep packet inspection (DPI) based service discovery (e.g., Google, Facebook).
+</li><li>Historical traffic analysis (e.g., hourly, daily, weekly, monthly, yearly).
+</li><li>Support for sFlow, NetFlow (v5/v9) and IPFIX through nProbe.
+</li><li>Network traffic matrix (who's talking to who?).
+</li><li>IPv6 support.
+</li></ul>
+<h2>Install ntopng on Linux</h2>
+<p>The official website offers binary packages for <a href="http://apt.ntop.org/" target="_blank">Ubuntu</a> and <a href="http://rpm.ntop.org/" target="_blank">CentOS</a>. So if you use either platform, you can install these packages.</p>
+<p>If you want to build the latest <tt>ntopng</tt> from <a href="http://sourceforge.net/projects/ntop/files/ntopng/" target="_blank">its source</a>, follow the instructions below. (Update: these instructions are valid for ntopng 1.0. For ntopng 1.1 and higher, see the <a href="http://xmodulo.com/set-web-based-network-traffic-monitoring-linux.html#comment-4993" target="_blank">updated instructions</a>).</p>
+<p>To build <tt>ntopng</tt> on Debian, Ubuntu or Linux Mint:</p>
+<p class="console">
+$ sudo apt-get install libpcap-dev libglib2.0-dev libgeoip-dev redis-server wget libxml2-dev<br>
+$ tar xzf ntopng-1.0.tar.gz -C ~<br>
+$ cd ~/ntopng-1.0/<br>
+$ ./configure<br>
+$ make geoip<br>
+$ make
+</p>
+<p>In the above steps, "make geoip" will automatically download a free version of GeoIP databases with <tt>wget</tt> from maxmind.com. So make sure that your system is connected to the network.</p>
+<p>To build <tt>ntopng</tt> on Fedora:</p>
+<p class="console">
+$ sudo yum install libpcap-devel glib2-devel GeoIP-devel libxml2-devel libxml2-devel redis wget<br>
+$ tar xzf ntopng-1.0.tar.gz -C ~<br>
+$ cd ~/ntopng-1.0/<br>
+$ ./configure<br>
+$ make geoip<br>
+$ make
+</p>
+<p>To install <tt>ntopng</tt> on CentOS or RHEL, first <a href="http://xmodulo.com/how-to-set-up-epel-repository-on-centos.html" target="_blank">set up EPEL repository</a>, and then follow the same instructions as in Fedora above.</p>
+<h2>Configure ntopng on Linux</h2>
+<p>After building <tt>ntopng</tt>, create a configuration directory for <tt>ntopng</tt>, and prepare default configuration files as follows. I assume that "192.168.1.0/24" is the CIDR address prefix of your local network.</p>
+<p class="console">
+$ sudo mkir /etc/ntopng -p
+</p>
+<p class="console">
+$ sudo -e /etc/ntopng/ntopng.start
+</p>
+<pre>
+--local-networks "192.168.1.0/24"
+--interface 1
+</pre>
+<p class="console">
+$ sudo -e /etc/ntopng/ntopng.conf
+</p>
+<pre>
+-G=/var/run/ntopng.pid
+</pre>
+<h2>Launch ntopng on Linux</h2>
+<p>Before running <tt>ntopng</tt>, make sure to first start <tt>redis</tt>, which is a key-value store for <tt>ntopng</tt>.</p>
+<p>To start <tt>ntopng</tt> on Debian, Ubuntu or Linux Mint:</p>
+
+
+
+
+<p class="console">
+$ sudo /etc/init.d/redis-server restart<br>
+$ cd ~/ntopng-1.0/<br>
+$ sudo ./ntopng
+</p>
+<p>To start <tt>ntopng</tt> on Fedora, CentOS or RHEL:</p>
+<p class="console">
+$ sudo service redis restart<br>
+$ cd ~/ntopng-1.0/<br>
+$ sudo ./ntopng
+</p>
+<p>By default, <tt>ntopng</tt> listens on TCP/3000 port. Verify this is the case using the command below.</p>
+<p class="console">
+$ sudo netstat -nap|grep ntopng
+</p>
+<pre>
+tcp 0 0 0.0.0.0:3000 0.0.0.0:* LISTEN 29566/ntopng
+</pre>
+<h2>Monitor Network Traffic in Web-Based Interface</h2>
+<p>Once <tt>ntopng</tt> is successfully running, go to http://&lt;ip-address-of-host&gt;:3000 on your web browser to access the web interface of <tt>ntopng</tt>.</p>
+<p>You will see the login screen of <tt>ntopng</tt>. Use the default username and password: "admin/admin" to log in.</p>
+
+<p>Here are a few screenshots of <tt>ntopng</tt> in action.</p>
+<p>Real-time visualization of top flows.</p>
+
+<p>Live statistics of top hosts, top protocols and top AS numbers.</p>
+
+<p>Real time report of active flows with DPI-based automatic application/service discovery.</p>
+
+<p>Historic traffic analysis.</p>
+<div><span>Download this article as ad-free PDF (made possible by <a target="_blank" rel="nofollow" href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&amp;hosted_button_id=PBHS9R4MB9RX4">your kind donation</a>):&#xA0;</span>
+
+</div>
+
+<div><br><h3> Subscribe to Xmodulo</h3>
+<p>Do you want to receive <strong>Linux FAQs, detailed tutorials and tips</strong> published at Xmodulo? Enter your email address below, and we will deliver our Linux posts straight to your email box, for free. Delivery powered by Google Feedburner.</p>
+<br>
+<h3> Support Xmodulo</h3>
+<p>Did you find this tutorial helpful? Then please be generous and <a target="_blank" href="http://xmodulo.com/about">support Xmodulo!</a></p></div>
+</div> 
+ 				 
+ 			</div>
+</body></html>

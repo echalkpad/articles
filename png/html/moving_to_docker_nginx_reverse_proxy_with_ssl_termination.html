@@ -1,0 +1,363 @@
+<!DOCTYPE html><html><head><title>Moving to Docker: NGINX reverse proxy with SSL termination</title></head><body>
+<h1>Moving to Docker: NGINX reverse proxy with SSL termination</h1><p><a href="https://www.timofejew.com/moving-to-docker-nginx/" target="_new">Original URL</a></p>
+<p><blockquote>Now that I have Ghost running in a Docker container, it's time to move the NGINX reverse proxy from the host environment into a Docker container as well. I'll be pretty much using the same techniques&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p>Now that I have <a href="https://ghost.org">Ghost</a> <a href="https://www.timofejew.com/moving-to-docker-ghost/">running</a> in a <a href="https://www.docker.com">Docker</a> container, it's time to move the <a href="http://nginx.org">NGINX</a> <a href="https://en.wikipedia.org/wiki/Reverse_proxy">reverse proxy</a> from the host environment into a Docker container as well. I'll be pretty much using the same techniques as I wrote in the <a href="https://www.timofejew.com/nginx-ghost-stopping-hotlink-images/">image hot linking article</a>, updated slightly to incorporate the latest <a href="https://en.wikipedia.org/wiki/Transport_Layer_Security">TLS</a> <a href="https://weakdh.org/sysadmin.html">security configuration</a>.</p>
+
+<h2 id="research">Research</h2>
+
+<p>Since I wanted to use Docker <a href="https://docs.docker.com/userguide/dockerlinks/">container linking</a> to automate the linkage of the containers, I thought I'd do some poking around the Internet to see what others have done. That, and see what the latest-and-greatest NGINX configurations for security and reverse proxying are.</p>
+
+<h3 id="security">Security</h3>
+
+<p>The first thing I stumbled across was a server-side <a href="https://mozilla.github.io/server-side-tls/ssl-config-generator/">TLS configuration generator</a> from the Mozilla foundation. What's really slick about this is that it has codified best practices for different servers, and for different levels of browser compatibility. Really nice.</p>
+
+<p>I also discovered an <a href="https://www.ssllabs.com/ssltest/index.html">online SSL server test</a> from <a href="https://www.ssllabs.com/index.html">Qualsys SSL Labs</a>. Once you have your server up and running, you can test your configuration with their tool, and it will supply recommendations for improving your configuration. For what it's worth, this site gets an A+ rating (as of the published date).</p>
+
+
+
+<p>I found a <a href="http://jasonwilder.com/blog/2014/03/25/automated-nginx-reverse-proxy-for-docker/">great resource</a> about linking containers at <a href="http://jasonwilder.com">Jason Wilder's blog</a>. It covers my use case exactly. What he's done is to create a Docker image, <a href="http://github.com/jwilder/nginx-proxy">jwilder/nginx-proxy</a> that uses an underlying tool he created, <a href="http://github.com/jwilder/docker-gen">jwilder/docker-gen</a>, which in turn uses the Docker API to monitor container events, and automatically generate new configurations on the fly as containers start and stop. It's all seriously slick, and looks like it would make a very robust production environment.</p>
+
+<p>However, it's a bit involved from a configuration point of view (it's using a template language to generate NGINX config files), and relies on Docker's API (which is still not 100% mature yet). For now, I'm going to keep it simple and use basic Docker linking. If the Ghost container starts to regularly fall over (which it doesn't in practice), I'll consider diving in and using his system.</p>
+
+<h2 id="shuttingdowninstallation">Shutting down installation</h2>
+
+<p>First things first, I stopped NGINX:</p>
+
+<pre><code class="language-bash">sudo service nginx stop 
+</code></pre>
+
+<p>And then removed all traces of NGINX:</p>
+
+<pre><code class="language-bash">sudo apt-get remove -y nginx 
+sudo apt-get --purge -y autoremove 
+</code></pre>
+
+<p>Now I'm committed...</p>
+
+<h2 id="systempreparation">System preparation</h2>
+
+<p>Assuming you're following along in this series, you'll have already installed <code>docker</code> on your system. If you haven't, please see the <a href="https://www.timofejew.com/moving-to-docker-ghost/">first part</a> of this series for instructions.</p>
+
+<h2 id="dockerimagecreation">Docker image creation</h2>
+
+<p>Since a couple of the machines on <code>timofejew.com</code> will be running reverse proxies, I decided that what I would do is create a separate image for each proxy. In this case, it's tuned to run as a front-end to my Ghost blog. Here's the <code>Dockerfile</code> I created (I'm substituting <code>example.com</code>):</p>
+
+<pre><code># Create proxy container for www.example.com
+#
+# docker build -t proxy .
+
+FROM nginx
+
+MAINTAINER Peter Timofejew &lt;peter@timofejew.com&gt;
+
+# Set timezone
+RUN echo "America/Toronto" &gt; /etc/timezone \ 
+ &amp;&amp; dpkg-reconfigure -f noninteractive tzdata
+
+# Install wget and install/updates certificates
+RUN apt-get update \ 
+ &amp;&amp; apt-get install -y -q --no-install-recommends \
+ ca-certificates \
+ wget \
+ &amp;&amp; apt-get clean \
+ &amp;&amp; rm -r /var/lib/apt/lists/*
+
+# Add main NGINX config
+COPY nginx.conf /etc/nginx/
+
+# Add DH params (generated with openssl dhparam -out dhparams.pem 2048)
+COPY ssl/dhparams.pem /etc/ssl/private/
+
+# Add www certificates
+COPY ssl/ssl-ca-certs-startssl.pem /etc/ssl/certs/ 
+COPY ssl/ssl-cert-chain-www-example-com.pem /etc/ssl/certs/ 
+COPY ssl/ssl-cert-www-example-com.crt /etc/ssl/private/ 
+COPY ssl/ssl-cert-www-example-com.key /etc/ssl/private/
+
+# Add virtual hosts
+COPY vhosts/ /etc/nginx/conf.d/
+
+# Add static content
+COPY html/ /usr/share/nginx/html/ 
+</code></pre>
+
+<p>As you can see from examining the <code>Dockerfile</code>, there are three directories with auxiliary files:</p>
+
+<ol>
+<li><code>ssl/</code> - this contains the <a href="https://en.wikipedia.org/wiki/Certificate_authority">CA certificate</a>, a <a href="http://security.stackexchange.com/questions/59566/ssl-certificate-chain-verification">chained SSL certificate</a> for the host, the SSL key for the host, and a <a href="https://weakdh.org/sysadmin.html">DH parameter</a> file. </li>
+<li><code>vhosts/</code> - in here are two config files for the two virtual hosts the container will handle (<code>example.com</code> and <code>www.example.com</code>). </li>
+<li><code>html/</code> - static content served up by the container.</li>
+</ol>
+
+<p><img src="https://www.timofejew.com/content/images/2015/09/Executie-Decision.jpg" alt="Business Cat!"></p>
+
+<p>I made an executive decision to not mount the host's filesystem, but to keep all the data in the container itself. Here's my rationale:</p>
+
+<ul>
+<li>The TLS information is relatively static. This will have to be updated in a year's time, but re-generating the image and launching a new container isn't that big of a deal, and it will be a good excuse to upgrade to the latest version of NGINX and OpenSSL (which will automatically happen when the container is rebuilt).</li>
+<li>The virtual hosts configuration is also pretty much static. I may modify this, but I doubt it. It's stable.</li>
+<li>Same with the static data. I may on occasion add something else to it, but it's probably better that I add it to the <code>git</code> repo, and then rebuild the image.</li>
+<li>And lastly, this is not a general purpose proxy. If it was, I'd probably mount the keys, configuration, and static content from the host filesystem.</li>
+</ul>
+
+<p>With that in mind, here's some of the key files:</p>
+
+<h3 id="nginxconf">nginx.conf</h3>
+
+<pre><code class="language-nginx">user www-data; 
+worker_processes 1;
+
+error_log /var/log/nginx/error.log warn; 
+pid /var/run/nginx.pid;
+
+events { 
+ worker_connections 1024;
+}
+
+http { 
+ include /etc/nginx/mime.types;
+ default_type application/octet-stream;
+
+ log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+ '$status $body_bytes_sent "$http_referer" '
+ '"$http_user_agent" "$http_x_forwarded_for"';
+
+ access_log /var/log/nginx/access.log main;
+
+ sendfile on;
+ #tcp_nopush on;
+
+ keepalive_timeout 65;
+
+ gzip on;
+ gzip_disable "msie6";
+ gzip_vary on;
+ gzip_proxied any;
+ gzip_comp_level 6;
+ gzip_buffers 16 8k;
+ gzip_http_version 1.1;
+ gzip_types text/plain text/css application/json application/x-javascript
+ text/xml application/xml application/xml+rss text/javascript;
+
+ # SSL intermediate configuration from https://mozilla.github.io/server-side-tls/ssl-config-generator/
+ ssl_certificate /etc/ssl/certs/ssl-cert-chain-www-example-com.pem;
+ ssl_certificate_key /etc/ssl/private/ssl-cert-www-example-com.key;
+ ssl_dhparam /etc/ssl/private/dhparams.pem;
+ ssl_session_timeout 1d;
+ ssl_session_cache shared:SSL:50m;
+
+ ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+ ssl_ciphers 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA';
+ ssl_ecdh_curve secp384r1;
+ ssl_prefer_server_ciphers on;
+
+ # HSTS (ngx_http_headers_module is required) (15768000 seconds = 6 months)
+ add_header Strict-Transport-Security "max-age=15768000; includeSubdomains";
+
+ # OCSP Stapling ---
+ # fetch OCSP records from URL in ssl_certificate and cache them
+ ssl_stapling on;
+ ssl_stapling_verify on;
+ ssl_trusted_certificate /etc/ssl/certs/ssl-ca-certs-startssl.pem;
+
+ include /etc/nginx/conf.d/*.conf;
+}
+</code></pre>
+
+<p>Although it may be more common to put the SSL configuration in a server configuration block, I decided to move it to the main http block since this is a proxy only for two virtual hosts that share the same SSL certificate. Otherwise, the only potentially odd thing I've done is set the <code>user</code> to <code>www-data</code>. This was done as the host OS is Ubuntu, and the default user id generated by the base NGINX image shares the same id as <code>sshd</code>, which disturbed me. At least <code>www-data</code> is web related, and has no write permissions anywhere in the container, let alone the host system.</p>
+
+<h3 id="vhostdefaultconf">vhost/default.conf</h3>
+
+<pre><code class="language-nginx">server { 
+ listen 80 default_server;
+ listen [::]:80 default_server;
+ listen 443 default_server ssl;
+ listen [::]:443 default_server ssl;
+
+ server_name example.com;
+
+ root /usr/share/nginx/html;
+ index index.html;
+
+ # force TLS
+ if ($scheme = http) {
+ return 301 https://$server_name$request_uri;
+ }
+
+ # try to get files from $root, otherwise redirect to Ghost
+ location / {
+ try_files $uri $uri/ =404;
+ error_page 403 = @ghost;
+ error_page 404 = @ghost;
+ }
+
+ # ghost blog
+ location @ghost {
+ rewrite ^ $scheme://www.example.com$uri redirect;
+ }
+}
+</code></pre>
+
+<p>I go into more detail for this and the other vhost configuration in the article <a href="https://www.timofejew.com/nginx-ghost-stopping-hotlink-images/">NGINX, Ghost, and host-linked images</a>.</p>
+
+<h3 id="vhostwwwconf">vhost/www.conf</h3>
+
+<pre><code class="language-nginx">server { 
+ listen 80;
+ listen [::]:80;
+ listen 443 ssl;
+ listen [::]:443 ssl;
+
+ server_name www.example.com;
+
+ root /usr/share/nginx/html;
+ index index.html;
+
+ # force TLS
+ if ($scheme = http) {
+ return 301 https://$server_name$request_uri;
+ }
+
+ # prevent hotlinking
+ # test http://www.htaccesstools.com/test-hotlink-protection/
+ location ~* \.(gif|png|jpe?g)$ {
+ valid_referers none blocked www.example.com;
+ if ($invalid_referer) {
+ return 444;
+ }
+ try_files $uri @ghost;
+ }
+
+ # try to get files from $root, otherwise redirect to Ghost
+ location / {
+ try_files $uri @ghost;
+ }
+
+ # proxy to Ghost (assumes 'ghost' is in /etc/hosts)
+ location @ghost {
+ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+ proxy_set_header Host $http_host;
+ proxy_set_header X-Forwarded-Proto $scheme;
+ proxy_pass http://ghost:2368;
+ }
+}
+</code></pre>
+
+<p>The main difference between this config and the one in the hot-linking article, is that <code>proxy_pass</code> parameter references a host named <code>ghost</code>. This is some magic supplied by the Docker <code>run</code> <code>--link</code> argument. What happens is that the container name of a linked container is put into <code>/etc/hosts</code> of the NGINX container. I'll describe this more in the next section.</p>
+
+<h2 id="deployment">Deployment</h2>
+
+<p>To stand this up on <code>www.timofejew.com</code>, I ended up created two images. An image called <code>proxy</code> (built from the <code>Dockerfile</code> above), and another called <code>blog</code>, which is built from the following <code>Dockerfile</code>:</p>
+
+<pre><code># Create Ghost container for www.example.com
+#
+# docker build -t blog .
+
+FROM ptimof/ghost
+
+MAINTAINER Peter Timofejew &lt;peter@timofejew.com&gt;
+
+# Set timezone
+RUN echo "America/Toronto" &gt; /etc/timezone \ 
+ &amp;&amp; dpkg-reconfigure -f noninteractive tzdata
+
+# install Postfix for forwarding
+RUN apt-get update \ 
+ &amp;&amp; DEBIAN_FRONTEND=noninteractive apt-get install -y \
+ postfix \
+ libsasl2-modules \
+ &amp;&amp; apt-get autoremove -y \
+ &amp;&amp; apt-get clean
+
+# Add in real values for example.com
+ENV GHOST_URL https://www.example.com 
+ENV MAIL_FROM '"Webmaster" &lt;webmaster@www.example.com&gt;' 
+ENV MAIL_HOST localhost
+
+# Set up Postfix
+RUN sed -i -e "/^mydestination/s/^.*$/mydestination = /" /etc/postfix/main.cf \ 
+ &amp;&amp; sed -i -e "/^relayhost/s/^/#/" /etc/postfix/main.cf \
+ &amp;&amp; sed -i -e "/^#myorigin/s/^#//" /etc/postfix/main.cf \
+ &amp;&amp; sed -i -e "/^myhostname/s/^.*$/myhostname = www.example.com/" /etc/postfix/main.cf \
+ &amp;&amp; echo "www.example.com" &gt; /etc/mailname \
+ &amp;&amp; echo "inet_protocols = ipv4" &gt;&gt; /etc/postfix/main.cf \
+ &amp;&amp; echo "relayhost = [mail.example.com]:587" &gt;&gt; /etc/postfix/main.cf \
+ &amp;&amp; echo "smtp_tls_security_level = verify" &gt;&gt; /etc/postfix/main.cf \
+ &amp;&amp; echo "smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt" &gt;&gt; /etc/postfix/main.cf \
+ &amp;&amp; echo "smtp_sasl_auth_enable = yes" &gt;&gt; /etc/postfix/main.cf \
+ &amp;&amp; echo "smtp_sasl_password_maps = hash:/etc/postfix/relay_password" &gt;&gt; /etc/postfix/main.cf \
+ &amp;&amp; echo "smtp_sasl_tls_security_options =" &gt;&gt; /etc/postfix/main.cf \
+ &amp;&amp; echo "[mail.example.com]:587 www-host@example.com:secret-password" &gt; /etc/postfix/relay_password \
+ &amp;&amp; chmod 600 /etc/postfix/relay_password \
+ &amp;&amp; postmap /etc/postfix/relay_password
+
+# Add startup shell
+COPY ghost.sh /
+
+# Run in production
+ENTRYPOINT [ "/ghost.sh" ] 
+CMD [ "npm", "start", "--production" ] 
+</code></pre>
+
+<p>You'll notice that's a bit different from the first article in this series, <a href="https://www.timofejew.com/moving-to-docker-ghost/">Moving to Docker: Ghost</a>. Mainly, I wanted to move the configuration from a file on the host, to burning it right into a Docker image, enable <a href="https://www.timofejew.com/adventures-in-emailing/">authenticated email to my email server</a>, and setting up the default command to run in production mode.</p>
+
+<p>And the <code>ghost.sh</code> script is fairly simple:</p>
+
+<pre><code class="language-bash">#!/bin/bash
+
+# start postfix
+service postfix start
+
+# start ghost
+exec /entrypoint.sh $@ 
+</code></pre>
+
+<p>Once the two images were built, I ran them as follows:</p>
+
+<pre><code class="language-bash">docker run --name ghost -v /var/lib/ghost:/var/lib/ghost \ 
+ --restart=always -m 150m --memory-swap 300m \
+ --log-driver=json-file --log-opt max-size=1m \
+ -h www.example.com \
+ -d blog
+docker run --name proxy --link ghost \ 
+ -p 80:80 -p 443:443 --restart=always -m 75m \
+ --log-driver=json-file --log-opt max-size=10m \
+ -d proxy
+</code></pre>
+
+<p>This will create two <em>containers</em>, <code>ghost</code> and <code>proxy</code><sup id="fnref:1"><a href="https://www.timofejew.com/moving-to-docker-nginx/#fn:1" rel="footnote">1</a></sup>, and pass the config information from <code>ghost</code> to <code>proxy</code> via the link.</p>
+
+<p>What's neat about the <code>--link</code> command, is that it will push a bunch of environment variables that describe <code>ghost</code> into <code>proxy</code>, as well as creating a host entry for <code>ghost</code> into <code>/etc/hosts</code> in <code>proxy</code>. That's how the <code>proxy_pass</code> line of <code>/etc/nginx/conf.d/www.conf</code> knows what IP to forward requests to. Interestingly, the port is available to <code>proxy</code> via an environment variable, but since NGINX config files can't directly access environment variables, I've hardcoded it to <code>2368</code> (which is what the <code>ghost</code> container exposes).</p>
+
+<p>And this is where Jason Wilder's scheme really shines. It will update the NGINX config to reflect the Ghost container's config exactly, no matter how it's launched. If I was running a more complex setup than a simple two container config, I'd certainly seriously consider using his technique.</p>
+
+<h2 id="finalthoughts">Final thoughts</h2>
+
+<p>What's really cool about using container linking is that the <code>ghost</code> container is only listening on it's own virtual interface - no port collisions if I decide to run another <code>ghost</code> container. And this virtual interface is automatically exported to the <code>proxy</code> container when it links it.</p>
+
+<p>There are two downsides, though, to using this technique:</p>
+
+<ol>
+<li>If the <code>ghost</code> container restarts, it may not have the same IP address. The <code>proxy</code> container will get an updated <code>/etc/hosts</code> entry, but NGINX won't be aware of it, and will need to be reloaded. This is one nice benefit of using Jason Wilder's technique: it will detect the change and kick NGINX. At the moment, I'm betting that the <code>ghost</code> container will not restart. </li>
+<li>Container linking is not compatible with <code>--net=host</code>. There is a performance hit to the <code>proxy</code> container because it needs to go through a couple of network stacks (the host IP stack, bridging to the Docker network, and then the container's stack). If <code>timofejew.com</code> was a high-volume site on the Internet, I wouldn't use linking. But I'm not worried...</li>
+</ol>
+
+<p>And finally, logs. I'm not running any log analysis, so the logs from both containers are just being rotated after they hit a size limit. This is good enough for debugging any problems, and will stop the logs from growing out of control.</p>
+
+<h2 id="nextsteps">Next steps</h2>
+
+<p>Now that the services on <code>www.timofejew.com</code> are containerized, there's a couple things I'd like to try:</p>
+
+<ul>
+<li>Develop a backup/restore technique for dealing with Docker volumes. Once this is done, <code>www.timofejew.com</code> will be "stateless", in the broad sense of the term: I should be able to destroy and re-create the machine without data loss.</li>
+<li>Experiment with using <a href="https://en.wikipedia.org/wiki/CoreOS">CoreOS</a> as the host operating system. If I'm moving to all services in containers, this seems to be the way to go. But I'll need to mess about with it for a bit first.</li>
+</ul>
+
+
+
+
+ </section>
+
+ </div>
+</body></html>

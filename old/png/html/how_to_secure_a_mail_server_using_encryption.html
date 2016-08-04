@@ -1,0 +1,145 @@
+<!DOCTYPE html><html><head><title>How to secure a mail server using encryption</title></head><body>
+<h1>How to secure a mail server using encryption</h1><p><a href="http://xmodulo.com/secure-mail-server-using-encryption.html" target="_new">Original URL</a></p>
+<p><blockquote>SSL (Secure Sockets Layer) and its descendant TLS (Transport Layer Security) are the most widely used protocols for encrypting data that is exchanged between a server and a client. These protocols&hellip;</blockquote></p>
+<div><div class="entry-content">
+
+<p>SSL (Secure Sockets Layer) and its descendant TLS (Transport Layer Security) are the most widely used protocols for encrypting data that is exchanged between a server and a client. These protocols often use X.509 certificates and asymmetric cryptography.</p>
+<p>STARTTTLS is another method of securing plain-text communication. This protocol also encrypts data with SSL or TLS, but with the same port as the plain-text protocols, instead of using separate ports for SSL/TLS-encrypted communications. For example, IMAP over STARTTLS uses the same port as IMAP (143), while IMAPS (IMAP over SSL) uses a separate port 993.</p>
+<p><a href="http://xmodulo.com/2014/01/mail-server-ubuntu-debian.html" target="_blank">The previous tutorial</a> describes how to set up a mail server running on Postfix and Dovecot, but the <a href="http://xmodulo.com/recommend/firewallbook" target="_blank" rel="nofollow">security</a> aspect was not covered. In this tutorial, we demonstrate <strong>how to add security to a mail server through TLS/SSL-based encryption</strong>.</p>
+<p>Certificates needed for TLS/SSL can be self-signed, signed by a free certification authority (e.g., CAcert) or signed by a commercial authority (e.g., VeriSign), and can be generated with utilities like <a href="http://security.ncsa.illinois.edu/research/grid-howtos/usefulopenssl.html" target="_blank">OpenSSL</a>. We are going to use a self-signed certificate in this tutorial.</p>
+<h2>Enable TLS Encryption for Postfix</h2>
+<p>A self-signed certificate can be created with the following command.</p>
+<p class="console">
+# openssl req -new -x509 -days 365 -nodes -out /etc/ssl/certs/postfixcert.pem -keyout /etc/ssl/private/postfixkey.pem
+</p>
+
+<p>The above command requests a new certificate which is of type X.509, and remains valid for 365 days. The optional <tt>-nodes</tt> parameter specifies that the private key should not be encrypted. An output certificate file is saved as <tt>postfixcert.pem</tt>, and an output key file as <tt>postfixkey.pem </tt>.</p>
+<p>All necessary values for the certificate can be given:</p>
+<pre>
+Country Name (2 letter code) [AU]:BD 
+State or Province Name (full name) [Some-State]:Dhaka 
+Locality Name (eg, city) []:Dhaka 
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:
+Organizational Unit Name (eg, section) []:Example.tst 
+Common Name (e.g. <strong>server FQDN or YOUR name</strong>) []:mail.example.tst 
+Email Address []:sarmed@example.tst 
+</pre>
+<p>Now that the certificate is ready, necessary parameters are adjusted in <tt>postfix</tt> configuration file.</p>
+<p class="console">
+root@mail:~# vim /etc/postfix/main.cf
+</p>
+<pre>
+### STARTTLS is enabled ###
+smtpd_tls_security_level = may 
+
+smtpd_tls_received_header = yes 
+smtpd_tls_auth_only = yes 
+
+### loglevel 3 should be used while troubleshooting ###
+smtpd_tls_loglevel = 1
+
+### path to certificate and key file
+smtpd_tls_cert_file = /etc/ssl/certs/postfixcert.pem 
+smtpd_tls_key_file = /etc/ssl/private/postfixkey.pem 
+smtpd_use_tls=yes 
+</pre>
+<p>Restart <tt>postfix</tt> to enable TLS.</p>
+<p class="console">
+root@mail:~# service postfix restart
+</p>
+
+<p>At this point, <tt>postfix</tt> is ready to encrypt data to and from the server. More details about Postfix TLS support can be found in their <a href="http://www.postfix.org/TLS_README.html" target="_blank">official README</a>.</p>
+
+
+
+
+<h2>Enable SSL Encryption for Dovecot</h2>
+<p>Configuring <tt>dovecot</tt> for encryption is similar to <tt>postfix</tt>.</p>
+<p>First of all, a self-signed certificate is created with <tt>openssl</tt>:</p>
+<p class="console">
+# openssl req -new -x509 -days 365 -nodes -out /etc/ssl/certs/dovecotcert.pem -keyout /etc/ssl/private/dovecotkey.pem
+</p>
+
+<p>The above command requests a new X.509 certificate which is valid for 365 days. <tt>-nodes</tt> is an optional parameter which specifies that the stored private key should not be encrypted. An output certificate file will be <tt>dovecotcert.pem</tt>, and an output key file will be <tt>dovecotkey.pem</tt>.</p>
+<p>All necessary parameters need to be specified in the certificate:</p>
+<pre>
+Country Name (2 letter code) [AU]:BD
+State or Province Name (full name) [Some-State]:Dhaka
+Locality Name (eg, city) []:Dhaka
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:
+Organizational Unit Name (eg, section) []:Example.tst
+Common Name (e.g. <strong>server FQDN or YOUR name</strong>) []:mail.example.tst
+Email Address []:sarmed@example.tst
+</pre>
+<p>Next, the path to the certificate is added in <tt>dovecot</tt> configuration.</p>
+<p class="console">
+root@mail:~# vim /etc/dovecot/conf.d/10-ssl.conf
+</p>
+<pre>
+ssl_cert = &lt;/etc/ssl/certs/dovecotcert.pem
+ssl_key = &lt;/etc/ssl/private/dovecotkey.pem
+</pre>
+<p>Finally, <tt>dovecot</tt> is restarted to enable SSL with the new certificate.</p>
+<p class="console">
+root@mail:~# service dovecot restart
+</p>
+
+<h2>Thunderbird Mail Client Configuration</h2>
+<p>The following is a snapshot on how to configure the account in Mozilla Thunderbird.</p>
+<p><a target="_blank" rel="nofollow" href="http://www.flickr.com/photos/xmodulo/12039520633/"><img src="http://farm6.staticflickr.com/5477/12039520633_2d5ab27274_z.jpg"></a></p>
+<h2>Troubleshooting</h2>
+<p>First of all, make sure that all necessary ports are allowed in the firewall.</p>
+<p>Second, try <tt>telnet</tt> to a mail server. You should be able to get through. Some examples are given below for reference.</p>
+<h4>Connect to IMAPS</h4>
+<p class="console">
+$ telnet mail.example.tst 993
+</p>
+<pre>
+Trying mail.example.tst... 
+<strong>Connected to mail.example.tst.</strong> 
+Escape character is '^]'. 
+exit 
+exit 
+Connection closed by foreign host. 
+</pre>
+<h4>Connect to POP3S</h4>
+<p class="console">
+$ telnet mail.example.tst 995
+</p>
+<pre>
+Trying mail.example.tst... 
+<strong>Connected to mail.example.tst.</strong> 
+Escape character is '^]'. 
+exit 
+exit 
+Connection closed by foreign host. 
+</pre>
+<h4>Connect to SMTP</h4>
+<p class="console">
+$ telnet mail.example.tst 25
+</p>
+<pre>
+Trying mail.example.tst... 
+<strong>Connected to mail.example.tst.</strong> 
+Escape character is '^]'. 
+220 mail.example.tst ESMTP Postfix (Ubuntu) 
+
+### Command ###
+ehlo mail.example.tst 
+250-mail.example.tst 
+250-PIPELINING 
+250-SIZE 10240000 
+250-VRFY 
+250-ETRN 
+<strong>250-STARTTLS</strong> 
+250-ENHANCEDSTATUSCODES 
+250-8BITMIME 
+250 DSN
+</pre>
+<div><h3><img src="http://xmodulo.com/images/rss_small.png"> Subscribe to Xmodulo</h3>
+<p>Do you want to receive <strong>Linux FAQs, detailed tutorials and tips</strong> published at Xmodulo? Enter your email address below, and we will deliver our Linux posts straight to your email box, for free. Delivery powered by Google Feedburner.</p>
+</div>
+</div> 
+ 				 
+ 			</div>
+</body></html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html><html><head><title>elasticio/haproxy-srv</title></head><body>
+<h1>elasticio/haproxy-srv</h1><p><a href="https://github.com/elasticio/haproxy-srv" target="_new">Original URL</a></p>
+<p><blockquote>HAProxy SRV HAProxy-SRV is a templating solution that can flexibly reconfigure HAProxy based on the regular polling of the service data from DNS (e.g. SkyDNS or Mesos-DNS) using SRV records. It has a&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content"><h2><a id="user-content-haproxy-srv" class="anchor" href="https://github.com/elasticio/haproxy-srv#haproxy-srv"></a>HAProxy SRV</h2>
+
+<p>HAProxy-SRV is a templating solution that can flexibly reconfigure HAProxy based on the regular polling of the
+service data from DNS (e.g. SkyDNS or Mesos-DNS) using SRV records.</p>
+
+<p>It has a very simple logic - HA Proxy is configured based on the Handlebars template that is re-evaluated every time changes in DNS are detecting. Script is polling DNS and trigger a HA Proxy configuration refresh after changes.</p>
+
+<p>Made by <a href="http://www.elastic.io">elastic.io</a> in Germany.</p>
+
+<h2><a id="user-content-how-it-works" class="anchor" href="https://github.com/elasticio/haproxy-srv#how-it-works"></a>How it works</h2>
+
+<p>Script works very simple - after docker container started script parse and validates template, create a HAProxy configuration file in <code>/src/haproxy.cfg</code> and start HAProxy as a daemon. Every second (by default, can be configured via <code>REFRESH_TIMEOUT</code> env variable, default 1000) scirpt will execute a DNS lookup and re-evaluate the template, if result of evaluation is different from original configuration, original config will be overwritten and HAProxy reload will be triggered. HAProxy reload will not affect existing connections.</p>
+
+<h2><a id="user-content-how-to-use-it" class="anchor" href="https://github.com/elasticio/haproxy-srv#how-to-use-it"></a>How to use it</h2>
+
+<p>Recommended way to deploy is is to use <a href="https://hub.docker.com/r/elasticio/haproxy-srv/">a Docker image</a>. You would need to place your configuration file template, the simples way to do it is to build an image based on <code>haproxy-srv</code> image. </p>
+
+<p>Create a new <code>Dockerfile</code> content like this:</p>
+
+<pre><code>FROM elasticio/haproxy-srv:latest
+
+COPY haproxy.cfg.template /src/
+
+EXPOSE 80 8880
+</code></pre>
+
+<p>Note the <code>EXPOSE</code> part here, don't forget to specify exposed ports if your HAProxy configuration listens on any port different from <code>80</code>.</p>
+
+<p>As a next step create a template file, it should be placed under <code>/src/haproxy.cfg.template</code> in resulting Docker container and should have a <a href="http://handlebarsjs.com/">Handlebars</a> syntax with one little extension (see below). Here is the sample:</p>
+
+<div class="highlight highlight-text-html-handlebars"><pre>global
+ user root
+ group root
+
+ # Default SSL material locations
+ ca-base /etc/ssl/certs
+ crt-base /etc/ssl/private
+
+ # Default ciphers to use on SSL-enabled listening sockets.
+ # For more information, see ciphers(1SSL).
+ ssl-default-bind-ciphers kEECDH+aRSA+AES:kRSA+AES:+AES256:RC4-SHA:!kEDH:!LOW:!EXP:!MD5:!aNULL:!eNULL
+
+ # Stats required for this module to work
+ # https://github.com/observing/haproxy#haproxycfg
+ stats socket /tmp/haproxy.sock level admin
+
+defaults
+ mode http
+ timeout connect 5000
+ timeout client 50000
+ timeout server 50000
+
+
+frontend stats
+ bind 0.0.0.0:8081
+ mode http
+ stats enable
+ stats hide-version
+ stats uri /
+
+<span class="pl-c1">{{#dns-srv</span> <span class="pl-s"><span class="pl-pds">"</span>_frontend._tcp.marathon.mesos<span class="pl-pds">"</span></span><span class="pl-c1">}}</span>
+ frontend sample
+ bind 0.0.0.0:8080
+ mode http
+ balance roundrobin
+ option http-server-close
+ option forwardfor
+ <span class="pl-c1">{{#each</span> <span class="pl-v">this</span><span class="pl-c1">}}</span>
+ server frontend-<span class="pl-c1">{{</span><span class="pl-v">@index</span><span class="pl-c1">}}</span> <span class="pl-c1">{{</span><span class="pl-v">ip</span><span class="pl-c1">}}</span>:<span class="pl-c1">{{</span><span class="pl-v">port</span><span class="pl-c1">}}</span> check weight <span class="pl-c1">{{</span><span class="pl-v">weight</span><span class="pl-c1">}}</span>
+ <span class="pl-c1">{{/each}}</span>
+<span class="pl-c1">{{/dns-srv}}</span></pre></div>
+
+<p>It could be any valid HAProxy configuration with one mandatory addition:</p>
+
+<pre><code>stats socket /tmp/haproxy.sock level admin
+</code></pre>
+
+<p>to trigger HAProxy restart the script inside the file will communicate with HAProxy daemon via socket <code>/tmp/haproxy.sock</code>.</p>
+
+<h2><a id="user-content-template" class="anchor" href="https://github.com/elasticio/haproxy-srv#template"></a>Template</h2>
+
+<p>Configuration template is a normal <a href="http://handlebarsjs.com/">Handlebars</a> so that you could use any of the feature of this template language. There is however one additional helper <code>dns-srv</code> implemented. This helper takes one string parameter and will execute a <a href="https://nodejs.org/api/dns.html#dns_dns_resolvesrv_hostname_callback">DNS SRV lookup</a> to fetch an SRV record(s). After SRV Record lookup, for each SRV record a <a href="https://nodejs.org/api/dns.html#dns_dns_resolve_hostname_rrtype_callback">DNS resolution</a> to find the IP will be made.</p>
+
+<p>This template will give you an idea how to use it:</p>
+
+<div class="highlight highlight-text-html-handlebars"><pre># Your usual configuration is here
+<span class="pl-c1">{{#dns-srv</span> <span class="pl-s"><span class="pl-pds">"</span>_frontend._tcp.marathon.mesos<span class="pl-pds">"</span></span><span class="pl-c1">}}</span>
+ # This block will only be rendered when _frontend._tcp.marathon.mesos was found in DNS
+ <span class="pl-c1">{{#each</span> <span class="pl-v">this</span><span class="pl-c1">}}</span>
+ # This piece will be rendered for each SRV entry from DNS
+ SRV Name is <span class="pl-c1">{{</span><span class="pl-v">name</span><span class="pl-c1">}}</span>
+ SRV Weight is <span class="pl-c1">{{</span><span class="pl-v">weight</span><span class="pl-c1">}}</span>
+ SRV Port is <span class="pl-c1">{{</span><span class="pl-v">port</span><span class="pl-c1">}}</span>
+ IP for SRV Name is <span class="pl-c1">{{</span><span class="pl-v">ip</span><span class="pl-c1">}}</span>
+ <span class="pl-c1">{{/each}}</span>
+<span class="pl-c1">{{/dns-srv}}</span>
+# rest of your configuration</pre></div>
+
+<p>Typical use-case for Msos-DNS you can see above.</p>
+
+<h2><a id="user-content-debugging" class="anchor" href="https://github.com/elasticio/haproxy-srv#debugging"></a>Debugging</h2>
+
+<p>Just set the <code>DEBUG</code> environment variable into <code>*</code> to see detailed logging.</p>
+
+<h2><a id="user-content-todos" class="anchor" href="https://github.com/elasticio/haproxy-srv#todos"></a>TODOs</h2>
+
+<p>PRs are welcome for</p>
+
+<ul>
+<li>Bug fixes</li>
+<li>Unit tests</li>
+<li>Gulp or Grunt-based builds</li>
+<li>CircleCI config for continous integration</li>
+</ul>
+</article>
+ </div>
+</body></html>

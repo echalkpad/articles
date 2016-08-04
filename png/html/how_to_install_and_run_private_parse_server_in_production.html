@@ -1,0 +1,92 @@
+<!DOCTYPE html><html><head><title>How to Install and Run Private Parse Server in Production</title></head><body>
+<h1>How to Install and Run Private Parse Server in Production</h1><p><a href="http://blog.kontena.io/how-to-install-and-run-private-parse-server-in-production/" target="_new">Original URL</a></p>
+<p><blockquote>29 January 2016 Over the past few years, we have had pleasure to use Parse to provide robust backend for various projects. Unfortunately, Parse just announced they will be winding down the Parse&hellip;</blockquote></p>
+<div><header class="post-header">
+ 
+ <section class="post-meta">
+ <time class="post-date" datetime="2016-01-29">29 January 2016</time> 
+ </section>
+ </header>
+
+ <section class="post-content">
+ <p>Over the past few years, we have had pleasure to use <a href="http://parse.com/">Parse</a> to provide robust backend for various projects. Unfortunately, Parse just announced they will be <a href="http://blog.parse.com/announcements/moving-on/">winding down the Parse service</a>. It's sad to see Parse retiring, but luckily they released <a href="http://blog.parse.com/announcements/introducing-parse-server-and-the-database-migration-tool/">Parse Server and the Database Migration Tool</a>. Using the migration tool and open source <a href="https://github.com/ParsePlatform/parse-server">Parse Server</a> written in Node.js you don't need to refactor your software. However, you need to setup your own <em>private</em> Parse Server.</p>
+
+<p>In this blog post, we'll demonstrate how to setup production quality Parse Server running on <a href="https://www.docker.com/">Docker</a> containers and managed by <a href="http://www.kontena.io">Kontena</a> container platform.</p>
+
+<h2 id="gettingstarted">Getting Started</h2>
+
+<p>We will install the full Parse stack using Kontena container management platform. If you are new to Kontena, please follow the <a href="http://www.kontena.io/docs/getting-started/quick-start">Kontena Quick Start</a> guide. It'll take just 5-10 minutes!</p>
+
+<p>Once you have Kontena installed, you are ready to proceed installing Parse server!</p>
+
+<h2 id="installingparseserver">Installing Parse Server</h2>
+
+<p>Installing Parse Server with Kontena is a very straightforward process. We have made available two examples. You can choose from:</p>
+
+<ul>
+<li><a href="https://github.com/kontena/examples/tree/master/parse">Parse Server (simple)</a></li>
+<li><a href="https://github.com/kontena/examples/tree/master/parse-cluster">Parse Server with MongoDB cluster</a></li>
+</ul>
+
+<p>The first option may be used to deploy stand-alone Parse Server with MongoDB database. The second option is similar, but with MongoDB cluster database setup for high-availability deployments. If you choose Parse Server with MongoDB cluster option, you should have at minimum 3 Kontena nodes running.</p>
+
+<p>Both of these examples use Kontena's built-in load balancer. The load balancer may be used to scale Parse Server instances to serve more traffic. You can also configure SSL certificate for the load balancer to provide secure access to your Parse Server API.</p>
+
+<p><strong>Step 1.</strong> Copy or Clone files from GitHub. </p>
+
+<p><strong>Step 2.</strong> Write secrets to <a href="http://www.kontena.io/docs/using-kontena/vault">Kontena Vault</a>.</p>
+
+<pre><code>$ kontena vault write PARSE_MASTER_KEY "mySecretMasterKey"
+$ kontena vault write PARSE_FILE_KEY "optionalFileKey"
+</code></pre>
+
+<p><strong>Step 3.</strong> Deploy the stack </p>
+
+<pre><code>$ kontena app deploy
+</code></pre>
+
+<p>After the deploy is finished you can connect to your Parse Servers with the IP addresses of your node(s).</p>
+
+<p><strong>Step 4.</strong> Enjoy!</p>
+
+<h2 id="optionalconfiguration">Optional Configuration</h2>
+
+<p>Here's some tips &amp; tricks to improve your Parse Server.</p>
+
+<h4 id="usingdnsaddress">Using DNS Address</h4>
+
+<p>Simply map your Kontena Node IP addresses to your own DNS address.</p>
+
+<h4 id="usingsslcertificates">Using SSL Certificates</h4>
+
+<p>It's recommended to use a SSL certificate on production environment to secure connections to your Parse Server. You can just add a certificate file to Kontena Vault and re-deploy the load balancer service:</p>
+
+<pre><code>$ kontena vault write PARSE_SERVER_CERT "$(cat cert.pem)"
+$ kontena app deploy loadbalancer
+</code></pre>
+
+<p>You can read more about <a href="http://www.kontena.io/docs/using-kontena/loadbalancer#ssl-termination">SSL Termination</a> on Kontena load balancer.</p>
+
+<h4 id="scalingparseserver">Scaling Parse Server</h4>
+
+<p>Scaling Parse Server is almost too easy. You can just modify <code>instances</code> parameter in <code>kontena.yml</code> file and re-deploy the <code>server</code> service. For example:</p>
+
+<pre><code>#kontena.yml
+...
+server: 
+ instances: 6
+...
+</code></pre>
+
+<pre><code>$ kontena app deploy server
+</code></pre>
+
+<p>Kontena's load balancer will automatically detect changes and route traffic correctly to all Parse Server instances.</p>
+
+<h2 id="aboutkontena">About Kontena</h2>
+
+<p><a href="http://www.kontena.io">Kontena</a> is a new open source Docker platform including orchestration, service discovery, overlay networking and all the tools required to run your containerized workloads. Kontena is built to maximize developer happiness. It works on any cloud, it's easy to setup and super simple to use. <a href="http://www.kontena.io/docs/getting-started/quick-start">Give it a try</a>! If you like it, please star it on <a href="https://github.com/kontena/kontena">Github</a> and follow us on <a href="https://twitter.com/KontenaInc">Twitter</a>. We hope to see you again!</p>
+ </section>
+
+ </div>
+</body></html>

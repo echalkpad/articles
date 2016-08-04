@@ -1,0 +1,354 @@
+<!DOCTYPE html><html><head><title>Software Install Guide</title></head><body>
+<h1>Software Install Guide</h1><p><a href="http://jasperproject.github.io/documentation/installation/" target="_new">Original URL</a></p>
+<p><blockquote>There are three ways to install Jasper on your Raspberry Pi. The quickest way to get up and running with Jasper is to download the pre-compiled disk image available here for Model B. There is also an&hellip;</blockquote></p>
+<div><div class="col-sm-10">
+ 
+
+<p>There are three ways to install Jasper on your Raspberry Pi.</p>
+
+
+
+<p>The quickest way to get up and running with Jasper is to download the pre-compiled disk image <a href="http://sourceforge.net/projects/jasperproject/files/jasper-disk-image.tar.gz/download">available here for Model B</a>. There is also an unofficial image for the B+ <a href="https://groups.google.com/forum/#!topic/jasper-support-forum/xHgonA-TZYw">available here</a>. After imaging your SD card, clone the repository and install the Python dependencies as described in <a href="http://jasperproject.github.io/documentation/installation/#install-jasper">Install Jasper</a>. Then, skip to <a href="http://jasperproject.github.io/documentation/configuration/">Configuration</a>.</p>
+
+<p>If you want to understand how all of the supporting libraries are compiled on the Raspberry Pi, Method 3 may be to your liking (or, at the very least, helpful for debugging).</p>
+
+
+
+
+
+<p>Unfortunately, there are currently no packages available for Debian or Raspbian. Please use <a href="http://jasperproject.github.io/documentation/installation/#manual-installation">Method 3</a>.</p>
+
+
+
+<p>If you&#x2019;re using ArchLinux, there are packages available in the <a href="https://aur.archlinux.org/packages/jasper-voice-control-git/">Arch User Repository</a>. To install them:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-voice-control-git
+yaourt -S jasper-plugins</code></pre></figure>
+
+<p>You&#x2019;ll also need a Text-to-Speech (TTS) and a Speech-to-Text (STT) engine. Check out the configuration section to learn what STT/TTS engines are and what you need to do to use them.</p>
+
+<p>After you&#x2019;ve done that, you can start Jasper as a systemd service:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo systemctl start jasper-voice-control</code></pre></figure>
+
+<p>If the systemd service keeps failing, your audio device might already be in use by MPD, Pulseaudio, your Desktop Environment or some other process. In this case, start Jasper as your current user:</p>
+
+<figure class="highlight"><pre><code class="language-bash">mkdir -p ~/.jasper
+cp -r /var/lib/jasper/.jasper/profile.yml ~/.jasper
+jasper-voice-control</code></pre></figure>
+
+
+
+<p>Follow these instructions only if you wish to compile your Jasper software from scratch. These steps are unnecessary if you follow the recommended &#x201C;Quick Start&#x201D; instructions above.</p>
+
+
+
+<p>We&#x2019;ll first clear the SD card using <a href="http://gparted.org">GParted</a> on Ubuntu, but you can use an equivalent utility or operating system. In GParted: right-click on each partition of the SD card, then select &#x2018;Unmount&#x2019; and &#x2018;Delete&#x2019;. Apply the changes with Edit &gt; Apply All Operations.</p>
+
+<p>Download Raspbian Wheezy from <a href="http://downloads.raspberrypi.org/raspbian_latest">http://downloads.raspberrypi.org/raspbian_latest</a>. While we&#x2019;ve tested Jasper on the 2014-01-07 release, newer releases may also work.</p>
+
+<p>We&#x2019;ll use dd to burn the image to the disk. Obtain the address of the SD card with:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo fdisk -l</code></pre></figure>
+
+<p>Our address was &#x2018;/dev/mmcblk0&#x2019;, so the following command burns the image to the disk:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo dd <span class="k">if</span><span class="o">=</span>2013-12-20-wheezy-raspbian.img <span class="nv">of</span><span class="o">=</span>/dev/mmcblk0 <span class="nv">bs</span><span class="o">=</span>2M</code></pre></figure>
+
+<p>When it&#x2019;s done, remove your SD card, insert it into your Raspberry Pi and connect it to your computer via ethernet.</p>
+
+
+
+<p>We&#x2019;re now going to do some basic housekeeping and install some of the required libraries. You should SSH into your Pi with a command similar to the following. The IP address usually falls in the 192.168.2.3-192.168.2.10 range.</p>
+
+<figure class="highlight"><pre><code class="language-bash">ssh pi@192.168.2.3 <span class="c"># password (default): raspberry</span></code></pre></figure>
+
+<p>Run the following, select to &#x2018;Expand Filesystem&#x2019; and restart your Pi:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo raspi-config</code></pre></figure>
+
+<p>Run the following commands to update Pi and install some useful tools.</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get upgrade --yes
+sudo apt-get install vim git-core python-dev python-pip bison libasound2-dev libportaudio-dev python-pyaudio --yes</code></pre></figure>
+
+<p>Plug in your USB microphone. Let&#x2019;s open up an ALSA configuration file in vim:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo vim /etc/modprobe.d/alsa-base.conf</code></pre></figure>
+
+<p>Change the following line:</p>
+
+<figure class="highlight"><pre><code class="language-bash">options snd-usb-audio <span class="nv">index</span><span class="o">=</span>-2</code></pre></figure>
+
+<p>To this:</p>
+
+<figure class="highlight"><pre><code class="language-bash">options snd-usb-audio <span class="nv">index</span><span class="o">=</span>0</code></pre></figure>
+
+<p>Back in the shell, run:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo alsa force-reload</code></pre></figure>
+
+<p>Next, test that recording works (you may need to restart your Pi) by recording some audio with the following command:</p>
+
+<figure class="highlight"><pre><code class="language-bash">arecord temp.wav</code></pre></figure>
+
+<p>Make sure you have speakers or headphones connected to the audio jack of your Pi. You can play back the recorded file:</p>
+
+<figure class="highlight"><pre><code class="language-bash">aplay -D hw:1,0 temp.wav</code></pre></figure>
+
+<p>Add the following line to the end of ~/.bash_profile (you may need to run <code class="highlighter-rouge">touch ~/.bash_profile</code> if the file doesn&#x2019;t exist already):</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nb">export </span><span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="s2">"/usr/local/lib"</span>
+<span class="nb">source</span> .bashrc</code></pre></figure>
+
+<p>And this to your ~/.bashrc or ~/.bash_profile:</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="s2">"/usr/local/lib"</span>
+<span class="nb">export </span>LD_LIBRARY_PATH
+<span class="nv">PATH</span><span class="o">=</span><span class="nv">$PATH</span>:/usr/local/lib/
+<span class="nb">export </span>PATH</code></pre></figure>
+
+<p>With that, we&#x2019;re ready to install Jasper.</p>
+
+
+
+<p>In the home directory of your Pi, clone the Jasper source code:</p>
+
+<figure class="highlight"><pre><code class="language-bash">git clone https://github.com/jasperproject/jasper-client.git jasper</code></pre></figure>
+
+<p>Jasper requires various Python libraries that we can install in one line with:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo pip install --upgrade setuptools
+sudo pip install -r jasper/client/requirements.txt</code></pre></figure>
+
+<p>Sometimes it might be neccessary to make <tt>jasper.py</tt> executable:</p>
+
+<figure class="highlight"><pre><code class="language-bash">chmod +x jasper/jasper.py</code></pre></figure>
+
+<p>You&#x2019;ve now installed the Jasper core software. If you&#x2019;re following Method I (Quick Start), continue with <a href="http://jasperproject.github.io/documentation/configuration/">Configuration</a>. Otherwise, continue with the dependency installation below.</p>
+
+
+
+<p>To be able to understand what you say, Jasper still needs a Speech-to-Text (STT) engine. Jasper also needs a Text-to-Speech (TTS) engine to answer to your commands. Jasper aims to be modular and thus gives you the choice which STT/TTS engine you want to use. Depending on your choice, it may be required to install additional software.</p>
+
+<p>Head over to the <a href="http://jasperproject.github.io/documentation/configuration/">Configuration section</a>. During configuration, you&#x2019;ll learn what STT/TTS engines are and chose your flavour. You can then come back here and install the required dependencies for the STT/TTS engine of your choice (if neccessary).</p>
+
+
+
+<p><em>Note: Installing pocketsphinx will take quite some time because you need to compile some stuff from source.</em></p>
+
+<p>Jasper can use PocketSphinx for voice recognition. If you want to use Pocketsphinx as <a href="http://jasperproject.github.io/documentation/configuration/#stt">STT Engine</a>, you&#x2019;ll have to install:</p>
+
+<ul>
+ <li>sphinxbase &amp; pocketsphinx</li>
+ <li>CMUCLMTK</li>
+ <li>MIT Language Modeling Toolkit</li>
+ <li>m2m-aligner</li>
+ <li>OpenFST &amp; Phonetisaurus</li>
+</ul>
+
+<p>If you&#x2019;re using ArchLinux, you&#x2019;re lucky: Just install the <a href="https://aur.archlinux.org/packages/jasper-stt-pocketsphinx/">according AUR package</a> and you&#x2019;re done:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-stt-pocketsphinx</code></pre></figure>
+
+<p>Everyone else needs to install the above tools manually:</p>
+
+<h4>Installing Sphinxbase/Pocketsphinx</h4>
+
+<p>First, you need to install Pocketsphinx. If you&#x2019;re using Debian Sid (unstable) or Jessie (testing), you can just do:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install pocketsphinx</code></pre></figure>
+
+<p>If you&#x2019;re not using Debian Sid/Jessie, you need to compile and install them from source:</p>
+
+<figure class="highlight"><pre><code class="language-bash">wget http://downloads.sourceforge.net/project/cmusphinx/sphinxbase/0.8/sphinxbase-0.8.tar.gz
+tar -zxvf sphinxbase-0.8.tar.gz
+<span class="nb">cd</span> ~/sphinxbase-0.8/
+./configure --enable-fixed
+make
+sudo make install
+wget http://downloads.sourceforge.net/project/cmusphinx/pocketsphinx/0.8/pocketsphinx-0.8.tar.gz
+tar -zxvf pocketsphinx-0.8.tar.gz
+<span class="nb">cd</span> ~/pocketsphinx-0.8/
+./configure
+make
+sudo make install</code></pre></figure>
+
+<h4>Installing CMUCLMTK</h4>
+<p>Begin by installing some dependencies:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get install subversion autoconf libtool automake gfortran g++ --yes</code></pre></figure>
+
+<p>Next, move into your home (or Jasper) directory to check out and install CMUCLMTK:</p>
+
+<figure class="highlight"><pre><code class="language-bash">svn co https://svn.code.sf.net/p/cmusphinx/code/trunk/cmuclmtk/
+<span class="nb">cd </span>cmuclmtk/
+./autogen.sh <span class="o">&amp;&amp;</span> make <span class="o">&amp;&amp;</span> sudo make install
+<span class="nb">cd</span> ..</code></pre></figure>
+
+<p>Then, when you&#x2019;ve left the CMUCLTK directory, download the following libraries:</p>
+
+<h4>Installing Phonetisaurus, m2m-aligner and MITLM</h4>
+
+<p>To use the Pocketsphinx STT engine, you also need to install MIT Language Modeling Toolkit, m2m-aligner and Phonetisaurus (and thus OpenFST).</p>
+
+<p>On Debian, you can install these from the <code class="highlighter-rouge">experimental</code> repository:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo su -c <span class="s2">"echo 'deb http://ftp.debian.org/debian experimental main contrib non-free' &gt; /etc/apt/sources.list.d/experimental.list"</span>
+sudo apt-get update
+sudo apt-get -t experimental install phonetisaurus m2m-aligner mitlm libfst-tools</code></pre></figure>
+
+<p>If you&#x2019;re not using Debian, perform these steps:</p>
+
+<figure class="highlight"><pre><code class="language-bash">wget http://distfiles.macports.org/openfst/openfst-1.3.3.tar.gz
+wget https://mitlm.googlecode.com/files/mitlm-0.4.1.tar.gz
+wget https://m2m-aligner.googlecode.com/files/m2m-aligner-1.2.tar.gz
+wget https://phonetisaurus.googlecode.com/files/is2013-conversion.tgz</code></pre></figure>
+
+<p>Untar the downloads:</p>
+
+<figure class="highlight"><pre><code class="language-bash">tar -xvf m2m-aligner-1.2.tar.gz
+tar -xvf openfst-1.3.3.tar.gz
+tar -xvf is2013-conversion.tgz
+tar -xvf mitlm-0.4.1.tar.gz</code></pre></figure>
+
+<p>Build OpenFST:</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nb">cd </span>openfst-1.3.3/
+sudo ./configure --enable-compact-fsts --enable-const-fsts --enable-far --enable-lookahead-fsts --enable-pdt
+sudo make install <span class="c"># come back after a really long time</span></code></pre></figure>
+
+<p>Build M2M:</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nb">cd </span>m2m-aligner-1.2/
+sudo make</code></pre></figure>
+
+<p>Build MITLMT:</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nb">cd </span>mitlm-0.4.1/
+sudo ./configure
+sudo make install</code></pre></figure>
+
+<p>Build Phonetisaurus:</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nb">cd </span>is2013-conversion/phonetisaurus/src
+sudo make</code></pre></figure>
+
+<p>Move some of the compiled files:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo cp ~/m2m-aligner-1.2/m2m-aligner /usr/local/bin/m2m-aligner
+sudo cp ~/phonetisaurus-0.7.8/phonetisaurus-g2p /usr/local/bin/phonetisaurus-g2p</code></pre></figure>
+
+<h4>Building the Phonetisaurus FST model</h4>
+
+<figure class="highlight"><pre><code class="language-bash">wget https://www.dropbox.com/s/kfht75czdwucni1/g014b2b.tgz
+tar -xvf g014b2b.tgz</code></pre></figure>
+
+<p>Build Phonetisaurus model:</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nb">cd </span>g014b2b/
+./compile-fst.sh
+<span class="nb">cd</span> ..</code></pre></figure>
+
+<p>Finally, rename the following folder for convenience:</p>
+
+<figure class="highlight"><pre><code class="language-bash">mv ~/g014b2b ~/phonetisaurus</code></pre></figure>
+
+<p>Once the installations are complete, restart your Pi.</p>
+
+<p>At this point, we&#x2019;ve installed Jasper and all the necessary software to run it. Before we start playing around, though, we need to configure Jasper and provide it with some basic information.</p>
+
+
+
+<p>On Arch Linux, install <a href="https://www.archlinux.org/packages/?repo=Community&amp;q=julius"><code class="highlighter-rouge">julius</code> from the <code class="highlighter-rouge">[community]</code> repo</a>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo pacman -S julius</code></pre></figure>
+
+<p>If you&#x2019;re not using ArchLinux, you need to compile Julius manually.</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install build-essential zlib1g-dev flex libasound2-dev libesd0-dev libsndfile1-dev</code></pre></figure>
+
+<p>Then, download the <a href="http://sourceforge.jp/projects/julius/downloads/60273/julius-4.3.1.tar.gz/">Julius source tarball</a> and extract it to <code class="highlighter-rouge">~/julius</code>.</p>
+
+<figure class="highlight"><pre><code class="language-bash"><span class="nb">cd</span> ~/julius
+./configure --enable-words-int
+make
+sudo make install</code></pre></figure>
+
+<p>Please note that you also need an <a href="http://jasperproject.github.io/documentation/configuration/#julius-stt">acoustic model and a lexicon.</a>.</p>
+
+
+
+<p>On Arch Linux, install <a href="https://aur.archlinux.org/packages/jasper-tts-espeak/"><code class="highlighter-rouge">jasper-tts-espeak</code> from the AUR</a>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-tts-espeak</code></pre></figure>
+
+<p>On Debian, install the <code class="highlighter-rouge">espeak</code> package:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install espeak</code></pre></figure>
+
+
+
+<p>On Arch Linux, install <a href="https://aur.archlinux.org/packages/jasper-tts-festival/"><code class="highlighter-rouge">jasper-tts-festival</code> from the AUR</a>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-tts-festival</code></pre></figure>
+
+<p>On Debian, install <code class="highlighter-rouge">festival</code> and <code class="highlighter-rouge">festvox-don</code>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install festival festvox-don</code></pre></figure>
+
+
+
+<p>On Arch Linux, install <a href="https://aur.archlinux.org/packages/jasper-tts-flite/"><code class="highlighter-rouge">jasper-tts-flite</code> from the AUR</a>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-tts-flite</code></pre></figure>
+
+<p>On Debian, install <code class="highlighter-rouge">flite</code>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install flite</code></pre></figure>
+
+
+
+<p>On Arch Linux, install <a href="https://aur.archlinux.org/packages/jasper-tts-pico/"><code class="highlighter-rouge">jasper-tts-pico</code> from the AUR</a>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-tts-pico</code></pre></figure>
+
+<p>On Debian, you need to install <code class="highlighter-rouge">libttspico-utils</code>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install libttspico-utils</code></pre></figure>
+
+
+
+<p>On Arch Linux, install <a href="https://aur.archlinux.org/packages/jasper-tts-google/"><code class="highlighter-rouge">jasper-tts-google</code> from the AUR</a>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-tts-google</code></pre></figure>
+
+<p>On Debian, you need to install <code class="highlighter-rouge">python-pymad</code> via APT and <code class="highlighter-rouge">gTTS</code> via PIP:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install python-pymad
+sudo pip install --upgrade gTTS</code></pre></figure>
+
+
+
+<p>On Arch Linux, install <a href="https://aur.archlinux.org/packages/jasper-tts-ivona/"><code class="highlighter-rouge">jasper-tts-ivona</code> from the AUR</a>:</p>
+
+<figure class="highlight"><pre><code class="language-bash">yaourt -S jasper-tts-ivona</code></pre></figure>
+
+<p>On Debian, you need to install <code class="highlighter-rouge">python-pymad</code> via APT and <code class="highlighter-rouge">pyvona</code> via PIP:</p>
+
+<figure class="highlight"><pre><code class="language-bash">sudo apt-get update
+sudo apt-get install python-pymad
+sudo pip install --upgrade pyvona</code></pre></figure>
+
+
+ </div>
+ </div>
+</body></html>

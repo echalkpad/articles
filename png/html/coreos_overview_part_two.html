@@ -1,0 +1,527 @@
+<!DOCTYPE html><html><head><title>CoreOS Overview, Part Two</title></head><body>
+<h1>CoreOS Overview, Part Two</h1><p><a href="https://deis.com/blog/2016/coreos-overview-p2" target="_new">Original URL</a></p>
+<p><blockquote>This is the second post in a series looking at CoreOS. In my last post, we looked at how CoreOS is different from other Linux systems, atomic upgrades and release channels, and the basics of cluster&hellip;</blockquote></p>
+<div><article>
+ <p>This is the second post in a series looking at CoreOS.</p>
+
+<p>In my <a href="https://deis.com/blog/2016/coreos-overview-p1">last post</a>, we looked at how CoreOS is different from other Linux systems, atomic upgrades and release channels, and the basics of cluster discovery. </p>
+
+<p>In this post, we take a closer look at cloud-config and etcd. We'll also look at a few common cluster architectures.</p>
+
+<h2>Cloud-Config</h2>
+
+<p>Cloud-config allows you to declaratively customize various OS-level items, such as network configuration, user accounts, and systemd units (which we'll cover the next post). This came from Ubuntu and was modified a bit to fit the needs of CoreOS.</p>
+
+<p>At the core of every CoreOS cluster machine, there is the bootstrap mechanic <em>coreos-cloudinit</em>. The coreos-cloudinit program the cloud-config file when it configures the OS after startup or during runtime.</p>
+
+<a name="read-more" class="read-more-anchor"></a>
+
+<h3>What Is Cloud-Config Anyway?</h3>
+
+<p>It all starts with the <code>cloud-config</code> file, which uses <a href="https://en.wikipedia.org/wiki/YAML">YAML</a>, with whitespace and new lines to delimit lists, associative arrays, and values.</p>
+
+<p>Formating is crucial. Before you deploy your cloud-config on a node, you should validate it with the <a href="https://coreos.com/validate/">online tool</a> provided by CoreOS.</p>
+
+<p>A cloud-config file must start with <code>#cloud-config</code>, followed by an associative array which has zero or more keys.</p>
+
+<p>Here are some frequently used keys:</p>
+
+<ul>
+<li><code>coreos</code>
+
+<ul>
+<li>Handles all CoreOS specifics like <code>update strategy</code>, <code>etcd2</code>, <code>fleet</code>, <code>flannel</code>, <code>units</code> and so on</li>
+</ul></li>
+<li><code>write_files</code>
+
+<ul>
+<li>Directive defines a set of files to create on the local filesystem</li>
+</ul></li>
+<li><code>ssh_authorized_keys</code>
+
+<ul>
+<li>Adds public SSH keys which will be authorized for the core user</li>
+</ul></li>
+</ul>
+
+<p>Here&#x2019;s an example cloud-config file:</p>
+<figure class="highlight"><pre><code class="language-text">#cloud-config
+hostname: core-01
+coreos:
+ update:
+ reboot-strategy: off
+ etcd2:
+ name: core-01
+ initial-advertise-peer-urls: http://127.0.0.1:2380
+ initial-cluster-token: core-01_etcd
+ initial-cluster: core-01=http://127.0.0.1:2380
+ initial-cluster-state: new
+ listen-peer-urls: http://0.0.0.0:2380,http://0.0.0.0:7001
+ listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+ advertise-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+ units:
+ - name: etcd2.service
+ command: start
+ - name: fleet.service
+ command: start
+ - name: docker-tcp.socket
+ command: start
+ enable: true
+ content: |
+ [Unit]
+ Description=Docker Socket for the API
+
+ [Socket]
+ ListenStream=2375
+ BindIPv6Only=both
+ Service=docker.service
+
+ [Install]
+ WantedBy=sockets.target
+ - name: docker.service
+ command: start
+ drop-ins:
+ - name: 50-insecure-registry.conf
+ content: |
+ [Unit]
+ [Service]
+ Environment=DOCKER_OPTS='--insecure-registry="0.0.0.0/0"'
+write-files:
+ - path: /etc/conf.d/nfs
+ permissions: '0644'
+ content: |
+ OPTS_RPC_MOUNTD=""
+ssh_authorized_keys:
+ - ssh-rsa 121313dqx1e123e12&#x2026; user@my_mac
+</code></pre></figure>
+<p>For more information about the cloud-config configuration parameters, see <a href="https://coreos.com/os/docs/latest/cloud-config.html">the documentation</a>. </p>
+
+<h2>Etcd 2.x</h2>
+
+<p>etcd is an open source, distributed, key-value store that provides a reliable way to store data across a cluster of machines.</p>
+
+<p>etcd runs on each etcd cluster's central services machine (don't worry, we'll explain this later in the post) and tolerates machine failure, including failure of the leader (a new leader will be elected if that happens).</p>
+
+<p>Data is replicated across etcd nodes using <a href="https://raftconsensus.github.io/">the Raft consensus algorithm</a>. Consensus is a fundamental problem in fault-tolerant distributed systems. Consensus involves multiple servers agreeing on values. Once they reach a decision on a value, that decision is final.</p>
+
+<p>Deis uses etcd to store its data. Kubernetes (an open source orchestration system for containers) uses etcd to store its data too.</p>
+
+<h3>Optimal etcd Cluster Size</h3>
+
+<p>The recommended etcd cluster size is three, five, or seven. Although a larger cluster provides better fault tolerance, the write performance is reduced because data needs to be replicated to more machines. </p>
+
+<p>In most cases, three or five members in a cluster is enough.</p>
+
+<p>It is recommended to have an odd number of members in a cluster. Having an odd number of members doesn't change the number needed for majority, but you gain a higher tolerance for failure by adding the extra member.</p>
+
+<p>You can see this in practice when comparing even and odd-sized clusters:</p>
+
+<h4>Fault Tolerance Table</h4>
+
+<table class="table">
+ <tr>
+ <td>Cluster Size</td>
+ <td>Majority</td>
+ <td>Failure Tolerance</td>
+ </tr>
+ <tr>
+ <td>1</td>
+ <td>1</td>
+ <td>0</td>
+ </tr>
+ <tr>
+ <td>3</td>
+ <td>2</td>
+ <td>1</td>
+ </tr>
+ <tr>
+ <td>4</td>
+ <td>3</td>
+ <td>1</td>
+ </tr>
+ <tr>
+ <td>5</td>
+ <td>3</td>
+ <td>2</td>
+ </tr>
+ <tr>
+ <td>6</td>
+ <td>4</td>
+ <td>2</td>
+ </tr>
+ <tr>
+ <td>7</td>
+ <td>4</td>
+ <td>3</td>
+ </tr>
+ <tr>
+ <td>8</td>
+ <td>5</td>
+ <td>3</td>
+ </tr>
+</table>
+
+<p>As you can see, adding another member to bring the size of cluster up to an odd size is always worth it.</p>
+
+<p>During a network partition, an odd number of members also guarantees that there will almost always be a majority of the cluster that can continue to operate and be the source of truth when the partition ends.</p>
+
+<p>For more about the etcd discovery see <a href="https://github.com/coreos/etcd/blob/master/Documentation/clustering.md#etcd-discovery">the documentation</a>.</p>
+
+<p>An example of etcd central services machines setup:</p>
+<figure class="highlight"><pre><code class="language-text">#cloud-config
+coreos:
+ etcd2:
+ # generate a new token for each unique cluster from https://discovery.etcd.io/new
+ discovery: https://discovery.etcd.io/60887e46255f4efew37077ccf12b5f06a54a
+ initial-advertise-peer-urls: http://$private_ipv4:2380
+ # listen on both the official ports and the legacy ports
+ # legacy ports can be omitted if your application doesn't depend on them
+ listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+ listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
+ data-dir: /var/lib/etcd2
+</code></pre></figure>
+<p>The <a href="https://discovery.etcd.io/new?size=3">https://discovery.etcd.io/new?size=3</a> URL was used, so the initial etcd cluster size must be 3 machines.</p>
+
+<h3>Proxy Mode</h3>
+
+<p>As you bootstrap a separate etcd cluster for central services, your worker machines need to connect to that etcd cluster to register themselves as a cluster member and to be able to receive deployed cluster fleet units, get OS updates control, and so on.</p>
+
+<p>The easiest way to do that is to run each cluster worker node in the etcd <em>proxy mode</em> instead of starting etcd server locally.</p>
+
+<p>Running etcd as a proxy allows for easy discovery of etcd on your network, because it can run on each machine as a local service. In this mode, etcd acts as a reverse proxy and forwards client requests to an active etcd node. Because the etcd proxy does not participate in the consensus replication of the etcd cluster, it neither increases the resilience nor decreases the write performance of the etcd cluster.</p>
+
+<p>Services that needs to talk to etcd can connect to localhost.</p>
+
+<p>etcd currently supports two proxy modes: <code>readwrite</code> and <code>readonly</code>.</p>
+
+<p>The default mode is <code>readwrite</code>, which forwards both read and write requests to the etcd cluster. </p>
+
+<p>The proxy rotates through the list of cluster members periodically to avoid forwarding all traffic to a single member.</p>
+
+<p>An example of etcd proxy setup:</p>
+<figure class="highlight"><pre><code class="language-text">#cloud-config
+coreos:
+ etcd2:
+ listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+ advertise-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+ discovery: https://discovery.etcd.io/60887e46255f4efew37077ccf12b5f06a54a
+ proxy: on
+</code></pre></figure>
+<p>This accepts client connectons via localhost and forwards them to the etcd central services cluster via this discovery URL:</p>
+
+<p><code>https://discovery.etcd.io/60887e46255f4efew37077ccf12b5f06a54a</code></p>
+
+<p>For more about the etcd proxy see <a href="https://github.com/coreos/etcd/blob/master/Documentation/proxy.md">the documentation</a>. </p>
+
+<h2>Cluster Architectures</h2>
+
+<p>Depending on the size of your cluster and how it's going to be used, there are a few common cluster architectures that <em>must</em> be followed.</p>
+
+<p>It is strongly recommended that you set aside a fixed number of machines to be dedicated to running etcd central cluster services and a separate fixed number of machines for the distributed controllers for applications like Deis, Kubernetes, Mesos, and OpenStack. </p>
+
+<p>Separating out these services into fixed number machines allows you to make sure they are distributed across datacenter cabinets and availability zones and setting up static networking to allow for easy cluster bootstrapping.</p>
+
+<p>If you're worried about relying on the discovery service, this architecture will remove your worries.</p>
+
+<p>Then you can set up your worker machines to be connected to central services. In such a setup you can scale up/down your machines to meet your demand and not to be worried about breaking quorum of your etcd cluster.</p>
+
+<p>For more information about setting up different cluster architectures with provided cloud-config files, see <a href="https://coreos.com/os/docs/latest/cluster-architectures.html">the documentation</a>.</p>
+
+<p>Let's go into a few examples.</p>
+
+<h3>Docker Dev Environment on a Laptop</h3>
+
+<p>If you're developing locally, but plan to run containers in production, it helps to mirror that environment locally.</p>
+
+<p>This can easily be done by running Docker commands on your laptop to control a CoreOS VM in VMware Fusion or VirtualBox.</p>
+
+<p>Here's a laptop development environment with a CoreOS VM:</p>
+
+<p><img src="https://deis.com/images/blog-images/coreos-overview-2-0.png" alt=""></p>
+
+<h3>An Easy Development and Testing Cluster</h3>
+
+<p>Here's a CoreOS cluster optimized for development and testing:</p>
+
+<p><img src="https://deis.com/images/blog-images/coreos-overview-2-1.png" alt=""></p>
+
+<p>A setup like this is great for running your development, testing, and staging environments on bare metal or cloud VM instances.</p>
+
+<p>When you're first getting started with CoreOS, it's common to frequently tweak your cloud-config. This requires booting, rebooting, and destroying many machines. Instead of being slowed down by generating new discovery URLs and bootstrapping etcd, it's easier to start a single etcd node. This way you are free to boot as many machines as you'd like that read from the etcd node.</p>
+
+<p>All the features of fleet, locksmith, and etcdctl continue to work properly, but connect to the etcd cluster via etcd proxy instead of using the worker&#x2019;s local etcd instance. Since etcd is running only in a proxy mode on all of the worker machines, you gain a little extra CPU and RAM.</p>
+
+<p>This environment is now set up for optimal performance.</p>
+
+<p>Pull the plug on a machine and watch fleet reschedule the units, max out the CPU, and so on!</p>
+
+<h3>A Production Cluster With Central Services</h3>
+
+<p>A CoreOS cluster separated into central services and workers:</p>
+
+<p><img src="https://deis.com/images/blog-images/coreos-overview-2-2.png" alt=""></p>
+
+<p>This setup is good for production. The cluster is separated into central services and workers. </p>
+
+<p>For large clusters, it's recommended to set aside three to five machines to run central services. </p>
+
+<p>After those are set up, you can boot as many workers as you want. </p>
+
+<p>Each of the workers uses the distributed etcd cluster on the central machines via local etcd proxies.</p>
+
+<p>fleet is used to bootstrap both the central services and jobs on the worker machines by taking advantage of machine metadata and global fleet units. We cover this in the <a href="https://deis.com/blog/2016/coreos-overview-p3">next post</a>!</p>
+
+<p><em>Note: If you have Deis, Kubernetes, or other services which need dedicated machines, do not put those services onto etcd cluster machines. Instead, dedicate a fixed number machines for them also. It is not recommended to use etcd cluster machines to run anything other than etcd services.</em></p>
+
+<h2>Wrap-Up</h2>
+
+<p>In this post, we looked at:</p>
+
+<ul>
+<li>The cloud-config file</li>
+<li>Why the ideal etcd cluster size is an odd number</li>
+<li>Running etcd in proxy mode</li>
+<li>Some common etcd cluster setups</li>
+</ul>
+
+<p>In the <a href="https://deis.com/blog/2016/coreos-overview-p3">next post</a> we take a look at systemd and fleet in a bit more detail.</p>
+
+ </article>
+ </div><hr class="rdb-page-break" /><div><article>
+ <p>This is the third and final post in a series looking at CoreOS.</p>
+
+<p>In my <a href="https://deis.com/blog/2016/coreos-overview-p2">last post</a>, we looked at the cloud-config file, running etcd in proxy mode, and some common etcd cluster setups.</p>
+
+<p>In this post, we take a closer look at systemd, unit files, Fleet, and fleetctl.</p>
+
+<h2>systemd Overview</h2>
+
+<p>systemd is an init system used by CoreOS that provides many powerful features for starting, stopping, monitoring, and restarting process. On CoreOS, systemd is used to manage the lifecycle of your Docker containers and also for different system bootstrap tasks.</p>
+
+<p>Learning systemd would need a series of blog posts in itself. Here we only cover systemd to the extent that we need to run systemd units for Docker containers on CoreOS. </p>
+
+<p>For more information about systemd, see <a href="http://www.freedesktop.org/wiki/Software/systemd/">the documentation</a>.</p>
+
+<a name="read-more" class="read-more-anchor"></a>
+
+<h3>Unit Files</h3>
+
+<p>systemd records initialization instructions for each daemon in a configuration file called <em>a unit</em>.</p>
+
+<p>This system replaces the traditional System V per-daemon <a href="https://www.wikiwand.com/en/Init">init scripts</a>. </p>
+
+<p>There are many different unit file types, but we'll only cover the <em>services</em> type used to run Docker containers. We call these <em>service units</em>.</p>
+
+<p>Here's a list of the most useful features, presented in the order they'll occur in the lifecycle of a service unit:</p>
+
+<ul>
+<li><code>ExecStartPre</code>: commands that run before <code>ExecStart</code></li>
+<li><code>ExecStart</code>: main commands to run for this unit</li>
+<li><code>ExecStartPost</code>: commands that run after all <code>ExecStart</code> commands have completed</li>
+<li><code>ExecReload</code>: commands that run when this unit is reloaded via <code>systemctl reload foo.service</code></li>
+<li><code>ExecStop</code>: commands that run when this unit is considered failed or if it is stopped via <code>systemctl stop foo.service</code></li>
+<li><code>ExecStopPost</code>: commands that run after <code>ExecStop</code> has completed</li>
+<li><code>RestartSec</code>: the amount of time to sleep before restarting a service (useful to prevent your failed service from attempting to restart itself every 100ms)</li>
+</ul>
+
+<p>Let&#x2019;s create a simple unit file called <code>hello_world.service</code>:</p>
+<figure class="highlight"><pre><code class="language-text">[Unit]
+Description=HelloWorldApp
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker rm busybox1
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --rm --name busybox1 busybox /bin/sh -c "while true; do echo Hello World; sleep 1; done"
+ExecStop=/usr/bin/docker stop busybox1
+
+[Install]
+WantedBy=multi-user.target
+</code></pre></figure>
+<p>Let&#x2019;s review the unit file we just created:</p>
+
+<ul>
+<li>The <code>Description</code> shows up in the systemd log (a unit&#x2019;s log can be checked with <em>journalctl</em> or <em>systemdctl</em>).</li>
+<li><code>After=docker.service</code> and <code>Requires=docker.service</code> means this unit only starts after <code>docker.service</code> is active. You can define as many of these as you want. You can delimit multiple <code>After</code> requirements using space as a separator.</li>
+<li>The <code>=-</code> is systemd syntax to ignore errors for this command. In our case, Docker will return a non-zero exit code if we try to stop a container that doesn't exist, so this is not an error for us.</li>
+<li><code>ExecStartPre=-/usr/bin/docker rm busybox1</code> will remove the Docker image <code>busybox1</code> if such image exists. If there&#x2019;s no Docker image to remove, the script will just move on.</li>
+<li><code>ExecStartPre=/usr/bin/docker pull busybox</code> will pull the <code>busybox</code> image from the Docker registry. </li>
+<li><code>ExecStart=</code> allows you to specify any command that you'd like to run when this unit is started. Do not run Docker containers with <code>-d</code> because this will prevent the container from starting as a child of this process. systemd will think the process has exited and the unit will be stopped.</li>
+<li><code>ExecStop=/usr/bin/docker stop busybox1</code> will stop the Docker container <code>busybox1</code>.</li>
+<li><code>WantedBy=multi-user.target</code>" tells systemd to pull in the unit when starting <code>multi-user.target</code>.</li>
+</ul>
+
+<p>Now to start a new unit, we need to tell systemd to create the symlink and then start the file:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo systemctl enable /etc/systemd/system/hello.service
+$ sudo systemctl start hello.service
+</code></pre></figure>
+<p>To verify the unit started, check the list of containers running with:</p>
+<figure class="highlight"><pre><code class="language-text">docker ps
+</code></pre></figure>
+<p>Then, read the unit's output with journalctl, like so:</p>
+<figure class="highlight"><pre><code class="language-text">$ journalctl -f -u hello.service
+-- Logs begin at Fri 2014-02-07 00:05:55 UTC. --
+Feb 11 17:46:26 localhost docker[23470]: Hello World
+Feb 11 17:46:27 localhost docker[23470]: Hello World
+Feb 11 17:46:28 localhost docker[23470]: Hello World
+[...]
+</code></pre></figure>
+<p>Here, <code>-u</code> means unit, and <code>-f</code> means follow. Press CTRL-c to exit.</p>
+
+<p>The systemd service units can only run and be controlled on a single machine. They are best used for simple tasks, like downloading files on reboot, and so on. </p>
+
+<p>For more information about systemd units, see <a href="https://coreos.com/docs/launching-containers/launching/getting-started-with-systemd/">the documentation</a>.</p>
+
+<h2>Fleet Overview</h2>
+
+<p>Fleet runs on top of systemd and controls systemd at the cluster level, creating a distributed systemd:</p>
+
+<p><img src="https://deis.com/images/blog-images/coreos-overview-3-0.png" alt=""></p>
+
+<p>To run your services in the cluster, you must submit regular systemd units combined with <a href="https://coreos.com/docs/launching-containers/launching/fleet-unit-files/">fleet-specific properties</a>.</p>
+
+<h3>fleetctl</h3>
+
+<p>fleetctl is a command line tool allowing you to control fleet units on local and remote CoreOS Clusters.</p>
+
+<p>The fleetctl commands are very similar to systemctl commands, and we do not have to use sudo with fleetctl. </p>
+
+<p>fleetctl commands can be run directly on a cluster machine.</p>
+
+<p>Or, if you prefer to execute fleetctl from an external host (i.e. your workstation), a system environment variable can be used to tunnel communication with your fleet cluster over SSH, like so:</p>
+<figure class="highlight"><pre><code class="language-text">$ export FLEETCTL_TUNNEL=remote_machines_ip
+</code></pre></figure>
+<p>Let's look at some of the tasks you can perform, listed with the required commands.</p>
+
+<p>Loading and starting the unit:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl start hello_world.service
+</code></pre></figure>
+<p>Checking the status of the unit:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl status hello_world.service
+</code></pre></figure>
+<p>Stopping the service:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl stop hello_world.service
+</code></pre></figure>
+<p>Viewing the content of service file:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl cat hello_world.service
+</code></pre></figure>
+<p>If you want to upload the unit file without starting it:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl submit hello_world.service
+</code></pre></figure>
+<p>Check the hello_world.service logs:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl journal hello_world.service
+</code></pre></figure>
+<p>You can even ssh to the host that runs the unit:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl ssh hello_world.service
+</code></pre></figure>
+<p>Listing all running fleet units:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl list-units
+</code></pre></figure>
+<p>Listing fleet cluster machines:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl list-machines
+</code></pre></figure>
+<h3>Unit Files</h3>
+
+<p>Unit files are the primary interaction with fleet.</p>
+
+<p>As with systemd units, fleet units define what you want to do and how fleet should provision them. Fleet schedules a valid unit file to one or more machines in a cluster, taking in mind fleet's special properties from the <code>[X-Fleet]</code> section, which replace the systemd unit's <code>[Install]</code> section. </p>
+
+<p>The rest of systemd's sections remain the same in fleet units.</p>
+
+<p>Let&#x2019;s review fleet specific options:</p>
+
+<ul>
+<li><code>MachineID</code>: Unit will be scheduled to the machine identified by a given string</li>
+<li><code>MachineOf</code>: Limit eligible machines to the one that hosts a specific unit</li>
+<li><code>MachineMetadata</code>: Limit eligible machines to those with this specific metadata</li>
+<li><code>Conflicts</code>: Prevent a unit from being collocated with other units using glob-matching on the other unit names</li>
+<li><code>Global</code>: Schedule this unit on all machines in the cluster</li>
+</ul>
+
+<p>All of these go in the <code>[X-Fleet]</code> section of the unit file.</p>
+
+<p>A unit is considered invalid if options other than <code>MachineMetadata</code> are provided alongside <code>Global=true</code>. Global units are very useful if you want to schedule the same unit on all machines or on some machines which <code>MachineMetadata</code> matches some value.</p>
+
+<p>Let&#x2019;s convert the systemd unit file <code>hello_world.service</code> we used above to a fleet unit:</p>
+<figure class="highlight"><pre><code class="language-text">[Unit]
+Description=HelloWorldApp
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker rm busybox1
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --rm --name busybox1 busybox /bin/sh -c "while true; do echo Hello World; sleep 1; done"
+ExecStop=/usr/bin/docker stop busybox1
+
+[X-Fleet]
+MachineMetadata=group=hw_webservers
+Conflicts=hello_world@*
+</code></pre></figure>
+<p>What does <code>hello_world@*</code> do in this example?</p>
+
+<p>Well, let's say we have two identical <code>hello_world@1.service</code> and <code>hello_world@2.service</code> files.</p>
+
+<p>We can start them on the cluster like so:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl start hello_world@*
+</code></pre></figure>
+<p>These two fleet units will be deployed to servers with <code>MachineMetadata=group=hw_webservers</code> metadada set, and <code>Conflicts=hello_world@*</code> will prevent a unit from being collocated with other units using glob-matching on the other unit names.</p>
+
+<p>Let's look at a few more examples with other fleet options for <code>hello_world.service</code> unit.</p>
+
+<p>This schedules this unit on all machines in the cluster:</p>
+<figure class="highlight"><pre><code class="language-text">[X-Fleet]
+Global=true
+</code></pre></figure>
+<p>This schedules the unit on the machine that has the <code>some_other_unit.service</code> unit.</p>
+<figure class="highlight"><pre><code class="language-text">[X-Fleet]
+MachineOf=some_other_unit.service
+</code></pre></figure>
+<p>This schedules the unit to the machine with the ID 562999f8:</p>
+<figure class="highlight"><pre><code class="language-text">[X-Fleet]
+MachineID="562999f8"
+</code></pre></figure>
+<p>You can check machine ID with:</p>
+<figure class="highlight"><pre><code class="language-text">$ fleetctl list-machines
+</code></pre></figure>
+<p>For more information about fleet units, see <a href="https://coreos.com/fleet/docs/latest/unit-files-and-scheduling.html">the documentation</a>.</p>
+
+<h3>Run a Container in the Cluster</h3>
+
+<p>Running a single container is very easy.</p>
+
+<p>All you need to do is provide a regular unit file without an <code>[Install]</code> section, like so:</p>
+<figure class="highlight"><pre><code class="language-text">[Unit]
+Description=hello_docker
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker rm busybox1
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --rm --name busybox1 busybox /bin/sh -c "while true; do echo Hello Docker; sleep 1; done"
+ExecStop=/usr/bin/docker stop busybox1
+</code></pre></figure>
+<p><em>Note: If you've been running Docker commands manually, make sure you don't copy a Docker run command that starts a container in detached mode (indicated by the <code>-d</code> switch). This will cause the unit to run for just a few seconds and then exit.</em></p>
+
+
+
+<p>In this post, we looked at:</p>
+
+<ul>
+<li>Writing unit files for systemd</li>
+<li>How Fleet is used to create a distributed systemd</li>
+<li>Writing unit files for Fleet</li>
+</ul>
+
+<p>Don't miss the previous two parts of this miniseries. In <a href="https://deis.com/blog/2016/coreos-overview-p1">part one</a>, we looked the basics of CoreOS, atomic upgrades and release channels, and cluster discovery. And in <a href="https://deis.com/blog/2016/coreos-overview-p2">part two</a>, we looked at cloud-config and etcd.</p>
+
+<p>In my next miniseries, I'll be looking at Docker.</p>
+
+ </article>
+ </div>
+</body></html>

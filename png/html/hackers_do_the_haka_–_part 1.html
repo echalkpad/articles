@@ -1,0 +1,243 @@
+<!DOCTYPE html><html><head><title>Hackers do the Haka – Part 1</title></head><body>
+<h1>Hackers do the Haka – Part 1</h1><p><a href="http://thisissecurity.net/2015/11/23/hackers-do-the-haka-part-1/" target="_new">Original URL</a></p>
+<p><blockquote>Haka is an open source network security oriented language that allows writing security rules and protocol dissectors. In this first part of a two-part series, we will focus on writing security rules.&hellip;</blockquote></p>
+<div><div class="block-text">
+					<p><span class="st">Haka is an open source network security oriented language that allows writing security rules and protocol dissectors. In this first part of a two-part series, we will focus on writing security rules.</span></p>
+<h2>What is Haka</h2>
+<p>Haka is an open source security oriented language that allows specifying and applying security policies on live captured traffic. Haka is based on Lua. It is a simple, lightweight (~200 kB) and fast (a JiT compiler is available) scripting language.</p>
+<p>The scope of Haka is twofold. First of all, it enables the specification of security rules to filter unwanted streams and report malicious activities. Haka provides a simple API for advanced packet and stream manipulation. One can drop packets or create new ones and inject them. Haka also supports on-the-fly packet modification. This is one of the main features of Haka since all complex tasks such as resizing packets, setting correctly sequence numbers are done transparently to the user. This is done live without the need of a proxy.</p>
+<p>Secondly, Haka is endowed with a grammar allowing the specification of protocols and their underlying state machine. Haka supports both type of protocols : binary-based protocols (e.g. dns) and text-based protocols (e.g. http). The specification covers packet-based protocols such as ip as well as stream-based protocols like http.</p>
+<p>Haka is embedded into a modular framework. It includes several packet capture modules (pcap, nfqueue) that enable end users to apply their security policy on live captured traffic or to replay it on a packet trace file. The framework provides also logging (syslog) and alerting modules (syslog, elasticsearch). Alerts follow an IDMEF-like format. Finally, the framework has auxiliary modules such as a pattern matching engine and an instruction disassembler module. These modules allow writing fine-grained security rules to detect obfuscated malware for instance. Haka was designed in a modular fashion enabling users to extend it with additional modules.</p>
+<p><a href="https://thisiscybersec.files.wordpress.com/2015/10/arch.png"><img class="aligncenter wp-image-248" src="https://thisiscybersec.files.wordpress.com/2015/10/arch.png?w=450&amp;h=585" alt="arch" width="450"></a></p>
+<h2>Haka Tool Suite</h2>
+<p>Haka provides a collection of four tools:</p>
+<ul>
+<ul>
+<li><strong>haka.</strong> It is the main program of the collection. It is intended to be used as a daemon to monitor packets in the background. Packets are dissected and filtered according to the specified security policy file. Haka takes as input a configuration file. For example, the following configuration sample file instructs Haka to capture packets from the interface eth0 using nfqueue module and to filter them using the policy file myrules.lua. This script file loads typically user-defined or built-in protocol dissectors and defines a set of security rules. Additionally, users can select the alerting and reporting module to be used and set some specific module options:
+<pre class="brush: xml; title: ; notranslate" title="">
+[general]
+# Select the haka configuration file to use
+configuration = "myrules.lua"
+
+# Optionally select the number of thread to use
+# By default, all system thread will be used
+#thread = 4
+
+[packet]
+# Select the capture model, nfqueue or pcap
+module = "packet/nfqueue"
+
+# Select the interfaces to listen to
+#interfaces = "any"
+interfaces = "eth0"
+
+# Select packet dumping for nfqueue
+#dump = yes
+#dump_input = "/tmp/input.pcap"
+#dump_output = "/tmp/output.pcap"
+
+[log]
+# Select the log module
+module = "log/syslog"
+
+# Set the default logging level
+#level = "info,packet=debug"
+
+[alert]
+# Select the alert module
+module = "alert/syslog"
+#module = "alert/file"
+#module = "alert/elasticsearch"
+
+# Disable alert on standard output
+#alert_on_stdout = no
+</pre>
+</li>
+<li><strong>hakactl.</strong> This tool allows controling a running Haka daemon. One can get live statistics on captured packets, inspect logs or simply shutdown/restart the daemon.</li>
+<li><strong>hakapcap.</strong> This tool allows replaying a policy file offline on a packet capture trace using the pcap module. For instance, this is useful to perform network forensics.</li>
+<li><strong>hakabana. </strong>This tool allows visualizing and monitoring network traffic in real time using Kibana and Elasticsearch. Hakabana consists in a set of custom security rules that pushes information about the traffic that passes though Haka on an elastisserach server and made them available through a Kibana dashboard. An additional dashboard is also available to visualize Haka alerts.</li>
+</ul>
+</ul>
+<p><a href="https://thisiscybersec.files.wordpress.com/2015/10/kibana_ips.png"><img class="wp-image-255 size-medium alignleft" src="https://thisiscybersec.files.wordpress.com/2015/10/kibana_ips.png?w=300&amp;h=145" alt="Kibana dashboard to visualize alerts" width="300"></a><a href="https://thisiscybersec.files.wordpress.com/2015/10/hakabana_dashboard.png"><img class="wp-image-256 size-medium alignnone" src="https://thisiscybersec.files.wordpress.com/2015/10/hakabana_dashboard.png?w=300&amp;h=147" alt="Kibana dashboard to monitor network trafic" width="300"></a></p>
+<h2>Writing security rules</h2>
+<p>Haka provides a simple way to write security rules in order to filter, modify, create and inject packets and streams. When a flow is detected as malicious, users can report an alert or drop the flow. Users can define even more complex scenarios to mitigate the impact of an attack. For instance, one can alter http requests to force obsolete browsers to update or forge specific packets to fool scanning port tools.</p>
+<h4>Packet Filtering</h4>
+<p>The following rule is a basic packet filtering rule that blocks all connections from a given network address.</p>
+<pre class="brush: ruby; title: ; notranslate" title="">
+local ipv4 = require("protocol/ipv4")
+local tcp = require("protocol/tcp_connection")
+
+local net = ipv4.network("192.168.101.0/24")
+
+haka.rule{
+ hook = tcp.events.new_connection,
+ eval = function (flow, pkt)
+ haka.log("tcp connection %s:%i -&gt; %s:%i",
+ flow.srcip, flow.srcport,
+ flow.dstip, flow.dstport)
+
+ if net:contains(flow.dstip) then
+ haka.alert{
+ severity = "low",
+ description = "connection refused",
+ start_time = pkt.ip.raw.timestamp
+ }
+ flow:drop()
+ end
+ end
+}
+</pre>
+<p>The first lines load the required protocol dissectors, namely, ipv4 and tcp connection dissectors. The first one handles ipv4 packets. The latter is a stateful tcp dissector that maintains a connection table and manages tcp streams. The next line, defines the network address that must be blocked.</p>
+<p>The security rule is defined through <em>haka.rule</em> keyword. A security rule is made of a <em>hook</em> and a evaluation function <em>eval.</em> The <em>hook</em> is an event that will trigger the evaluation of the security rule. In this example, the security rule will be evaluated at each tcp connection establishment attempt. The parameters passed to the evaluation function depend on the event. In the case of <em>new_connection</em> event, <em>eval</em> takes two parameters: <em>flow</em> and <em>pkt.</em> The first one holds details about the connection and the latter is a table containing all tcp (and lower layer) packet fields.</p>
+<p>In the core of the security rule, we log <em>(haka.log)</em> first some information about the current connection. Then, we check if the source address&#xA0; belongs to the range of non-authorized IP addresses defined previously. If this test succeeds, we raise an alert <em>(haka.alert)</em> and drop the connection.&#xA0; Note that we reported only few details in the alert. One can add more information such as the source and the targeted service.</p>
+<p>We use <em>hakapcap</em> tool to test our <a href="https://thisiscybersec.files.wordpress.com/2015/11/filter.zip">rule filter.lua on a pcap trace file filter.pcap</a>:</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+$ hakapcap filter.lua filter.pcap
+</pre>
+<p>Hereafter, is the output of Haka which dumps some info about loaded dissectors and registered rules. The output shows that Haka succeeded to block connections targeting 192.168.101.62 address:</p>
+<p><a href="https://thisiscybersec.files.wordpress.com/2015/11/filter.png"><img class="aligncenter wp-image-362" src="https://thisiscybersec.files.wordpress.com/2015/11/filter.png?w=600&amp;h=306" alt="filter" width="600"></a></p>
+<p>In the above example, we have defined a single rule to block connections. One can write a complete firewall-like rule set using the <em>haka.group </em>keyword. In this configuration case, one can choose a default behavior (e.g. block all connections) if none of the security rule belonging to the group explicitly authorizes the traffic.</p>
+<h4>Packet Injection</h4>
+<p>In Haka, one can create new packets and inject them. The following rule crafts an RST packet in order to fool a Xmas nmap scan. As as result, nmap will conclude that all ports are closed on target side.</p>
+<pre class="brush: ruby; title: ; notranslate" title="">
+raw = require("protocol/raw")
+ipv4 = require("protocol/ipv4")
+tcp = require("protocol/tcp")
+
+haka.rule {
+ hook = tcp.events.receive_packet,
+ eval = function(pkt)
+ local flags = pkt.flags
+ -- test for xmas nmap scans
+ if flags.fin and flags.psh and flags.urg then
+ -- raw packet
+ local rstpkt = raw.create()
+
+ -- ip packet
+ rstpkt = ipv4.create(rstpkt)
+ rstpkt.ttl = pkt.ip.ttl
+ rstpkt.dst = pkt.ip.src
+ rstpkt.src = pkt.ip.dst
+
+ -- tcp packet
+ rstpkt = tcp.create(rstpkt)
+ rstpkt.srcport = pkt.dstport
+ rstpkt.dstport = pkt.srcport
+ rstpkt.flags.rst = true
+ rstpkt.flags.ack = true
+ rstpkt.ack_seq = pkt.seq + 1
+
+ -- inject forged packet and
+ -- drop malicious scanning packet
+ rstpkt:send()
+ pkt:drop()
+ end
+ end
+}
+</pre>
+<h4>Packet Altering</h4>
+<p>Packet modification is one of the most advanced feature of Haka. Haka handles automatically all internal modifications at stream and packet level: resizing and fragmenting packets, resetting sequence numbers, etc. The following example shows how easy it is to access and modify protocol fields. This rule alters some headers of http protocol. More precisely, the <em>user-agent</em> header will be modified (or added to the list of headers if not set), and the <em>accept-encoding</em> header will be removed.</p>
+<pre class="brush: ruby; title: ; notranslate" title="">
+local http = require("protocol/http")
+
+http.install_tcp_rule(80)
+
+haka.rule{
+ hook = http.events.request,
+ eval = function (flow, request)
+ request.headers["User-Agent"] = "HAKA User Agent"
+ request.headers["Accept-Encoding"] = nil
+ end
+}
+</pre>
+<p><a href="https://www.paulfariello.fr/assets/blurring-the-web.lua">blurring-the-web</a> and <a href="https://thisiscybersec.files.wordpress.com/2015/11/inject-ponies.zip">inject_ponies</a> are funny scripts that alter http response traffic in order to blur and pollute (inject garbage) requested web pages, respectively:</p>
+<p><a href="https://thisiscybersec.files.wordpress.com/2015/11/blur.png"><img class="size-medium wp-image-348 alignleft" src="https://thisiscybersec.files.wordpress.com/2015/11/blur.png?w=300&amp;h=160" alt="blur" width="300"></a><a href="https://thisiscybersec.files.wordpress.com/2015/11/ponies.png"><img class="alignnone size-medium wp-image-347" src="https://thisiscybersec.files.wordpress.com/2015/11/ponies.png?w=300&amp;h=160" alt="ponies" width="300"></a></p>
+<h4>Stream Filtering</h4>
+<p>Before presenting stream filtering, we will present first how Haka manages packets and streams internally. In Haka, all packets and streams are represented by virtual buffers (see figure below). Virtual buffers are a unified view of non-adjacent blocks of memory. They allow an easy and efficient modification of memory data. Virtual buffers use scattered lists to represent non-contiguous chunks which avoids allocating and copying superfluous block of memory. Haka provides iterators to navigate through these blocks of memory. These iterators could be blocking which would enable some functions to suspend and then resume transparently their execution when more data is available on the stream for instance.</p>
+<p><a href="https://thisiscybersec.files.wordpress.com/2015/11/vbuffer.png"><img class="aligncenter wp-image-323 size-full" src="https://thisiscybersec.files.wordpress.com/2015/11/vbuffer.png?w=700" alt="vbuffer"></a>The following rule collects http streams and dumps them on stdout. This rule is equivalent to the &#x201C;follow tcp stream&#x201D; feature of Wireshark.</p>
+<pre class="brush: ruby; title: ; notranslate" title="">
+local ipv4 = require('protocol/ipv4')
+local tcp_connection = require('protocol/tcp_connection')
+
+haka.rule{
+ hook = tcp_connection.events.receive_data,
+ options = {
+ streamed = true
+ },
+ eval = function (flow, iter, dir)
+ local data = flow.ccdata or {}
+ flow.ccdata = data
+
+ while iter:wait() do
+ data[#data+1] = iter:sub('available'):asstring()
+ end
+ haka.log("%s -&gt; %s:\n", flow.srcip, flow.dstip)
+ io.write(table.concat(data))
+ end
+}
+</pre>
+<h4>Interactive Packet Filtering</h4>
+<blockquote><p>Wait, it&#x2019;s like gdb but for packets !! &#x2013; Anonymous Haka user</p></blockquote>
+<p>This is my favorite feature of Haka. It allows inspecting the traffic packet per packet. All the magic starts with the following rule which will prompt a shell for each http POST request.</p>
+<pre class="brush: ruby; title: ; notranslate" title="">
+local http = require("protocol/http")
+
+http.install_tcp_rule(80)
+
+haka.rule {
+ hook = http.events.request_data,
+ eval = function (http, data)
+ haka.interactive_rule("interactive mode")(http, data)
+ end
+}
+
+haka.rule {
+ hook = http.events.request,
+ eval = function (http, request)
+ http:enable_data_modification()
+ end
+}
+</pre>
+<p>The shell gives access to the full Haka API to play with packet content: accessing and modifying packet fields, dropping packets, logging suspicious events, alerting, etc. The Lua console supports auto-completion and therefore is a good starting point to dive into the Haka API.</p>
+<p>As shown by the following output, Haka breaks on the first POST request. Http data are available through the <em>inputs</em> variable. In this example, we alter the user credentials on the fly.</p>
+<p><a href="https://thisiscybersec.files.wordpress.com/2015/11/interactive.png"><img class="aligncenter wp-image-361" src="https://thisiscybersec.files.wordpress.com/2015/11/interactive.png?w=650&amp;h=537" alt="interactive" width="650"></a></p>
+<p>Note that it is best to use the interactive rule on pcap files as the edition will add a substantial delay.</p>
+<h4>Advanced Stream Filtering</h4>
+<p>Haka features a pattern matching engine and disassembler modules. These two modules are stream-based which enables us to detect a malicious payload scattered over multiple packets for instance. The following rule, uses a regular expression to detect a nop sled. We enable the streamed option which means that the matching function will block and wait for data to be available to proceed with matching. If a nop sled is detected, we raise an alert and dump the shellcode instruction. Note that the pattern matching function updates the iterator position which points afterwards to the shellcode.</p>
+<pre class="brush: bash; title: ; notranslate" title="">
+local tcp = require("protocol/tcp_connection")
+
+local rem = require("regexp/pcre")
+local re = rem.re:compile("%x90{100,}")
+
+local asm = require("misc/asm")
+local dasm = asm.new_disassembler("x86", "32")
+
+haka.rule{
+ hook = tcp.events.receive_data,
+ options = {
+ streamed = true,
+ },
+ eval = function (flow, iter, direction)
+ if re:match(iter, false) then
+ -- raise an alert
+ haka.alert{
+ description = "nop sled detected",
+ }
+ -- dump instructions following nop sled
+ dasm:dump_instructions(iter)
+ end
+ end
+}
+</pre>
+<p>Replaying this rule on the well-known <a href="https://www.honeynet.org/node/504">network forensic challenge</a> results on the following output. More details about disassembling network traffic into instruction are available <a href="http://www.haka-security.org/blog/2015/06/23/instruction-disassembly.html">here</a>.</p>
+<p><a href="https://thisiscybersec.files.wordpress.com/2015/11/asm.png"><img class="aligncenter wp-image-358" src="https://thisiscybersec.files.wordpress.com/2015/11/asm.png?w=600&amp;h=410" alt="asm" width="600"></a></p>
+<h4>To be continued &#x2026;</h4>
+<h4>Links</h4>
+
+<div id="jp-post-flair" class="sharedaddy sd-like-enabled sd-sharing-enabled"><div class="sharedaddy sd-block sd-like jetpack-likes-widget-wrapper jetpack-likes-widget-unloaded" id="like-post-wrapper-65827538-245-56546dbaad997"><h3 class="sd-title">Like this:</h3><p class="likes-widget-placeholder post-likes-widget-placeholder"><span class="button"><span>Like</span></span> <span class="loading">Loading...</span></p><a class="sd-link-color"></a></div>
+<p id="jp-relatedposts" class="jp-relatedposts">
+	<h3 class="jp-relatedposts-headline"><em>Related</em></h3>
+</p></div>									</div>
+</div>
+</body></html>

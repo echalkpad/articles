@@ -1,0 +1,67 @@
+# A torrential leak
+
+[Original URL](http://www.economist.com/news/international/21696497-huge-trove-documents-has-revealed-secrets-offshore-business-presaging-tougher)
+
+> AS A young man, Ramon Fonseca considered taking holy orders. Instead he became an evangelist for offshore business. Now the law firm he co-founded is at the centre of a global storm,...
+
+![](http://cdn.static-economist.com/sites/default/files/imagecache/full-width/images/2016/04/articles/main/20160409_ird001.jpg)
+
+AS A young man, Ramon Fonseca considered taking holy orders. Instead he became an evangelist for offshore business. Now the law firm he co-founded is at the centre of a global storm, linked--unfairly, he insists--to a multitude of financial sins.
+
+Few had heard of Mr Fonseca's Panama-based firm, Mossack Fonseca, until April 3rd, when a collective of journalists from 76 countries began publishing stories exposing the hidden wealth of politicians, celebrities and others, based on 11.5m documents leaked from the firm's database. The "Panama papers" cover a period of almost 40 years, but some are only a few months old. They contain details of thousands of opaque offshore companies, trusts and foundations used by Mossack's clients. (The firm says it has never been charged with wrongdoing and conducts thorough due diligence on all clients.)
+
+![](http://cdn.static-economist.com/sites/default/files/imagecache/original-size/images/2016/04/articles/body/20160409_irc960.png)
+
+The files had been passed anonymously, in several batches, to _Süddeutsche Zeitung_, a German newspaper. It shared them with the International Consortium of Investigative Journalists, an outfit created by the Centre for Public Integrity, an American charity. The ICIJ has made hay with leaked documents before, including the "Lux Leaks" files, which exposed tax-avoidance deals between multinational firms and Luxembourg's government. But this leak is the biggest yet (see chart) and the most wounding. Some 140 political figures have links to firms serviced by Mossack, either directly or through family, friends or associates, according to the ICIJ.
+
+Offshore finance has many legitimate uses. But it smells foul to Western voters, who are still angry with bankers and the politicians who seemed to treat them kindly during the financial crisis before imposing austerity on everyone else. And the opacity it offers, particularly through shell companies with nominee owners, is open to abuse by tax evaders, money launderers and corrupt officials looking for somewhere to stash their loot. In his seminal book on tax havens, "Treasure Islands", Nicholas Shaxson describes offshore finance as "a project of elites against their, and our, societies".
+
+On April 5th the leak claimed its first big victim. Iceland's prime minister, Sigmundur David Gunnlaugsson, resigned after it emerged that he had discreetly sold a stake in an offshore firm holding investments in Icelandic banks to his wife. Some 20,000 Icelanders had protested in the streets--a lot in a country of 330,000 people. A smaller scalp produced wry smiles. The head of the Chilean branch of Transparency International, which campaigns against corporate secrecy, resigned after being linked to five firms in tax havens.
+
+There is no mention of Vladimir Putin, Russia's president, in the files. But members of his inner circle play starring roles: for instance, Sergei Roldugin, a close friend and godfather to one of Mr Putin's daughters, apparently moved $2 billion through a web of offshore entities--not bad for a cellist. Among the investments part-owned by Mr Roldugin are a 12.5% stake in Russia's largest television-advertising agency, which has never disclosed its ownership, and 3.2% of Bank Rossiya, a firm that American officials have described as the personal bank of Mr Putin. Such revelations appear to support their assertion that he is hugely rich but hides his wealth by parking it with trusted associates. Mr Putin's spokesman accused the Americans of organising the leak to discredit his boss (see [article](http://www.economist.com/news/international/21696530-mossack-fonseca-leak-shakes-ukraine-more-russia-nothing-see-here)).
+
+In China, too, the Panama papers were dismissed as a Western plot by _Global Times_, a party mouthpiece. Censors tried to delete all discussion of them from the Chinese internet. They had plenty of work to do. The files suggest that some of China's highest-ranking families, including a relative of the president, Xi Jinping, own or have owned secret offshore companies.
+
+Mr Xi's brother-in-law, Deng Jiagui, a property magnate, was a director of two companies registered in the British Virgin Islands (BVI). According to Bloomberg, a media group, he and his wife, Mr Xi's older sister, ran businesses worth hundreds of millions of dollars, though the offshore firms were reportedly defunct by the time Mr Xi came to power. Two other members of the country's top decision-making body, the Standing Committee of the Politburo, also have relatives connected with Mossack firms. One of them is Liu Yunshan, the man in charge of propaganda.
+
+Not all of this will come as a shock in China, where relatives of high-ranking officials are among the country's most successful business folk. But evidence of covert offshore holdings goes down badly in a country whose president is conducting an anti-corruption drive. And top political families are not the only ones involved. The leaked files suggest that China is Mossack's largest market. The firm's Hong Kong office has been its busiest, and it has outposts in eight other Chinese cities. These nine offices set up 29% of all the firms Mossack had on its books at the end of 2015, according to the ICIJ.
+
+Although there is no evidence of illegality, obeying the law is not the only requirement for Chinese officials. Almost all of those involved are Communist Party members, who must abide by the party's code of conduct. This bans them from registering or investing in companies abroad. So they may have broken rules, if not the law. High-ranking officials in China can also be held responsible for the business dealings of relatives.
+
+A popular use of offshore shell companies is to circumvent sanctions, and the files are studded with examples. Mossack worked with more than 30 people and companies that were at one time or another blacklisted by America's Treasury, the ICIJ says. These include businesses linked to senior figures in Syria and North Korea.
+
+The law firm reportedly acted as a front for companies linked to Rami Makhlouf, a cousin of Syria's president, Bashar al-Assad. He has long been subject to Western sanctions and was once described in American diplomatic cables as a "poster boy for corruption". The files reportedly show that in 2011 Mossack partners rejected a recommendation by their compliance team to sever ties to Mr Makhlouf, though they agreed to do so months later. The firm has said it never knowingly allowed anyone connected with rogue regimes to use its companies.
+
+The gossip pages
+
+Mossack also catered to entertainers. The files show that Jackie Chan, an actor, and Pedro Almodóvar, a film director, put business the firm's way. No large financial leak would be complete these days without a mention of FIFA, football's governing body, and this one does not disappoint. The files reportedly show that Gianni Infantino, who replaced the disgraced Sepp Blatter as FIFA boss in February, signed off on contracts with businessmen who have since been indicted on bribery charges when he was at UEFA, contrary to indications the European football body had given. Mr Infantino said he is "dismayed" that his "integrity is being doubted".
+
+The leak has already sparked action: probes have been launched in Australia, Britain and other countries. South African regulators are to scrutinise a firm linked to President Jacob Zuma's nephew that struck a lucrative oil deal. France has stuck Panama back on its tax blacklist. With so many leads to follow, governments seem barely to know where to start.
+
+![](http://cdn.static-economist.com/sites/default/files/imagecache/full-width/images/2016/04/articles/body/20160409_ird002.jpg)
+
+The intermediaries that did business with Mossack are likely to receive plenty of scrutiny. The firm dealt with more than 14,000 law firms, banks, incorporation agents and other middlemen to set up its clients' companies, trusts and foundations, the ICIJ reckons.
+
+Global banks, already hounded and in some cases fined over their links to tax-dodgers and sanctions-busters, should brace for more pain. Around 500 banks registered shell companies with Mossack. HSBC alone reportedly set up or provided financial services to more than 2,000 entities, including a company linked to Mr Makhlouf, called Drex Technologies. A spokesman for the bank said the allegations were "historical" and predate HSBC's "significant" reforms implemented in recent years.
+
+Governments are not alone in taking an interest. The files will be a boon for corporate investigators looking, say, to revive asset-search cases related to disputes. "Many a trail has gone cold in Panama. This should open new doors," says David Robertson of K2 Intelligence, a corporate-detective firm. Outfits like his might receive calls from clients hoping to use the leak to their advantage in other ways--for instance, to gain intelligence on rivals' positions in commodities markets. Some firms route transactions through Panama to keep such information from prying eyes.
+
+The leak will heap pressure on Panama to embrace transparency reforms to which other financial centres have committed. Its government has refused to accept an OECD-led international standard on the exchange of tax information. That could now change, especially if other countries follow France in blacklisting Panama.
+
+Ironically, the leak comes at a time of reformist zeal. Last year Panama's Supreme Court ordered the arrest of Ricardo Martinelli, president from 2009 to 2014, who has been accused of illegal wiretapping and embezzlement (he has denied the allegations). Panama has been praised for passing a strong anti-money-laundering law last year, though it remains to be seen if this will be rigorously enforced.
+
+The fear in Panama is that such improvements are being ignored in the rush to traduce the country for the actions of one business. "This is a report that speaks of documents of a firm of lawyers, not our financial-services platform," says one minister. The government has announced a probe of its own, but has also hinted at a vigorous defence. The leak undermines Panamanian sovereignty and its defence of the right to privacy, some harrumph.
+
+The spotlight has also been thrust back on Britain's overseas territories, which are important cogs in the offshore engine. Of the more than 200,000 firms mentioned in the files, half are domiciled in the BVI. "Panama and the BVI go together like Bonnie and Clyde," says an offshore lawyer--though he also points out that some of the most watertight corporate secrecy can be found onshore. Shell companies set up in Delaware and Nevada have been linked to frauds and corruption scandals.
+
+The BVI link will add to pressure on Britain's government to persuade its dependencies (which enjoy financial autonomy) to introduce public registers of corporate ownership, as Britain itself will do later this year. A poll carried out just before the Panama story broke found that 77% of Britons believe David Cameron, their prime minister, has a "moral responsibility" to ensure that Britain's offshore satellites are "as transparent as possible". Mr Cameron is feeling the heat directly: he has been forced to clarify his links to an offshore fund set up by his late father, details of which appear in the files.
+
+A louder whistle
+
+The furore over the Mossack documents suggests that leaks will do more than any politician to sink tax havens. As the public mood towards offshore shenanigans hardens, more employees of financial and law firms seem to feel morally compelled to pilfer data and hand it to reporters or governments. Some believe the spate of whistle-blowing since the global financial crisis has helped cool interest in using shell companies; Mossack has closed more than it has opened in recent years (see chart).
+
+![](http://cdn.static-economist.com/sites/default/files/imagecache/original-size/images/2016/04/articles/body/20160409_irc010.png)
+
+The affair is also a triumph for a new model of investigative reporting. The ICIJ enlisted some 400 journalists to help it sift the data dump, which they did using a bespoke search engine. It picked some odd collaborators: in America it chose to work with the _Charlotte Observer_ and Fusion, a news site for millennials, rather than, say, the _New York Times_. Still, many eyes meant less was missed. And distributed journalism of this kind is almost impossible to censor or stop.
+
+There is much in the 2.6 terabytes of data that is yet to be noticed or revealed. The ICIJ has been drip-feeding stories daily after publishing the initial batch. More revelations were expected after _The Economist_ went to press. And there is plenty more beyond Mossack that might be leaked: the firm has only 5-10% of the global market for shell companies. No wonder that, as one adviser to the wealthy puts it, "We're now telling clients they have to assume anything they do offshore will become public, and they'll have to be able to justify it when it does."

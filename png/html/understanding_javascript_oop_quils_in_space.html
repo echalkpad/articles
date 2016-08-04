@@ -1,0 +1,285 @@
+<!DOCTYPE html><html><head><title>Understanding JavaScript OOP - Quils in Space</title></head><body>
+<h1>Understanding JavaScript OOP - Quils in Space</h1><p><a href="http://robotlolita.me/2011/10/09/understanding-javascript-oop.html" target="_new">Original URL</a></p>
+<p><blockquote>Now that we're able to inherit properties from other objects and extend the specialised objects to define their own behaviours, we have a little problem: what if we actually wanted to access the&hellip;</blockquote></p>
+<div><div class="outline-text-3" id="text-3-5">
+
+<p>Now that we're able to inherit properties from other objects and extend
+the specialised objects to define their own behaviours, we have a little
+problem: what if we actually wanted to access the parent behaviours that
+we just overwrote?
+</p>
+<p>
+JavaScript provides the <code>Object.getPrototypeOf</code> function, that returns
+the <code>[&#x2063;[Prototype]&#x2063;]</code> of an object. This way, we have access to all
+properties defined within the prototype chain of an object. So,
+accessing a property in the parent of an object is quite simple:
+</p>
+
+
+<table class="highlighttable"><tr><td class="linenos"></td><td class="code"><div class="highlight"><pre><span class="nb">Object</span><span class="p">.</span><span class="nx">getPrototypeOf</span><span class="p">(</span><span class="nx">mikhail</span><span class="p">).</span><span class="nx">name</span> <span class="c1">// same as `person.name'</span>
+<span class="c1">// =&gt; 'undefined undefined'</span>
+
+<span class="c1">// We can assert it's really being called on `person' by</span>
+<span class="c1">// giving `person' a `first_name' and `last_name'</span>
+<span class="nx">person</span><span class="p">.</span><span class="nx">first_name</span> <span class="o">=</span> <span class="s1">'Random'</span>
+<span class="nx">person</span><span class="p">.</span><span class="nx">last_name</span> <span class="o">=</span> <span class="s1">'Person'</span>
+<span class="nb">Object</span><span class="p">.</span><span class="nx">getPrototypeOf</span><span class="p">(</span><span class="nx">mikhail</span><span class="p">).</span><span class="nx">name</span>
+<span class="c1">// =&gt; 'Random Person'</span>
+</pre></div>
+</td></tr></table>
+
+<p>
+So, a na&#xEF;ve solution for applying a method stored in the <code>[&#x2063;[Prototype]&#x2063;]</code>
+of an object to the current one, would then follow, quite naturally, by
+looking the property on the <code>[&#x2063;[Prototype]&#x2063;]</code> of <code>this</code>:
+</p>
+
+
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><code class="language-js"> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15</code></pre></div></td><td class="code"><div class="highlight"><pre><span class="kd">var</span> <span class="nx">proto</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">getPrototypeOf</span>
+
+<span class="c1">// (name:String) &#x2192; String</span>
+<span class="c1">// Greets someone intimately if we know them, otherwise use</span>
+<span class="c1">// the generic greeting</span>
+<span class="nx">mikhail</span><span class="p">.</span><span class="nx">greet</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">name</span> <span class="o">==</span> <span class="s1">'Kristin Wei&#xDF;'</span><span class="o">?</span> <span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">+</span> <span class="s1">': Heya, Kristty'</span>
+ <span class="o">:</span> <span class="cm">/* we dunno this guy */</span> <span class="nx">proto</span><span class="p">(</span><span class="k">this</span><span class="p">).</span><span class="nx">greet</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nx">name</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="nx">mikhail</span><span class="p">.</span><span class="nx">greet</span><span class="p">(</span><span class="nx">kristin</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span>
+<span class="c1">// =&gt; 'Michael White: Heya, Kristty'</span>
+
+<span class="nx">mikhail</span><span class="p">.</span><span class="nx">greet</span><span class="p">(</span><span class="s1">'Margareth'</span><span class="p">)</span>
+<span class="c1">// =&gt; 'Michael White: Hello, Margareth'</span>
+</pre></div>
+</td></tr></table>
+
+
+<p>
+This looks all good and well, but there's a little catch: it will enter
+in endless recursion if you try to apply this approach to more than one
+parent. This happens because the methods are always applied in the
+context of the message's first target, making the <code>[&#x2063;[Prototype]&#x2063;]</code> lookup
+resolve always to the same object:
+</p>
+
+
+<p>
+<img src="http://dl.dropbox.com/u/4429200/blog/oop-super.png" alt="http://dl.dropbox.com/u/4429200/blog/oop-super.png">
+</p>
+<p>
+The simple solution to this, then, is to make all parent look-ups
+static, by passing the object where the current function is stored,
+rather than the object that the function was applied to.
+</p>
+<p>
+So, the last example becomes:
+</p>
+
+
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><code class="language-js"> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19</code></pre></div></td><td class="code"><div class="highlight"><pre><span class="kd">var</span> <span class="nx">proto</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">getPrototypeOf</span>
+
+<span class="c1">// (name:String) &#x2192; String</span>
+<span class="c1">// Greets someone intimately if we know them, otherwise use</span>
+<span class="c1">// the generic greeting.</span>
+<span class="c1">//</span>
+<span class="c1">// Note that now we explicitly state that the lookup should take</span>
+<span class="c1">// the parent of `mikhail', so we can be assured the cyclic parent</span>
+<span class="c1">// resolution above won't happen.</span>
+<span class="nx">mikhail</span><span class="p">.</span><span class="nx">greet</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="nx">name</span> <span class="o">==</span> <span class="s1">'Kristin Wei&#xDF;'</span><span class="o">?</span> <span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">+</span> <span class="s1">': Heya, Kristty'</span>
+ <span class="o">:</span> <span class="cm">/* we dunno this guy */</span> <span class="nx">proto</span><span class="p">(</span><span class="nx">mikhail</span><span class="p">).</span><span class="nx">greet</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nx">name</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="nx">mikhail</span><span class="p">.</span><span class="nx">greet</span><span class="p">(</span><span class="nx">kristin</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span>
+<span class="c1">// =&gt; 'Michael White: Heya, Kristty'</span>
+
+<span class="nx">mikhail</span><span class="p">.</span><span class="nx">greet</span><span class="p">(</span><span class="s1">'Margareth'</span><span class="p">)</span>
+<span class="c1">// =&gt; 'Michael White: Hello, Margareth'</span>
+</pre></div>
+</td></tr></table>
+
+
+<p>
+Still, this has quite some short-commings. First, since the object is
+hard-coded in the function, we can't just assign the function to any
+object and have it just work, as we did up 'till now. The function would
+always resolve to the parent of <code>mikhail</code>, not of the object where it's
+stored.
+</p>
+<p>
+Likewise, we can't just apply the function to any object. The function
+is not generic anymore. Unfortunately, though, making the parent
+resolution dynamic would require us to pass an additional parameter to
+every function call, which is something that can't be achieved short of
+ugly hacks.
+</p>
+<p>
+The approach proposed for the next version of JavaScript only solves the
+first problem, which is the easiest. Here, we'll do the same, by
+introducing a new way of defining methods. Yes, methods, not generic
+functions.
+</p>
+<p>
+Functions that need to access the properties in the <code>[&#x2063;[Prototype]&#x2063;]</code> will
+require an additional information: the object where they are
+stored. This makes the lookup static, but solves our cyclic lookup
+problem.
+</p>
+<p>
+We do this by introducing a new function &#x2014; <code>make_method</code> &#x2014; which creates
+a function that passes this information to the target function.
+</p>
+
+
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><code class="language-js"> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57</code></pre></div></td><td class="code"><div class="highlight"><pre><span class="c1">// (object:Object, fun:Function) &#x2192; Function</span>
+<span class="c1">// Creates a method</span>
+<span class="kd">function</span> <span class="nx">make_method</span><span class="p">(</span><span class="nx">object</span><span class="p">,</span> <span class="nx">fun</span><span class="p">)</span> <span class="p">{</span>
+ <span class="k">return</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="kd">var</span> <span class="nx">args</span>
+ <span class="nx">args</span> <span class="o">=</span> <span class="nx">slice</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">arguments</span><span class="p">)</span>
+ <span class="nx">args</span><span class="p">.</span><span class="nx">unshift</span><span class="p">(</span><span class="nx">object</span><span class="p">)</span> <span class="c1">// insert `object' as first parameter</span>
+ <span class="nx">fn</span><span class="p">.</span><span class="nx">apply</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nx">args</span><span class="p">)</span> <span class="p">}</span>
+<span class="p">}</span>
+
+
+<span class="c1">// Now, all functions that are expected to be used as a method</span>
+<span class="c1">// should remember to reserve the first parameter to the object</span>
+<span class="c1">// where they're stored.</span>
+<span class="c1">//</span>
+<span class="c1">// Note that, however, this is a magical parameter introduced</span>
+<span class="c1">// by the method function, so any function calling the method</span>
+<span class="c1">// should pass only the usual arguments.</span>
+<span class="kd">function</span> <span class="nx">message</span><span class="p">(</span><span class="nx">self</span><span class="p">,</span> <span class="nx">message</span><span class="p">)</span> <span class="p">{</span> <span class="kd">var</span> <span class="nx">parent</span>
+ <span class="nx">parent</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">getPrototypeOf</span><span class="p">(</span><span class="nx">self</span><span class="p">)</span>
+ <span class="k">if</span> <span class="p">(</span><span class="nx">parent</span> <span class="o">&amp;&amp;</span> <span class="nx">parent</span><span class="p">.</span><span class="nx">log</span><span class="p">)</span>
+ <span class="nx">parent</span><span class="p">.</span><span class="nx">log</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nx">message</span><span class="p">)</span>
+
+ <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'-- At '</span> <span class="o">+</span> <span class="nx">self</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span>
+ <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">+</span> <span class="s1">': '</span> <span class="o">+</span> <span class="nx">message</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="c1">// Here we define a prototype chain C -&gt; B -&gt; A</span>
+<span class="kd">var</span> <span class="nx">A</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="kc">null</span><span class="p">)</span>
+<span class="nx">A</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="s1">'A'</span>
+<span class="nx">A</span><span class="p">.</span><span class="nx">log</span> <span class="o">=</span> <span class="nx">make_method</span><span class="p">(</span><span class="nx">A</span><span class="p">,</span> <span class="nx">message</span><span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">B</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">A</span><span class="p">)</span>
+<span class="nx">B</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="s1">'B'</span>
+<span class="nx">B</span><span class="p">.</span><span class="nx">log</span> <span class="o">=</span> <span class="nx">make_method</span><span class="p">(</span><span class="nx">B</span><span class="p">,</span> <span class="nx">message</span><span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">C</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">B</span><span class="p">)</span>
+<span class="nx">C</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="s1">'C'</span>
+<span class="nx">C</span><span class="p">.</span><span class="nx">log</span> <span class="o">=</span> <span class="nx">make_method</span><span class="p">(</span><span class="nx">C</span><span class="p">,</span> <span class="nx">message</span><span class="p">)</span>
+
+<span class="c1">// And we can test if it works by calling the methods:</span>
+<span class="nx">A</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'foo'</span><span class="p">)</span>
+<span class="c1">// =&gt; '-- At A'</span>
+<span class="c1">// =&gt; 'A: foo'</span>
+
+<span class="nx">B</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'foo'</span><span class="p">)</span>
+<span class="c1">// =&gt; '-- At A'</span>
+<span class="c1">// =&gt; 'B: foo'</span>
+<span class="c1">// =&gt; '-- At B'</span>
+<span class="c1">// =&gt; 'B: foo'</span>
+
+<span class="nx">C</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'foo'</span><span class="p">)</span>
+<span class="c1">// =&gt; '-- At A'</span>
+<span class="c1">// =&gt; 'C: foo'</span>
+<span class="c1">// =&gt; '-- At B'</span>
+<span class="c1">// =&gt; 'C: foo'</span>
+<span class="c1">// =&gt; '-- At C'</span>
+<span class="c1">// =&gt; 'C: foo'</span>
+</pre></div>
+</td></tr></table>
+
+
+</div>
+</div>
+</body></html>

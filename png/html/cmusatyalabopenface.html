@@ -1,0 +1,540 @@
+<!DOCTYPE html><html><head><title>cmusatyalab/openface</title></head><body>
+<h1>cmusatyalab/openface</h1><p><a href="https://github.com/cmusatyalab/openface" target="_new">Original URL</a></p>
+<p><blockquote>OpenFace This is a Python and Torch implementation of the CVPR 2015 paper FaceNet: A Unified Embedding for Face Recognition and Clustering by Florian Schroff, Dmitry Kalenichenko, and James Phil</blockquote></p>
+<div><article class="markdown-body entry-content"><h2><a id="user-content-openface" class="anchor" href="https://github.com/cmusatyalab/openface#openface"></a>OpenFace</h2>
+
+<p><a href="https://travis-ci.org/cmusatyalab/openface"><img src="https://camo.githubusercontent.com/7649857bc22a4061aea8a38706cc64b6bca51e45/68747470733a2f2f7472617669732d63692e6f72672f636d7573617479616c61622f6f70656e666163652e7376673f6272616e63683d6d6173746572" alt="Build Status"></a>
+<a href="http://dx.doi.org/10.5281/zenodo.32041"><img src="https://camo.githubusercontent.com/f579c9d16000174d04b351c5b3a8d3333629a745/68747470733a2f2f7a656e6f646f2e6f72672f62616467652f646f692f31302e353238312f7a656e6f646f2e33323034312e737667" alt="DOI"></a></p>
+
+<p>This is a Python and Torch implementation of the CVPR 2015 paper
+<a href="http://www.cv-foundation.org/openaccess/content_cvpr_2015/app/1A_089.pdf">FaceNet: A Unified Embedding for Face Recognition and Clustering</a>
+by Florian Schroff, Dmitry Kalenichenko, and James Philbin at Google
+using publicly available libraries and datasets.
+Torch allows the network to be executed on a CPU or with CUDA.</p>
+
+<p><strong>Crafted by <a href="http://bamos.github.io">Brandon Amos</a> in the
+<a href="http://elijah.cs.cmu.edu">Elijah</a> research group at
+Carnegie Mellon University.</strong></p>
+
+
+
+<h3><a id="user-content-isnt-face-recognition-a-solved-problem" class="anchor" href="https://github.com/cmusatyalab/openface#isnt-face-recognition-a-solved-problem"></a>Isn't face recognition a solved problem?</h3>
+
+<p>No! Accuracies from research papers have just begun to surpass
+human accuracies on some benchmarks.
+The accuracies of open source face recognition systems lag
+behind the state-of-the-art.
+See our accuracy comparisons on the famous LFW benchmark below.</p>
+
+
+
+<h3><a id="user-content-please-use-responsibly" class="anchor" href="https://github.com/cmusatyalab/openface#please-use-responsibly"></a>Please use responsibly!</h3>
+
+<p>We do not support the use of this project in applications
+that violate privacy and security.
+We are using this to help cognitively impaired users to
+sense and understand the world around them.</p>
+
+
+
+<h2><a id="user-content-overview" class="anchor" href="https://github.com/cmusatyalab/openface#overview"></a>Overview</h2>
+
+<p>The following overview shows the workflow for a single input
+image of Sylvestor Stallone from the publicly available
+<a href="http://vis-www.cs.umass.edu/lfw/person/Sylvester_Stallone.html">LFW dataset</a>.</p>
+
+<ol>
+<li>Detect faces with a pre-trained models from
+<a href="http://blog.dlib.net/2014/02/dlib-186-released-make-your-own-object.html">dlib</a>
+or
+<a href="http://docs.opencv.org/master/d7/d8b/tutorial_py_face_detection.html">OpenCV</a>.</li>
+<li>Transform the face for the neural network.
+This repository uses dlib's
+<a href="http://blog.dlib.net/2014/08/real-time-face-pose-estimation.html">real-time pose estimation</a>
+with OpenCV's
+<a href="http://docs.opencv.org/doc/tutorials/imgproc/imgtrans/warp_affine/warp_affine.html">affine transformation</a>
+to try to make the eyes and nose appear in
+the same location on each image.</li>
+<li>Use a deep neural network to represent (or embed) the face on
+a 128-dimensional unit hypersphere.
+The embedding is a generic representation for anybody's face.
+Unlike other face representations, this embedding has the nice property
+that a larger distance between two face embeddings means
+that the faces are likely not of the same person.
+This property makes clustering, similarity detection,
+and classification tasks easier than other face recognition
+techniques where the Euclidean distance between
+features is not meaningful.</li>
+<li>Apply your favorite clustering or classification techniques
+to the features to complete your recognition task.
+See below for our examples for classification and
+similarity detection, including an online web demo.</li>
+</ol>
+
+<p><a href="https://github.com/cmusatyalab/openface/blob/master/images/summary.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/summary.jpg" alt=""></a></p>
+
+<h2><a id="user-content-whats-in-this-repository" class="anchor" href="https://github.com/cmusatyalab/openface#whats-in-this-repository"></a>What's in this repository?</h2>
+
+
+
+<h2><a id="user-content-demo-1-real-time-web-demo" class="anchor" href="https://github.com/cmusatyalab/openface#demo-1-real-time-web-demo"></a>Demo 1: Real-Time Web Demo</h2>
+
+<p>See <a href="https://www.youtube.com/watch?v=-lX1_rI7Oe4">our YouTube video</a>
+of using this in a real-time web application
+for face recognition.
+The source is available in <a href="https://github.com/cmusatyalab/openface/blob/master/demos/web">demos/web</a>.</p>
+
+<p><a href="https://www.youtube.com/watch?v=uQiPq5zRaS8"><img src="https://github.com/cmusatyalab/openface/raw/master/images/youtube-web.gif"></a></p>
+
+<p>From the <code>demos/web</code> directory, install requirements
+with <code>./install-deps.sh</code> and <code>sudo pip install -r requirements.txt</code>.</p>
+
+<p>In practice, object tracking
+<a href="http://blog.dlib.net/2015/02/dlib-1813-released.html">like dlib's</a>
+should be used once the face recognizer has predicted a face.</p>
+
+<h2><a id="user-content-demo-2-comparing-two-images" class="anchor" href="https://github.com/cmusatyalab/openface#demo-2-comparing-two-images"></a>Demo 2: Comparing two images</h2>
+
+<p>The <a href="https://github.com/cmusatyalab/openface/blob/master/demos/compare.py">comparison demo</a> outputs the predicted similarity
+score of two faces by computing the squared L2 distance between
+their representations.
+A lower score indicates two faces are more likely of the same person.
+Since the representations are on the unit hypersphere, the
+scores range from 0 (the same picture) to 4.0.
+The following distances between images of John Lennon and
+Eric Clapton were generated with
+<code>./demos/compare.py images/examples/{lennon*,clapton*}</code>.</p>
+
+<table><thead>
+<tr>
+<th>Lennon 1</th>
+<th>Lennon 2</th>
+<th>Clapton 1</th>
+<th>Clapton 2</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/lennon-1.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/lennon-1.jpg" width="200px"></a></td>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/lennon-2.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/lennon-2.jpg" width="200px"></a></td>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/clapton-1.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/clapton-1.jpg" width="200px"></a></td>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/clapton-2.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/clapton-2.jpg" width="200px"></a></td>
+</tr>
+</tbody></table>
+
+<p>The following table shows that a distance threshold of <code>0.3</code> would
+distinguish these two people.
+In practice, further experimentation should be done on the distance threshold.
+On our LFW experiments, the mean threshold across multiple
+experiments is 0.71 &#xB1; 0.027,
+see <a href="https://github.com/cmusatyalab/openface/blob/master/evaluation/lfw.nn4.v1.epoch-177/accuracies.txt">accuracies.txt</a>.</p>
+
+<table><thead>
+<tr>
+<th>Image 1</th>
+<th>Image 2</th>
+<th>Distance</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Lennon 1</td>
+<td>Lennon 2</td>
+<td>0.204</td>
+</tr>
+<tr>
+<td>Lennon 1</td>
+<td>Clapton 1</td>
+<td>1.392</td>
+</tr>
+<tr>
+<td>Lennon 1</td>
+<td>Clapton 2</td>
+<td>1.445</td>
+</tr>
+<tr>
+<td>Lennon 2</td>
+<td>Clapton 1</td>
+<td>1.435</td>
+</tr>
+<tr>
+<td>Lennon 2</td>
+<td>Clapton 2</td>
+<td>1.322</td>
+</tr>
+<tr>
+<td>Clapton 1</td>
+<td>Clapton 2</td>
+<td>0.174</td>
+</tr>
+</tbody></table>
+
+<h2><a id="user-content-demo-3-training-a-classifier" class="anchor" href="https://github.com/cmusatyalab/openface#demo-3-training-a-classifier"></a>Demo 3: Training a Classifier</h2>
+
+<p>OpenFace's core provides a feature extraction method to
+obtain a low-dimensional representation of any face.
+<a href="https://github.com/cmusatyalab/openface/blob/master/demos/classifier.py">demos/classifier.py</a> shows a demo of
+how these representations can be used to create a face classifier.</p>
+
+<p>This is trained on about 6000 total images of the following people,
+which are the people with the most images in our dataset.
+Classifiers can be created with far less images per
+person.</p>
+
+<ul>
+<li>America Ferrera</li>
+<li>Amy Adams</li>
+<li>Anne Hathaway</li>
+<li>Ben Stiller</li>
+<li>Bradley Cooper</li>
+<li>David Boreanaz</li>
+<li>Emily Deschanel</li>
+<li>Eva Longoria</li>
+<li>Jon Hamm</li>
+<li>Steve Carell</li>
+</ul>
+
+<p>This demo uses <a href="http://scikit-learn.org">scikit-learn</a> to perform
+a grid search over SVM parameters.
+For 1000's of images, training the SVMs takes seconds.
+Our trained model obtains 87% accuracy on this set of data.
+<a href="https://github.com/cmusatyalab/openface/blob/master/models/get-models.sh">models/get-models.sh</a>
+will automatically download this classifier and place
+it in <code>models/openface/celeb-classifier.nn4.v1.pkl</code>.</p>
+
+<p>For an example, consider the following small set of images
+the model has no knowledge of.
+For an unknown person, a prediction still needs to be made, but
+the confidence score is usually lower.</p>
+
+<p>Run the classifier on your images with:</p>
+
+<pre><code>./demos/classifier.py infer ./models/openface/celeb-classifier.nn4.v1.pkl &lt;image&gt;
+</code></pre>
+
+<table><thead>
+<tr>
+<th>Person</th>
+<th>Image</th>
+<th>Prediction</th>
+<th>Confidence</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Lennon 1</td>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/lennon-1.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/lennon-1.jpg" width="200px"></a></td>
+<td>DavidBoreanaz</td>
+<td>0.28</td>
+</tr>
+<tr>
+<td>Lennon 2</td>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/lennon-2.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/lennon-2.jpg" width="200px"></a></td>
+<td>DavidBoreanaz</td>
+<td>0.56</td>
+</tr>
+<tr>
+<td>Carell</td>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/carell.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/carell.jpg" width="200px"></a></td>
+<td>SteveCarell</td>
+<td>0.78</td>
+</tr>
+<tr>
+<td>Adams</td>
+<td><a href="https://github.com/cmusatyalab/openface/blob/master/images/examples/adams.jpg" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/examples/adams.jpg" width="200px"></a></td>
+<td>AmyAdams</td>
+<td>0.87</td>
+</tr>
+</tbody></table>
+
+<h2><a id="user-content-cool-demos-but-i-want-numbers-whats-the-accuracy" class="anchor" href="https://github.com/cmusatyalab/openface#cool-demos-but-i-want-numbers-whats-the-accuracy"></a>Cool demos, but I want numbers. What's the accuracy?</h2>
+
+<p>Even though the public datasets we trained on have orders of magnitude less data
+than private industry datasets, the accuracy is remarkably high and
+outperforms all other open-source face recognition implementations we
+are aware of on the standard
+<a href="http://vis-www.cs.umass.edu/lfw/results.html">LFW</a>
+benchmark.
+We had to fallback to using the deep funneled versions for
+152 of 13233 images because dlib failed to detect a face or landmarks.
+We obtain a mean accuracy of 0.8483 &#xB1; 0.0172 with an AUC of 0.923.</p>
+
+<p><a href="https://github.com/cmusatyalab/openface/blob/master/images/nn4.v1.lfw.roc.png" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/nn4.v1.lfw.roc.png" alt=""></a></p>
+
+<p>This can be generated with the following commands from the root <code>openface</code>
+directory, assuming you have downloaded and placed the raw and
+deep funneled LFW data from <a href="http://vis-www.cs.umass.edu/lfw/">here</a>
+in <code>./data/lfw/raw</code> and <code>./data/lfw/deepfunneled</code>.</p>
+
+<ol>
+<li>Install prerequisites as below.</li>
+<li>Preprocess the raw <code>lfw</code> images, change <code>8</code> to however many
+separate processes you want to run:
+<code>for N in {1..8}; do ./util/align-dlib.py data/lfw/raw align affine data/lfw/dlib-affine-sz:96 --size 96 &amp;; done</code>.
+Fallback to deep funneled versions for images that dlib failed
+to align:
+<code>./util/align-dlib.py data/lfw/raw align affine data/lfw/dlib-affine-sz:96 --size 96 --fallbackLfw data/lfw/deepfunneled</code></li>
+<li>Generate representations with <code>./batch-represent/main.lua -outDir evaluation/lfw.nn4.v1.reps -model models/openface/nn4.v1.t7 -data data/lfw/dlib-affine-sz:96</code></li>
+<li>Generate the ROC curve from the <code>evaluation</code> directory with <code>./lfw-roc.py --workDir lfw.nn4.v1.reps</code>.
+This creates <code>roc.pdf</code> in the <code>lfw.nn4.v1.reps</code> directory.</li>
+</ol>
+
+<h2><a id="user-content-help-wanted" class="anchor" href="https://github.com/cmusatyalab/openface#help-wanted"></a>Help Wanted!</h2>
+
+<p>As the following table shows, the forefront of deep learning research
+is driven by large private datasets.
+In face recognition, there are no open source implementations or
+models trained on these datasets.
+If you have access to a large dataset, we are very interested
+in training a new OpenFace model with it.
+Please contact Brandon Amos at <a href="mailto:bamos@cs.cmu.edu">bamos@cs.cmu.edu</a>.</p>
+
+
+
+<h2><a id="user-content-visualizing-representations-with-t-sne" class="anchor" href="https://github.com/cmusatyalab/openface#visualizing-representations-with-t-sne"></a>Visualizing representations with t-SNE</h2>
+
+<p><a href="http://lvdmaaten.github.io/tsne/">t-SNE</a> is a dimensionality
+reduction technique that can be used to visualize the
+128-dimensional features OpenFace produces.
+The following shows the visualization of the three people
+in the training and testing dataset with the most images.</p>
+
+<p><strong>Training</strong></p>
+
+<p><a href="https://github.com/cmusatyalab/openface/blob/master/images/train-tsne.png" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/train-tsne.png" alt=""></a></p>
+
+<p><strong>Testing</strong></p>
+
+<p><a href="https://github.com/cmusatyalab/openface/blob/master/images/val-tsne.png" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/val-tsne.png" alt=""></a></p>
+
+<p>These can be generated with the following commands from the root
+<code>openface</code> directory.</p>
+
+<ol>
+<li>Install prerequisites as below.</li>
+<li>Preprocess the raw <code>lfw</code> images, change <code>8</code> to however many
+separate processes you want to run:
+<code>for N in {1..8}; do ./util/align-dlib.py &lt;path-to-raw-data&gt; align affine &lt;path-to-aligned-data&gt; --size 96 &amp;; done</code>.</li>
+<li>Generate representations with <code>./batch-represent/main.lua -outDir &lt;feature-directory (to be created)&gt; -model models/openface/nn4.v1.t7 -data &lt;path-to-aligned-data&gt;</code></li>
+<li>Generate t-SNE visualization with <code>./util/tsne.py &lt;feature-directory&gt; --names &lt;name 1&gt; ... &lt;name n&gt;</code>
+This creates <code>tsne.pdf</code> in <code>&lt;feature-directory&gt;</code>.</li>
+</ol>
+
+<h2><a id="user-content-visualizing-layer-outputs" class="anchor" href="https://github.com/cmusatyalab/openface#visualizing-layer-outputs"></a>Visualizing layer outputs</h2>
+
+<p>Visualizing the output feature maps of each layer
+is sometimes helpful to understand what features
+the network has learned to extract.
+With faces, the locations of the eyes, nose, and
+mouth should play an important role.</p>
+
+<p><a href="https://github.com/cmusatyalab/openface/blob/master/demos/vis-outputs.lua">demos/vis-outputs.lua</a>
+outputs the feature maps from an aligned image.
+The following shows the first 39 filters of the
+first convolutional layer on two images
+of John Lennon.</p>
+
+<p><a href="https://github.com/cmusatyalab/openface/blob/master/images/nn4.v1.conv1.lennon-1.png" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/nn4.v1.conv1.lennon-1.png" alt=""></a>
+<a href="https://github.com/cmusatyalab/openface/blob/master/images/nn4.v1.conv1.lennon-2.png" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/nn4.v1.conv1.lennon-2.png" alt=""></a></p>
+
+<h2><a id="user-content-model-definitions" class="anchor" href="https://github.com/cmusatyalab/openface#model-definitions"></a>Model Definitions</h2>
+
+<p>Model definitions should be kept in <a href="https://github.com/cmusatyalab/openface/blob/master/models/openface">models/openface</a>,
+where we have provided definitions of the <a href="https://github.com/cmusatyalab/openface/blob/master/models/openface/nn2.def.lua">NN2</a>
+and <a href="https://github.com/cmusatyalab/openface/blob/master/models/openface/nn4.def.lua">nn4</a> as described in the paper,
+but with batch normalization and no normalization in the lower layers.
+The inception layers are introduced in
+<a href="http://arxiv.org/abs/1409.4842">Going Deeper with Convolutions</a>
+by Christian Szegedy et al.</p>
+
+<h2><a id="user-content-pre-trained-models" class="anchor" href="https://github.com/cmusatyalab/openface#pre-trained-models"></a>Pre-trained Models</h2>
+
+<p>Pre-trained models are versioned and should be released with
+a corresponding model definition.
+We currently only provide a pre-trained model for <code>nn4.v1</code>
+because we have limited access to large-scale face recognition
+datasets.</p>
+
+<h2><a id="user-content-nn4v1" class="anchor" href="https://github.com/cmusatyalab/openface#nn4v1"></a>nn4.v1</h2>
+
+<p>This model has been trained by combining the two largest (of August 2015)
+publicly-available face recognition datasets based on names:
+<a href="http://vintage.winklerbros.net/facescrub.html">FaceScrub</a>
+and <a href="http://arxiv.org/abs/1411.7923">CASIA-WebFace</a>.
+This model was trained for about 300 hours on a Tesla K40 GPU.</p>
+
+<p>The following plot shows the triplet loss on the training
+and test set.
+Semi-hard triplets are used on the training set, and
+random triplets are used on the testing set.
+Our <code>nn4.v1</code> model is from epoch 177.</p>
+
+<p><a href="https://github.com/cmusatyalab/openface/blob/master/images/nn4.v1.loss.png" target="_blank"><img src="https://github.com/cmusatyalab/openface/raw/master/images/nn4.v1.loss.png" alt=""></a></p>
+
+<p>The LFW section above shows that this model obtains a mean
+accuracy of 0.8483 &#xB1; 0.0172 with an AUC of 0.923.</p>
+
+<h2><a id="user-content-how-long-does-processing-a-face-take" class="anchor" href="https://github.com/cmusatyalab/openface#how-long-does-processing-a-face-take"></a>How long does processing a face take?</h2>
+
+<p>The processing time depends on the size of your image for
+face detection and alignment.
+These only run on the CPU and take from 100-200ms to over
+a second.
+The neural network uses a fixed-size input and has
+a more consistent runtime,
+86.97 ms &#xB1; 67.82 ms on our 3.70 GHz CPU
+32.45 ms &#xB1; 12.89 ms on our Tesla K40 GPU,
+obtained with <a href="https://github.com/cmusatyalab/openface/blob/master/util/profile-network.lua">util/profile-network.lua</a>.</p>
+
+<h2><a id="user-content-usage" class="anchor" href="https://github.com/cmusatyalab/openface#usage"></a>Usage</h2>
+
+<h2><a id="user-content-existing-models" class="anchor" href="https://github.com/cmusatyalab/openface#existing-models"></a>Existing Models</h2>
+
+<p>See <a href="https://github.com/cmusatyalab/openface/blob/master/demos/compare.py">the image comparison demo</a> for a complete example
+written in Python using a naive Torch subprocess to process the faces.</p>
+
+<div class="highlight highlight-source-python"><pre><span class="pl-k">import</span> openface
+<span class="pl-k">from</span> openface.alignment <span class="pl-k">import</span> NaiveDlib <span class="pl-c"># Depends on dlib.</span>
+
+<span class="pl-c"># `args` are parsed command-line arguments.</span>
+
+align <span class="pl-k">=</span> NaiveDlib(args.dlibFaceMean, args.dlibFacePredictor)
+net <span class="pl-k">=</span> openface.TorchWrap(args.networkModel, <span class="pl-smi">imgDim</span><span class="pl-k">=</span>args.imgDim, <span class="pl-smi">cuda</span><span class="pl-k">=</span>args.cuda)
+
+<span class="pl-c"># `img` is a numpy matrix containing the RGB pixels of the image.</span>
+bb <span class="pl-k">=</span> align.getLargestFaceBoundingBox(img)
+alignedFace <span class="pl-k">=</span> align.alignImg(<span class="pl-s"><span class="pl-pds">"</span>affine<span class="pl-pds">"</span></span>, args.imgDim, img, bb)
+rep1 <span class="pl-k">=</span> net.forwardImage(alignedFace)
+
+<span class="pl-c"># `rep2` obtained similarly.</span>
+d <span class="pl-k">=</span> rep1 <span class="pl-k">-</span> rep2
+distance <span class="pl-k">=</span> np.dot(d, d)</pre></div>
+
+<h2><a id="user-content-training-new-models" class="anchor" href="https://github.com/cmusatyalab/openface#training-new-models"></a>Training new models</h2>
+
+<p>This repository also contains our training infrastructure to promote an
+open ecosystem and enable quicker bootstrapping for new research and development.
+Warning: Training is computationally expensive and takes a few
+weeks on our Tesla K40 GPU.</p>
+
+<p>A rough overview of training is:</p>
+
+<ol>
+<li>Preprocess the raw images, change <code>8</code> to however many
+separate processes you want to run:
+<code>for N in {1..8}; do ./util/align-dlib.py &lt;path-to-raw-data&gt; align affine &lt;path-to-aligned-data&gt; --size 96 &amp;; done</code>.</li>
+<li>Run <a href="https://github.com/cmusatyalab/openface/blob/master/training/main.lua">training/main.lua</a> to start training the model.
+Edit the dataset options in <a href="https://github.com/cmusatyalab/openface/blob/master/training/opts.lua">training/opts.lua</a> or
+pass them as command-line parameters.
+This will output the loss and in-progress models to <code>training/work</code>.</li>
+<li>Visualize the loss with <a href="https://github.com/cmusatyalab/openface/blob/master/training/plot-loss.py">training/plot-loss.py</a>.</li>
+</ol>
+
+<h2><a id="user-content-setup" class="anchor" href="https://github.com/cmusatyalab/openface#setup"></a>Setup</h2>
+
+<p>The following instructions are for Linux and OSX only.
+Please contribute modifications and build instructions if you
+are interested in running this on other operating systems.</p>
+
+<h2><a id="user-content-check-out-git-submodules" class="anchor" href="https://github.com/cmusatyalab/openface#check-out-git-submodules"></a>Check out git submodules</h2>
+
+<p>Clone with <code>--recursive</code> or run <code>git submodule init &amp;&amp; git submodule update</code>
+after checking out.</p>
+
+<h2><a id="user-content-download-the-models" class="anchor" href="https://github.com/cmusatyalab/openface#download-the-models"></a>Download the models</h2>
+
+<p>Run <code>./models/get-models.sh</code> to download pre-trained OpenFace
+models on the combined CASIA-WebFace and FaceScrub database.
+This also downloads dlib's pre-trained model for face landmark detection.</p>
+
+<h2><a id="user-content-with-docker" class="anchor" href="https://github.com/cmusatyalab/openface#with-docker"></a>With Docker</h2>
+
+<p>Be sure you have checked out the submodules and downloaded the models as
+described above.</p>
+
+<p>This repo can be deployed as a container with <a href="https://www.docker.com/">Docker</a>
+for CPU mode:</p>
+
+<pre><code>sudo docker build -t openface .
+sudo docker run -t -i -v $PWD:/openface openface /bin/bash
+cd /openface
+./demos/compare.py images/examples/{lennon*,clapton*}
+</code></pre>
+
+<p>To use, place your images in <code>openface</code> on your host and
+access them from the shared Docker directory.</p>
+
+<h2><a id="user-content-by-hand" class="anchor" href="https://github.com/cmusatyalab/openface#by-hand"></a>By hand</h2>
+
+<p>Be sure you have checked out the submodules and downloaded the models as
+described above.
+See the <a href="https://github.com/cmusatyalab/openface/blob/master/Dockerfile">Dockerfile</a> as a reference.</p>
+
+<p>Install the packages the Dockerfile uses with your package manager.
+With <code>pip</code>, install <code>numpy</code>, <code>scipy</code>, <code>scikit-learn</code>, and <code>scikit-image</code>.</p>
+
+<p>Next, manually install the following.</p>
+
+<h3><a id="user-content-opencv" class="anchor" href="https://github.com/cmusatyalab/openface#opencv"></a>OpenCV</h3>
+
+<p>Download <a href="https://github.com/Itseez/opencv/archive/2.4.11.zip">OpenCV 2.4.11</a>
+and follow their
+<a href="http://docs.opencv.org/doc/tutorials/introduction/linux_install/linux_install.html">build instructions</a>.</p>
+
+<h3><a id="user-content-dlib" class="anchor" href="https://github.com/cmusatyalab/openface#dlib"></a>dlib</h3>
+
+<p>Download <a href="https://github.com/davisking/dlib/releases/download/v18.16/dlib-18.16.tar.bz2">dlib v18.16</a>.</p>
+
+<pre><code>cd ~/src
+tar xf dlib-18.16.tar.bz2
+cd dlib-18.16/python_examples
+mkdir build
+cd build
+cmake ../../tools/python
+cmake --build . --config Release
+cp dlib.so ..
+</code></pre>
+
+<h3><a id="user-content-torch" class="anchor" href="https://github.com/cmusatyalab/openface#torch"></a>Torch</h3>
+
+<p>Install <a href="http://torch.ch">Torch</a> from the instructions on their website
+and install the <a href="https://github.com/nicholas-leonard/dpnn">dpnn</a>
+and <a href="https://github.com/torch/nn">nn</a> libraries with
+<code>luarocks install dpnn</code> and <code>luarocks install nn</code>.</p>
+
+<p>If you want CUDA support, also install
+<a href="https://github.com/soumith/cudnn.torch">cudnn.torch</a>.</p>
+
+<h2><a id="user-content-citations" class="anchor" href="https://github.com/cmusatyalab/openface#citations"></a>Citations</h2>
+
+<p><a href="http://dx.doi.org/10.5281/zenodo.32041"><img src="https://camo.githubusercontent.com/f579c9d16000174d04b351c5b3a8d3333629a745/68747470733a2f2f7a656e6f646f2e6f72672f62616467652f646f692f31302e353238312f7a656e6f646f2e33323034312e737667" alt="DOI"></a></p>
+
+<p>Please cite this repository if you use this in academic works.</p>
+
+<pre><code>@misc{brandon_amos_2015_32041,
+ author = {Amos, Brandon and Harkes, Jan and Pillai, Padmanabhan and Elgazzar, Khalid and Satyanarayanan, Mahadev},
+ title = {OpenFace: Face recognition with Google's FaceNet deep neural network.},
+ month = oct,
+ year = 2015,
+ doi = {10.5281/zenodo.32041},
+ url = {http://dx.doi.org/10.5281/zenodo.32041}
+}
+</code></pre>
+
+<h2><a id="user-content-acknowledgements" class="anchor" href="https://github.com/cmusatyalab/openface#acknowledgements"></a>Acknowledgements</h2>
+
+
+
+<h2><a id="user-content-licensing" class="anchor" href="https://github.com/cmusatyalab/openface#licensing"></a>Licensing</h2>
+
+<p>The source code and trained models <code>nn4.v1.t7</code> and
+<code>celeb-classifier.nn4.v1.t7</code> are copyright
+Carnegie Mellon University and licensed under the
+<a href="https://github.com/cmusatyalab/openface/blob/master/LICENSE">Apache 2.0 License</a>.
+Portions from the following third party sources have
+been modified and are included in this repository.
+These portions are noted in the source files and are
+copyright their respective authors with
+the licenses listed.</p>
+
+
+</article>
+ </div>
+</body></html>

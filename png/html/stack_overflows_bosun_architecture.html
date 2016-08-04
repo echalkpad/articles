@@ -1,0 +1,360 @@
+<!DOCTYPE html><html><head><title>Stack Overflow's Bosun Architecture</title></head><body>
+<h1>Stack Overflow's Bosun Architecture</h1><p><a href="http://kbrandt.com/post/bosun_arch/" target="_new">Original URL</a></p>
+<p><blockquote>Bosun is a significant piece of our monitoring infrastructure at Stack Overflow. In forums such as Bosun&#x2019;s Slack Chat Room, we are frequently asked to describe how Bosun is set up in our&hellip;</blockquote></p>
+<div><div class="post-content clearfix">
+ 
+
+ 
+
+<p>Bosun is a significant piece of our monitoring infrastructure at Stack Overflow. In forums such as <a href="http://bosun.org/slackInvite">Bosun&#x2019;s Slack Chat Room</a>, we are frequently asked to describe how Bosun is set up in our environment.. This is a detailed post about our architecture surrounding Bosun. This is not the only way to set things up and may not always be the best way either &#x2013; but this is our current setup.</p>
+
+<h2 id="the-pieces:7bc97b814cc5ce0a4508e0dd2bd2e58d">The Pieces</h2>
+
+<p>There are a lot of components we use with Bosun, but they all serve their purposes in our monitoring infrastructure. The following table outlines them.</p>
+
+<table>
+ <tr>
+ <td rowspan="4"><a href="http://bosun.org">Bosun</a></td>
+ <td rowspan="4">Alerting System</td>
+ <td>Expression language for evaluating time series from OpenTSDB, Graphite, Elastic, and InfluxDB</td>
+ </tr>
+ <tr>
+ <td>Templates for rich notifications: HTML, Graphs, Tables, CSS-inlining</td>
+ </tr>
+ <tr>
+ <td>Web interface for viewing alerts, writing expressions, graphing, creating alerts and templates, and testing alerts over history.</td>
+ </tr>
+ <tr>
+ <td>A store for metric metadata and string data about tags (for example, host IPs, Serial numbers, etc)</td>
+ </tr>
+ <tr>
+ <td rowspan="2"><a href="http://bosun.org/scollector/">scollector</a></td>
+ <td rowspan="2">Collection Agent</td>
+ <td>Runs on Windows and Linux. Polls local OS and applications via APIs; also polls external services via SNMP, ICMP, etc.</td>
+ </tr>
+ <tr>
+ <td>With no configuration, monitors anything it auto-discovers (IIS, Redis, Elastic, Etc); configuration rarely needed.</td>
+ </tr>
+ <tr>
+ <td><a href="https://github.com/bretcope/BosunReporter.NET">BosunReporter.NET</a></td>
+ <td>App Metrics</td>
+ <td>Sends application metrics to bosun.</td>
+ </tr>
+ <tr>
+ <td rowspan="2"><a href="http://opentsdb.net/">OpenTSDB</a></td>
+ <td rowspan="2">Time Series Database Daemon</td>
+ <td>Takes time series data and stores it in HBase</td>
+ </tr>
+ <tr>
+ <td>Time series are tagged, so it is a multi-dimensional time series database</td>
+ </tr>
+ <tr>
+ <td rowspan="2"><a href="https://github.com/opserver/Opserver">Opserver</a></td>
+ <td rowspan="2">Monitoring dashboard</td>
+ <td>Pulls from SolarWinds Orion or Bosun</td>
+ </tr>
+ <tr>
+ <td>Also includes indepth independent monitoring and control of Redis, SQL Server, HAProxy, and Elastic</td>
+ </tr>
+ <tr>
+ <td><a href="http://grafana.org">Grafana</a></td>
+ <td>User Dashboards</td>
+ <td>Uses the [Grafana Bosun plugin](https://github.com/grafana/grafana-plugins/tree/master/datasources/bosun) to create graphs and tables via Bosun expressions</td>
+ </tr>
+ <tr>
+ <td>TPS</td>
+ <td>Parses Web Logs</td>
+ <td>Sends raw logs to SQL and summaries in time series format to Bosun.</td>
+ </tr>
+ <tr>
+ <td rowspan="2"><a href="https://github.com/bosun-monitor/bosun/tree/master/cmd/tsdbrelay">tsdbrelay</a></td>
+ <td rowspan="2">Relay Time Series and Meta Data</td>
+ <td>Cross replicates time series and meta data across data centers</td>
+ </tr>
+ <tr>
+ <td>Creates denormalized OpenTSDB metrics for faster querying speed</td>
+ </tr>
+ <tr>
+ <td rowspan="3"><a href="https://hbase.apache.org/">HBase</a></td>
+ <td rowspan="3">Where OpenTSDB Stores Data</td>
+ <td><a href="http://hadoop.apache.org/">Hadoop</a>: The distributed filed system (HDFS), MapReduce framework, and Cluster Management (Zookeeper).</td>
+ </tr>
+ <tr>
+ <td><a href="https://hbase.apache.org/">HBase</a>: A clone of Google's Bigtable runs on top of Hadoop</td>
+ </tr>
+ <tr>
+ <td><a href="https://cloudera.com/products/cloudera-manager.html">Cloudera Manager</a>: What we use to manage HBase</td>
+ </tr>
+ <tr>
+ <td><a href="http://www.haproxy.org/">HAProxy</a></td>
+ <td>Load Balancer Used at Stack</td>
+ <td>We use it in front of Bosun, OpenTSDB daemons, and tsdbrelay</td>
+ </tr>
+ <tr>
+ <td><a href="http://redis.io/">Redis</a></td>
+ <td>In-memory Store</td>
+ <td>*Optionally* used by Bosun to store state, metadata, metric indexes, etc. If Redis is not used, a built-in implementation in Go called LedisDB is used</td>
+ </tr>
+ <tr>
+ <td><a href="https://www.elastic.co">Elastic</a></td>
+ <td>Document Searching</td>
+ <td>Where we send system logs. Can be queried with Bosun expressions. The Bosun Grafana plugin can use this method to graph time series info about the logs as well.</td>
+ </tr>
+</table>
+
+<h3 id="metric-and-query-flow:7bc97b814cc5ce0a4508e0dd2bd2e58d">Metric and Query Flow</h3>
+
+<p>Metrics are collected many ways:</p>
+
+<ul>
+<li>Our homegrown applications calculate their own metrics and send them to Bosun. C# programs
+use <a href="https://github.com/bretcope/BosunReporter.NET">BosunReporter.NET</a> and Go programs use the <a href="https://godoc.org/bosun.org/collect">Go collect package</a>.</li>
+<li>scollector gathers stats from the OS, services it auto-discovers.</li>
+<li>Network equipment and other devices must be polled from a third-party machine since they can not run scollector. We designate 2 hosts to run scollector with polling mode enabled. They collect data via SNMP (network devices), ICMP pings, and can be expanded via plug-ins.</li>
+</ul>
+
+<p>No matter how data is collected, it is not send it directly to Bosun. They send to tsdbrelays which have two purposes:</p>
+
+<ul>
+<li>They relay the data to two different bosun clusters. (more on that later)</li>
+<li>They denormalize certain datapoints.</li>
+</ul>
+
+<p>They actually do not send directly to tsdbrelay. We front-end tsdbrelay through a load balancer (HAProxy) so that we can scale horizontally.</p>
+
+<p>We also front-end the Bosun service itself for the same reason. One Bosun server is in read-only mode, and flipping between the two requires us to sync the state and take the other bosun out of read only mode. OpenTSDB performance is improved if all write requests go to the same node and our HAProxy setup allows us to funnel all write requests to a single node when all nodes are up.</p>
+
+<p>Many different systems query the time series database. We call this the &#x201C;query flow&#x201D;:</p>
+
+<ul>
+<li>Grafana: Queries OpenTSDB using Bosun expressions via <code>/api/expr</code>. It can also query Elastic directly, as well as query Elastic via: Grafana -&gt; Bosun -&gt; Elastic.</li>
+<li>Opserver: Queries Bosun&#x2019;s <code>/api/host</code> endpoint and also queries OpenTSDB directly.</li>
+<li>Bosun itself: when running alerts, or users interact with the UI, it queries OpenTSDB or Elastic (if it exists)</li>
+</ul>
+
+<p><img src="http://kbrandt.com/images/metric_query_flow.svg" alt="Metric and Query Flow Diagram"></p>
+
+<h2 id="our-opentsdb-and-hbase-setup:7bc97b814cc5ce0a4508e0dd2bd2e58d">Our OpenTSDB and HBase Setup</h2>
+
+<p>In our main datacenter in NY to we have two HBase clusters. One is a three node cluster running on NY-TSDB0{1,2,3}. The other is a local replica running on NY-BOSUN01. The local replica is for backups (See how we Backup below).</p>
+
+<p>In our secondary datacenter (named &#x201C;CO&#x201D;) we have a three node cluster that is a mirror setup of the NY-TSDB cluster. The HBase clusters don&#x2019;t replicate across datacenters, rather tsdbrelay relays the datapoints to each independent data store.</p>
+
+<p>We use a HDFS replication factor of 3 in the two main HBase clusters. The HBase replica is currently a single machine, so it has no HDFS replication.</p>
+
+<p><img src="http://kbrandt.com/images/hbase.svg" alt="HBase Diagram">
+We use Cloudera Manager to manage our OpenTSDB clusters. We have found that HBase <em>can be</em> stable, but it is difficult for a shop that doesn&#x2019;t happen to use it anywhere else.</p>
+
+<h3 id="the-numbers:7bc97b814cc5ce0a4508e0dd2bd2e58d">The Numbers</h3>
+
+<ul>
+<li>3.7 Billion datapoints a day (43,000 Datapoints a second) per cluster</li>
+<li>~8 Gigabytes a day of HDFS unreplicated growth per cluster (24GB replicated)</li>
+<li>Currently ~ 7TB of replicated storage consumed</li>
+</ul>
+
+<h3 id="opentsdb-appends-vs-compaction:7bc97b814cc5ce0a4508e0dd2bd2e58d">OpenTSDB Appends vs Compaction</h3>
+
+<p>HBase was very unstable when we first started using it in 2015. The main thing that improved our stability was to switch to OpenTSDB&#x2019;s &#x201C;appends model&#x201D; instead of the &#x201C;hourly compactions model&#x201D;. (Note: These are unrelated to <em>HBase compactions</em>).</p>
+
+<p>OpenTSDB stores time series as metric+tags in hourly rows. By storing them as per-hour, OpenTSDB only needs to store the delta (the offset from the base hour) for each datapoint. This is more space-efficient.</p>
+
+<p>In the appends model, storing new datapoints only requires appending to the row. However this requires HBase to read the existing data block, then write it out again with the new datapoint appended. This generates a lot of network traffic.</p>
+
+<p>In the compaction model, it writes the data in a less efficient form but one that requires less network bandwidth. Once each hour it then rewrites the data in the more compact, delta, format. As a result the network activity is reduced to an hourly burst instead of constant reading and rewriting.</p>
+
+<p>In this graph you can see the Append Model&#x2019;s network traffic load versus Hourly Compaction&#x2019;s greatly reduced network load.</p>
+
+<p><img src="http://kbrandt.com/images/appends_compact.jpg" alt="Appends vs Compaction Graphs"></p>
+
+<p>This network traffic was unexpectedly huge considering that our input into OpenTSDB (gzip compressed HTTP JSON) is on average 4 Mbit/sec. Appends can be seen in the hourly seasonality of the above graph. As the row grows over the hour, so do the size of the rows being re-written and and replicated across HDFS and HBase replication.</p>
+
+<h3 id="zookeeper:7bc97b814cc5ce0a4508e0dd2bd2e58d">Zookeeper</h3>
+
+<p>We found that for stability we have had to greatly increase the timeouts around zookeeper:</p>
+
+<p>Zookeeper:</p>
+
+<pre><code>tickTime: 30000
+maxSessionTimeout: 600000
+</code></pre>
+
+<p>HBase:</p>
+
+<pre><code>zookeeper.session.timeout: 600000
+</code></pre>
+
+<p>With low zookeeper timeouts, if operations took a long time or spent a long time in garbage collection, then HBase servers would eject themselves taking the cluster down.</p>
+
+<h3 id="denormalization-query-speed-and-last:7bc97b814cc5ce0a4508e0dd2bd2e58d">Denormalization, Query Speed, and Last</h3>
+
+<p>HBase only has one index. OpenTSDB is optimized around the metric. So for example, querying all the metrics about a host (cpu, mem, etc) is slower than a query against a single metric for all hosts. The <a href="http://opentsdb.net/docs/build/html/user_guide/backends/hbase.html">HBase schema for OpenTSDB reflects this</a>:</p>
+
+<pre><code>00000150E22700000001000001
+'----''------''----''----'
+metric time tagk tagv
+</code></pre>
+
+<p>Since the metric and time fields are the start of the key, and the key is the only thing indexed, the more tags you have on a metric, the more rows that have to be scanned to find your particular host. This reduces query speed.</p>
+
+<p>However, host based views are common. In this schema, they have to multiple metrics, and if those metrics have the <code>host=something</code> tagset, the query gets slower as you add more hosts. Combine that with the number of rows that need to be scanned for longer durations and the queries become untenable.</p>
+
+<p>As an Example, <code>os.cpu</code> has only one tag key host, and about 500 possible values in our environment. To query one year of data (downsampled) to a single host in this metric takes about 20 seconds. If you add more tags it only gets worse (i.e. os.net.bytes which has host, interface, and direction.</p>
+
+<p>We work around this query speed issue to generate views in two ways:</p>
+
+<ol>
+<li>Redis stores the last value (the last two for counters) for all series. When generating these views, we can get current values for anything nearly instantly. This data is used in Boson&#x2019;s <code>/api/host</code> endpoints and can also be queried directly at <code>/api/last</code></li>
+<li>Denormalize the metrics</li>
+</ol>
+
+<p>To denormalize metrics we put the host name in the metric, and only give it a single tag key / value pair (at least one tag key with a value is required). We use the following argument to tsdbrelay to do this:</p>
+
+<pre><code>-denormalize=os.cpu__host,os.mem.used__host,os.net.bytes__host,os.net.bond.bytes__host,os.net.other.bytes__host,os.net.tunnel.bytes__host,os.net.virtual.bytes__host
+</code></pre>
+
+<p>This results in a metric like <code>__ny-web01.os.cpu</code>. A year&#x2019;s worth of data (also downsampled) is queried in ~100 milliseconds as compared to 20 seconds for the normalized metric.</p>
+
+<h3 id="hbase-replication:7bc97b814cc5ce0a4508e0dd2bd2e58d">HBase Replication</h3>
+
+<p>We have struggled some with HBase replication. The secondary cluster has had to be rebuilt when we found corruption, and also when we upgraded to SSDs. With our most recent case of replication breaking we found that <a href="http://hortonworks.com/blog/apache-hbase-region-splitting-and-merging/">force splitting</a> some of the unbalanced regions on the secondary cluster seems to have fixed in (You can see the unbalance in size via the HBase Web GUI).</p>
+
+<p>When replication breaks, the logs grow rapidly, and drain at a much slower rate then they grow:</p>
+
+<p><img src="http://kbrandt.com/images/hbase_replication_space.jpg" alt="HBase Replication and Space Used"></p>
+
+<p>Since replication backing up uses so much disk space, we have to factor in head room for this when sizing the HBase clusters.</p>
+
+<h3 id="hardware:7bc97b814cc5ce0a4508e0dd2bd2e58d">Hardware</h3>
+
+<p>NY-TSDB0{1,2,3} (Per Sever)</p>
+
+<table>
+ <thead>
+ <tr>
+ <th>Area</th>
+ <th>Details</th>
+ <th>Utilization</th>
+ </tr>
+ </thead>
+ <tr>
+ <td>Model</td>
+ <td>Dell R620</td>
+ <td></td>
+ </tr>
+ <tr>
+ <td>CPU</td>
+ <td>2x Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz</td>
+ <td>~15%</td>
+ </tr>
+ <tr>
+ <td>Ram</td>
+ <td>128 GB Ram (8x 16GB Chips)</td>
+ <td>34 GB RSS, Rest Used in File Cache</td>
+ </tr>
+ <tr>
+ <td>Disk</td>
+ <td>2 Spinny OS Disks, 8x SSDs in JBOD (INTEL SSDSC2BB480G4)</td>
+ <td>Avg Read: 1.6 MByte/sec, Avg Write: 57 MByte/sec</td>
+ </tr>
+ <tr>
+ <td>Network</td>
+ <td>Redundant 10Gigabit</td>
+ <td> ~500 MBit/sec</td>
+ </tr>
+</table>
+
+<p>NY-BOSUN02 (Also HBase Replica, see previous diagram)</p>
+
+<table>
+ <thead>
+ <tr>
+ <th>Area</th>
+ <th>Details</th>
+ <th>Utilization</th>
+ </tr>
+ </thead>
+ <tr>
+ <td>Model</td>
+ <td>Dell R620</td>
+ <td></td>
+ </tr>
+ <tr>
+ <td>CPU</td>
+ <td>2x Intel(R) Xeon(R) CPU E5-2643 v2 @ 3.50GHz</td>
+ <td>~15%</td>
+ </tr>
+ <tr>
+ <td>Ram</td>
+ <td>64 GB Ram (4x 16GB Chips)</td>
+ <td>20 GB RSS, Rest Used in File Cache</td>
+ </tr>
+ <tr>
+ <td>Disk</td>
+ <td>2 Spinny OS Disks, 8x SSDs in JBOD (INTEL SSDSC2BB480G4)</td>
+ <td>Avg Read: 1.1 MByte/sec, Avg Write: 33 MByte/sec</td>
+ </tr>
+ <tr>
+ <td>Network</td>
+ <td>Redundant 10Gigabit</td>
+ <td> ~300 MBit/sec</td>
+ </tr>
+</table>
+
+<h3 id="reference-configs:7bc97b814cc5ce0a4508e0dd2bd2e58d">Reference Configs</h3>
+
+
+
+<h2 id="how-we-deploy:7bc97b814cc5ce0a4508e0dd2bd2e58d">How we deploy</h2>
+
+<p>The CI framework we use is called <a href="https://www.jetbrains.com/teamcity/">TeamCity</a>. We use it to build packages for Deploy scollector, tsdbrelay, to directly deploy Bosun binaries and configurations into production. TeamCity calls each configuration a &#x201C;build&#x201D;.</p>
+
+<ul>
+<li>scollector and tsdbrelay (Linux): We make RPM packages using <a href="https://github.com/jordansissel/fpm">fpm</a> combined with <a href="https://github.com/StackExchange/blackbox/blob/master/tools/mk_rpm_fpmdir">this script</a> to easily wrap binaries into RPMs. The script reads <code>mk_rpm_fpmdir.*.txt</code> to manufacture input to FPM.</li>
+<li>scollector (Windows): A TeamCity build produces a binary and does the right thing so that it is distributed to our Windows hosts.</li>
+<li>Bosun is deployed directly by TeamCity. We do this because we tend to build pretty often and use branches, so the lag of RPM would be annoying to our developers.</li>
+<li>Our Bosun configuration is kept in a Git repository. TeamCity triggers on changes to this repo, runs tests, pushes the new config to production, then restarts Bosun. (Bosun currently doesn&#x2019;t have live configuration reloading).</li>
+</ul>
+
+<h2 id="how-we-backup:7bc97b814cc5ce0a4508e0dd2bd2e58d">How we Backup</h2>
+
+<p>The are three things in and around Bosun that are Backed up:</p>
+
+<ol>
+<li>Bosun&#x2019;s Configuration File</li>
+<li>Bosun&#x2019;s State and Metadata Storage</li>
+<li>The Time Series Data</li>
+</ol>
+
+<p>The configuration file is stored in Git which is backed up independently (we use <a href="https://about.gitlab.com/">Gitlab</a> internally). We now use redis to store bosun&#x2019;s state and metadata. Bosun will use <a href="https://github.com/siddontang/ledisdb">ledis</a> if no redis server is provided, but we haven&#x2019;t explored how this would be backed up as it is there for small test setups. In redis we use both RDB and AOF for <a href="http://redis.io/topics/persistence">redis persistence</a>:</p>
+
+<ul>
+<li>RDB allows us to have snapshots of the datastore. These can be restored easily (even for local development).</li>
+<li>AOF allows us persistence across restarts of redis.</li>
+</ul>
+
+<p>Backing up the time series database, in our case OpenTSDB, is one of our pain points. HBase is designed to scale to petabytes. With that much data, a standalone full backup becomes impractical. So HBase isn&#x2019;t really designed for these sort of backups (See <a href="http://blog.cloudera.com/blog/2013/11/approaches-to-backup-and-disaster-recovery-in-hbase/#export">Approaches to Backup and Disaster Recovery in Hbase</a>. This is a shame for us, as we don&#x2019;t have petabytes of data in another system standalone backups might be an option. Therefore we do the following in place of traditional standalone backups:</p>
+
+<ol>
+<li>Datapoint level replication: tsdbrelay sends all datapoints to its local and remote cluster (one in NY, one in CO). Although the two HBase clusters are not exactly consistent with each other (different IDs in the database, missing data when a datacenter is out) they are &#x201C;good enough&#x201D; copies of each other.</li>
+<li>Restore: Rotating hourly HBase snaphosts</li>
+<li>Backup cluster in the main datacenter: An HBase replica (This is distinct from HDFS replication - that is within a cluster, whereas HBase replication replicates to another cluster).</li>
+</ol>
+
+<p>Without standalone full backups we are frankly a bit afraid of HBase, but we haven&#x2019;t had any significant data losses since we started using it.</p>
+
+<h2 id="possible-future-changes:7bc97b814cc5ce0a4508e0dd2bd2e58d">Possible Future Changes</h2>
+
+<p>Our largest pain point is using OpenTSDB and HBase. Since we don&#x2019;t use HBase anywhere else, the administrative overhead eats up a lot of time. Also, OpenTSDB has had some long standing issues that have been difficult, for example <a href="https://groups.google.com/forum/#!topic/opentsdb/KdgGNK0Y9HQ">counters don&#x2019;t downsample correctly</a> and our data is in counter format when possible so we don&#x2019;t lose resolution. That being said we still feel for us it is currently our best option. We will be expanding our two main clusters with two more nodes each (running tsdbrelay, opentsdb, and region servers) to increase space.</p>
+
+<p>We are very interested in <a href="https://influxdata.com/">InfluxDB</a>. It is written in Go which we are familiar with and has a rapid devlopment cycle. Bosun has it as a backend, and scollector can send to it since it has a OpenTSDB api style endpoint. However, we are waiting for InfluxBD to have a more stable clustering story before we could consider switching to it in production.</p>
+
+</div>
+
+ 
+
+ 
+ 
+
+ </div>
+</body></html>

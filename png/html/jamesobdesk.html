@@ -1,0 +1,127 @@
+<!DOCTYPE html><html><head><title>jamesob/desk</title></head><body>
+<h1>jamesob/desk</h1><p><a href="https://github.com/jamesob/desk" target="_new">Original URL</a></p>
+<p><blockquote>Lightweight workspace manager for the shell. Desk makes it easy to flip back and forth between different project contexts in your favorite shell. Change directory, activate a virtualenv or rvm, load&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content">
+
+<p><a href="https://travis-ci.org/jamesob/desk"><img src="https://camo.githubusercontent.com/fda7a265f498cc24f80594a639b15b224a8fefbb/68747470733a2f2f6170692e7472617669732d63692e6f72672f6a616d65736f622f6465736b2e737667" alt="build"></a> <a href="https://gitter.im/jamesob/desk?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://camo.githubusercontent.com/da2edb525cde1455a622c58c0effc3a90b9a181c/68747470733a2f2f6261646765732e6769747465722e696d2f4a6f696e253230436861742e737667" alt="Join the chat at https://gitter.im/jamesob/desk"></a></p>
+
+<p>Lightweight workspace manager for the shell. </p>
+
+<p>Desk makes it easy to flip back and forth between different project contexts in
+your favorite shell. Change directory, activate a virtualenv or rvm, load
+in domain-specific aliases, functions, arbitrary shell files, all in a
+single command.</p>
+
+<p>Instead of relying on <code>CTRL-R</code> to execute and recall ("that command's gotta
+be here somewhere..."), desk helps shorten and document those actions with
+shell aliases and functions, which are then namespaced under a particular
+desk.</p>
+
+<p>I have a hard time calling this a "workspace manager" with a straight
+face -- it's basically just a shell script that sources another shell script in a new shell.
+But I often find myself working in multiple different code trees simultaneously:
+the quick context switches and namespaced commands that desk facilitates 
+have proven useful.</p>
+
+<p>There are no dependencies other than some kind of Unix shell.</p>
+
+<div class="highlight highlight-source-shell"><pre>&#x25F2; desk 0.1.1
+
+Usage:
+
+ desk
+ List the current desk and any associated aliases. If no desk 
+ is being used, display available desks.
+ desk init
+ Initialize desk configuration.
+ desk (list<span class="pl-k">|</span>ls)
+ List all desks along with a description.
+ desk (.<span class="pl-k">|</span>go) desk-name
+ Activate a desk.
+ desk <span class="pl-c1">help</span>
+ Show this text.
+ desk version
+ Show version information.
+
+Since desk spawns a shell, to deactivate and <span class="pl-s"><span class="pl-pds">"</span>pop<span class="pl-pds">"</span></span> out a desk, you
+simply need to <span class="pl-c1">exit</span> or otherwise end the current shell process.</pre></div>
+
+<p><a href="https://github.com/jamesob/desk/blob/master/screencap.gif" target="_blank"><img src="https://github.com/jamesob/desk/raw/master/screencap.gif" width="700"></a></p>
+
+<p>For example, given this deskfile (<code>~/.desk/desks/tf.sh</code>):</p>
+
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"># tf.sh</span>
+<span class="pl-c"># </span>
+<span class="pl-c"># Description: desk for doing work on a terraform-based repository</span>
+<span class="pl-c">#</span>
+
+<span class="pl-c1">cd</span> <span class="pl-k">~</span>/terraform-repo
+
+<span class="pl-c"># Set up AWS env variables: &lt;key id&gt; &lt;secret&gt;</span>
+<span class="pl-en">set_aws_env</span>() {
+ <span class="pl-k">export</span> AWS_ACCESS_KEY_ID=<span class="pl-s"><span class="pl-pds">"</span><span class="pl-smi">$1</span><span class="pl-pds">"</span></span>
+ <span class="pl-k">export</span> AWS_SECRET_ACCESS_KEY=<span class="pl-s"><span class="pl-pds">"</span><span class="pl-smi">$2</span><span class="pl-pds">"</span></span>
+}
+
+<span class="pl-c"># Run `terraform plan` with proper AWS var config</span>
+<span class="pl-en">plan</span>() {
+ terraform plan -module-depth=-1 \
+ -var <span class="pl-s"><span class="pl-pds">"</span>access_key=<span class="pl-smi">${AWS_ACCESS_KEY_ID}</span><span class="pl-pds">"</span></span> \
+ -var <span class="pl-s"><span class="pl-pds">"</span>secret_key=<span class="pl-smi">${AWS_SECRET_ACCESS_KEY}</span><span class="pl-pds">"</span></span>
+}
+
+<span class="pl-c"># Run `terraform apply` with proper AWS var config</span>
+<span class="pl-c1">alias</span> apply=<span class="pl-s"><span class="pl-pds">'</span>terraform apply<span class="pl-pds">'</span></span></pre></div>
+
+<p>we'd get </p>
+
+<div class="highlight highlight-source-shell"><pre>$ desk <span class="pl-c1">.</span> tf
+$ desk
+
+tf
+desk <span class="pl-k">for</span> <span class="pl-smi">doing</span> work on a terraform repo
+
+ set_aws_env - Set up AWS env variables: <span class="pl-k">&lt;</span>key id<span class="pl-k">&gt;</span> <span class="pl-k">&lt;</span>secret<span class="pl-k">&gt;</span>
+ plan - Run <span class="pl-s"><span class="pl-pds">`</span>terraform plan<span class="pl-pds">`</span></span> with proper AWS var config
+ apply - Run <span class="pl-s"><span class="pl-pds">`</span>terraform apply<span class="pl-pds">`</span></span> with proper AWS var config</pre></div>
+
+<p>Basically, desk just associates a shell script (<code>name.sh</code>) with a name. When
+you call <code>desk . name</code>, desk drops you into a shell where <code>name.sh</code> has been
+executed, and then desk extracts out certain comments in <code>name.sh</code> for useful
+rendering.</p>
+
+<h3><a id="user-content-installing" class="anchor" href="https://github.com/jamesob/desk#installing"></a>Installing</h3>
+
+<ol>
+<li><code>git clone git@github.com:jamesob/desk.git &amp;&amp; cd desk</code></li>
+<li><code>sudo make install</code> or <code>cp desk ~/bin/desk</code></li>
+<li><code>desk init</code></li>
+<li>Start adding deskfiles to your config directory, e.g. <code>~/.desk/desks/hacking_gibson.sh</code></li>
+</ol>
+
+<h3><a id="user-content-deskfile-rules" class="anchor" href="https://github.com/jamesob/desk#deskfile-rules"></a>Deskfile rules</h3>
+
+<p>Deskfiles are just shell scripts, nothing more, that live in the desk config directory. 
+Desk does pay attention to certain kinds of comments, though.</p>
+
+<ul>
+<li><p><em>description</em>: you can describe a deskfile by including <code># Description: ...</code>
+somewhere in the file.</p></li>
+<li><p><em>alias and function docs</em>: if the line above an alias or function is a 
+comment, it will be used as documentation.</p></li>
+</ul>
+
+<h3><a id="user-content-sharing-deskfiles-across-computers" class="anchor" href="https://github.com/jamesob/desk#sharing-deskfiles-across-computers"></a>Sharing deskfiles across computers</h3>
+
+<p>Of course, the desk config directory (by default <code>~/.desks</code>) can be a symlink
+so that deskfiles can be stored in some centralized place, like Dropbox,
+and so shared across many computers.</p>
+
+<h3><a id="user-content-using-a-non-default-config-location" class="anchor" href="https://github.com/jamesob/desk#using-a-non-default-config-location"></a>Using a non-default config location</h3>
+
+<p>By default, desks live in <code>~/.desk/desks</code>. If you want to use some other location,
+specify as much in <code>desk init</code> and then ensure you set <code>$DESK_DIR</code> to match
+that location in your shell's rc file.</p>
+</article>
+ </div>
+</body></html>

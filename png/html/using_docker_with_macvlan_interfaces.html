@@ -1,0 +1,72 @@
+<!DOCTYPE html><html><head><title>Using Docker with macvlan Interfaces</title></head><body>
+<h1>Using Docker with macvlan Interfaces</h1><p><a href="http://blog.scottlowe.org/2016/01/28/docker-macvlan-interfaces/" target="_new">Original URL</a></p>
+<p><blockquote>28 January 2016 In this post, I&#x2019;m going to show you how to use macvlan interfaces with Docker for networking. The use of macvlan interfaces presents an interesting networking configuration for&hellip;</blockquote></p>
+<div><div class="post">
+
+<span class="post-date">28 January 2016</span>
+<p>In this post, I&#x2019;m going to show you how to use macvlan interfaces with <a href="http://www.docker.com/">Docker</a> for networking. The use of macvlan interfaces presents an interesting networking configuration for Docker containers that may (depending on your use case) address issues with the standard Linux bridge configuration.</p>
+<p>Macvlan interfaces, if you&#x2019;re unfamiliar with them, are a (somewhat) recent addition to the Linux kernel that enables users to add multiple MAC address-based logical interfaces to a single physical interface. These logical interfaces must reside in the same broadcast domain as the associated physical interface, which means that Docker containers attached to macvlan interfaces <em>also</em> will be in the same broadcast domain as the associated physical interface. In other words, the Docker containers will be on the same network as the host&#x2014;no IPTables rules, no Linux bridge, just attached directly to the host&#x2019;s network. This introduces some interesting possibilities (and potential challenges), but I&#x2019;ll save that discussion for a future post.</p>
+<p>Right now, macvlan supported is implemented via <a href="https://github.com/gopher-net/macvlan-docker-plugin">an unsupported Docker Network plugin hosted on GitHub</a>. However, I suspect that the macvlan functionality found in this plugin will find its way into the core of Docker Network, and probably sooner rather than later.</p>
+<p>You&#x2019;ll want to start by first confirming that your Linux distribution has support for macvlan interfaces. An easy way of doing this is to run the following commands (run these as root, or use <code class="highlighter-rouge">sudo</code>):</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>modprobe macvlan
+lsmod | grep macvlan
+</code></pre>
+</div>
+<p>If you get an error, or if the <code class="highlighter-rouge">lsmod</code> command returns no results, then you don&#x2019;t have macvlan support in your kernel. I tested this on Ubuntu 14.04 as well as Debian 8.1 and had no issues.</p>
+<p>Assuming that your Linux distribution supports macvlan interfaces, the next step is to get the appropriate Linux plugin onto your system by cloning the GitHub repo:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>git clone https://github.com/gopher-net/macvlan-docker-plugin
+</code></pre>
+</div>
+<p>This will clone the repository into a directory named <code class="highlighter-rouge">macvlan-docker-plugin</code> beneath your current directory.</p>
+<p>For the next few steps, you may want to use <code class="highlighter-rouge">screen</code> or <code class="highlighter-rouge">tmux</code>, at least at first. I couldn&#x2019;t find a way to daemonize the macvlan plugin (aside from adding a <code class="highlighter-rouge">&amp;</code> at the end of the command).</p>
+<p>First, launch the macvlan plugin with the following set of commands:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>cd macvlan-docker-plugin/binaries
+./macvlan-docker-plugin-0.2-Linux-x86_64 \
+--macvlan-subnet "192.168.100.0/24" --gateway "192.168.100.1" \
+--host-interface "eth1"
+</code></pre>
+</div>
+<p>A quick note on these options:</p>
+<ul>
+<li>The <code class="highlighter-rouge">--macvlan-subnet</code> option needs to correspond to the subnet associated with the physical interface named with the <code class="highlighter-rouge">--host-interface</code> parameter.</li>
+<li>The <code class="highlighter-rouge">--host-interface</code> parameter should list the physical interface to which the macvlan interfaces should be associated.</li>
+<li>The <code class="highlighter-rouge">--gateway</code> option needs to correspond to the gateway on the network.</li>
+</ul>
+<p>Next (in another terminal window or another session in <code class="highlighter-rouge">tmux</code>), create a Docker network using the macvlan driver:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker network create -d macvlan --subnet=192.168.100.0/24 \
+--gateway=192.168.100.1 -o host_iface=eth1 network-name
+</code></pre>
+</div>
+<p>The values given to the <code class="highlighter-rouge">--subnet</code>, <code class="highlighter-rouge">--gateway</code>, and <code class="highlighter-rouge">-o host_iface</code> parameters all need to match the ones given to the macvlan driver when it was launched. In my testing with this plugin, I found that omitting the parameters when creating the network caused errors, even though the parameters used when creating the network are duplicates of the values used when launching the macvlan driver.</p>
+<p>Finally, launch a Docker container attached to the Docker network you just created:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>docker run -it --rm --net=network-name ubuntu
+</code></pre>
+</div>
+<p>This will drop you at a Bash prompt in an Ubuntu container. From here, you can use <code class="highlighter-rouge">ping</code> to verify connectivity to other systems. You can also run <code class="highlighter-rouge">ip -d link list</code> within the container; note the last line of the output (shown here):</p>
+<figure class="highlight"><pre><code class="language-text">7: eth0@if3: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UNKNOWN mode DEFAULT group default
+ link/ether 5a:7b:f3:63:51:68 brd ff:ff:ff:ff:ff:ff promiscuity 0
+ macvlan mode bridge</code></pre></figure>
+<p>This clearly shows that the interface in the Docker container is a macvlan interface.</p>
+<p>So there you have it&#x2014;how to use macvlan interfaces to provide network connectivity to your Docker containers.</p>
+<h2 id="more-resources">More Resources</h2>
+<p>If you&#x2019;re interested in trying this out for yourself, check out the <code class="highlighter-rouge">docker-macvlan</code> directory in <a href="https://github.com/lowescott/learning-tools">my GitHub &#x201C;learning-tools&#x201D; repository</a>.</p>
+<span class="post-date">Tags:
+<a href="http://blog.scottlowe.org/tags/#CLI">CLI</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Docker">Docker</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Linux">Linux</a>
+&#xB7;
+<a href="http://blog.scottlowe.org/tags/#Networking">Networking</a>
+</span>
+<span class="post-date">
+<i class="fa fa-arrow-circle-left"></i> Previous Post: <a href="http://blog.scottlowe.org/2016/01/21/looking-ahead-2016-projects/">Looking Ahead: My 2016 Projects</a></span>
+<span class="post-date">
+Next Post: <a href="http://blog.scottlowe.org/2016/01/29/technology-short-take-60/">Technology Short Take #60</a> <i class="fa fa-arrow-circle-right"></i></span>
+<div class="post-sharing"><p>Be social and share this post!<br>
+<a href="https://www.facebook.com/sharer/sharer.php?u=http://blog.scottlowe.org/2016/01/28/docker-macvlan-interfaces/" title="Share on Facebook"><i class="fa fa-facebook-square fa-2x"></i></a>
+<a href="https://twitter.com/intent/tweet?url=http://blog.scottlowe.org/2016/01/28/docker-macvlan-interfaces/&amp;text=Using%20Docker%20with%20macvlan%20Interfaces" title="Share on Twitter"><i class="fa fa-twitter-square fa-2x"></i></a>
+<a href="https://plus.google.com/share?url=http://blog.scottlowe.org/2016/01/28/docker-macvlan-interfaces/" title="Share on Google Plus"><i class="fa fa-google-plus-square fa-2x"></i></a></p></div>
+</div>
+</div>
+</body></html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html><html><head><title>Build a Swarm Cluster</title></head><body>
+<h1>Build a Swarm Cluster</h1><p><a href="https://opsnotice.xyz/build-swarm-cluster/" target="_new">Original URL</a></p>
+<p><blockquote>The version 1.12 of Docker has been released few days ago. Among the changes, Docker-Swarm get embedded directly into the Engine that allow easier Swarm deployment. I&#x2019;m going to show that to&hellip;</blockquote></p>
+<div><header>
+ 
+ 
+ 
+ </header>
+
+ <section class="post-content">
+ <p><img src="https://opsnotice.xyz/content/images/2016/07/swarm-cluster.png" alt=""></p>
+
+<p>The version 1.12 of Docker has been released few days ago. Among the changes, Docker-Swarm get embedded directly into the Engine that allow easier Swarm deployment. I&#x2019;m going to show that to you. </p>
+
+<blockquote>
+ <p>Docker Swarm is native clustering for Docker. It turns a pool of Docker hosts into a single, virtual Docker host.</p>
+</blockquote>
+
+<p>Earlier stages, it was quite hard to deploy a Swarm cluster, you had to generate some certs, use a service discovery, configure each node&#x2026; This time is over ! <br>
+Today, we are going to make a Swarm cluster in two commands !</p>
+
+<p>In this post, I&#x2019;ll show you how to make a small cluster between two virtual machines but you can easily repeat operations to make a larger cluster.</p>
+
+<p>I&#x2019;ll use two Ubuntu 16.04 Xenial VM and install Docker 1.12 on each.</p>
+
+<pre><code class="language-langage-bash">export DEBIAN_FRONTEND=noninteractive 
+sudo apt-get -y update 
+sudo apt-get install apt-transport-https ca-certificates 
+sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D 
+sudo echo "deb https://apt.dockerproject.org/repo ubuntu-xenial experimental" &gt; /etc/apt/sources.list.d/docker.list 
+sudo apt-get -y update 
+sudo apt-get purge lxc-docker 
+sudo apt-cache policy docker-engine 
+sudo apt-get -y install linux-image-extra-$(uname -r) 
+sudo apt-get -y install apparmor 
+sudo apt-get -y install docker-engine 
+sudo service docker start 
+docker -v 
+</code></pre>
+
+<p>When your VMs have Docker 1.12 installed on it, we are going to create our Swarm cluster. Launch this command on the VM you want use for Master : </p>
+
+<pre><code class="language-langage-docker">docker swarm init 
+</code></pre>
+
+<p>This command will init the cluster and give you, at end, the command to launch on your nodes to join us to the cluster. Launch it on other nodes : </p>
+
+<pre><code class="language-langage-docker">docker swarm join --secret &lt;secret&gt; \ 
+--ca-hash sha256:&lt;hash&gt; \
+IP_Master_Swarm:2377 
+</code></pre>
+
+<p>With this second command, your node joins directly your Swarm cluster (in two commands, no jokes). You have definitely a Docker Swarm Cluster ! Docker Swarm is too easy since 1.12</p>
+
+<p>For going a bit deeper in Swarm, we&#x2019;ll deploy a service and expose it on our nodes (port 8001/tcp) who will be load-balanced in the cluster. In our example, we&#x2019;re going to use Nginx, but you can use any other image of your choice.</p>
+
+<p>We launch these commands on the Master : </p>
+
+<pre><code class="language-langage-docker">docker network create -d overlay nginx-network 
+docker service create --name nginx --network nginx-network --replicas 5 -p 8001:80/tcp nginx 
+</code></pre>
+
+<p><img src="https://opsnotice.xyz/content/images/2016/07/nginx-swarm-task.png" alt=""></p>
+
+<p>With this command, we have created a private network for Nginx and a service (new Docker concept) who expose the port 8001 off our Swarm&#x2019;s nodes and load-balance it to 5 Nginx containers.</p>
+
+<p>After, we can easily scale up our service : </p>
+
+<pre><code class="language-langage-docker">docker service scale nginx=40 
+</code></pre>
+
+<p><img src="https://opsnotice.xyz/content/images/2016/07/nginx-scale-40.png" alt=""></p>
+
+<p>If you want to read more about the new Swarm, <a href="https://docs.docker.com/engine/swarm/">let&#x2019;s RTFM</a>.</p>
+
+<p>For me, this update makes really easier the deployment of a Swarm Cluster from scratch. This is a good point for Docker Inc in the big war or container orchestration (Kubernetes, Mesos, Rancher&#x2026;).</p>
+ </section>
+
+ </div>
+</body></html>

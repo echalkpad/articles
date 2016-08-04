@@ -1,0 +1,353 @@
+<!DOCTYPE html><html><head><title>Distributed Dask Arrays</title></head><body>
+<h1>Distributed Dask Arrays</h1><p><a href="http://matthewrocklin.com/blog/work/2016/02/26/dask-distributed-part-3" target="_new">Original URL</a></p>
+<p><blockquote>This work is supported by Continuum Analytics and the XDATA Program as part of the Blaze Project In this post we analyze weather data across a cluster using NumPy in parallel with dask.array. We&hellip;</blockquote></p>
+<div><div class="span8" width="800px">
+ 
+<p><em>This work is supported by <a href="http://continuum.io">Continuum Analytics</a>
+and the <a href="http://www.darpa.mil/program/XDATA">XDATA Program</a>
+as part of the <a href="http://blaze.pydata.org">Blaze Project</a></em></p>
+
+<p>In this post we analyze weather data across a cluster using NumPy in
+parallel with dask.array. We focus on the following:</p>
+
+<ol>
+ <li>How to set up the distributed scheduler with a job scheduler like Sun
+GridEngine.</li>
+ <li>How to load NetCDF data from a network file system (NFS) into distributed
+RAM</li>
+ <li>How to manipulate data with dask.arrays</li>
+ <li>How to interact with distributed data using IPython widgets</li>
+</ol>
+
+<p>This blogpost has an accompanying
+<a href="https://www.youtube.com/watch?v=ZpMXEVp-iaY">screencast</a> which might be a bit
+more fun than this text version.</p>
+
+<p>This is the third in a sequence of blogposts about dask.distributed:</p>
+
+<ol>
+ <li><a href="http://matthewrocklin.com/blog/work/2016/02/17/dask-distributed-part1">Dask Bags on GitHub Data</a></li>
+ <li><a href="http://matthewrocklin.com/blog/work/2016/02/22/dask-distributed-part-2">Dask DataFrames on HDFS</a></li>
+ <li>Dask Arrays on NetCDF data</li>
+</ol>
+
+<h2 id="setup">Setup</h2>
+
+<p>We wanted to emulate the typical academic cluster setup using a job scheduler
+like SunGridEngine (similar to SLURM, Torque, PBS scripts and other
+technologies), a shared network file system, and typical binary stored arrays
+in NetCDF files (similar to HDF5).</p>
+
+<p>To this end we used <a href="http://star.mit.edu/cluster/">Starcluster</a>, a quick way to
+set up such a cluster on EC2 with SGE and NFS, and we downloaded data from the
+<a href="http://www.ecmwf.int/en/research/climate-reanalysis/era-interim">European Centre for Meteorology and Weather
+Forecasting</a></p>
+
+<p>To deploy dask&#x2019;s distributed scheduler with SGE we made a scheduler on the
+master node:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>sgeadmin@master:~$ dscheduler
+distributed.scheduler - INFO - Start Scheduler at: 172.31.7.88:8786
+</code></pre>
+</div>
+
+<p>And then used the <code class="highlighter-rouge">qsub</code> command to start four dask workers, pointing to the
+scheduler address:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>sgeadmin@master:~$ qsub -b y -V dworker 172.31.7.88:8786
+Your job 1 ("dworker") has been submitted
+sgeadmin@master:~$ qsub -b y -V dworker 172.31.7.88:8786
+Your job 2 ("dworker") has been submitted
+sgeadmin@master:~$ qsub -b y -V dworker 172.31.7.88:8786
+Your job 3 ("dworker") has been submitted
+sgeadmin@master:~$ qsub -b y -V dworker 172.31.7.88:8786
+Your job 4 ("dworker") has been submitted
+</code></pre>
+</div>
+
+<p>After a few seconds these workers start on various nodes in the cluster and
+connect to the scheduler.</p>
+
+<h2 id="load-sample-data-on-a-single-machine">Load sample data on a single machine</h2>
+
+<p>On the shared NFS drive we&#x2019;ve downloaded several NetCDF3 files, each holding
+the global temperature every six hours for a single day:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">filenames</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">glob</span><span class="p">(</span><span class="s">'*.nc3'</span><span class="p">))</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">filenames</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
+<span class="p">[</span><span class="s">'2014-01-01.nc3'</span><span class="p">,</span>
+ <span class="s">'2014-01-02.nc3'</span><span class="p">,</span>
+ <span class="s">'2014-01-03.nc3'</span><span class="p">,</span>
+ <span class="s">'2014-01-04.nc3'</span><span class="p">,</span>
+ <span class="s">'2014-01-05.nc3'</span><span class="p">]</span>
+</code></pre>
+</div>
+
+<p>We use conda to install the netCDF4 library and make a small function to
+read the <code class="highlighter-rouge">t2m</code> variable for &#x201C;temperature at two meters elevation&#x201D; from a single
+filename:</p>
+
+
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">netCDF4</span>
+<span class="k">def</span> <span class="nf">load_temperature</span><span class="p">(</span><span class="n">fn</span><span class="p">):</span>
+ <span class="k">with</span> <span class="n">netCDF4</span><span class="o">.</span><span class="n">Dataset</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+ <span class="k">return</span> <span class="n">f</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="s">'t2m'</span><span class="p">][:]</span>
+</code></pre>
+</div>
+
+<p>This converts a single file into a single numpy array in memory. We could call
+this on an individual file locally as follows:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="o">&gt;&gt;&gt;</span> <span class="n">load_temperature</span><span class="p">(</span><span class="n">filenames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">array</span><span class="p">([[[</span> <span class="mf">253.96238624</span><span class="p">,</span> <span class="mf">253.96238624</span><span class="p">,</span> <span class="mf">253.96238624</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="mf">253.96238624</span><span class="p">,</span>
+ <span class="mf">253.96238624</span><span class="p">,</span> <span class="mf">253.96238624</span><span class="p">],</span>
+ <span class="p">[</span> <span class="mf">252.80590921</span><span class="p">,</span> <span class="mf">252.81070124</span><span class="p">,</span> <span class="mf">252.81389593</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="mf">252.79792249</span><span class="p">,</span>
+ <span class="mf">252.80111718</span><span class="p">,</span> <span class="mf">252.80271452</span><span class="p">],</span>
+ <span class="o">...</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">load_temperature</span><span class="p">(</span><span class="n">filenames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">721</span><span class="p">,</span> <span class="mi">1440</span><span class="p">)</span>
+</code></pre>
+</div>
+
+<p>Our dataset has dimensions of <code class="highlighter-rouge">(time, latitude, longitude)</code>. Note above that
+each day has four time entries (measurements every six hours).</p>
+
+<p>The NFS set up by Starcluster is unfortunately quite small. We were only able
+to fit around five months of data (136 days) in shared disk.</p>
+
+<h2 id="load-data-across-cluster">Load data across cluster</h2>
+
+<p>We want to call the <code class="highlighter-rouge">load_temperature</code> function on our list <code class="highlighter-rouge">filenames</code> on each
+of our four workers. We connect a dask Executor to our scheduler address and
+then map our function on our filenames:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">distributed</span> <span class="kn">import</span> <span class="n">Executor</span><span class="p">,</span> <span class="n">progress</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">e</span> <span class="o">=</span> <span class="n">Executor</span><span class="p">(</span><span class="s">'172.31.7.88:8786'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">e</span>
+<span class="o">&lt;</span><span class="n">Executor</span><span class="p">:</span> <span class="n">scheduler</span><span class="o">=</span><span class="mf">172.31</span><span class="o">.</span><span class="mf">7.88</span><span class="p">:</span><span class="mi">8786</span> <span class="n">workers</span><span class="o">=</span><span class="mi">4</span> <span class="n">threads</span><span class="o">=</span><span class="mi">32</span><span class="o">&gt;</span>
+
+<span class="o">&gt;&gt;&gt;</span> <span class="n">futures</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="nb">map</span><span class="p">(</span><span class="n">load_temperature</span><span class="p">,</span> <span class="n">filenames</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">progress</span><span class="p">(</span><span class="n">futures</span><span class="p">)</span>
+</code></pre>
+</div>
+
+<p><img src="http://mrocklin.github.com/blog/images/load-netcdf.gif"></p>
+
+<p>After this completes we have several numpy arrays scattered about the memory of
+each of our four workers.</p>
+
+<h2 id="coordinate-with-daskarray">Coordinate with dask.array</h2>
+
+<p>We coordinate these many numpy arrays into a single logical dask array as
+follows:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">distributed.collections</span> <span class="kn">import</span> <span class="n">futures_to_dask_arrays</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">xs</span> <span class="o">=</span> <span class="n">futures_to_dask_arrays</span><span class="p">(</span><span class="n">futures</span><span class="p">)</span> <span class="c"># many small dask arrays</span>
+
+<span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span> <span class="nn">dask.array</span> <span class="kn">as</span> <span class="nn">da</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">xs</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="c"># one large dask array, joined by time</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">x</span>
+<span class="n">dask</span><span class="o">.</span><span class="n">array</span><span class="o">&lt;</span><span class="n">concate</span><span class="o">...</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">544</span><span class="p">,</span> <span class="mi">721</span><span class="p">,</span> <span class="mi">1440</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">float64</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">721</span><span class="p">,</span> <span class="mi">1440</span><span class="p">)</span><span class="o">&gt;</span>
+</code></pre>
+</div>
+
+<p>This single logical dask array is comprised of 136 numpy arrays spread across
+our cluster. Operations on the single dask array will trigger many operations
+on each of our numpy arrays.</p>
+
+<h2 id="interact-with-distributed-data">Interact with Distributed Data</h2>
+
+<p>We can now interact with our dataset using standard NumPy syntax and other
+PyData libraries. Below we pull out a single time slice and render it to the
+screen with matplotlib.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span><span class="o">.</span><span class="n">compute</span><span class="p">(),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'viridis'</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">()</span>
+</code></pre>
+</div>
+
+<p><img src="http://mrocklin.github.com/blog/images/temperature-viridis.png"></p>
+
+<p>In the <a href="https://www.youtube.com/watch?v=ZpMXEVp-iaY">screencast version of this
+post</a> we hook this up to an
+IPython slider widget and scroll around time, which is fun.</p>
+
+<h2 id="speed">Speed</h2>
+
+<p>We benchmark a few representative operations to look at the strengths and
+weaknesses of the distributed system.</p>
+
+<h3 id="single-element">Single element</h3>
+
+<p>This single element computation accesses a single number from a single NumPy
+array of our dataset. It is bound by a network roundtrip from client to
+scheduler, to worker, and back.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="o">&gt;&gt;&gt;</span> <span class="o">%</span><span class="n">time</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+<span class="n">CPU</span> <span class="n">times</span><span class="p">:</span> <span class="n">user</span> <span class="mi">4</span> <span class="n">ms</span><span class="p">,</span> <span class="n">sys</span><span class="p">:</span> <span class="mi">0</span> <span class="n">ns</span><span class="p">,</span> <span class="n">total</span><span class="p">:</span> <span class="mi">4</span> <span class="n">ms</span>
+<span class="n">Wall</span> <span class="n">time</span><span class="p">:</span> <span class="mf">9.72</span> <span class="n">ms</span>
+</code></pre>
+</div>
+
+<h3 id="single-time-slice">Single time slice</h3>
+
+<p>This time slice computation pulls around 8 MB from a single NumPy array on a
+single worker. It is likely bound by network bandwidth.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="o">&gt;&gt;&gt;</span> <span class="o">%</span><span class="n">time</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+<span class="n">CPU</span> <span class="n">times</span><span class="p">:</span> <span class="n">user</span> <span class="mi">24</span> <span class="n">ms</span><span class="p">,</span> <span class="n">sys</span><span class="p">:</span> <span class="mi">24</span> <span class="n">ms</span><span class="p">,</span> <span class="n">total</span><span class="p">:</span> <span class="mi">48</span> <span class="n">ms</span>
+<span class="n">Wall</span> <span class="n">time</span><span class="p">:</span> <span class="mi">274</span> <span class="n">ms</span>
+</code></pre>
+</div>
+
+<h3 id="mean-computation">Mean computation</h3>
+
+<p>This mean computation touches every number in every NumPy array across all of
+our workers. Computing means is quite fast, so this is likely bound by
+scheduler overhead.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="o">&gt;&gt;&gt;</span> <span class="o">%</span><span class="n">time</span> <span class="n">x</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+<span class="n">CPU</span> <span class="n">times</span><span class="p">:</span> <span class="n">user</span> <span class="mi">88</span> <span class="n">ms</span><span class="p">,</span> <span class="n">sys</span><span class="p">:</span> <span class="mi">0</span> <span class="n">ns</span><span class="p">,</span> <span class="n">total</span><span class="p">:</span> <span class="mi">88</span> <span class="n">ms</span>
+<span class="n">Wall</span> <span class="n">time</span><span class="p">:</span> <span class="mi">422</span> <span class="n">ms</span>
+</code></pre>
+</div>
+
+
+
+<p>To make these times feel more visceral we hook up these computations to IPython
+Widgets.</p>
+
+<p>This first example looks fairly fluid. This only touches a single worker and
+returns a small result. It is cheap because it indexes in a way that is well
+aligned with how our NumPy arrays are split up by time.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="nd">@interact</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">f</span><span class="p">(</span><span class="n">time</span><span class="p">):</span>
+ <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="n">time</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+</code></pre>
+</div>
+
+<p><img src="http://mrocklin.github.com/blog/images/mean-time.gif"></p>
+
+<p>This second example is less fluid because we index across our NumPy chunks.
+Each computation touches all of our data. It&#x2019;s still not bad though and quite
+acceptable by today&#x2019;s standards of interactive distributed data
+science.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="nd">@interact</span><span class="p">(</span><span class="n">lat</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">f</span><span class="p">(</span><span class="n">lat</span><span class="p">):</span>
+ <span class="k">return</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">lat</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+</code></pre>
+</div>
+
+<p><img src="http://mrocklin.github.com/blog/images/mean-latitude.gif"></p>
+
+<h2 id="normalize-data">Normalize Data</h2>
+
+<p>Until now we&#x2019;ve only performed simple calculations on our data, usually grabbing
+out means. The image of the temperature above looks unsurprising. The image
+is dominated by the facts that land is warmer than oceans and that the equator
+is warmer than the poles. No surprises there.</p>
+
+<p>To make things more interesting we subtract off the mean and divide by the
+standard deviation over time. This will tell us how unexpectedly hot or cold a
+particular point was, relative to all measurements of that point over time.
+This gives us something like a geo-located Z-Score.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="n">z</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">x</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span> <span class="o">/</span> <span class="n">x</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">z</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">persist</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<span class="n">progress</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+</code></pre>
+</div>
+
+<p><img src="http://mrocklin.github.com/blog/images/normalize.gif"></p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">z</span><span class="p">[</span><span class="nb">slice</span><span class="p">]</span><span class="o">.</span><span class="n">compute</span><span class="p">(),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'RdBu_r'</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">()</span>
+</code></pre>
+</div>
+
+<p><img src="http://mrocklin.github.com/blog/images/temperature-denormalized.png"></p>
+
+<p>We can now see much more fine structure of the currents of the day. In the
+<a href="https://www.youtube.com/watch?v=ZpMXEVp-iaY">screencast version</a> we hook this
+dataset up to a slider as well and inspect various times.</p>
+
+<p>I&#x2019;ve avoided displaying GIFs of full images changing in this post to keep the
+size down, however we can easily render a plot of average temperature by
+latitude changing over time here:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="nb">xrange</span> <span class="o">=</span> <span class="mi">90</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">z</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="mi">4</span>
+
+<span class="nd">@interact</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">z</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">f</span><span class="p">(</span><span class="n">time</span><span class="p">):</span>
+ <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+ <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="nb">xrange</span><span class="p">,</span> <span class="n">z</span><span class="p">[</span><span class="n">time</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">compute</span><span class="p">())</span>
+ <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">"Normalized Temperature"</span><span class="p">)</span>
+ <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">"Latitude (degrees)"</span><span class="p">)</span>
+</code></pre>
+</div>
+
+<p><img src="http://mrocklin.github.com/blog/images/latitude-plot.gif"></p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>We showed how to use distributed dask.arrays on a typical academic cluster.
+I&#x2019;ve had several conversations with different groups about this topic; it seems
+to be a common case. I hope that the instructions at the beginning of this
+post prove to be helpful to others.</p>
+
+<p>It is really satisfying to me to couple interactive widgets with data on a
+cluster in an intuitive way. This sort of fluid interaction on larger datasets
+is a core problem in modern data science.</p>
+
+<h2 id="what-didnt-work">What didn&#x2019;t work</h2>
+
+<p>As always I&#x2019;ll include a section like this on what didn&#x2019;t work well or what I
+would have done with more time:</p>
+
+<ul>
+ <li>No high-level <code class="highlighter-rouge">read_netcdf</code> function: We had to use the mid-level API of
+<code class="highlighter-rouge">executor.map</code> to construct our dask array. This is a bit of a pain for
+novice users. We should probably adapt existing high-level functions in
+dask.array to robustly handle the distributed data case.</li>
+ <li>Need a larger problem: Our dataset could have fit into a Macbook Pro.
+A larger dataset that could not have been efficiently investigated from a
+single machine would have really cemented the need for this technology.</li>
+ <li>Easier deployment: The solution above with <code class="highlighter-rouge">qsub</code> was straightforward but
+not always accessible to novice users. Additionally while SGE is common
+there are several other systems that are just as common. We need to think
+of nice ways to automate this for the user.</li>
+ <li>XArray integration: Many people use dask.array on single machines through
+<a href="http://xarray.pydata.org/en/stable/">XArray</a>, an excellent library for the
+analysis of labeled nd-arrays especially common in climate science. It
+would be good to integrate this new distributed work into the XArray
+project. I suspect that doing this mostly involves handling the data
+ingest problem described above.</li>
+ <li>Reduction speed: The computation of normalized temperature, <code class="highlighter-rouge">z</code>, took a
+surprisingly long time. I&#x2019;d like to look into what is holding up that
+computation.</li>
+</ul>
+
+ 
+ 
+ 
+ 
+
+
+ 
+
+
+<a href="http://disqus.com" class="dsq-brlink">blog comments powered by </a>
+
+
+
+
+ </div>
+ 
+</div>
+</body></html>

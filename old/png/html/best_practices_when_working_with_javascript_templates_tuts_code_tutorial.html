@@ -1,0 +1,126 @@
+<!DOCTYPE html><html><head><title>Best Practices When Working With JavaScript Templates - Tuts+ Code Tutorial</title></head><body>
+<h1>Best Practices When Working With JavaScript Templates - Tuts+ Code Tutorial</h1><p><a href="http://code.tutsplus.com/tutorials/best-practices-when-working-with-javascript-templates--net-28364" target="_new">Original URL</a></p>
+<p><blockquote>Maybe you don't need them for simple web apps, but it doesn't take too much complexity before embracing JavaScript templates becomes a good decision. Like any other tool or technique, there are a few&hellip;</blockquote></p>
+<div><div class="post-title-and-body__content"><p>Maybe you don't need them for simple web apps, but it doesn't take too much complexity before embracing JavaScript templates becomes a good decision. Like any other tool or technique, there are a few best practices that you should keep in mind, when using templates. We'll take a look at a handful of these practices in this tutorial.</p>
+
+
+<h2><span> 1. </span> <a href="http://underscorejs.org/">Underscore</a> for Simple, <a href="http://handlebarsjs.com">Handlebars</a> for Complex</h2>
+<blockquote class="pullquote">
+<p>If you need something with a bit more zest, might I recommend <a href="http://handlebarsjs.com/">Handlebars</a>?</p>
+</blockquote>
+<p>First things first: unless you're <a href="http://ejohn.org/blog/javascript-micro-templating/">John Resig</a>, you most likely want to choose a well-tested library to offer your template functionality. While the options are nearly endless, there are two really good options, depending on the complexity of your project. </p>
+<p>If the project is relatively simple, you can use <a href="http://underscorejs.org/">Underscore.js</a>. For the most part, this library offers functional programming utilities, but it does have a <code>_.template</code> method that couldn't make things easier. By default, it uses the ERB-esque <code>&lt;%= %&gt;</code> delimiters, but that can easily be modified. The beauty of this solution is that any project that requires templates will likely have Underscore loaded already, simply due to its sheer general usefulness. To learn more about Underscore, check out Siddharth's <a href="http://net.tutsplus.com/tutorials/javascript-ajax/getting-cozy-with-underscore-js/">comprehensive tutorial</a> right here on Nettuts+.</p>
+<p>If you need something with a bit more zest, might I recommend <a href="http://handlebarsjs.com/">Handlebars</a>? With many useful block expressions (such as <code>#each</code> for looping and <code>#if</code> for conditionals) and the ability to register your own helper functions, Handlebars will give you everything you need to create even the most complex of templates.</p>
+<blockquote><p>If you're not familiar with Handlebars, Gabriel Manricks has got you covered in this <a href="http://net.tutsplus.com/tutorials/javascript-ajax/introduction-to-handlebars/">tutorial</a>.</p>
+</blockquote>
+<p>Of course, there are other template libraries out there; feel free to check them out! I only recommend these two because I enjoy and use them myself. They also tend to be the most popular offerings in the community.</p>
+<div class="tutorial_image">
+ <a href="http://handlebarsjs.com/"><img src="https://cdn.tutsplus.com/net/uploads/legacy/2167_Templates/handlebars-templating.jpg" alt="Handlebars"></a><br>
+Handlebars is an excellent JavaScript templating engine.
+</div>
+
+<h2><span> 2. </span> Create Template Helper Functions</h2>
+<blockquote class="pullquote">
+<p>Most template libraries will make the data object that you pass into the template function the context.</p>
+</blockquote>
+<p>There will be times, when the data that you are inserting into a template won't quite be formatted in the way you prefer. In these situations, you'll need to create custom functions to format it. If you're using something like Handlebars, you can easily register a helper function; but other solutions, like Underscore, don't offer that functionality. You'll have to roll your own. </p>
+<p>The reason why this isn't as simple as it might sound is because most template libraries will make the data object that you pass into the template function the context, or the value of <code>this</code>. Therefore, the function needs to be part of this object. There are a couple of ways to do this. The primary way is to to add the function to the data object before passing it to the template function. Here's an example:</p>
+<pre class="brush: js">// assume data object and template function
+
+data.formatPrice = function (priceInCents) {
+ return "$" + (priceInCents / 100).toFixed(2);
+}
+
+var html = template(data);</pre>
+<p>This is great for one-off situations, but it's possible that you'll have multiple sets of templates, each which needs its own set of helper functions. What I like to do in these cases is wrap the template function in another function that will apply the helpers to the <code>data</code> object.</p>
+<pre class="brush: js">var productTemplate = function (data) {
+ var template = _.template("the template string");
+ data.helperFunction1 = function () { return "whatever" };
+ return template(data);
+};</pre>
+<p>There are several ways to improve this (you might start with caching the "raw" template function outside this function, probably via a closure), but that's the basic idea. Now, you can simply pass your data to that <code>productTemplate</code> and have access to your helper functions.</p>
+
+<h2><span> 3. </span> Store Templates in Their Own File</h2>
+<blockquote class="pullquote">
+<p>There are several alternate solutions that might be better, especially in more complex scenarios.</p>
+</blockquote>
+<p>All JavaScript templates obviously start out as text. The most popular (and natural) place to store them is within your HTML document - usually in a <code>script</code> tag with an alternate <code>type</code> attribute, so that the browser doesn't attempt to execute them. It's fairly easy to grab the <code>innerHTML</code> attribute of the <code>script</code> tag and pass it to the template-creating function, when you're ready.</p>
+<p>However, this isn't the only way to do it; in fact, it might not be the optimal way. There are several alternate solutions that might be better, especially in more complex scenarios.</p>
+<p>The first alternative is to store them all within a JavaScript file. Of course, this means that your templates will be stored as strings instead of the more readable indented HTML, but stick with me for a second! First, for templates that are longer than a single line (most templates), you don't have to use an unwieldy, wrapping string. Instead, try something like this:</p>
+<pre class="brush: js">Templates = {};
+
+Templates.contactEntry = [
+ "&lt;h1&gt; {{fullName}} &lt;/h1&gt;",
+ "&lt;ul&gt;",
+ "&lt;li&gt; Email: {{email}} &lt;/li&gt;",
+ "&lt;li&gt; Phone: {{tel}} &lt;/li&gt;",
+ "&lt;/ul&gt;"
+].join("\n");</pre>
+<p>Storing a template in an array like this makes it much easier to handle. Using syntax like this, you can easily store all your templates in their own JavaScript file, and have that file loaded onto the page before you need the templates. And of course, you don't have to keep them all within a single <code>Template</code> object, but it keeps things organized. That <code>Templates</code> object could even be a property on your global application object (as in, <code>MyApp.Templates</code>).</p>
+<p>But wait, there's more (to coin a phrase). You can convert all of your templates to their respective template functions in a single loop:</p>
+<pre class="brush: js">for (var tmpl in Templates) {
+ if (Templates.hasOwnProperty(tmpl) {
+ Templates[t] = _.template(Templates[t]); // Underscore example
+ }
+}</pre>
+<p>If you're using AMD in your application, this method will still work; just put that in a templates module that returns that <code>Templates</code> object. However, many AMD solutions have a text plugin that lets you load plain text files; instead of the normal module object, you'll get a string in return. If you're using the RequireJS library, you'll have to include the <code>text.js</code> plugin in the same directory as the <code>require.js</code> file. Then, you can do something along the lines of:</p>
+<pre class="brush: text">require(["text!templates/document.html"], function (documentTemplate) {
+
+});</pre>
+<p>That <code>documentTemplate</code> parameter will be a string containing whatever contents is in that <code>templates/document.html</code> file. When doing it this way, you won't be able to put multiple templates into one file, unless you want to manipulate that string. </p>
+
+<h2><span> 4. </span> Precompile Your Templates</h2>
+<blockquote class="pullquote">
+<p>If using the Asset Pipeline in a Rails app, take advantage of <a href="https://github.com/rails/sprockets-rails">Sprockets</a> to pre-compile template functions.</p>
+</blockquote>
+<p>If you think about it for a second, there's some extra work done by the browser every time you create a template. Usually, that template starts out as a string that you pass to a template-creating function. That function returns another function, which you can pass the data to and receive HTML from. The extra work is the "creating-the-template-function" part; there's no reason why this can't be done before the JavaScript is sent to the client. Preferably, you could put add this work to your build process, along with minifying your CSS and concatenating your JS. </p>
+<p>Unfortunately, pre-compiling JavaScript templates isn't quite as simple as minifying or concatenating... at least, not just yet, probably due to the many ways to create templates. If you're using Grunt or Yeoman, you can look up plugins (<a href="https://github.com/gruntjs/grunt-contrib-handlebars">like this one</a>) on the <a href="http://gruntjs.com/">Grunt website</a>. If you're using the Asset Pipeline in a Rails app, you can take advantage of <a href="https://github.com/rails/sprockets-rails">Sprockets</a> to pre-compile your template functions.</p>
+<blockquote>
+<p>Oh, and if you're adventurous (and a Tuts+ Premium subscriber), you can join me as I <a href="https://tutsplus.com/lesson/precompiled-templates/">precompile templates from scratch</a> in my <a href="https://tutsplus.com/course/advanced-backbone-patterns-and-techniques/">Advanced Backbone Patterns and Techniques course</a>.</p>
+</blockquote>
+
+<h2><span> 5. </span> No Evaluation in Templates</h2>
+<blockquote class="pullquote">
+<p>No evaluation in templates.</p>
+</blockquote>
+<p>Not too long ago, while researching for <a href="https://tutsplus.com/course/advanced-backbone-patterns-and-techniques/">another project</a>, I came across an interesting idea regarding JavaScript templates in the excellent book <a href="http://recipeswithbackbone.com/">Recipes with Backbone</a>. It's since become a best practice in the community: no evaluation in templates. Of course, interpolating variables is, strictly speaking, evaluation, but what I'm more referring to here is logic code. You can put whatever JavaScript you'd like inside of the delimiting tags, but it can easily get out of hand. We all know that it's considered a best practice to keep your HTML, CSS, and JavaScript separate; this makes it easier to keep track of the code and spot errors, when necessary. The same is true for templates: they should be a place for interpolating values only. Any logic or data transformation should be performed outside the template.</p>
+<p>Of course, how far you go with this idea is up to you. You might decide that looping inside your templates is okay; you might have a template like this:</p>
+<pre class="brush: html">&lt;h1&gt; My List &lt;/h1&gt;
+&lt;ul id="myList"&gt;
+ &lt;% list.forEach(function (item) { %&gt;
+ &lt;li&gt; &lt;%= item.name %&gt; &lt;/li&gt;
+ &lt;% }); %&gt;
+&lt;/ul&gt;</pre>
+<p>Or, you might instead choose to loop outside your templates by creating a wrapper template, and then looping over items, rendering a sub-templates, and inserting them into the wrapper template. You might end up with two templates like this:</p>
+<p>The wrapper template:</p>
+<pre class="brush: html">&lt;h1&gt; My List &lt;/h1&gt;
+&lt;ul id="myList"&gt;
+&lt;/ul&gt;</pre>
+<p>The sub-template:</p>
+<pre class="brush: html">&lt;li&gt; &lt;%= name %&gt; &lt;/li&gt;</pre>
+<p>Of course, this separated method makes for a bit more code, but you'll find it worth the effort in the long run. </p>
+<p>Along these lines, it's a good practice follow the lead of the framework or library you're using. For example, I've found that, when using Backbone with Underscore templates, it is easier to use outside loops and sub-templates: Underscore's minimal template functionality doesn't offer any looping syntax, and Backbone's <code>render</code> method is a great place to do that looping and inserting the sub-templates. However, when using Meteor, which builds in Handlebars templates, it's much easier to loop inside the templates with an <code>#each</code> block; (and use sub-templates, too, if you want). </p>
+
+<h2><span> 6. </span> Bind Data to the Templates</h2>
+<blockquote class="pullquote">
+<p>Learn more about Backbone.stickit at <a href="https://tutsplus.com/lesson/backbone-stickit/">Tuts+ Premium.</a></p>
+</blockquote>
+<p>This won't always be applicable, but, in some cases, it can be really helpful to make your templates update automatically, when the data they are displaying changes. I like this idea a lot, because it allows even the UI of your application to be completely data-driven: when a model attribute updates, the UI updates with it. This is the basic principle behind tools, like Knockout.</p>
+<p>While you could probably roll this functionality on your own without too much trouble, all the popular frameworks have it built in. For example, in Backbone, a template's <code>initialize</code> function might include some custom event listeners, like so:</p>
+<pre class="brush: js">this.model.on('change', this.render, this);</pre>
+<p>This way, whenever a model attribute changes, the template's <code>render</code> function will be called and the template re-rendered. Alternatively, you can use a plugin, like <a href="https://github.com/NYTimes/backbone.stickit">backbone.stickit</a>, which will manage the bindings for you. If you're working with Meteor and using one of its reactive data sources, you'll get this binding for free - no extra work necessary. I'm not familiar enough with any other framework to know exactly how they do it, but any framework worth using should have a similar feature.</p>
+
+<h2><span> 7. </span> Simplify Your Templates</h2>
+<blockquote class="pullquote">
+<p>Very quickly, your templates can get out of hand and become unwieldy.</p>
+</blockquote>
+<p>If you aren't careful, very quickly, your templates can get out of hand and become unwieldy. This is why it's always a good idea to limit your templates to a reasonable size. If you make them too large, they'll be more difficult to update, and won't allow for a good separation of the code. On the other hand, if they're too small, they'll cost too much for what they bring, and will subsequently slow down your app. </p>
+<p>This is why it's important to find a happy medium. Approach your templates in the same way that you write your JavaScript or CSS code: make it modular. Yes, each UI "chunk" or widget should have it's own template, but don't forget about sub-templates. They're useful, when smaller units of a widget have complex layouts or states, as well as when they have multiple events, but remember that they can be a double-edged sword. Don't use them unless you have a good reason to.</p>
+
+<h2><span> 8. </span> Don't Use 'em if You Don't Need 'em</h2>
+<p>Finally, remember that JavaScript templates is just one more tool in your box; and, sometimes, it simply isn't the right one for the job. Don't use templates where you don't need them. Use your head: there may be other situations, when a template is not the best tool. </p>
+
+<h2>Conclusion</h2>
+<p>We'll, those are my best tips for using JavaScript templates, but perhaps you can think of a few more! If so, please share them in the comments below, so that we can continue the discussion.</p>
+</div></div>
+</body></html>

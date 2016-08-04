@@ -1,0 +1,160 @@
+<!DOCTYPE html><html><head><title>Pure UI</title></head><body>
+<h1>Pure UI</h1><p><a href="http://rauchg.com/2015/pure-ui/" target="_new">Original URL</a></p>
+<p><blockquote>I recently redesigned and implemented a new version of VideoPress, the WordPress video platform. The process involved, among other things, creating a new UI, ditching the dependency on Flash in favor&hellip;</blockquote></p>
+<div><div class="entry-content">
+ <p>I recently redesigned and implemented a new version of VideoPress, the WordPress video platform.</p>
+<p>The process involved, among other things, creating a new UI, ditching the dependency on Flash in favor of HTML5 <code>&lt;video&gt;</code> and introducing new functionality.</p>
+<p>The particular way in which I implemented it led me to some interesting insights around the <strong>growing convergence</strong> of the designer and programmer roles.</p>
+<p>In the short term, as I&#x2019;ll show, the communication between the programmer and designer will improve dramatically by becoming well technically delineated.</p>
+<p>And if I&#x2019;m allowed to extrapolate, a clear path is now laid out towards a future where the steps to go from sketch to design to implementation are greatly more accessible to everyone with an idea.</p>
+
+<p>A lot has been written about the merits of React as a framework. Today I&#x2019;m compelled to write about the benefits of a <a href="http://lambda-the-ultimate.org/node/4561">programming model</a><a href="http://rauchg.com/2015/pure-ui/#f1" id="s1" class="footnote-link">[1]</a> it enables and its implications to the design and creation workflow.</p>
+<p>The fundamental idea I want to discuss is the definition of an application&#x2019;s UI as <strong>a pure function of application state</strong>.</p>
+<p>A pure function is one that exhibits the property of substitution: replacing a call with its returned value should make the program equivalent. As an example, <code>concat('hello', 'world')</code> can be substituted with <code>'hello world'</code> without changing the behavior of your program.</p>
+<p>How can we apply this to a graphical user interface? By having the function return an abstract representation of widgets (or markup) to be rendered on the screen:</p>
+<pre><code>function videoplayer({ title, src } = {}){
+ if (src) {
+ return div(
+ div({ 'class': 'title' }, title),
+ video({ autoplay: true, loop: true, src })
+ );
+ } else { 
+ return div('No video to load');
+ }
+}
+</code></pre>
+<p>If I call the <code>videoplayer</code> function with no parameters, I&#x2019;ll <em>consistently</em> get a <code>&lt;div&gt;No video to load&lt;/div&gt;</code> back. If I call it with <code>'Charlie bit mey'</code> and <code>'charlie.mp4'</code> I&#x2019;ll likewise get the titlebar and video I expect.</p>
+<p>Since I&#x2019;m not returning the actual DOM elements (no <code>document.createElement</code>) or performing any real rendering, we can think of this function as one that performs mappings between an input (my parameters) and an output (the <em>virtual dom</em>).</p>
+<p>If throughout the lifetime of the program the parameters change (let&#x2019;s say there&#x2019;s a new video to play or the user performs an action), the function is called again with new parameters and the rendered view is updated.</p>
+<p>With this model in place, the programmer is thus relieved from the burden of specifying the transition between states (or transformation) of the UI over time. No need to specify how to go from <strong>A</strong> to <strong>B</strong>: just describe what <strong>A</strong> looks like and what <strong>B</strong> looks like, in a discrete way.</p>
+
+<p>UI designers have been intuitively &#x201C;programming&#x201D; in this way for some time now, arguably in a more direct way.</p>
+<p>While design specifications were usually drawn out on a single canvas, the rise of mobile has forced the industry to think about varying screen sizes (responsiveness).</p>
+<p><b>Artboards</b> have become the de-facto standard<a href="http://rauchg.com/2015/pure-ui/#f2" id="s2" class="footnote-link">[2]</a> to convey how a certain UI is supposed to be rendered for each configuration in graphics software. They allow the creator to shape and position each canvas where elements are placed.</p>
+<p>This is what a designer&#x2019;s handout looks like when using artboards to represent the same content for desktop and for mobile:</p>
+<div class="wide-image">
+<div class="wide-bg">
+ <img src="https://cldup.com/JDDxCgEoBj.png" width="600">
+</div>
+</div>
+<p>We can think of the example above as the <em>same</em> Socket.IO <code>dashboard()</code> UI function but with different parameters. The second artboard represents the invocation <code>dashboard({ width: 375 })</code>.</p>
+<pre><code>function dashboard({ width, num }){
+ // with proper access to the layout data
+ // data CSS media queries can be redundant
+ if (width &gt; 375) {
+ return div('Twitter followers', prettify(num));
+ } else {
+ return div('Twitter', abbreviate(num));
+ }
+}
+</code></pre>
+<p>Moreover, seasoned designers have recognized the need for further specification. This can be seen in the popularization of UI styleguides, such as the following example from <a href="http://primercss.io/buttons/">Github Primer</a>.</p>
+<div class="wide-image">
+<div class="wide-bg">
+ <img width="670" src="https://cldup.com/AgHrso5cqp.png">
+</div>
+</div>
+<p>CSS and HTML being fully declarative have lent themselves very well to this task.</p>
+<p>We can now think of this as the base function being the <code>&lt;button&gt;</code>, and its parameters being the <code>class="btn-sm"</code> or <code>disabled</code>. The button produces different outputs depending on the supplied parameters, which can be combined: <code>&lt;button class="btn-sm btn-outline"&gt;</code>, <code>&lt;button disabled class="btn-outline"&gt;</code>, and so on.</p>
+
+<p>With this paradigm in mind, I set out to realize the different main states of the video player with my design tool.</p>
+<div class="wide-image">
+<div class="wide-bg">
+ <img src="https://cldup.com/iIIdwqx6y4.png" width="600">
+</div>
+</div>
+<p>These answer the questions of what the player would look like when</p>
+<p>&#x2026; the video is converting on the backend and not ready for playback yet<br>
+&#x2026; the video has been removed due to DMCA<br>
+&#x2026; a connection or server error occured<br>
+&#x2026; the video is not G rated and the person is asked to enter their age<br>
+&#x2026; the video was playing but no further data was received<br>
+&#x2026; the user hovers the progress bar</p>
+<p>The main issue, however, is that underestimating the size of the state space is actually very easy. In other words, it&#x2019;s difficult to come up with the <em>complete</em> list of questions that your UI needs to answer.</p>
+<p>It&#x2019;s easy because the experience we&#x2019;re discussing fundamentally revolves around just watching video. Every other state can be seen as exceptional in the same way errors are. Without careful consideration, it could be wrongly reduced to &#x201C;just <code>&lt;video&gt;</code> and a few extra divs&#x201D;.</p>
+<p>Through this lens, one can hazard an explanation for the age-old problem of poor software development estimates. When the <em>magnitude</em> of the undertaking is not clear for the developer or designer, let alone for the people removed from the creation process, it&#x2019;s simply impossible to make any accurate predictions.</p>
+<p>Unlike other projects I&#x2019;d worked on in the past, the next step of the implementation almost perfectly matched the design workflow. I broke down the initial design into even smaller functions that would be rendered into HTML artboards.</p>
+<p>Since these functions are essentially acting as mappings between data and UI, I created a simple JSON file that would describe the different parameters for each state.</p>
+<pre><code> {
+ "title": "Thumb tooltip",
+ "views": [
+ [
+ {
+ "title": "Default",
+ "require": "../views/thumb-tip",
+ "params": {
+ "width": 136,
+ "height": 78,
+ "css": true
+ }
+ },
+ {
+ "title": "Custom offset (30px)",
+ "require": "../views/thumb-tip",
+ "params": {
+ "width": 136,
+ "height": 78,
+ "tipLeft": 30
+ }
+ },
+ {
+ "title": "Custom offset (left edge)",
+ "require": "../views/thumb-tip",
+ "params": {
+ "width": 136,
+ "height": 78,
+ "tipLeft": 0
+ }
+ },
+ // &#x2026;
+</code></pre>
+
+<p>Throughout this exercise it became apparent that there was more to the project than what I had contemplated in my original plan.</p>
+<p>As an example, it wasn&#x2019;t enough just to consider a state where there&#x2019;s a tooltip on top of the progress bar. But also what happens if the tip is positioned to the leftmost or rightmost edge of the toolbar. Or if it&#x2019;s triggered without the image having loaded yet.</p>
+<p>In many cases, it&#x2019;s necessary to go back to the design tool and represent these new states adequately. For the tips, I had to split the triangle in half if they approach the boundaries of the player. I added a state to display when the image grid is not loaded yet. And so on. The tooltip alone expanded into the 6 representations seen above.</p>
+
+<p>This allows us to make a distinction of two very distinct (yet frequently interleaved) phases of the creation process: <strong>design</strong> and <strong>discovery</strong>.</p>
+<p>Design is the process of taking the available data and coming up with its representation. The outcome is reasonably well specified and understood.</p>
+<p>Discovery is about the transformation (usually expansion) of that input. It&#x2019;s the evolution of the design. The uncovering of new states and new ideas throughout the process itself.</p>
+<p>Even the most careful designer that can anticipate -due to their extensive experience and ability- a wide range of scenarios will necessarily participate in this feedback loop.</p>
+<p>First, there&#x2019;s a potentially infinite number of permutations of the parameters they&#x2019;re trying to design. Only some of the combinations can (and should) be considered at the design stage.</p>
+<p>An example from this project is the conversion phase of the video. While the video is converting, I intended to show a blurred out thumbnail with a progress bar that notifies the user in realtime.</p>
+
+<p>Once rendered, I incorporated a [+] icon (which you can click above) to modify the parameters with which the view was invoked and rendered.</p>
+<p>One can then experiment and modify the parameters (or potentially introduce some <a href="https://en.wikipedia.org/wiki/Fuzz_testing">chaos</a>) and get direct feedback.</p>
+<p>In this case, clicking and dragging the numbers to alter the dimensions of the player allows us to see how it would perform in the real world beyond just the breakpoints specified by the designer, like iPhone or iPad size.</p>
+<p>&#x2028;When a parameter is recognized as an image, an extra link is added to retrieve a random image from <a href="http://imgur.com">imgur</a>. It turns out that light images were actually not very friendly to the particular design I picked for the progress bar, and it had to be revisited. Adding some shadows made it perform well with a wide range of photos:</p>
+<p><img src="https://cldup.com/KK_maFpl8V.gif"></p>
+<p>Another way in which discovery occurs, usually more painstakingly, is in the <em>implementation</em> process itself.</p>
+<p>In the case of video streaming, something that can be easily overlooked (which falls under the category of &#x201C;errors&#x201D;) is that the download of the video can stall completely. When this happens, the <code>MediaElement</code> API emits a <code>stalled</code> event.</p>
+<p>Both designer and developer can be oblivious to details like that initially. But under this model, the communication between the designer and developer now consists of a very clear <strong>protocol</strong>.</p>
+<p>The next step is for the design mockup to be created for the player but with the extra parameter <code>{ stalled: true }</code>. And so the TODO list expands, but in a way that neatly breaks down responsibilities.</p>
+<p>This workflow brings us closer to understanding the <strong>completeness</strong> of implementation in a very direct way. If you think up and hand out 20 distinct states in which your application can behave, then you should be able to clearly see them rendered on a screen as HTML. If only 10 are done, then the implementation is only 50% done.</p>
+<p>To contrast this, consider a simple payment form with jQuery. The server responds <code>200</code> if the payment succeeds, or <code>400</code> otherwise. The programmer that&#x2019;s in charge of implementing this writes:</p>
+<pre><code>function pay(){&#x2028;
+ $.ajax({ url: &#x2018;/api/pay&#x2019; })
+ .fail(() =&gt; $(&#x2018;#msg-error&#x2019;).show())
+ .success(&#x2028;() =&gt; {
+ $('#payment').hide();
+ $('#msg-success').show();
+ });
+&#x2028;}
+</code></pre>
+<p>What if we now wanted to see the two states this procedure can yield, to assess our progress?</p>
+<p>The only way one could confidently determine the correctness and completeness of the implementation would be actually executing the code. In a simple case like this, the task would be to ensure that both logical branches (failure and success) are executed.</p>
+<p>This, in practice, can actually be quite convoluted. Applications must handle different states that are difficult to replicate under normal testing conditions. <a href="http://writings.quilt.org/2014/05/12/distributed-systems-and-the-end-of-the-api/#toc-ack">They must</a> provide answers to questions like &#x201C;what if this network call is taking too long?&#x201D;, &#x201C;what if it the response doesn&#x2019;t come back?&#x201D; and &#x201C;what if the server returns an error?&#x201D;, among others.</p>
+<p>In addition, getting to the particular payment form in this example could be the result of more branching. You must first be logged in, maybe under a certain type of user, of a certain role and specific privileges, with some pre-existing data in their profile.</p>
+
+<p>The ideas outlined in this article can hopefully lead to the implementation of a workflow that maximizes productivity, efficiency, correctness and completeness.</p>
+<p>Mapping out your application in this way can not only allow you to measure progress but also complexity. Are there too many steps? Too many screens? Are they consistent?</p>
+<p>Visualizing the evolution of this map over time can shed light into how accurate the initial preconceptions of the task at hand were. If much of the map is discovered later on, it could mean that the project was improperly scoped or understood, and it can explain why it&#x2019;s taking longer to ship.</p>
+<p>The design and creation of an application serves a clear goal: the creative representation of some data a set of users are interested in.</p>
+<p>The techniques described allow for this process to be significantly smoother, by ensuring that designer and programmer share a common guide. That being said, there&#x2019;s still a very clear repetition of effort when translating these creative ideas from our minds to the medium.</p>
+<p>As we continue to refine our understanding of the entire process, our tools will follow.</p>
+<p><em>Lorem Ipsum</em> has had a good run. Let&#x2019;s replace it with data.</p>
+
+ </div>
+
+ 
+</div>
+</body></html>

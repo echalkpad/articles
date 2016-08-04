@@ -1,0 +1,174 @@
+<!DOCTYPE html><html><head><title>How to Create Cross-Platform Desktop Apps with NW.js</title></head><body>
+<h1>How to Create Cross-Platform Desktop Apps with NW.js</h1><p><a href="https://www.codementor.io/javascript/tutorial/how-to-create-cross-platform-desktop-apps-with-nwjs" target="_new">Original URL</a></p>
+<p><blockquote>After creating two successful apps based on NW.js, Messenger for Desktop and WhatsApp for Desktop, I was told that I should create a tutorial. So here I am, telling you (almost) all there is to know&hellip;</blockquote></p>
+<div><div class="preview">
+
+
+<p>After creating two successful apps based on NW.js, <a href="http://messengerfordesktop.com/">Messenger for Desktop</a> and <a href="https://github.com/Aluxian/WhatsApp-Desktop">WhatsApp for Desktop</a>, I was told that I should create a tutorial. So here I am, telling you (almost) all there is to know about creating apps like mine.</p>
+
+<p>But first, let me introduce you to the hero: <a href="http://nwjs.io/">NW.js</a>, formerly known as node-webkit. From their GitHub <a href="https://github.com/nwjs/nw.js">repository</a>:</p>
+
+<blockquote>
+ <p>NW.js is an app runtime based on Chromium and node.js. You can write native apps in HTML and JavaScript with NW.js. It also lets you call Node.js modules directly from the DOM and enables a new way of writing native applications with all Web technologies.</p>
+</blockquote>
+
+
+
+<h2 id="0_The_Plan_0">0. The Plan</h2>
+
+<p>The first step is to find an app to port. Maybe it&#x2019;s your favourite website, or your startup&#x2019;s dashboard, or just a <a href="http://mostexclusivewebsite.com/">random website</a>. Whatever it is, it will work.</p>
+
+<p>I chose to create a desktop app for <a href="https://klout.com/">Klout</a>, an online service that uses social media analytics to measure online influence. I signed up today, and I&#x2019;m curious whether it will become my go-to sharing tool. I like the elegant UI and the colours they chose, so that&#x2019;s a plus.</p>
+
+<p>It doesn&#x2019;t seem to have HTML5 desktop notifications. I think we could inject some code into the dashboard page to check for notifications if we really wanted to.</p>
+
+<p>Another neat thing I&#x2019;m thinking of is adding a &#x201C;Share with Klout&#x201D; integration on OS X. I&#x2019;m not sure it&#x2019;s possible to do with NW.js, but with Electron it&#x2019;s possible for sure.</p>
+
+<h2 id="1_Getting_Started_1">1. Getting Started</h2>
+
+<p>We&#x2019;ll start by cloning my <a href="https://github.com/Aluxian/nwjs-starter">nwjs-starter</a> repository, which should help us get up and running quickly:</p>
+
+<pre><code class="language-language-bash language-bash">$ git clone https://github.com/Aluxian/nwjs-starter.git klout
+$ cd klout
+</code></pre>
+
+<p>I&#x2019;m going to replace Starter, which is the default name of the app, with Klout:</p>
+
+<pre><code class="language-language-bash language-bash">$ sed -i.bak "s/Starter/Klout/g" **/*.{sh,json,md,js,html,nsi,coffee,desktop}
+$ sed -i.bak "s/starter/klout/g" **/*.{sh,json,md,js,html,nsi,coffee,desktop}
+$ rm **/*.bak # remove backup files created by sed
+</code></pre>
+
+<p>This looks for <code>Starter</code> and <code>starter</code> and replaces them with <code>Klout</code> and <code>klout</code>, respectively. We also need to rename some files:</p>
+
+<pre><code class="language-language-bash language-bash">$ cd assets-linux
+$ mv icons/256/starter.png icons/256/klout.png
+$ mv icons/48/starter.png icons/48/klout.png
+$ mv icons/scalable/starter.svg icons/scalable/klout.svg
+$ mv starter.desktop klout.desktop
+</code></pre>
+
+<p>Now go to <code>src/app.html</code> and replace the <code>h1</code> line with this iframe:</p>
+
+<pre><code class="language-language-markup language-markup">&lt;iframe src="https://klout.com/login" nwdisable nwfaketop&gt;&lt;/iframe&gt;
+</code></pre>
+
+<p>The <code>nwdisable</code> attribute disables node.js support inside the iframe. <code>nwfaketop</code> will replace the default <code>window</code> global object with a custom one. I chose to show the login page directly, and it will never know it&#x2019;s running inside an iframe.</p>
+
+<p>Let&#x2019;s add some styling rules too. Remove everything inside <code>src/app.css</code> and paste this:</p>
+
+<pre><code class="language-language-css language-css">html, body, iframe {
+ margin: 0;
+ padding: 0;
+ border: none;
+ width: 100%;
+ height: 100%;
+ overflow: hidden;
+}
+</code></pre>
+
+<h2 id="2_Create_Assets_2">2. Create Assets</h2>
+
+<p>Because <a href="http://bohemiancoding.com/sketch/">Sketch</a> is my favourite design tool, I&#x2019;ll use it to create some icons for the app. I&#x2019;ll use the <code>design.sketch</code> file as a starting point.</p>
+
+<p>You can skip this step, and the app will use a generic icon, or you can download the assets I created from <a href="http://cl.ly/2s3S1U3l0i3y">here</a>.</p>
+
+<p><img src="http://blog.aluxian.com/content/images/2015/07/Screen-Shot-2015-07-07-at-00-31-36.png" alt="Klout assets"></p>
+
+<h2 id="3_Build_It_3">3. Build It</h2>
+
+<p>Make sure you have <a href="https://nodejs.org/">node.js</a> installed:</p>
+
+<pre><code class="language-language-bash language-bash">$ node --version
+$ npm --version
+</code></pre>
+
+<p>If you want to create packages for Linux, you need <a href="https://github.com/jordansissel/fpm">fpm</a>. If you are not on a Windows machine, you need to install <a href="https://www.winehq.org/">wine</a> to build for Windows.</p>
+
+<p>To create the Windows installer, you need to have the <a href="http://nsis.sourceforge.net/Main_Page">makensis</a> command in your PATH.</p>
+
+<p>On OS X, you can use gem and brew:</p>
+
+<pre><code class="language-language-bash language-bash">$ sudo gem install fpm
+$ brew install wine
+$ brew install makensis
+</code></pre>
+
+<p>Finally, it&#x2019;s time to build the app and test it. Install gulp and the node dependencies:</p>
+
+<pre><code class="language-language-bash language-bash">$ npm install -g gulp
+$ npm install 
+</code></pre>
+
+<p>Run the build task for the platform you want to run it on:</p>
+
+<pre><code class="language-language-bash language-bash">$ gulp build:osx64
+$ gulp build:linux32
+$ gulp build:linux64
+$ gulp build:win32
+</code></pre>
+
+<p>I also did a minor tweak. In <code>src/package.json</code>, I changed the width to 1080 and the height to 768.</p>
+
+<p>This is what the login screen should look like:</p>
+
+<p><img src="http://blog.aluxian.com/content/images/2015/07/klout-app-login.jpg" alt=""></p>
+
+<p>And the dashboard:</p>
+
+<p><img src="http://blog.aluxian.com/content/images/2015/07/klout-app-dashboard.jpg" alt=""></p>
+
+<p>Great job so far! :)</p>
+
+<h2 id="4_Packaging_and_Upload_4">4. Packaging and Upload</h2>
+
+<p>Again, depending on what platform you want to build for, run one of these tasks:</p>
+
+<pre><code class="language-language-bash language-bash">$ gulp pack:osx64 # dist/Klout.dmg
+$ gulp pack:linux32:deb # dist/Klout_linux32.deb
+$ gulp pack:linux64:deb # dist/Klout_linux64.deb
+$ gulp pack:win32 # dist/KloutSetup.exe
+</code></pre>
+
+<p>If you&#x2019;re on OS X, edit <code>gulpfile.coffee</code> and make the <code>pack:osx64</code> task depend on <code>build:osx64</code> instead of <code>sign:osx64</code>. Otherwise, Gulp will try to sign the app with an identity that most probably (or at least I hope so) is not in your keychain.</p>
+
+<h2 id="5_Next_Steps_5">5. Next Steps</h2>
+
+<p>You might be happy with your app as it is, and you&#x2019;ll probably just keep it for yourself or share it with the close ones. But what if, one day, you decide to publish it?</p>
+
+
+
+<p>Every time the app checks for updates, it looks in <code>src/package.json</code> for <code>manifestUrl</code>. That URL should point to a JSON file with a <code>version</code> field and an object that looks like this:</p>
+
+<pre><code class="language-language-javascript language-javascript">"packages": {
+ "osx64": "https://github.com/.../v0.1.0/Klout.dmg",
+ "win32": "https://github.com/.../v0.1.0/KloutSetup.exe",
+ "linux32": "https://github.com/.../v0.1.0/Klout_linux32.deb",
+ "linux64": "https://github.com/.../v0.1.0/Klout_linux64.deb"
+}
+</code></pre>
+
+<p>The app will download that file and compare the versions. If it&#x2019;s a newer version, it will ask the user whether they want to update. If they confirm, the app opens the download link in the browser so the user can download and install it.</p>
+
+<h3 id="electron">Electron</h3>
+
+<p>For the past weeks I&#x2019;ve been working on <a href="https://github.com/Aluxian/electron-superkit">electron-superkit</a>. It&#x2019;s just like <a href="https://github.com/Aluxian/nwjs-starter">nwjs-starter</a>: it helps you get up and running fast while offering plenty of features, but it&#x2019;s based on <a href="http://electron.atom.io/">Electron</a>.</p>
+
+<p>Electron seems to be a newer, more performant and featureful version of NW.js. It&#x2019;s being actively worked on by the awesome team that created <a href="https://atom.io/">Atom</a>.</p>
+
+<p>I like it more, and as soon as I finish Electron SuperKit I will port both Messenger and WhatsApp for Desktop to it. I recommend new users to try to learn and use Electron.</p>
+
+
+
+<p>I created a repository on my GitHub account and now I&#x2019;m running <code>gulp release</code> to upload the app there. You can download the app from the <a href="https://github.com/Aluxian/klout-desktop/releases">releases</a> page and you can get all the source code <a href="https://github.com/Aluxian/klout-desktop">here</a>.</p>
+
+<p>Let me know if I missed any steps. If you get stuck, just ask for help below. Happy coding!</p>
+
+
+
+<p>This article first appeared on my <a href="http://blog.aluxian.com/">blog</a>. Please subscribe for more!</p>
+
+
+</div>
+</div>
+</body></html>

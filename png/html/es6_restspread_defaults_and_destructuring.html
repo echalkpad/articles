@@ -1,0 +1,279 @@
+<!DOCTYPE html><html><head><title>ES6 Rest/Spread, Defaults and Destructuring</title></head><body>
+<h1>ES6 Rest/Spread, Defaults and Destructuring</h1><p><a href="http://www.datchley.name/es6-rest-spread-defaults-and-destructuring/" target="_new">Original URL</a></p>
+<p><blockquote>As I've been playing around with React and more specifically Redux these last couple of weeks, the usefulness and joy of ES6's new rest/spread '...' operator and default function arguments has become&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p>As I've been playing around with React and more specifically <a href="http://redux.js.org/">Redux</a> these last couple of weeks, the usefulness and joy of ES6's new rest/spread <code>'...'</code> operator and default function arguments has become apparent. So many of the common idioms we've used in ES5 and prior can be done now in a more elegant and explicit way. So much so, that I think they warrant a post all to themselves.</p>
+
+<h2 id="defaultfunctionarguments">Default Function Arguments</h2>
+
+<p>Functions in javascript are extremely versatile to begin with, as they are first-class objects in the language. But, unlike some other languages, having default values for function arguments in ES5 was a bit cumbersome.</p>
+
+<p>Here's a simple logarithm function to compute the logarithm of a given number for a particular base. For example, the base 10 logarithm of 1000 is 3, ie., 1000 = 10 x 10 x 10 = 10<sup>3</sup>.</p>
+
+<pre><code class="language-javascript">// get base logarithm of n 
+function log(n, base) { 
+ base = base || 10;
+ return Math.log(n) / Math.log(base);
+}
+log(1000, 10); 
+//=&gt; 2.9999999999999996 
+</code></pre>
+
+<p><small><b>Note</b>: this gets us nearly 3, as <a href="http://en.wikipedia.org/wiki/IEEE_754">IEEE 754</a> floating point rounding used in Javascript only gets us close.</small></p>
+
+<p>Here, we default the second argument, <code>base</code>, to 10 using Javascript's <code>||</code> logical OR operator, which basically says: evaluate to the first (<em>left hand</em>) expression if that expression is truthy, otherwise evaluate to the second (<em>right hand</em>) expression. So if our function is called with no explicit base, then the <code>base</code> argument is <code>undefined</code> which evaluates as falsy cause the number 10 to be assigned to <code>base</code>.</p>
+
+<p>While this gives us the ability to set default values for function arguments, it isn't very explicit. If we're reading through someone's code, we need to be looking specifically for code that does this to see that the function allows fewer arguments than it has declared.</p>
+
+<p>With ES6's default arguments, however, we can make this more explicit in the code and easier to implement. Here's our new <code>log()</code> function using default arguments and ES6 <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/Arrow_functions">arrow function expression</a> syntax.</p>
+
+<pre><code class="language-javascript">const log = (n, base=10) =&gt; Math.log(n) / Math.log(base); 
+console.log(log(1000,10)); 
+//=&gt; 2.9999999999999996 
+</code></pre>
+
+<p>We simply assign a default value to a given parameter right in the declaration. Javascript evaluates those default arguments at run time, so a new value is always produced. You can even use a function call as a way to get the default value.</p>
+
+<p>For instance, here's a function that creates an image DOM Element, allowing you to pass it styles that should be applied but using some defaults defined by another function if none are passed.</p>
+
+<pre><code class="language-javascript">// Returns a default style config object for images
+const getDefaultImgStyle = () =&gt; { 
+ return {
+ width: '100px',
+ height: '100px',
+ border: '1px solid #ccc'
+ };
+}
+
+const img = (src, styles=getDefaultImgStyle()) =&gt; { 
+ let img = document.createElement('img');
+ img.src = src;
+ Object.keys(styles).forEach((prop) =&gt; img.style[prop]=styles[prop]);
+ return img;
+}
+
+img('http://babeljs.io/images/logo.svg'); 
+//=&gt; &lt;img&gt; DOMElement with applied styles inline
+</code></pre>
+
+<p>Earlier parameter values are also available to later parameter default values as well.</p>
+
+<pre><code class="language-javascript">const numbers = (a, b = a+1, c = b+1) =&gt; { 
+ console.log(a,b,c);
+}
+numbers(3); 
+//=&gt; 3 4 5
+</code></pre>
+
+<p>These are just some of the highlights; and there's <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/Default_parameters">much more</a> to argument defaults; but let's move on to look at the spread/rest operator next.</p>
+
+<h2 id="spreadrestoperator">Spread/Rest Operator <code>...</code></h2>
+
+<p>This operator, <code>'...'</code>, has two uses, depending on the context. In the first case we'll cover the usage as a <em>spread</em> operator.</p>
+
+<p>A common idiom in Javascript is using <code>Function#apply</code> to pass an array of values as arguments to some other function. For instance, we might have a simple <code>max</code> function that can give us the highest number out of any of the numbers passed to it as arguments. (<em>this is how the <code>Math#max</code> method works to begin with, but bear with me</em>) </p>
+
+<pre><code class="language-javascript">function max() { 
+ // arguments contains all params, named + non-named
+ // we use Function#apply to pass those as individual arguments
+ return Math.max.apply(null, arguments);
+}
+max(5,8); //=&gt; 8 
+max(5,8,1,18); //=&gt; 18 
+</code></pre>
+
+<p>Here, we use <code>Function#apply</code> to pass our function's arguments, available to us in the special <code>argument</code> variable, as individual arguments to the <code>Math#max</code> method.</p>
+
+<p>In ES6, we can do it in a more explicit and useful way, without having to resort to using <code>Function#apply</code> and worry about the <em>context</em> argument which we previously passed as <code>null</code>.</p>
+
+<pre><code class="language-javascript">function max() { return Math.max(...arguments); } 
+max(5,18,1,8); 
+//=&gt; 18
+</code></pre>
+
+<p>The spread operator takes each value of the array and passes them as individual parameters to the <code>Math#max</code> method.</p>
+
+<p>But, we can use the operator again as the <em>rest</em> operator to collect all the arguments passed to our function without having to use the special <code>arguments</code> variable at all.</p>
+
+<pre><code class="language-javascript">const max = (...nums) =&gt; Math.max(...nums); 
+max(5,18,1,8); 
+//=&gt; 18
+</code></pre>
+
+<p>Using the spread/rest operator in these situations makes the code much more declarative about what arguments the function expects and how it will use them. </p>
+
+<p>It also means we don't have to use the special <code>arguments</code> variable, which isn't a real Array. Having to use <code>arguments</code> precludes us from using standard Array methods like <code>Array#slice</code>. With the rest/spread operator, we get a real Array, with all the usual methods at our disposal.</p>
+
+<p>Another example:</p>
+
+<pre><code class="language-javascript">const join = (sep, ...args) =&gt; args.join(sep); 
+join(':', "one", "two", "three"); 
+//=&gt; one:two:three
+</code></pre>
+
+<p>Had we intended to write this in ES5, we would have had to do the following:</p>
+
+<pre><code class="language-javascript">function join(sep /*, ...args*/) { 
+ var args = [].slice.call(arguments);
+ return args.join(sep);
+}
+</code></pre>
+
+<p>Our ES6 function expression is much more explicit about its surface API now; as opposed to our ES5 code, in which we, as good developers, at least documented the use of further arguments with a comment in the parameter declaration.</p>
+
+<p>One caveat with using the rest parameter in ES6 is that, just like the Highlander, there can be only one. And, it has to be the last parameter to the function. </p>
+
+<p>The following will throw a syntax error or give an <code>Unexpected token</code> error if using a transpiler like Babel.</p>
+
+<pre><code class="language-javascript">const fn = (one, ...more, last) =&gt; { /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ... _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }; 
+</code></pre>
+
+<p>Finally, consider something we do constantly in Javascript: merging two or more objects. You've likely done this with the well known <code>extend</code> method in libraries like jQuery and Underscore/LoDash.</p>
+
+<p>Here's a simple <code>extend</code> function in ES5.</p>
+
+<pre><code class="language-javascript">function extend(target /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ,source ,... */) { 
+ var args = [].slice.call(arguments, 1); 
+
+ return args.reduce(function(merged, obj) {
+ return Object.keys(obj).reduce(function(receiver, prop) {
+ if (obj.hasOwnProperty(prop)) {
+ receiver[prop] = obj[prop];
+ }
+ return receiver;
+ }, merged);
+ }, target);
+}
+
+var base = { a: 1, b: 2 }, 
+ src1 = { b: 3 },
+ src2 = { c: 4 },
+ merged;
+
+merged = extend(base, src1, src2); 
+//=&gt; { a: 1, b: 3, c: 4 }
+</code></pre>
+
+<p>We can simplify this using <code>Object#assign</code> directly.</p>
+
+<pre><code class="language-javascript">let merged = Object.assign(base, src1, src2); 
+//=&gt; { a: 1, b: 3, c: 4 }
+</code></pre>
+
+<p>But we can also perform the same operation with the spread operator as well.</p>
+
+<pre><code class="language-javascript">merged = { 
+ ...base,
+ ...src1,
+ ...src2
+ };
+//=&gt; { a: 1, b: 3, c: 4 }
+</code></pre>
+
+<p>In this case, the spread operator works to destructure each property on the object directly onto the object literal it is being applied on; and it does so in order (<em>left to right</em>) so that future destructured object property values will overwrite previously set values.</p>
+
+<p>For a great write up on rest and spread in ES6, check out Nicol&#xE1;s Bevacqua's post on the subject, <a href="https://ponyfoo.com/articles/es6-spread-and-butter-in-depth">ES6 Spread &amp; Butter in Depth</a>.</p>
+
+<h2 id="destructuring">Destructuring</h2>
+
+<p>Destructuring has been available in a number of languages and is a convenient way to pull values out of arrays or objects. </p>
+
+<p>In the left-hand side of an assignment statement, destructuring lets us use the pattern of the array or object to pull out values. </p>
+
+<p>For example:</p>
+
+<pre><code class="language-javascript">const list = [1,2,3]; 
+const obj = { one: 1, two: 2, three: 3 };
+
+let [n] = list; 
+//=&gt; n=1
+
+let [a,b,c] = list; 
+//=&gt; a=1,b=2,c=3
+
+let { one:x, two:y, three:z } = obj; 
+//=&gt; x=1, y=2, z=3
+
+// function arguments are assignment statements
+const fn = ([x,y,z]) =&gt; x+y+z; 
+fn(list); //=&gt; 6 
+</code></pre>
+
+<p>We can even access only the parts of the array or object that we want and skip others. If the array/object being destructured doesn't match the pattern used on the left-hand side, you end up with <code>undefined</code>.</p>
+
+<pre><code class="language-javascript">const list = [1,2,3]; 
+const obj = { one: 1, two: 2, three: 3 };
+
+let { one:x, ,three:z } = obj; 
+//=&gt; x=1, z=3
+
+let [x,,z] = list; 
+//=&gt; x=1, z=3
+
+let [a,b,c,d] = list; 
+//=&gt; a=1, b=2, c=3, d=undefined
+</code></pre>
+
+<p>We can even handle nested properties of arrays and objects as well. And, given that the destructuring pattern on the left-hand side coerces the values on the right-hand side to objects before extracting the value, we can access any available properties or methods on that object as well.</p>
+
+<pre><code class="language-javascript">const list = [1, [2, 3], 4]; 
+const obj = { 
+ one: 1,
+ two: 2,
+ items: [3, 4]
+};
+
+let [a, [b, c], d] = list; 
+//=&gt; a=1, b=2, c=3, d=4
+
+let { one:f, items:[g,h] } = obj; 
+//=&gt; f=1, g=3, h=4
+
+// strings are iterable as Arrays of characters
+let { length: l } = "abc"; 
+// =&gt; l=3
+</code></pre>
+
+<p>We can even use the <em>rest</em> operator in the left-hand destructuring pattern as well.</p>
+
+<pre><code class="language-javascript">const numbers = [1,2,3,4,5,6,7];
+
+let [first, ...rest] = numbers; 
+//=&gt; first=1, rest=[2,3,4,5,6,7]
+</code></pre>
+
+<p>And, we can use default values, much like our default argument values for functions, when destructuring as well.</p>
+
+<pre><code class="language-javascript">const list = [1,2]; 
+const obj = { one: 1, two: 2 };
+
+let [x,y,z=3] = list; 
+//=&gt; x=1, y=2, z=3
+
+let { one:a, two:b, three:c=3 } = obj; 
+//=&gt; a=1, b=2, c=3
+</code></pre>
+
+<p>Keep in mind that we can also use ES6's property value shorthand syntax when extracting during destructuring as well.</p>
+
+<pre><code class="language-javascript">const obj = { x: 1, y: 2, z: 3 }; 
+let { x, y, z } = obj; 
+//=&gt; x=1, y=2, z=3
+</code></pre>
+
+<p>The shorthand notation is the equivalent of the following:</p>
+
+<pre><code class="language-javascript">const obj = { x: 1, y: 2, z: 3 }; 
+let { x:x, y:y, z:z } = obj; 
+</code></pre>
+
+<p>There are so many more nuances to destructuring in ES6, such as being able to destructure and use spread to get the values of an infinite series, like a generator function; or the use of computed property values. </p>
+
+<p>For a more in depth look at the topic, check out Axel Rauschmayer's <a href="http://www.2ality.com/2015/01/es6-destructuring.html">post</a> on destructuring and his <a href="http://www.2ality.com/2015/03/destructuring-algorithm.html">follow up post</a> on the algorithm ES6 uses to implement the feature.</p>
+
+<p>Hopefully, you've seen how using destructuring and the rest/spread operator can help you simplify your code as well as be much more explicit about what that code is doing.</p>
+ 
+ </section>
+
+ </div>
+</body></html>

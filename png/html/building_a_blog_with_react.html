@@ -1,0 +1,918 @@
+<!DOCTYPE html><html><head><title>Building a Blog with React</title></head><body>
+<h1>Building a Blog with React</h1><p><a href="https://themeteorchef.com/recipes/building-a-blog-with-react/" target="_new">Original URL</a></p>
+<p><blockquote>What we're going to learn In this recipe, we'll work with HD Buff, a curated video streaming service to create a blog for their website using React. We'll see how to create a simple admin area,&hellip;</blockquote></p>
+<div><div id="recipe" class="tab-content active">
+ <h3>What we're going to learn</h3>
+ <p>In this recipe, we'll work with HD Buff, a curated video streaming service to create a blog for their website using React. We'll see how to create a simple admin area, retrieve posts, and even handle things like Markdown directly from our React components!</p>
+
+ 
+ 
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/slack-logo.svg" alt="Slack">
+ <header>
+ <h4>Join The Meteor Chef on Slack</h4>
+ <p>If you get confused or stuck while reading&#x2014;or just want to talk about Meteor&#x2014;join us on Slack! <a href="http://slack.themeteorchef.com" target="_blank">Get an invite now</a>.</p>
+ </header>
+ </div>
+ 
+
+ 
+
+<div class="note">
+ <h3>Additional Packages <i class="fa fa-warning"></i></h3>
+ <p>This recipe relies on several other packages that come as part of <a href="https://github.com/themeteorchef/base/tree/base-react">Base</a>, the boilerplate kit used here on The Meteor Chef. The packages listed below are merely recipe-specific additions to the packages that are included by default in the kit. Make sure to reference the <a href="https://themeteorchef.com/base/packages-included">Packages Included list</a> for Base to ensure you have fulfilled all of the dependencies.</p>
+</div>
+
+<h3>Prep</h3>
+
+
+
+<h3>What are we building?</h3>
+
+<p>HD Buff is a curated video streaming service (like <a href="https://mubi.com">MUBI.com</a>). It&#x2019;s a really small service built by three enthusiastic film professionals that focuses on all the films you&#x2019;ve never seen (as long as they&#x2019;re available in HD). They&#x2019;re looking to start a blog to keep up with their customers and asked us how to get it done. During our initial meetings, they mentioned that they&#x2019;ll want to extend its feature set in the long-run, but for now they just need a quick, simple way to write posts.</p>
+
+<p>In this recipe, we&#x2019;ll be helping the HD Buff crew to build a simple blog using Meteor and React. In terms of features, they said as long as someone can log in, write a post, and customers can sort those posts by tags later, they&#x2019;ll be happy. Oh, and they said Markdown is a <em>must-have</em>.</p>
+
+<p>Before we get to work, here&#x2019;s a quick example of what we&#x2019;re after:</p>
+
+<figure>
+ <img src="https://tmc-post-content.s3.amazonaws.com/hd-buff-demo.gif" alt="A simple blog for HD Buff.">
+ <figcaption>A simple blog for HD Buff.</figcaption>
+</figure>
+
+<p>Ready to get to work? Let&#x2019;s do it!</p>
+
+<h3>Ingredients</h3>
+
+<p>Before we start building, make sure that you&#x2019;ve installed the following packages and libraries in your application. We&#x2019;ll use these at different points in the recipe, so it&#x2019;s best to install these now so we have access to them later.</p>
+
+<h4>Meteor packages</h4>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add ongoworks:speakingurl
+</code></pre>
+
+<p>We&#x2019;ll rely on the <code>ongoworks:speakingurl</code> package to help us generate URL friendly slugs based on our <code>post-titles-like-this</code>.</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add themeteorchef:commonmark
+</code></pre>
+
+<p>We&#x2019;ll use the <code>themeteorchef:commonmark</code> package to help us parse the <a href="https://daringfireball.net/projects/markdown/">Markdown</a> posts will be written with on the client.</p>
+
+<p class="block-header">Terminal</p>
+
+<pre><code class="language-bash">meteor add momentjs:moment
+</code></pre>
+
+<p>To help us parse dates on posts, we&#x2019;ll rely on the <code>momentjs:moment</code> package.</p>
+
+<h3>Setting up an auth flow</h3>
+
+<p>To get us up and running, our first task will be to set up a basic authentication workflow. We want to organize our routes so that only members of the HD Buff team can get access to creating new posts and editing existing ones. To do this, we&#x2019;re going to rely on creating an <code>App</code> component in React that will determine when and where users should be routed.</p>
+
+<p>We&#x2019;ve already <a href="https://github.com/themeteorchef/building-a-blog-with-react/tree/master/code/both/routes">set up some routes</a> (we&#x2019;ve split these into two groups: <code>public</code> and <code>authenticated</code>), so let&#x2019;s focus on building out the <code>App</code> component each of the routes is using to render the view. If you&#x2019;re not familiar with this pattern, take a peek at <a href="https://themeteorchef.com/snippets/authentication-with-react-and-flow-router/">this snippet</a> which will walk you through all of the finer details of what we&#x2019;ll cover below.</p>
+
+<p>To get started, let&#x2019;s create our <code>App</code> component now.</p>
+
+<p class="block-header">/client/components/layout/app.jsx</p>
+
+<pre><code class="language-javascript">App = React.createClass({
+ mixins: [ ReactMeteorData ],
+ getMeteorData() {
+ return {
+ loggingIn: Meteor.loggingIn(),
+ hasUser: !!Meteor.user(),
+ isPublic( route ) {
+ return [
+ 'index',
+ 'singlePost',
+ 'tagIndex',
+ 'login',
+ 'recoverPassword',
+ 'resetPassword',
+ 'notFound'
+ ].indexOf( route ) &gt; -1;
+ },
+ canView() {
+ return this.isPublic( FlowRouter.getRouteName() ) || !!Meteor.user();
+ }
+ };
+ },
+ getView() {
+ return this.data.canView() ? this.props.yield : &lt;Login /&gt;;
+ },
+ render() {
+ return &lt;div className="app-root"&gt;
+ &lt;AppHeader hasUser={ this.data.hasUser } /&gt;
+ &lt;div className="container"&gt;
+ { this.data.loggingIn ? &lt;Loading /&gt; : this.getView() }
+ &lt;/div&gt;
+ &lt;/div&gt;;
+ }
+});
+</code></pre>
+
+<p>Lots of code! Don&#x2019;t panic. Let&#x2019;s focus down in the <code>render()</code> method of our component first. Here, we&#x2019;re working to determine <em>what</em> the user should be able to see. As this <code>App</code> component is used for every route in the app, we can trust that it will always be the first &#x201C;stopping point&#x201D; for users. Because of this, here, we can implement the necessary functionality to decide whether or not they can see a certain page or not.</p>
+
+<p>The part we want to pay attention to is <code>{ this.data.loggingIn ? &lt;Loading /&gt; : this.getView() }</code>. In this one line, we&#x2019;re asking the question &#x201C;is the app currently logging in a user?&#x201D; If someone <em>is</em> being logged in, we want to display the <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/global/loading.jsx"><code>&lt;Loading /&gt;</code></a> component for them (a simple SVG graphic that we <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/stylesheets/components/global/_loading.scss">animate with CSS</a>). If not, we want to fire the <code>getView()</code> method we&#x2019;ve defined up above in the component.</p>
+
+<p>Up above, <code>getView()</code> is doing something similar to what we&#x2019;re doing in our <code>render()</code> method. At this point, we&#x2019;re asking <em>another</em> question: &#x201C;can this person view the page they&#x2019;re trying to access?&#x201D; If the answer is yes, we reveal the page by returning <code>this.props.yield</code> (remember, from the current route, this is where we&#x2019;re telling <code>ReactLayout.render()</code> where to render the component being passed). If we went to <code>/login</code>, <code>this.props.yield</code> would equal the <code>&lt;Login /&gt;</code> component. Make sense?</p>
+
+<p>Conversely, if we get a negative response from <code>this.data.canView()</code>, we simply reveal the <code>&lt;Login /&gt;</code> component in place of the requested route/component. Wait, what? This is a bit confusing at first. While you might expect us to want to perform a redirect to <code>/login</code> here, it&#x2019;s much easier to just reveal the <code>&lt;Login /&gt;</code> component directly instead. Why? Well, consider that if we do this, the URL doesn&#x2019;t change in the browser&#x2019;s navigation bar.</p>
+
+<p>So, if we&#x2019;re trying to access a protected route like <code>/posts</code>, when the user logs in (using the form we&#x2019;ve revealed via the <code>&lt;Login /&gt;</code> component), they will automatically get the component intended for the <code>/posts</code> route. Let that sink in. The basic idea is that by using this pattern, we&#x2019;re removing the need to store <em>where</em> the user was headed if we determine they need to login. Instead, we let the browser do the work and simply &#x201C;open the gates&#x201D; once we&#x2019;ve authenticated the user. Pretty neat, eh?</p>
+
+<h4>Wiring up <code>canView()</code> and <code>isPublic()</code></h4>
+
+<p>With all of this in mind, the next question is, &#x201C;how are <code>this.data.canView()</code> and <code>this.data.isPublic()</code> working?&#x201D; This is where everything in our <code>App</code> component comes together. In the <code>canView()</code> method, we&#x2019;re asking whether or not the current route name is considered &#x201C;public&#x201D; (meaning it&#x2019;s accessible to anyone), or, if a user is currently logged in (using <code>!!</code> to convert the result of <code>Meteor.user()</code>&#x2014;an object&#x2014;to a <code>Boolean</code>). If either of these return <code>true</code>, we return the requested view/component.</p>
+
+<p>The magic of this happens inside of the <code>isPublic()</code> method. Notice that we&#x2019;re passing in the current route name via <code>FlowRouter.getRouteName()</code>. With this, we simply take the value and test it against an array of route names (pay attention, these are the <code>name</code> values defined on our routes, not the paths), seeing if the passed value exists in the array. If it <em>does</em>, this means that the route is public and okay to access. If it <em>doesn&#x2019;t</em> exist, that means the route is protected and we should defer to <code>Meteor.user()</code> to see if a user is logged in. If they <em>are</em>, they see the protected route as expected. If not, they get the <code>&lt;Login /&gt;</code> component lik we outlined above!</p>
+
+<p>With this in place, we now have a functioning auth flow for our app. This means that anyone from HD Buff can login and get access to the editor we&#x2019;ll build next, but the public is kept out. Nice!</p>
+
+<div class="note">
+ <h3>Holy components, Batman! <i class="fa fa-warning"></i></h3>
+ <p>We&#x2019;ve taken a decidely shorter path to explaining the organization of our authentication flow. You may be wondering, &#x201C;but what about that <code>&lt;AppHeader /&gt;</code> component?&#x201D; Throughout this recipe, we may skip over <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/global/app-header.jsx">components like this</a>, so make sure to check the <a href="https://github.com/themeteorchef/building-a-blog-with-react">source on GitHub</a> if something isn&#x2019;t clear. <strong>If the concepts being used are not clear, make sure to defer to the links in the &#x201C;Additional knowledge required&#x201D; list</strong> in the Prep section of this post up top. These guides will help you to understand what&#x2019;s happening here.</p>
+</div>
+
+<h3>Building the editor</h3>
+
+<p>Next up, we need to implement the editor where the HD Buff team will actually manage content on their blog. This will require three steps: adding the ability to list existing posts, the ability to create new posts, and the ability to edit posts in a form. Before we start our work on these components, though, we need to set up a collection where all of our data will live. To help us out later, we&#x2019;ll be using some Schema-foo to automate the creation of some of the data we&#x2019;ll need.</p>
+
+<h4>Setting up a collection and schema</h4>
+
+<p>Let&#x2019;s get our collection set up now. To start, let&#x2019;s get a simple definition in place and lock down our allow/deny rules (this will help us to keep the client secure and force all database operations to happen on the server).</p>
+
+<p class="block-header">/collections/posts</p>
+
+<pre><code class="language-javascript">Posts = new Mongo.Collection( 'posts' );
+
+Posts.allow({
+ insert: () =&gt; false,
+ update: () =&gt; false,
+ remove: () =&gt; false
+});
+
+Posts.deny({
+ insert: () =&gt; true,
+ update: () =&gt; true,
+ remove: () =&gt; true
+});
+</code></pre>
+
+<p>Simple enough! Here we create our new collection assigning it to the global variable <code>Posts</code> and then set up our <code>allow</code> and <code>deny</code> rules. Again, this is a security practice. Here, we&#x2019;re saying that we want to deny <em>all</em> database operations on the client and we do not want to allow <em>any</em> database operations on the client (specifically for our <code>Posts</code>) collection. This means that later, we&#x2019;ll need to use Meteor methods in order to manage our database. We do this because allow and deny rules are finicky and error prone. Using method&#x2019;s does add a little work to our plate, but gives us peace of mind for later.</p>
+
+<p>Next up, we need to define a schema. For this, we&#x2019;re going to rely on the <a href="https://themeteorchef.com/snippets/using-the-collection2-package/">aldeed:collection2</a> package that comes with <a href="https://github.com/themeteorchef/base/tree/base-react">Base</a>. Because some of the rules here are a little more complicated than others, let&#x2019;s add the basic ones first and then pepper in the more complicated stuff.</p>
+
+<p class="block-header">/collections/posts.js</p>
+
+<pre><code class="language-javascript">let PostsSchema = new SimpleSchema({
+ "published": {
+ type: Boolean,
+ label: "Is this post published?",
+ autoValue() {
+ if ( this.isInsert ) {
+ return false;
+ }
+ }
+ },
+ "updated": {
+ type: String,
+ label: "The date this post was last updated on.",
+ autoValue() {
+ return ( new Date() ).toISOString();
+ }
+ },
+ "title": {
+ type: String,
+ label: "The title of this post.",
+ defaultValue: "Untitled Post"
+ },
+ "content": {
+ type: String,
+ label: "The content of this post.",
+ optional: true
+ },
+ "tags": {
+ type: [ String ],
+ label: "The tags for this post.",
+ optional: true
+ }
+});
+
+Posts.attachSchema( PostsSchema );
+</code></pre>
+
+<p>Okay! Here, we have the basic parts of our schema. <strong>This is not all of the fields we&#x2019;ll need</strong>, just the ones with simple rulesets. Here, <code>published</code> is being used to determine whether or not the current post is published. This is a <code>Boolean</code> value, meaning it&#x2019;s either <code>true</code> (is published) or <code>false</code> (is not published). Notice that protect our authors, when we insert a new post we&#x2019;re automatically setting the value of this field to <code>false</code>. Neat, eh? This means that no matter what, if we insert a new post it will have its published value set to <code>false</code>. They&#x2019;ll thank us later!</p>
+
+<p>Next, <code>updated</code> is doing something similar, however, setting the current date as an <a href="https://en.wikipedia.org/wiki/ISO_8601">ISO 8601</a> string. A little further down, <code>title</code> and <code>content</code> are just going to be simple <code>String</code> values. For <code>tags</code>, this will just be validating as an <code>Array</code> of <code>String</code>s. Notice that both <code>content</code> and <code>tags</code> are being made optional. Why&#x2019;s that? Well, technically we&#x2019;ll be allowing our authors to create new posts <em>without</em> any content or tags. While this isn&#x2019;t likely to happen all of the time, we may find authors wanting to save a post idea but not publish it yet (remember, posts are <em>not</em> published by default). Finally, to save us some time, notice that we&#x2019;ve already attached our schema to our <code>Posts</code> collection.</p>
+
+<p>Now for the tricky part! Right now the HD Buff team isn&#x2019;t terribly concerned about content owernship. They&#x2019;ve alluded to the idea that whoever last touched a post is going to be considered the owner. To make our lives easy, we can piggyback on <code>autoValue()</code> again, this time however, setting the author name automatically. Let&#x2019;s add it in:</p>
+
+<p class="block-header">/collections/posts.js</p>
+
+<pre><code class="language-javascript">let PostsSchema = new SimpleSchema({
+ "published": {
+ type: Boolean,
+ label: "Is this post published?",
+ autoValue() {
+ if ( this.isInsert ) {
+ return false;
+ }
+ }
+ },
+ "author": {
+ type: String,
+ label: "The ID of the author of this post.",
+ autoValue() {
+ let user = Meteor.users.findOne( { _id: this.userId } );
+ if ( user ) {
+ return `${ user.profile.name.first } ${ user.profile.name.last }`;
+ }
+ }
+ },
+ [...]
+});
+</code></pre>
+
+<p>Nothing <em>too</em> crazy. Here, we&#x2019;re automatically setting the value of the <code>author</code> field on <em>any</em> changes to posts (inserts, updates, etc.) with the name of the current user. To get their name, notice that we take <code>this.userId</code> (this is automatically provided by the collection2 package) and pass it to a call to <code>Meteor.users.findOne()</code>. From there, if we get a user back we grab the <code>first</code> and <code>last</code> name of the user from their <code>profile</code>&#x2019;s <code>name</code> property and concatenate them into a String using ES2015&#x2019;s <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/template_strings">template strings</a> feature. Phew! Now, if &#x201C;Joe Buff&#x201D; is logged in and creates a new post (or edits an existing one), he will be set as the author. If &#x201C;Jane Buff&#x201D; does the same, <em>she</em> will be set as the author! Pretty slick.</p>
+
+<p>Okay. Just one more of these to knock out and our schema is ready. This may be frustrating, but realize that we&#x2019;re saving ourselves a lot of effort later! Next, we need to account for duplicate <code>slug</code> values (<code>the-title-formatted-for-a-url-like-this</code>) for our posts automatically. Let&#x2019;s take a look:</p>
+
+<p class="block-header">/collections/posts.js</p>
+
+<pre><code class="language-javascript">let PostsSchema = new SimpleSchema({
+ [...]
+ "title": {
+ type: String,
+ label: "The title of this post.",
+ defaultValue: "Untitled Post"
+ },
+ "slug": {
+ type: String,
+ label: "The slug for this post.",
+ autoValue() {
+ let slug = this.value,
+ existingSlugCount = Posts.find( { _id: { $ne: this.docId }, slug: slug } ).count(),
+ existingUntitled = Posts.find( { slug: { $regex: /untitled-post/i } } ).count();
+
+ if ( slug ) {
+ return existingSlugCount &gt; 0 ? `${ slug }-${ existingSlugCount + 1 }` : slug;
+ } else {
+ return existingUntitled &gt; 0 ? `untitled-post-${ existingUntitled + 1 }` : 'untitled-post';
+ }
+ }
+ },
+ [...]
+});
+</code></pre>
+
+<p>Don&#x2019;t give up! This is a bit trickier than our other <code>autoValue()</code>s but not too scary. Here, our goal is to determine whether or not a post with the same slug as the one currently being managed. This means that if we have a post called <code>my-great-film-review</code> and then try to add another with the same title, the slug will be set to <code>my-great-film-review-1</code>. This prevents overwriting and collisions in our URLs later and encourages authors to use more unique post titles.</p>
+
+<p>To do this, we&#x2019;re creating two queries and counting the number of posts returned <em>by</em> those queries. First, we check whether the current slug already exists in the database (we use a <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions">JavaScript RegEx</a> to do this)&#x2014;notice we filter out this post from the results to avoid renaming its slug with <code>{ $ne: this.docId }</code>&#x2014;returning the number of existing posts with the same slug. Read that a few times! It&#x2019;s a bit of a brain buster. In essence, this returns us the number of posts that have the same <code>slug</code> value as the post being inserted or updated, excluding that post from the count.</p>
+
+<p>Next, we do something very similar but this time for posts with the slug <code>untitled-post</code>. Wait, what? As we&#x2019;ll see in a little bit, whenever we create a new post we&#x2019;ll be giving it the title &#x201C;Untitled Post&#x201D; to start with. Here, we account for this and ensure that the slug value is handled properly. Down below, then, we check whether or not a slug is being passed. If one <em>is</em> passed, we use our <code>existingSlugCount</code> suffixing the count plus one of matching posts to the returned value. If no posts exist, we return the value as-is.</p>
+
+<p>If we <em>do not</em> have a slug passed (meaning we&#x2019;re creating a new post and want this to be automated), we check our <code>existingUntitled</code> count and update the slug in the exact same way we handle existing slugs. Woah. This is a pretty powerful chunk of code, so read it over a few times! This will save us and the HD Buff team a lot of frustration later.</p>
+
+<p>Phew. We&#x2019;re making good progress but we still have a lot to do. Let&#x2019;s keep chuggin'. Next up, we need to implement our ability to insert new posts and then display a list of those posts for editors to select from.</p>
+
+<h4>Creating and listing posts for editors</h4>
+
+<p>All right! Now we&#x2019;re getting in to the meat of this recipe. Now, we need a way to do two things: create a new posts and list all of the posts in the system for the HD Buff team. To start, let&#x2019;s scope out the basic structure of our component along with its listing feature. Pay close attention as we&#x2019;ll be making reference to a few things that we won&#x2019;t cover directly but will link up to the code for.</p>
+
+<p class="block-header">/client/components/views/posts-list.jsx</p>
+
+<pre><code class="language-javascript">PostsList = React.createClass({
+ mixins: [ ReactMeteorData ],
+ getMeteorData() {
+ Meteor.subscribe( 'postsList' );
+
+ return {
+ posts: Posts.find().fetch().map( ( post ) =&gt; {
+ return { uid: post._id, href: `/posts/${ post._id }/edit`, label: post.title };
+ })
+ };
+ },
+ renderPostsList() {
+ if ( this.data.posts.length &gt; 0 ) {
+ return &lt;ListGroup linked={ true } items={ this.data.posts } /&gt;;
+ } else {
+ return &lt;WarningAlert&gt;No posts found.&lt;/WarningAlert&gt;;
+ }
+ },
+ render() {
+ return &lt;GridRow&gt;
+ &lt;GridColumn className="col-xs-12 col-sm-8 col-sm-offset-2"&gt;
+ &lt;SuccessButton type="button" label="New Post" onClick={ this.handleNewPost } /&gt;
+ &lt;PageHeader size="h4" label="Posts" /&gt;
+ { this.renderPostsList() }
+ &lt;/GridColumn&gt;
+ &lt;/GridRow&gt;;
+ }
+});
+</code></pre>
+
+<p>A few things to noice. First, down in our <code>render()</code> method, in order to render our list of posts we&#x2019;re calling to a method <code>renderPostsList()</code> we&#x2019;ve defined further up in our component. Our goal here is to conditionally display either a list of posts&#x2014;if any exist&#x2014;or, a message that reads &#x201C;No posts found.&#x201D; Up in the <code>renderPostsList()</code> method, we can see this taking place. Inside, we begin by testing the length of <code>this.data.posts</code> (we&#x2019;ll cover this in detail soon).</p>
+
+<p>If it&#x2019;s greater than <code>0</code> (meaning posts were found), we go ahead and render the <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/generic/list-group.jsx"><code>&lt;ListGroup /&gt;</code></a> component in <a href="https://github.com/themeteorchef/base/tree/base-react">Base</a>. Alternatively, if we <em>do not</em> find any posts in the database, we display the <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/generic/alerts/warning-alert.jsx"><code>&lt;WarningAlert /&gt;</code></a> component (a stylized variation of the <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/generic/alerts/alert.jsx"><code>&lt;Alert /&gt;</code></a> component. Review that wiring a few times. All we&#x2019;re doing is rendering out the list of posts, or, display an alert message.</p>
+
+<p>Let&#x2019;s review how the data is getting into the component to make sense of this. Up in the <code>getMeteorData()</code> method (this is the one that we get from Meteor&#x2019;s <code>react</code> package and is responsible for reactivity in the component), we begin to fetch data by subscribing to a publication called <code>postsList</code>. Real quick, let&#x2019;s see what that&#x2019;s returning.</p>
+
+<p class="block-header">/server/publications/posts-list.js</p>
+
+<pre><code class="language-javascript">Meteor.publish( 'postsList', () =&gt; {
+ return Posts.find();
+});
+</code></pre>
+
+<p>Un-der-whel-ming! Pretty simple here. Because we&#x2019;re on the admin side of things, we simply want to return <em>all</em> of the posts in the database. This means that all authors should have access to <em>all</em> posts. Remember, ownership isn&#x2019;t a priority for HD Buff right now; they just want to get posts published without a lot of fuss. So far so good?</p>
+
+<p>Back in our <code>&lt;PostsList /&gt;</code> component, let&#x2019;s review how we&#x2019;re returning this data from <code>getMeteorData()</code>.</p>
+
+<p class="block-header">/client/components/views/posts-list.jsx</p>
+
+<pre><code class="language-javascript">PostsList = React.createClass({
+ mixins: [ ReactMeteorData ],
+ getMeteorData() {
+ Meteor.subscribe( 'postsList' );
+
+ return {
+ posts: Posts.find().fetch().map( ( post ) =&gt; {
+ return { uid: post._id, href: `/posts/${ post._id }/edit`, label: post.title };
+ })
+ };
+ },
+ [...]
+});
+</code></pre>
+
+<p>Here, we&#x2019;re returning a <code>posts</code> property (this will be accessible via <code>this.data.posts</code> elsewhere in the component) and assigning it to a query to find all of the posts returned from our publication. Next, we <code>fetch()</code> that list so we get it back as an <code>Array</code> (remember, by default we get a MongoDB cursor from <code>Posts.find()</code>) and then we <code>map()</code> over that array. Phew! Inside of our map, we give each of our returned posts a slightly different structure, including a <code>uid</code>, <code>href</code>, and <code>label</code> property. What gives?</p>
+
+<p>What we&#x2019;re doing here is formatting the array of posts being returned from <code>this.data.posts</code> to match the API of our <code>&lt;ListGroup /&gt;</code> component. It will be expecting <code>uid</code>, <code>href</code>, and <code>label</code> as props, so we take care of this here so the component can just handle the render. A little strange, so spend some time with the connection between this and the <code>&lt;ListGroup /&gt;</code> we&#x2019;re outputting when we have posts.</p>
+
+<p>Okay, moving right along. Now for something a little easier: creating new posts.</p>
+
+<h4>Creating new posts</h4>
+
+<p>This part is super simple. Let&#x2019;s look back at our <code>render()</code> method for our posts list. Notice that inside, we have a button with an <code>onClick</code> prop that&#x2019;s wired up to a method on our component called <code>handleNewPost()</code>. The idea here is that when we click this button, we&#x2019;ll fire this method which will call to the server for us. Real quick, here are the essentials:</p>
+
+<p class="block-header">/client/components/views/posts-list.jsx</p>
+
+<pre><code class="language-javascript">PostsList = React.createClass({
+ [...]
+ handleNewPost() {
+ Meteor.call( 'newPost', ( error, postId ) =&gt; {
+ if ( error ) {
+ Bert.alert( error.reason, 'danger' );
+ } else {
+ FlowRouter.go( `/posts/${ postId }/edit` );
+ Bert.alert( 'All set! Get to typin\'', 'success' );
+ }
+ });
+ },
+ [...]
+ render() {
+ return &lt;GridRow&gt;
+ &lt;GridColumn className="col-xs-12 col-sm-8 col-sm-offset-2"&gt;
+ &lt;SuccessButton type="button" label="New Post" onClick={ this.handleNewPost } /&gt;
+ &lt;PageHeader size="h4" label="Posts" /&gt;
+ { this.renderPostsList() }
+ &lt;/GridColumn&gt;
+ &lt;/GridRow&gt;;
+ }
+});
+</code></pre>
+
+<p>For creating a new post, we&#x2019;re not taking in any arguments from the user. Remember all of that &#x201C;Untitled Post&#x201D; beeswax from earlier? This is where it comes together. Let&#x2019;s take a peek at this <code>newPost</code> method we&#x2019;re dialing up on the server.</p>
+
+<p class="block-header">/server/methods/insert/posts.js</p>
+
+<pre><code class="language-javascript">Meteor.methods({
+ newPost() {
+ return Posts.insert( {} );
+ }
+});
+</code></pre>
+
+<p>Wait&#x2026;hahahaha. Yep. That is seriously <em>it</em>. All of that work we did in our schema is paying off right here. How the heck is this working? Well, consider that for all of the fields in our schema, each either has:</p>
+
+<ol>
+<li>A default value.</li>
+<li>An automatically set value.</li>
+<li>Is optional.</li>
+</ol>
+
+<p>Combined, this means that when we insert a &#x201C;blank&#x201D; object into our collection, our schema is kicking in and automatically populating the required fields for us! Get outta here. Nope. Serious. Grab a pen and write home about this. You&#x2019;re officially a badass! Isn&#x2019;t this cool? Go ahead, beep your own horn.</p>
+
+<p>If we look back at our component real quick, we can see that we&#x2019;re taking the returned post ID from our method (remember, when we call .insert() on a collection without a callback, Meteor returns the new document&#x2019;s <code>_id</code> value) and redirecting to the &#x201C;editor&#x201D; view for working on our post <code>FlowRouter.go( '/posts/${ postId }/edit' );</code>. This is our next stop! Now we need to wire up our editor to actually manage and publish posts.</p>
+
+<h4>Editing content</h4>
+
+<p>This is going to take <em>a lot</em> of work. Don&#x2019;t let that spook you! In honesty, our <code>&lt;Editor /&gt;</code> component looks scarier than it actually is because we&#x2019;re using up a lot of vertical space to list out props on our components. To step through everything efficiently, we&#x2019;re going to start by wiring up our data for our component <em>first</em> and then discuss how we&#x2019;re making use of it. There&#x2019;s a lot of repetition in concepts here, so pay close attention to the first few to make sure you have a solid grasp on what we&#x2019;re doing.</p>
+
+<p class="block-header">/client/components/views/editor.jsx</p>
+
+<pre><code class="language-javascript">Editor = React.createClass({
+ mixins: [ ReactMeteorData ],
+ getMeteorData() {
+ Meteor.subscribe( 'editor', this.props.post );
+
+ return {
+ post: Posts.findOne( { _id: this.props.post } )
+ };
+ },
+ [...]
+ render() {
+ if ( !this.data.post ) { return &lt;div /&gt;; }
+
+ return [...]
+ }
+});
+</code></pre>
+
+<p>Easy does it to start! Notice that in terms of loading in data, this is all pretty simplistic. First, up in <code>getMeteorData()</code>, notice that we&#x2019;re pulling in the value <code>this.props.post</code> in order to subscribe to our data and filter down <em>which</em> post we&#x2019;re currently editing. But wait, where is that coming from? Our route! Let&#x2019;s take a quick peek to see how it&#x2019;s being passed down.</p>
+
+<p class="block-header">/both/routes/authenticated.jsx</p>
+
+<pre><code class="language-javascript">[...]
+
+authenticatedRoutes.route( '/posts/:_id/edit', {
+ name: 'editor',
+ action( params ) {
+ ReactLayout.render( App, { yield: &lt;Editor post={ params._id } /&gt; } );
+ }
+});
+</code></pre>
+
+<p>In our <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/both/routes/authenticated.jsx">authenticated routes group</a>, we&#x2019;re defining our path (the one we redirected to in the previous step after creating a post and linked each of our list items to) to our editor. Notice that in the <code>action()</code> method, we&#x2019;re pulling in the <code>params</code> object for the route and on our invocation of <code>&lt;Editor /&gt;</code>, we&#x2019;re passing <code>post={ params._id }</code>, or, the <code>_id</code> value from our URL! By passing this into our props, whenever our URL changes to a new post, our component will automatically get access to its <code>_id</code> straight from the router. Swish.</p>
+
+<p>Back in our <code>&lt;Editor /&gt;</code>, then, we subscribe to our <code>editor</code> publication passing in the post ID and then&#x2014;to compensate for React&#x2019;s speed when moving between views&#x2014;pass the ID to our <code>Posts.findOne()</code> as well. This ensures that when we go to a different post, we don&#x2019;t get stuck on the previous one because that&#x2019;s what our component sees in the minimongo collection (the result we&#x2019;d get if we left this as a plain <code>Posts.findOne()</code>). Safety first!</p>
+
+<p>Speaking of safety, we also need to account for our data not being ready down in our <code>render()</code> method. Notice that we first check to see if <code>this.data.post</code> is defined and if it&#x2019;s <em>not</em>, we return an empty div until it <em>is</em> ready. Once it <em>is</em> ready, we return our component&#x2019;s actual markup (we&#x2019;ll do this next). So far so good? Okay, <strong>strap on your goggles, we&#x2019;re going downhill at full speed from here</strong>!</p>
+
+<p class="block-header">/client/components/views/editor.jsx</p>
+
+<pre><code class="language-javascript">Editor = React.createClass({
+ [...]
+ generateSlug( event ) {
+ let { setValue } = ReactHelpers,
+ form = this.refs.editPostForm.refs.form,
+ title = event.target.value;
+
+ setValue( form, '[name="postSlug"]', getSlug( title, { custom: { "'": "" } } ) );
+ },
+ getLastUpdate() {
+ if ( this.data ) {
+ let { formatLastUpdate } = ReactHelpers,
+ post = this.data.post;
+
+ return `${ formatLastUpdate( post.updated ) } by ${ post.author }`;
+ }
+ },
+ getTags() {
+ let post = this.data.post;
+
+ if ( post &amp;&amp; post.tags ) {
+ return post.tags.join( ', ' );
+ }
+ },
+ handleSubmit( event ) {
+ event.preventDefault();
+ },
+ render() {
+ if ( !this.data.post ) { return &lt;div /&gt;; }
+
+ return &lt;GridRow&gt;
+ &lt;GridColumn className="col-xs-12 col-sm-8 col-sm-offset-2"&gt;
+ &lt;PageHeader size="h4" label="Edit Post" /&gt;
+ &lt;Form ref="editPostForm" id="edit-post" className="edit-post" validations={ this.validations() } onSubmit={ this.handleSubmit }&gt;
+ &lt;p className="updated-date"&gt;
+ &lt;strong&gt;Last Updated:&lt;/strong&gt; { this.getLastUpdate() }
+ &lt;/p&gt;
+ &lt;FormGroup&gt;
+ &lt;FormControl
+ style="checkbox"
+ name="postPublished"
+ id="#post-published"
+ label="Published?"
+ defaultValue={ this.data.post &amp;&amp; this.data.post.published }
+ /&gt;
+ &lt;/FormGroup&gt;
+ &lt;FormGroup&gt;
+ &lt;FormControl
+ showLabel={ false }
+ style="input"
+ type="text"
+ name="postTitle"
+ label="Title"
+ onChange={ this.generateSlug }
+ defaultValue={ this.data.post &amp;&amp; this.data.post.title }
+ /&gt;
+ &lt;/FormGroup&gt;
+ &lt;FormGroup&gt;
+ &lt;FormControl
+ disabled={ true }
+ showLabel={ false }
+ style="input"
+ type="text"
+ name="postSlug"
+ label="Slug"
+ defaultValue={ this.data.post &amp;&amp; this.data.post.slug }
+ /&gt;
+ &lt;/FormGroup&gt;
+ &lt;FormGroup&gt;
+ &lt;FormControl
+ showLabel={ false }
+ style="textarea"
+ name="postContent"
+ label="Content"
+ defaultValue={ this.data.post &amp;&amp; this.data.post.content }
+ /&gt;
+ &lt;/FormGroup&gt;
+ &lt;FormGroup&gt;
+ &lt;FormControl
+ showLabel={ false }
+ style="input"
+ type="text"
+ name="postTags"
+ label="Tags"
+ defaultValue={ this.getTags() }
+ /&gt;
+ &lt;/FormGroup&gt;
+ &lt;FormGroup&gt;
+ &lt;SuccessButton type="submit" label="Save Post" /&gt;
+ &lt;/FormGroup&gt;
+ &lt;/Form&gt;
+ &lt;/GridColumn&gt;
+ &lt;/GridRow&gt;;
+ }
+});
+</code></pre>
+
+<p>Seriously?! I warned you! We&#x2019;ve got a lot going on here so let&#x2019;s work our way through it. First, the basics. Down in our <code>render()</code> method, let&#x2019;s inspect each of the <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/generic/forms/form-control.jsx"><code>&lt;FormControl /&gt;</code></a> components being added. The part we want to pay attention to on each, here, is the <code>defaultValue</code> property. Notice that for the first four fields we&#x2019;re rendering, we&#x2019;re setting this equal to <code>this.data.post &amp;&amp; this.data.post.&lt;someProperty&gt;</code>. What gives?</p>
+
+<p>This is a trick picked up from reader <a href="https://twitter.com/patrickml1">Patrick Lewis</a>. While we may expect this to return a <code>Boolean</code> value, in JSX, the interpretation is to say if both of these return true (exist), then <em>return</em> the last value in the chain. This helps us to avoid a bunch of ternary operators littering our code. It&#x2019;s a bit cryptic the first time you see it, but once you start to use it you won&#x2019;t want to go back!</p>
+
+<p>What this all translates to, then, is that we&#x2019;re setting the default value for each of our input fields <em>if</em> a value exists for that field on <code>this.data.post</code>. This covers two scenarios: editing a new post we just created with <em>some data</em> and coming back later to edit a post with everything. If you&#x2019;ve been having trouble wrapping your head around the importance of components and React, this is it: extreme frugality in respect to reusing interface components! This is like <a href="https://www.youtube.com/watch?v=8lFWTGog__I">extreme couponing</a> for developers.</p>
+
+<p>For our final input&#x2014;where we&#x2019;ll render a list of tags&#x2014;we make a call to a method up above <code>this.getTags()</code>. It&#x2019;s pretty simple but important, so let&#x2019;s take a closer look.</p>
+
+<p class="block-header">/client/components/views/editor.jsx</p>
+
+<pre><code class="language-javascript">getTags() {
+ let post = this.data.post;
+
+ if ( post &amp;&amp; post.tags ) {
+ return post.tags.join( ', ' );
+ }
+}
+</code></pre>
+
+<p>Because our list of tags will be stored as an <em>array</em>, when returning it back to the editor, we need to &#x201C;prettify it&#x201D; as a string. For example, we&#x2019;re expecting something like this <code>[ 'tacos', 'burritos', 'sandwiches' ]</code> but want to set the value of our tags input to <code>tacos, burritos, sandwiches</code>. Using this method <code>getTags()</code>, we accomplish this by pulling in the post data and if we discoer it has tags set, use a JavaScript <code>.join( ', ' )</code> to return our array as a comma-separated string!</p>
+
+<div class="note">
+ <h3>Why not use a component? <i class="fa fa-warning"></i></h3>
+ <p>As of writing, adding third-party components is tricky. The original scope for this recipe was to include a token input, however, the experience of implementing it was confusing to say the least. Unless you&#x2019;re comfortable getting your hands dirty, usage of third-party components is unadvised until Meteor adds proper support for <code>require</code> in Meteor 1.3.</p>
+</div>
+
+<p>Continuing down a similar path, let&#x2019;s slide up our component a little further and look at the <code>getLastUpdate()</code> method we&#x2019;re using toward the top of our component&#x2019;s <code>render()</code> method.</p>
+
+<p class="block-header">/client/components/views/editor.jsx</p>
+
+<pre><code class="language-javascript">getLastUpdate() {
+ if ( this.data ) {
+ let { formatLastUpdate } = ReactHelpers,
+ post = this.data.post;
+
+ return `${ formatLastUpdate( post.updated ) } by ${ post.author }`;
+ }
+}
+</code></pre>
+
+<p>A little more involved, but about the same. Here, we check if our data is available and if it is, we assign a few variables. The first is a bit funky. Here, we&#x2019;re using ES2015 object destructuring to say &#x201C;give us the <code>formatLastUpdate()</code> method that&#x2019;s defined in the global <code>ReactHelpers</code> object.&#x201D; What&#x2019;s that? This is a collection of helpers that is being <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/helpers/react.js">added to the React port of Base</a> (the TMC starter kit).</p>
+
+<p>Here, <code>formatLastUpdate()</code> is responsible for taking the date our post was last marked as updated&#x2014;remember, we set this in our schema to be an ISO8601 string&#x2014;and returning it as a human readable string like <code>January 13th, 2016 10:30 am</code> (behind the scenes we&#x2019;re using the <code>momentjs:moment</code> packag we installed earlier). To close the loop here, we concatenate this result with the word <code>by</code> and the value of <code>post.author</code>, which, again, is the name of the most recent user to update this post (set by <code>autoValue()</code> in our schema). Pretty wild stuff!</p>
+
+<p>Okay. Next up is something really neat! To make the editing experience nice and simple for the folks at HD Buff, we want to auto-generate slugs based on whatever title they set on the post. To do this, notice that in our <code>render()</code> method, the <code>&lt;FormControl /&gt;</code> component for our post&#x2019;s title has an <code>onChange={ this.generateSlug }</code> prop. Can you guess what&#x2019;s happening here? Whenever this input changes (meaning a user types in it), we want to grab that value, convert it into a slug <code>like-this-right-here</code> and set it on the slug field beneath the title. Let&#x2019;s take a peek at the <code>generateSlug()</code> method we&#x2019;re calling.</p>
+
+<p class="block-header">/client/components/views/editor.jsx</p>
+
+<pre><code class="language-javascript">generateSlug( event ) {
+ let { setValue } = ReactHelpers,
+ form = this.refs.editPostForm.refs.form,
+ title = event.target.value;
+
+ setValue( form, '[name="postSlug"]', getSlug( title, { custom: { "'": "" } } ) );
+}
+</code></pre>
+
+<p>We&#x2019;re building up a lot of knowledge here! Notice that again, we&#x2019;re pulling in one of the methods <code>setValue</code> from our <code>ReactHelpers</code> global (this will help us set the slug we generate on the slug input). Next, we do something funky involving React&#x2019;s refs. Due to the shape of our <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/generic/forms/form.jsx"><code>&lt;Form /&gt;</code></a> component, we need to get access to that form by calling <code>this.refs.editPostForm.refs.form</code>. If you look down in our <code>render()</code> method, you&#x2019;ll notice <code>&lt;Form /&gt;</code> has a prop <code>ref="editPostForm"</code> on it. This is React&#x2019;s way of identifying a DOM node within a component. By calling <code>this.refs.editPostForm.refs.form</code>, we&#x2019;re essentially grabbing the <em>nested</em> ref of the <code>&lt;Form /&gt;</code> component to access the actual DOM node for the form. <em>Gasp</em>. That was long-winded. If that&#x2019;s confusing, take a peek at the wiring of the <code>&lt;Form /&gt;</code> component <a href="https://github.com/themeteorchef/building-a-blog-with-react/blob/master/code/client/components/generic/forms/form.jsx">here</a>.</p>
+
+<p>Next, we grab the value of <code>event.target</code>, or, our title input. This works because the &#x201C;event&#x201D; that&#x2019;s taking place is happening on our title input. By proxy, then, event.target is equal to our title input. With <em>all of this</em> bundled up, we make a call to <code>setValue()</code>, passing the context for where our field will be&#x2014;<code>form</code>&#x2014;the name attribute of the element we want to set the value on&#x2014;our slug input&#x2014;and finally, we use the <code>getSlug()</code> method from the <code>ongoworks:speakingurl</code> package we installed earlier to generate the <code>slugified-version-of-our-title</code>.</p>
+
+<p>Yikes! That seems like a lot, but step through it and it will make sense. With this in place, whenever we edit the value of our title input, our slug will automatically be generated and set on the slug input! Nice work. That was a big one to solve.</p>
+
+<p>Last but not least for this form, let&#x2019;s get some validation wired up and then handle saving changes on the server!</p>
+
+<h4>Saving the form</h4>
+
+<p>Here comes the turkey. This is a big step, but should actually look somewhat familiar if you&#x2019;ve worked with validation in the past. What we want to do now is validate the fields in our editor and if they&#x2019;re good to go, push an update of our post to the server. If you&#x2019;re new to validation, take a peek at this post on <a href="https://themeteorchef.com/snippets/validating-forms-with-jquery-validation/">jQuery validation</a>, the underying package we&#x2019;ll use to validate our form here.</p>
+
+<p class="block-header">/client/components/views/editor.jsx</p>
+
+<pre><code class="language-javascript">validations() {
+ let component = this;
+
+ return {
+ rules: {
+ postTitle: {
+ required: true
+ }
+ },
+ messages: {
+ postTitle: {
+ required: "Hang on there, a post title is required!"
+ }
+ },
+ submitHandler() {
+ let { getValue, isChecked } = ReactHelpers;
+
+ let form = component.refs.editPostForm.refs.form,
+ post = {
+ _id: component.props.post,
+ title: getValue( form, '[name="postTitle"]' ),
+ slug: getValue( form, '[name="postSlug"]' ),
+ content: getValue( form, '[name="postContent"]' ),
+ published: isChecked( form, '[name="postPublished"]' ),
+ tags: getValue( form, '[name="postTags"]' ).split( ',' ).map( ( string ) =&gt; {
+ return string.trim();
+ })
+ };
+
+ Meteor.call( 'savePost', post, ( error, response ) =&gt; {
+ if ( error ) {
+ Bert.alert( error.reason, 'danger' );
+ } else {
+ Bert.alert( 'Post saved!', 'success' );
+ }
+ });
+ }
+ };
+},
+handleSubmit( event ) {
+ event.preventDefault();
+}
+</code></pre>
+
+<p>Woah buddy! A lot going on here but nothing too crazy. Notice that we have two methods output here: <code>validations()</code> and <code>handleSubmit()</code>. Here, <code>handleSubmit()</code> is responsible for &#x201C;terminating&#x201D; the default behavior of our form&#x2019;s <code>onSubmit</code> method&#x2014;we can see this being attached to our <code>&lt;Form /&gt;</code> component in our <code>render()</code>&#x2014;and instead, deferring submission to our validation&#x2019;s <code>submitHandler()</code> method. This is a bit strange, but allows to get our form validated and handle the submission without a lot of running around.</p>
+
+<p>Inside <code>validations()</code>&#x2014;this is also attached to our <code>&lt;Form /&gt;</code> component as a prop&#x2014;we add a single rule for our <code>postTitle</code> input. This is ensuring that <code>postTitle</code> is <em>not</em> blank when our user submits the form. If it is, they&#x2019;ll be asked to correct it before they submit the form. Once the form is all green, we get to work in our <code>submitHandler()</code>. At this point, we&#x2019;re building up the object we&#x2019;ll send to the server to update our post.</p>
+
+<p>Here, we&#x2019;re making use of a few more helpers from our <code>ReactHelpers</code> object. At this point, all we&#x2019;re doing is fetching the current values from each of the fields in our form. Two to point out: <code>published</code> and <code>tags</code>. Notice that for published, we&#x2019;re using the helper <code>isChecked</code> to determine whether or not the &#x201C;Published?&#x201D; box is checked. For <code>tags</code>, we&#x2019;re grabbing the current value of the input and then <em>splitting</em> it into an array. To make sure our data is clean, we use a map to return an array of with each value obtained from the string with a <code>trim()</code>. This ensures that none of our tags have any trailing spaces (e.g. <code>tag </code> vs. <code>tag</code>).</p>
+
+<p>So far so good? Once we have this, it&#x2019;s up to the server to save the post!</p>
+
+<h4>Updating the post on the server</h4>
+
+<p>Let&#x2019;s take a look at our <code>savePost</code> method on the server. Hint: it&#x2019;s really simple.</p>
+
+<p class="block-header">/server/methods/update/posts.js</p>
+
+<pre><code class="language-javascript">Meteor.methods({
+ savePost( post ) {
+ check( post, Object );
+
+ let postId = post._id;
+ delete post._id;
+
+ Posts.upsert( postId, { $set: post } );
+ }
+});
+</code></pre>
+
+<p>Yep, pretty simple! Here, we&#x2019;re not doing much. First, we <a href="https://themeteorchef.com/snippets/using-the-check-package/">check</a> that the value we get from the client is an <code>Object</code>. Next, we assign the value of <code>post._id</code> to a variable <code>postId</code> and then delete it from the main <code>post</code> object (we don&#x2019;t want to include this in the value we pass to our <code>upsert</code> below). Finally, we perform an <code>upsert</code> on our <code>Posts</code> collection, passing in our post&#x2019;s contents via a MongoDB <code>$set</code> method. Why use an <code>upsert</code> here?</p>
+
+<p>Well, remember that when creating our new posts, we didn&#x2019;t set a content or tags field. With an upsert, we get the best of doing an update and an insert. If a field doesn&#x2019;t exist on the object we&#x2019;re trying to update, the upsert will create it for us. If it already exists, it will just update the value! This means that we don&#x2019;t have to fight with missing fields conflicting with those that already exist. We just call an <code>upsert</code> and let Mongo handle the stick parts for us.</p>
+
+<p>Awesome. At this point, we&#x2019;ve got our posts inserting and everything wired up for admins. Next, let&#x2019;s focus on getting posts output for our readers. This will be much simpler and should go pretty fast!</p>
+
+<h3>Listing posts in the index (and tag pages)</h3>
+
+<p>Great work so far. We&#x2019;ve come a long way, but we&#x2019;re not quite done. Next, we need to wire up a list of posts for HD Buff&#x2019;s readers. This will be the main stream of <em>published</em> posts. In tandem with this, we&#x2019;re also going to wire up a way to make this list filterable by tag. Let&#x2019;s dive in. Our <code>&lt;PostsIndex /&gt;</code> component is pretty simple compared to what we&#x2019;ve accomplished so far, so let&#x2019;s take a quick tour of how everything is working here (a lot of repeated concepts).</p>
+
+<p class="block-header">/client/components/views/posts-index.jsx</p>
+
+<pre><code class="language-javascript">PostsIndex = React.createClass({
+ mixins: [ ReactMeteorData ],
+ getMeteorData() {
+ let query = {};
+
+ if ( this.props.tag ) {
+ Meteor.subscribe( 'tagsIndex', this.props.tag );
+ query = { tags: { $in: [ this.props.tag ] } };
+ } else {
+ Meteor.subscribe( 'postsIndex' );
+ }
+
+ return {
+ posts: Posts.find( query, { sort: { updated: -1 } } ).fetch()
+ };
+ },
+ renderHeader() {
+ if ( this.props.tag ) {
+ return &lt;Jumbotron className="tags-header"&gt;
+ &lt;h4&gt;Posts tagged with: { this.props.tag }.&lt;/h4&gt;
+ &lt;/Jumbotron&gt;;
+ } else {
+ return &lt;Jumbotron className="blog-header"&gt;
+ &lt;h2&gt;Get Buff&lt;/h2&gt;
+ &lt;h4&gt;A new blog by the HD Buff crew.&lt;/h4&gt;
+ &lt;/Jumbotron&gt;;
+ }
+ },
+ renderPosts() {
+ if ( this.data.posts.length &gt; 0 ) {
+ return this.data.posts.map( ( post ) =&gt; {
+ return &lt;Post key={ post._id } post={ post } /&gt;;
+ });
+ } else {
+ return &lt;WarningAlert&gt;No posts found.&lt;/WarningAlert&gt;;
+ }
+ },
+ render() {
+ return &lt;div className="posts"&gt;
+ &lt;GridRow&gt;
+ &lt;GridColumn className="col-xs-12 col-sm-8 col-sm-offset-2"&gt;
+ { this.renderHeader() }
+ { this.renderPosts() }
+ &lt;/GridColumn&gt;
+ &lt;/GridRow&gt;
+ &lt;/div&gt;;
+ }
+});
+</code></pre>
+
+<p>This should look super familiar. At this point, we&#x2019;re starting to repeat a lot of the patterns we&#x2019;ve introduced so far. Let&#x2019;s do a quick breeze through this component, explaining the important pieces. Sound good?</p>
+
+<p>First, let&#x2019;s call attention to how we&#x2019;re pulling data. Remember, our goal for this component is to pull in data in one of two ways: either filtered by tag, or, with no filter (all published posts on the site). To achieve this, up in our call to <code>getMeteorData()</code>, we&#x2019;re doing a little <code>if</code>-foo to determine whether or not we&#x2019;re trying to render a list of posts by tag. If we detect the prop <code>this.props.tag</code>, we assume that yes, we want to filter by tag.</p>
+
+<p>In this case, we take the tag and pass it to our publication <code>tagsIndex</code> (we&#x2019;ll look at this soon) and then set <code>query</code> (the value we&#x2019;ll pass to the query set to the <code>posts</code> value of our object returned from <code>getMeteorData()</code>) to only gives us back the posts where the current tag is in the <code>tags</code> array of the post. Said another way, if we return a list of posts from the server like this:</p>
+
+<pre><code class="language-javascript">{ _id: '1', tags: [ 'peanuts', 'butter', 'oil' ] }
+{ _id: '2', tags: [ 'tacos', 'almonds', 'cookies' ] }
+{ _id: '3', tags: [ 'peanuts', 'sandwiches', 'political-differences' ] }
+</code></pre>
+
+<p>if we pass the tag <code>peanuts</code>, we&#x2019;d only expect to get back posts <code>1</code> and <code>3</code> (those are the only posts with <code>peanuts</code> in their <code>tags</code> array). Making sense?</p>
+
+<p>A little less complex, if we <em>do not</em> detect <code>this.props.tag</code>, we simply want to subscribe to <code>postsIndex</code>. Let&#x2019;s take a look at those two side-by-side now.</p>
+
+<p class="block-header">/server/publications/posts-index.js</p>
+
+<pre><code class="language-javascript">Meteor.publish( 'postsIndex', function() {
+ return Posts.find( { published: true } );
+});
+
+Meteor.publish( 'tagsIndex', function( tag ) {
+ check( tag, String );
+ return Posts.find( { published: true, tags: { $in: [ tag ] } } );
+});
+</code></pre>
+
+<p>About what we&#x2019;d expect. Notice for <code>postsIndex</code> we simply return <em>all</em> of the posts who&#x2019;s <code>published</code> flag is set to <code>true</code>. Down in <code>tagsIndex</code>, we do something similar, however, also passing in the <code>tag</code> from the client using an identical <code>{ $in: [ tag ] }</code> check like we did on the client. This guarantees that we only get back posts with the matching tag. Neat!</p>
+
+<p>Back in our <code>&lt;PostsIndex /&gt;</code> component, the rest is pretty simple. If we&#x2019;re on a tag page we decide to render a slightly different page header displaying the name of the currently selected tag. For <code>renderPosts()</code>, if we have a set of posts we want to map over those returning an instance of <code>&lt;Post /&gt;</code> (we&#x2019;ll look at this next). Otherwise, we return a &#x201C;No posts found.&#x201D; message just like we did for editors earlier. Boom! Making progress.</p>
+
+<p>Real quick, let&#x2019;s take a peek at that <code>&lt;Post /&gt;</code> component as it&#x2019;s got a little more going on then meets the eye.</p>
+
+<h4>The <code>&lt;Post /&gt;</code> component</h4>
+
+<p>The <code>&lt;Post /&gt;</code> component is reusing a lot of the same techniques as explained above, except for one. Let&#x2019;s take a look at the full component and then talk about the one that stands out.</p>
+
+<p class="block-header">/client/components/generic/post.jsx</p>
+
+<pre><code class="language-javascript">Post = React.createClass({
+ getPostTitle() {
+ let post = this.props.post;
+ 
+ if ( this.props.singlePost ) {
+ return &lt;h3&gt;{ post.title }&lt;/h3&gt;;
+ } else {
+ return &lt;h3&gt;&lt;a href={ `/posts/${ post.slug }`}&gt;{ post.title }&lt;/a&gt;&lt;/h3&gt;;
+ }
+ },
+ getHTML( markdown ) {
+ if ( markdown ) {
+ return { __html: parseMarkdown( markdown ) };
+ }
+ },
+ renderTags( tags ) {
+ if ( tags ) {
+ return &lt;div className="tags"&gt;
+ {tags.map( ( tag ) =&gt; {
+ return &lt;a className="tag" href={ `/tags/${ tag }` }&gt;#{ tag }&lt;/a&gt;;
+ })}
+ &lt;/div&gt;;
+ }
+ },
+ render() {
+ let { formatLastUpdate } = ReactHelpers,
+ post = this.props.post;
+
+ return &lt;div className="post"&gt;
+ { this.getPostTitle() }
+ &lt;p&gt;&lt;strong&gt;Last Updated:&lt;/strong&gt; { formatLastUpdate( post.updated ) } by { post.author }&lt;/p&gt;
+ { this.renderTags( post.tags ) }
+ &lt;div className="post-body" dangerouslySetInnerHTML={ this.getHTML( post.content ) } /&gt;
+ &lt;/div&gt;;
+ }
+});
+</code></pre>
+
+<p>Okay! A lot of this is pretty straightforward. Here, we&#x2019;re rendering the actual contents of a post out for display. Notice that down in our <code>render()</code> method, we&#x2019;re simply grabbing the contents of our post and then displaying them in the UI. Because we&#x2019;ll be using this component conditionally (in either a list of posts or as a single post), we&#x2019;ve set up a few methods to help us negotiate that process. For <code>getPostTitle()</code>, notice that we&#x2019;re checking whether or not our component has a <code>this.props.singlePost</code> value.</p>
+
+<p>In our last step, we&#x2019;ll wire up a component that makes use of this. If we <em>do</em> detect this value, we want to return a plain <code>&lt;h3&gt;&lt;/h3&gt;</code> tag containing our title <em>without</em> a link. If we&#x2019;re not on a single post, we return an <code>&lt;h3&gt;&lt;/h3&gt;</code> tag with a link <em>to</em> our post. Think about that one! If we&#x2019;re in a list of posts, we&#x2019;ll want a link so we can read the post. If we&#x2019;re on a single post, we&#x2019;re already viewing it so we don&#x2019;t need the link.</p>
+
+<p>For our tags, there&#x2019;s not much mystery. Inside of <code>renderTags()</code>, if we get a list of tags for our post, we simply map over each and return an <code>&lt;a&gt;&lt;/a&gt;</code> tag with a link to that tag&#x2019;s page (this makes use of the code we wrote in the previous step) along with the name of the tag. Simple!</p>
+
+<p>The big scary part (not really) of this is Markdown. In React, it&#x2019;s advised to be cautious when setting HTML directly on a component. Most of the time this isn&#x2019;t necessary, however, with Markdown conversion, we <em>will</em> need to set HTML directly. Why? Well, when we get our post back here on the client, what we&#x2019;re actually getting back is a string of Markdown. In order to convert that into HTML, we need a way to do that and then set the value in our component.</p>
+
+<p>Here, if we look at <code>&lt;div className="post-body"&gt;&lt;/div&gt;</code> we can see this taking place in the prop <code>dangerouslySetInnerHTML</code>. Spooky! This method is aptly named as outside of scenarios like this, setting this value can leave a component vulnerable to <a href="https://facebook.github.io/react/tips/dangerously-set-inner-html.html">XSS</a> attacks. Fortunately in this case, we&#x2019;re safe as we know what we&#x2019;re putting into the DOM (at that location) has been properly sanitized. To handle that sanitization, notice that we&#x2019;re making a call to <code>this.getHTML()</code>.</p>
+
+<p>If we look at that method, it&#x2019;s pretty simple. All we&#x2019;re doing here is returning an object with a property <code>__html</code>, equal to the result of converting our Markdown into HTML. We get the <code>parseMarkdown()</code> method from the <code>themeteorchef:commonmark</code> package we installed earlier. In passing our string of Markdown to it, we get back a sanitized, HTML-ified version of our posts contents. We set this on the <code>__html</code> propery of the object we&#x2019;re returning and React takes care of the rest! Note: that <code>__html</code> property in an object thing is specific to <code>dangerouslySetInnerHTML</code>. If we pass our string directly, React will throw a tantrum.</p>
+
+<p>That&#x2019;s all we need to know for our <code>&lt;Post /&gt;</code> component! One last step: rendering a single post. This is quick and painless, so let&#x2019;s take a look.</p>
+
+<h3>Displaying a single post</h3>
+
+<p>Fortunately, with our <code>&lt;Post /&gt;</code> component wired up, displaying a single post is pretty easy. Let&#x2019;s dump out the whole component and explain what&#x2019;s happening.</p>
+
+<p class="block-header">/client/components/views/single-post.jsx</p>
+
+<pre><code class="language-javascript">SinglePost = React.createClass({
+ mixins: [ ReactMeteorData ],
+ getMeteorData() {
+ let sub = Meteor.subscribe( 'singlePost', this.props.slug );
+
+ return {
+ post: Posts.findOne( { slug: this.props.slug } ),
+ ready: sub.ready()
+ };
+ },
+ render() {
+ if ( !this.data ) { return &lt;div /&gt;; }
+ return &lt;GridRow&gt;
+ &lt;GridColumn className="col-xs-12 col-sm-8 col-sm-offset-2"&gt;
+ &lt;Post singlePost={ true } post={ this.data.ready &amp;&amp; this.data &amp;&amp; this.data.post } /&gt;
+ &lt;/GridColumn&gt;
+ &lt;/GridRow&gt;;
+ }
+});
+</code></pre>
+
+<p>Pretty close to what we&#x2019;ve been up to. Notice that down in our <code>render()</code> method, we&#x2019;re wiring up our data source to the <code>&lt;Post /&gt;</code> component we just wrapped up. That&#x2019;s the bulk of this component! The one thing we want to call attention to is how we&#x2019;re loading in our data. Notice that up in <code>getMeteorData()</code>, we&#x2019;re assigning our subscription to <code>sub</code>, and then making the response to its <code>.ready()</code> handle available at <code>this.data.ready</code>. We make use of <code>this.data.ready</code> down below in our call to <code>&lt;Post /&gt;</code>.</p>
+
+<p>What&#x2019;s up with this? This is a safeguard. What we want to avoid is React moving too fast and rendering with the wrong data. By tying into <code>sub.ready()</code>, we&#x2019;re waiting to return data to our <code>&lt;Post /&gt;</code> component until we&#x2019;re absolutely certain we have the post data we need. We can do this because our call to <code>Meteor.subscribe( 'singlePost' );</code> is updating when we change posts (e.g. clicking on another post in our list). Let&#x2019;s take a peek at our publication real quick to understand that.</p>
+
+<p class="block-header">/server/publications/single-post.js</p>
+
+<pre><code class="language-javascript">Meteor.publish( 'singlePost', ( postSlug ) =&gt; {
+ check( postSlug, String );
+
+ return Posts.find( { slug: postSlug } );
+});
+</code></pre>
+
+<p>Making sense? When we move to a new post, we grab its slug value from our route and pass it into <code>&lt;SinglePost slug={ params.slug } /&gt;</code> as a prop. Then, in the component we subscribe using that same slug, returning only the post that matches that slug in the database. Nice and tidy!</p>
+
+<p>Back in our component, then, whenever we make the change to a new post, we&#x2019;re updating the slug and our subscription re-responds to <code>sub.ready()</code>. Neat! This means that we avoid any issues with displaying the incorrect post, allowing React&#x2019;s speed to play nicely with Meteor&#x2019;s reactivity.</p>
+
+<p>That&#x2019;s it! At this point, we&#x2019;ve successfully fulfilled HD Buff&#x2019;s request for a simple blog! We have the ability to post, view a list of posts, sort posts by tag, and view a single post. We even added a means for managing posts behind the scenes for HD Buff&#x2019;s team. Great work!</p>
+
+<h3>Wrap up &amp; summary</h3>
+
+<p>In this recipe we learned how to create a simple blog using Meteor and the React user interface library. We learned how to wire up a large collection of components, working with things like nesting, passing around props, and wiring up a data source with <code>ReactMeteorData</code>. Further, we learned how to manage an editing interface for writing posts as well as how to get those posts to display back for users. We even learned how to make use of collection2&#x2019;s <code>autoValue()</code> method to do some heavy lifting for us!</p>
+
+
+ 
+ <div class="third-party-block">
+ <img src="https://themeteorchef.com/assets/watsi-logo.svg" alt="Watsi">
+ <header>
+ <h4>Enjoy this post?</h4>
+ <p>I'd really appreciate it if you showed your thanks by <a href="https://watsi.org/team/the-meteor-chef" target="_blank">joining Team Meteor Chef on Watsi</a> and donating healthcare to someone who needs it in exchange!</p>
+ </header>
+ </div>
+ 
+ <h3>Questions &amp; Comments</h3>
+ 
+
+
+
+ </div> 
+ </div>
+</body></html>

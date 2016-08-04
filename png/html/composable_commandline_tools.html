@@ -1,0 +1,376 @@
+<!DOCTYPE html><html><head><title>Composable command-line tools</title></head><body>
+<h1>Composable command-line tools</h1><p><a href="https://blog.gopheracademy.com/advent-2015/composable-command-line-tools/" target="_new">Original URL</a></p>
+<p><blockquote>Go&#x2019;s simplicity and exhaustive standard library means writing command-line tools is easy and enjoyable. Following the Go philosophy, if you write programs that are small and focussed, you can&hellip;</blockquote></p>
+<div><div id="content-font">
+ 
+
+<p>Go&#x2019;s simplicity and exhaustive standard library means writing command-line tools is easy and enjoyable. Following the Go philosophy, if you write programs that are small and focussed, you can end up with a pretty powerful little toolbelt of utilities.</p>
+
+<p>But pretty soon, programs will need to communicate with each other in some way; to share data or issue commands. But before you invest in a messaging queue and heavily complicate your otherwise neat little world, consider using a staple of the OS; pipes (<code>stdin</code> standard in and <code>stdout</code> standard out - and <code>stderr</code> standard error for if things go wrong).</p>
+
+<p>I first explored this technique in depth in <a href="http://bit.ly/goblueprints">Chapter 4 of Go Programming Blueprints</a>, where we built a domain-name generator by mashing up many disparate services. I have since built tools that are now in production that use pipes to stream lots of data from one process to another.</p>
+
+<p>In this article, we will build some descrete but composable programs to explore this idea further. The programs we write are illustrative, calculating the mean average from a set of numbers etc. You would probably never build these for real - it&#x2019;s probably easier to just write a new Go program each time you need it. But it&#x2019;s the festive season, and why shouldn&#x2019;t we have a little fun?</p>
+
+<h2 id="how-it-works:0e48c6e191ff57d6ce5c64faf3430c0f">How it works</h2>
+
+<p>Even if you&#x2019;re not familiar with piping, you&#x2019;ve certainly seen it in action whenever you&#x2019;ve interacted with a program in a shell. Whether it&#x2019;s providing input (like when answering a question) or just reading the output of a program in a terminal, you&#x2019;re using pipes.</p>
+
+<p>The standard out pipe (called <code>stdout</code> in computer speak) is, by default, connected to the terminal - which is how you can see what the program is outputting. You can redirect this if you want to, like to a file, or even &#x201C;pipe it&#x201D; into another program&#x2019;s standard in pipe (using the pipe character):</p>
+
+<pre><code>one | two
+</code></pre>
+
+<p>Here the output from <code>one</code> would become the input for <code>two</code>.</p>
+
+<p>The standard in pipe (also known as <code>stdin</code>) is the opposite; the input for a program. In its simplist form, this is just for prompting the user to continue or not (<code>Are you sure? [Yn]</code>), or it can be used to take more information in, such as your name. Or you can pipe in many gigabytes of data.</p>
+
+<p>To see this in action, on a unix machine (I&#x2019;m sure you can do the same on Windows), open a terminal and type:</p>
+
+<pre><code>$ echo "Hello"
+Hello
+</code></pre>
+
+<p>The <code>echo</code> command is used to write something to (in the default case) stdout. It just echos back what you give it. By default, this comes through stdout and we see it printed in the terminal.</p>
+
+<p>We are now going to redirect it into another program using the pipe (<code>|</code>) character:</p>
+
+<pre><code>$ echo -n "Hello" | md5
+09f7e02f1290be211da707a266f153b3
+</code></pre>
+
+<p>Here, we pipe the stdout of <code>echo "Hello"</code> into the stdin of the <code>md5</code> command - which calculates an MD5 hash of whatever you give it. In this case, we learn that the MD5 hash of &#x201C;Hello&#x201D; (minus the quotes) is <code>09f7e02f1290be211da707a266f153b3</code>. (The <code>-n</code> flag asks echo to omit the trailing line feed).</p>
+
+<p>When <code>echo</code> has finished echoing, it terminates which closes the pipe. If we run the <code>md5</code> program without piping something into it, it will connect its stdin to the terminal, and we can type what we want hashing.</p>
+
+<p>We&#x2019;re going to use this technique to build some tools of our own.</p>
+
+<h2 id="mean:0e48c6e191ff57d6ce5c64faf3430c0f">Mean</h2>
+
+<p>The first program we will write will calculate the mean average from a set of numbers. The updated value will be output each time we have new input. The program will maintain a single mean value for its lifecycle.</p>
+
+<p>We&#x2019;ll put each program in its own folder, and run them from a common parent folder.</p>
+
+<p>Create a folder called <code>piping</code>, which will be our parent folder, and another inside it called <code>mean</code>.</p>
+
+<p>Add the following code:</p>
+
+<pre><code>package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+)
+
+func main() {
+	var sum, vals int
+	s := bufio.NewScanner(os.Stdin)
+	for s.Scan() {
+		val, err := strconv.Atoi(s.Text())
+		if err != nil {
+			io.WriteString(os.Stderr, "(ignoring) expected whole numbers: "+err.Error())
+			continue
+		}
+		vals++
+		sum += val
+		fmt.Println(sum / vals)
+	}
+}
+</code></pre>
+
+<p>The first thing we do is create a <code>Scanner</code>, an extremely useful type from the <code>bufio</code> package, that has the ability to read (scan) chunks of data from an input source. In our case, the input source is the famous <code>os.Stdin</code>.</p>
+
+<p>We then start scanning with a call to the <code>Scan</code> method. Execution will block here until the scanner deems that we have something worth working with - which it decides, by default, when it encounters a line feed character.</p>
+
+<p>Given the <code>s.Text()</code>, we use <code>strconv</code> to turn it into an integer that we can work with. If something goes wrong, we write an informative error out (to stderr - since we don&#x2019;t want to pollute our standard out stream). All being well, we increase <code>vals</code>, add the value to the <code>sum</code>, and output the mean average.</p>
+
+<h2 id="building:0e48c6e191ff57d6ce5c64faf3430c0f">Building</h2>
+
+<p>For now, we&#x2019;ll build each program individually and place it inside a special <code>piping/cmds</code> folder. This will make them easy to run. In the real world, they&#x2019;ll likely end up in some appropriate <code>bin</code> folder.</p>
+
+<ul>
+<li>Create a folder <code>piping/cmds</code></li>
+<li>Navigate to your program source folder (with <code>cd mean</code>)</li>
+<li>Build it and use the <code>-o</code> flag to place it inside the <code>cmds</code> folder: <code>go build -o ../cmds/mean</code></li>
+</ul>
+
+<h2 id="running:0e48c6e191ff57d6ce5c64faf3430c0f">Running</h2>
+
+<p>Try this program out by navigating to the <code>cmds</code> folder in a terminal, running it, and entering some numbers:</p>
+
+<pre><code>$ ./mean
+10
+10 &lt;&lt; mean
+</code></pre>
+
+<p>(I&#x2019;ve added the <code>mean</code> tag to make it a little clearer).</p>
+
+<p>Enter some more numbers, and you&#x2019;ll see the mean average start to migrate:</p>
+
+<pre><code>$ go run mean/main.go
+10
+10 &lt;&lt; mean
+15
+12 &lt;&lt; mean
+20
+15 &lt;&lt; mean
+5
+12 &lt;&lt; mean
+4
+10 &lt;&lt; mean
+3
+9 &lt;&lt; mean
+</code></pre>
+
+<h2 id="ending-programs:0e48c6e191ff57d6ce5c64faf3430c0f">Ending programs</h2>
+
+<p>The program will only end once the <code>Scan()</code> method returns <code>false</code> - like when the input stream is closed, which we can do in the terminal by hitting <code>Ctrl+D</code>. Then use <code>Ctrl+C</code> to end the program altogether.</p>
+
+<h2 id="split:0e48c6e191ff57d6ce5c64faf3430c0f">Split</h2>
+
+<p>The next program we will write is called <code>split</code>, which will take a single line of text and split it onto many lines. This will allow us to echo <code>1,2,3,4</code> and have it changed into:</p>
+
+<pre><code>1
+2
+3
+4
+</code></pre>
+
+<p>This is nice becuase it will allow us to pipe many numbers into our <code>mean</code> program without having to keep typing <code>\n</code> all over the place.</p>
+
+<p>Create a folder alongside <code>mean</code> (inside the <code>piping</code> parent folder) called <code>split</code>, and add the following code into <code>main.go</code>:</p>
+
+<pre><code>package main
+
+import (
+	"bufio"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+)
+
+func main() {
+	var (
+		delimiter = flag.String("delimiter", ",", "character to split by")
+	)
+	flag.Parse()
+	s := bufio.NewScanner(os.Stdin)
+	for s.Scan() {
+		println(strings.Split(s.Text(), *delimiter)...)
+	}
+}
+
+func println(s ...string) {
+	for _, ss := range s {
+		fmt.Println(ss)
+	}
+}
+</code></pre>
+
+<p>This time, we are using the <code>flag</code> package to allow our users a little more control over which character becomes the delimiter. By default, it&#x2019;ll be a comma (<code>,</code>) and we won&#x2019;t change this. This was left in to highlight how you can easily take in configuration settings to your programs using only the standard library.</p>
+
+<p>We create the same <code>Scanner</code> as before, and use <code>strings.Split</code> to break up the input. We then call <code>fmt.Println</code> for each value.</p>
+
+<p>Build and run the program in a terminal, and type in <code>1,2,3</code>:</p>
+
+<pre><code>$ ./split
+1,2,3
+1
+2
+3
+</code></pre>
+
+<p>Press <code>Ctrl+C</code> to terminate the program.</p>
+
+<p>Instead of manually typing in the input, we can use the piping technique to take numbers in from another command - such as the <code>echo</code> command. Try this:</p>
+
+<pre><code>$ echo "1,2,3" | ./split
+1
+2
+3
+</code></pre>
+
+<p>Not only did the program work as before, but notice that it also automatically terminated. This is because <code>echo</code> closed the input stream, and <code>Scan()</code> therefore returned <code>false</code>.</p>
+
+<h2 id="one-mean-result:0e48c6e191ff57d6ce5c64faf3430c0f">One mean result</h2>
+
+<p>Now we can rely on this stopping mechanism, let&#x2019;s adjust our Mean program to only print the output once, at the end of the program (like the <code>md5</code> command does). Update the <code>main</code> function in <code>mean/main.go</code> with the following code (move the <code>fmt.Println</code> line outside the loop):</p>
+
+<pre><code>func main() {
+	var sum, vals int
+	s := bufio.NewScanner(os.Stdin)
+	for s.Scan() {
+		val, err := strconv.Atoi(s.Text())
+		if err != nil {
+			io.WriteString(os.Stderr, "(ignoring) expected whole numbers: "+err.Error())
+			continue
+		}
+		vals++
+		sum += val
+	}
+	fmt.Println(sum / vals) // print one result at the end
+}
+</code></pre>
+
+<p>Rebuild Mean as you did before, replacing the old binary in the <code>cmds</code> folder.</p>
+
+<h2 id="split-and-mean:0e48c6e191ff57d6ce5c64faf3430c0f">Split and mean</h2>
+
+<p>Now we&#x2019;re going to combine our two programs. We&#x2019;re going to pipe the lines of output from Split into the input of Mean. Be sure to be inside the <code>cmds</code> folder:</p>
+
+<pre><code>$ echo "10,20,35" | ./split | ./mean
+21
+</code></pre>
+
+<p>Let&#x2019;s trace through what&#x2019;s happening here:</p>
+
+<ul>
+<li>Print out <code>10,20,35</code> with the <code>echo</code> command</li>
+<li>Take the output from echo and pipe it into the input for Split</li>
+<li>Split it into many lines, and pipe each line into Mean</li>
+<li>Mean keeps track of the number of values and sum</li>
+<li>Echo closes the input</li>
+<li>Split gets <code>Scan() == false</code> and closes its input</li>
+<li>Mean then gets <code>Scan() == false</code> and exits the for loop - where it prints the latest mean average value</li>
+</ul>
+
+<p>Finally, we see the result of the mean average of the numbers 10, 20 and 35, which is 21.</p>
+
+<h2 id="summing:0e48c6e191ff57d6ce5c64faf3430c0f">Summing</h2>
+
+<p>To sum a range of numbers, we just need to copy our <code>mean/main.go</code> code, and remove the actual mean calculating piece. Create a file at <code>sum/main.go</code> with the following:</p>
+
+<pre><code>package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+)
+
+func main() {
+	sum := 0
+	s := bufio.NewScanner(os.Stdin)
+	for s.Scan() {
+		val, err := strconv.Atoi(s.Text())
+		if err != nil {
+			io.WriteString(os.Stderr, "(ignoring) expected whole numbers: "+err.Error())
+			continue
+		}
+		sum += val
+	}
+	fmt.Println(sum)
+}
+</code></pre>
+
+<p>Build this too and play with it, remmeber you can use the Split program if it&#x2019;s easier:</p>
+
+<pre><code>$ echo "1,2,3" | ./split | ./sum
+6
+
+$ echo "1,2,3,4,5" | ./split | ./sum
+15
+</code></pre>
+
+<h2 id="averages-and-sums-of-fibonacci-numbers:0e48c6e191ff57d6ce5c64faf3430c0f">Averages and sums of Fibonacci numbers</h2>
+
+<p>If we want to find out the mean average of Fibonacci numbers, all we have to do is write a small program that generates Fibonacci numbers for us.</p>
+
+<p>Create a new folder in <code>piping</code> called <code>fib</code> - and add the following code:</p>
+
+<pre><code>package main
+
+import (
+	"flag"
+	"fmt"
+)
+
+func main() {
+	var (
+		max = flag.Int("max", 21, "maximum number")
+	)
+	flag.Parse()
+	f := fib()
+	for {
+		i := f()
+		if i &gt; *max {
+			break
+		}
+		fmt.Println(i)
+	}
+}
+
+// fib returns a function that returns
+// successive Fibonacci numbers.
+// The state is stored in closures.
+func fib() func() int {
+	a, b := 0, 1
+	return func() int {
+		a, b = b, a+b
+		return a
+	}
+}
+</code></pre>
+
+
+
+<p>Build the program and put the binary in the <code>cmds</code> folder as before:</p>
+
+<pre><code>$ go build -o ../cmds/fib
+</code></pre>
+
+<p>Running <code>fib</code> will generate all Fibonnaci numbers until the specified <code>max</code>:</p>
+
+<pre><code>$ ./fib -max=21
+1
+1
+2
+3
+5
+8
+13
+21
+</code></pre>
+
+<p>To see the mean average of these numbers, we just pipe that output into the Mean command:</p>
+
+<pre><code>$ ./fib -max=21 | ./mean
+6
+</code></pre>
+
+<p>To see the sum of a range of Fibonnaci numbers, just pipe them into our Sum command:</p>
+
+<pre><code>$ ./fib -max=21 | ./sum
+54
+</code></pre>
+
+<p>This demonstrates how we can compose the programs in different ways, to do different things.</p>
+
+<p>To push it a little, why not try some big numbers too:</p>
+
+<pre><code>$ ./fib -max=1000000000000000000 | ./sum
+1779979416004714188
+
+$ ./fib -max=1000000000000000000 | ./mean
+20459533517295565
+</code></pre>
+
+<h2 id="so-what:0e48c6e191ff57d6ce5c64faf3430c0f">So what?</h2>
+
+<p>Although our example was a little far fetched, we saw the power of writing small programs with simple interfaces (e.g. lines of numbers) and how they can be composed together to solve deeper problems.</p>
+
+<p>Of course, it doesn&#x2019;t have to be numbers that you are passing around - what about lines of JSON data, configuration files, pictures etc?</p>
+
+<p>Consider the power of mixing your own tools with those of the operating system. The <code>find</code> command prints out paths to files matching a pattern, you could use that to extract the sizes of the files, and pipe that into your <code>sum</code> command to get the average file size for each directory. Calculating the total size for a directory becomes trivial using your tools.</p>
+
+<p>Whatever your need, consider how you might solve it in an isolated way, and before you know it - you&#x2019;ll be on your way to a library of useful, reusable, composable shell tools.</p>
+
+ </div>
+ </div>
+</body></html>

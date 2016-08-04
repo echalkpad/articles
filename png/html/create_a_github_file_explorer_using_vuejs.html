@@ -1,0 +1,270 @@
+<!DOCTYPE html><html><head><title>Create a GitHub File Explorer Using Vue.js</title></head><body>
+<h1>Create a GitHub File Explorer Using Vue.js</h1><p><a href="https://scotch.io/tutorials/create-a-github-file-explorer-using-vue-js" target="_new">Original URL</a></p>
+<p><blockquote>Vue.js makes everything easy. Creating seemingly complex applications becomes super simple and is something that can be done in much less time than previously. We will demonstrate this by creating a&hellip;</blockquote></p>
+<div><div class="page-content-primary">
+
+										
+										
+					<p>Vue.js makes everything easy. Creating seemingly complex applications becomes super simple and is something that can be done in much less time than previously. We will demonstrate this by creating a Github file explorer that will allow us to explore files in public Github repos.</p>
+<p>All the code for this post can be found <a href="https://github.com/scotch-io/vuejs-github-explorer">on Github</a>. You can view a <a href="https://scotch.io/demos/demo-create-a-github-file-explorer-using-vue-js">demo here</a>.</p>
+<h2>Setup Development Environment</h2>
+<p>The repo for this post has a good starting point tagged. We need to pull the code down and check out this tag. Then we need to download all the dependencies using npm. Run the following commands in your terminal of choice.</p>
+<pre><code class="language-bash">
+ git clone https://github.com/scotch-io/vuejs-github-explorer.git
+ cd vuejs-github-explorer
+ git checkout start-here
+ npm install
+ ./node_modules/.bin/gulp serve
+</code>
+</pre>
+<p>This will get your local environment setup and serve the starting point files on your localhost on port 8080. Open up a browser window and go to <code>localhost:8080</code>. You should see something like below.</p>
+<p><a href="https://scotch.io/wp-content/uploads/2015/11/starting-point.jpg"><img src="https://scotch.io/wp-content/uploads/2015/11/starting-point.jpg" alt="starting-point" width="900" class="alignnone size-full wp-image-11762 img-responsive img-thumbnail"></a></p>
+<p>As you can see, there isn&#x2019;t anything special going on here just yet. So far, all we have done is compile Twitter Bootstrap, Font Awesome, and some other basic styles that will be used in the application. We have also compiled our JavaScript using Browserify. You can see the JavaScript in <code>src/js/app.js</code>. We are only logging a simple &#x201C;Hello World&#x201D; to the console. All this is handled by Gulp. If you are interested in seeing what all is going on, take a look at the <code>Gulpfile.js</code> in the root directory of the project.</p>
+<p>Now that we have a development environment setup, let&#x2019;s make something cool.</p>
+<h2>Creating the Vue instance</h2>
+<p>First things first. We need to create the HTML for the main part of our application. Input the following HTML into <code>src/index.html</code>.</p>
+<pre><code class="language-markup">
+
+&lt;div id="container"&gt;
+ &lt;div class="row"&gt;
+ &lt;div class="col-md-6 col-md-offset-3"&gt;
+ &lt;form id="changeRepoForm" @submit.prevent="changeRepo()" class="form-inline"&gt;
+ &lt;div class="form-group"&gt;
+ &lt;label for="fullRepoName"&gt;Full Repo Name&lt;/label&gt;
+ &lt;input type="text" name="fullRepoName" v-model="fullRepoName" class="form-control"&gt;
+ &lt;/div&gt;
+ &lt;input type="submit" class="btn btn-default" value="Get repo filesystem!"&gt;
+ &lt;/form&gt;
+ &lt;hr&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+&lt;/div&gt;
+
+</code>
+</pre>
+<p>Here, we are simply creating a form and marking it up with some basic Bootstrap code. On the form, we have used the <code>@submit.prevent</code> directive to add a submit listener to the form. The <code>@submit</code> adds the listener while the <code>.prevent</code> part will automatically run <code>preventDefault</code> for us. When we submit the form, Vue will fire the <code>changeRepo</code> method. We will get to this method in a minute.</p>
+<p>The form itself is pretty basic. It has a text field with a label and a submit button. The input has the <code>v-model</code> directive on it. This creates a two-way binding between the value of the input and the value of <code>fullRepoName</code>, which is a piece of data on our Vue instance.</p>
+<p>Now that we have this set up, let&#x2019;s create our Vue instance. Remove all the code from <code>src/app.js</code> and input the following:</p>
+<pre><code class="language-javascript">
+ var Vue = require('vue');
+ Vue.config.debug = true;
+</code>
+</pre>
+<p>Here we are <code>require</code>ing Vue into our file using &#x201C;Node syntax.&#x201D; We are able to do this due to our use of Browserify as part of our Gulp pipeline. The next thing we do is set a global config option to put our application in &#x201C;debug mode.&#x201D; This just means that if we get an error, we will get more information about it in the developer console.</p>
+<pre><code class="language-javascript">
+ new Vue({
+ el: '#container',
+ data: {
+ fullRepoName: '',
+ username: '',
+ repo: ''
+ },
+ methods: {
+ changeRepo: function() {
+ var splitData = this.fullRepoName.split('/');
+ this.username = splitData[0];
+ this.repo = splitData[1];
+ 
+ console.group("Vue Data");
+ console.log("fullRepoName:", this.fullRepoName);
+ console.log("username:", this.username);
+ console.log("repo:", this.repo);
+ console.groupEnd("Vue Data");
+ }
+ }
+ });
+</code>
+</pre>
+<p>This is the code that creates our Vue instance. We bind the instance to the element with the ID of <code>container</code>. Then we initialize our instance with some data. It is best to initialize Vue instances with the data that you plan on using in it. This ensures that Vue binds to all the data we want it to. Lastly, we define the methods we will use in our Vue instance. Here is where we will define the <code>changeRepo</code> method that we used in our HTML earlier.</p>
+<p>The <code>changeRepo</code> method simply splits the value of the <code>fullRepoName</code> piece of data and assigns the first part to <code>username</code> and the second part to <code>repo</code>. This is possible due to the two-way binding I mentioned earlier. We also print the data on our instance to the console so we can see it change as we submit our form.</p>
+<p><a href="https://scotch.io/wp-content/uploads/2015/11/only-form.jpg"><img src="https://scotch.io/wp-content/uploads/2015/11/only-form.jpg" alt="only-form" width="900" class="alignnone size-full wp-image-11761 img-responsive img-thumbnail"></a></p>
+<p>Go ahead and view the page in your browser. The Gulp task compiles the code as you write it and will refresh the browser for you also. Open dev tools and view the console. Now type the name of a public Github repository. For example, try typing <code>laravel/laravel</code> in the text box and hit submit. You should see the data spit out in a nice, readable form in the console. Pretty neat, huh?</p>
+<p>This all is fine and dandy, but let&#x2019;s start displaying the files for the repository we type in.</p>
+<h2>The File Explorer</h2>
+<p>We will implement the explorer as a separate component. Separating applications into smaller components makes code easier to comprehend and maintain. First, let&#x2019;s create a file at <code>src/js/components/github-file-explorer/index.js</code>. This will be the main entry for our component. Before we define anything, let&#x2019;s tell our Vue instance about this new component. Add the following code to our Vue instance.</p>
+<pre><code class="language-javascript">
+ components: {
+ githubFileExplorer: require('./components/github-file-explorer')
+ }
+</code>
+</pre>
+<p>This brings in our component from the given file. Since no specific file is provided, the default used is <code>index.js</code>.</p>
+<p>In the <code>index.js</code> file of our component, we need to export an object that has all the configurations for our component. Put the following in that file.</p>
+<pre><code class="language-javascript">
+ module.exports = {
+ template: require('./template.html'),
+ data: function() {
+ return {
+ path: '/',
+ files: []
+ };
+ },
+ props: {
+ username: {
+ type: String,
+ required: true
+ },
+ repo: {
+ type: String,
+ required: true
+ }
+ },
+ created: function() {
+ if (this.username &amp;&amp; this.repo) this.getFiles();
+ }
+ };
+</code>
+</pre>
+<p>Here we are exporting the configuration object. We are defining a template and bringing in code from a <code>template.html</code> file in the same directory. We can bring in HTML files like this thanks to a Browserify transform called <a href="https://github.com/bclinkinbeard/partialify">Partialify</a>. Browserify has <a href="https://github.com/substack/node-browserify/wiki/list-of-transforms">a ton of other transforms</a> you can use in your projects. We will create this template file in a minute. Next we define the data this component will need. It will track the current path and the files we receive from Github.</p>
+<p>We then define the <a href="http://vuejs.org/guide/components.html#Props">props</a> this component will accept from its parent. Because we don&#x2019;t want to make requests to Github if the username or repo are blank, we define them in the component as objects. This allows us to add validations that the props must pass for the data in the Vue instance to be updated. We define both these props as strings and required.</p>
+<p>Lastly, we add a <code>created</code> method that calls <code>getFiles</code> if <code>username</code> and <code>repo</code> are set. This <code>created</code> method is a <a href="http://vuejs.org/guide/instance.html#Lifecycle_Diagram">lifecycle method</a>. This means it will be called when that particular point in the component&#x2019;s lifecycle is hit. Since it calls <code>getFiles</code>, let&#x2019;s create this method. Add the following code to this component.</p>
+<pre><code class="language-javascript">
+ methods: {
+ getFiles: function() {
+ this.$http.get('https://api.github.com/repos/' + this.fullRepoUrl + '/contents' + this.path,
+ function(data) {
+ this.files = data;
+ }
+ );
+ }
+ }
+</code>
+</pre>
+<p>Here we are defining <code>getFiles</code>. This method hits the Github API for us and returns the files in the repository for the path specified. We are using <code>this.$http</code> to make the call. That is provided by <code>vue-resource</code>, a plugin for Vue that allows us to make RESTful calls from inside our Vue instance. We could also use jQuery or something similar to do the same thing. However, I prefer to use <code>vue-resource</code> since it is made for Vue. For it to work though, we need to tell Vue to use it. We have already brought it in as a dependency in the <code>package.json</code> in this project. Let&#x2019;s tell Vue about it. Put the following in your <code>src/app.js</code> underneath where we turned on debugging.</p>
+<pre><code class="language-javascript">
+ Vue.use(require('vue-resource'));
+</code>
+</pre>
+<p>In <code>getFiles</code>, we call the <code>get</code> method on <code>this.$http</code>, which will make a GET request to the URL provided and then run the callback supplied and pass the data returned from the GET request. We build the URL by concatenating the base of the Github API with the <code>fullRepoUrl</code>, which we will create in a moment, and then adding the <code>path</code> to the end. For more information on this endpoint, see <a href="https://developer.github.com/v3/repos/contents/#get-contents">the Github documentation</a>. In the callback, we are setting <code>this.files</code> to the data returned.</p>
+<p>Let&#x2019;s create the <code>fullRepoUrl</code> property now. Since it isn&#x2019;t part of our data, we can create it as a computed property, meaning Vue will calculate it on the fly whenever we need to use it. Add the following to the configuration object of our component.</p>
+<pre><code class="language-javascript">
+ computed: {
+ fullRepoUrl: function() {
+ return this.username + '/' + this.repo;
+ },
+ }
+</code>
+</pre>
+<p>This simply creates a computed object with a single method in it. The name of the method becomes the name of the property we access. This method simply concatenates the username and repo together for convenience.</p>
+<p>Let&#x2019;s put some of this to use. Let&#x2019;s create our template so we can see something. Create a file at <code>src/js/components/github-file-explorer/template.html</code> and add the following into it.</p>
+<pre><code class="language-markup">
+
+ &lt;div class="row"&gt;
+ &lt;div class="col-md-12"&gt;
+ &lt;table class="table"&gt;
+ &lt;caption&gt;{{ path }}&lt;/caption&gt;
+ &lt;thead&gt;
+ &lt;tr&gt;
+ &lt;th&gt;Name&lt;/th&gt;
+ &lt;th class="text-right"&gt;&lt;button class="btn btn-default btn-xs" @click="goBack()" v-if="path !== '/'"&gt;Go Back&lt;/button&gt;&lt;/th&gt;
+ &lt;/tr&gt;
+ &lt;/thead&gt;
+ &lt;tbody&gt;
+ &lt;tr v-for="file in files"&gt;
+ &lt;td&gt;
+ &lt;div class="file" v-if="file.type === 'file'"&gt;
+ &lt;i class="fa fa-file-o"&gt;&lt;/i&gt;
+ {{ file.name }}
+ &lt;/div&gt;
+ &lt;div class="directory" v-if="file.type === 'dir'"&gt;
+ &lt;i class="fa fa-folder-o"&gt;&lt;/i&gt;
+ &lt;a @click="changePath(file.path)"&gt;{{ file.name }}&lt;/a&gt;
+ &lt;/div&gt;
+ &lt;/td&gt;
+ &lt;td class="text-right"&gt;
+ &lt;a href="{{ file.download_url }}" download v-if="file.type === 'file'"&gt;
+ &lt;i class="fa fa-cloud-download"&gt;&lt;/i&gt;
+ &lt;/a&gt;
+ &lt;/td&gt;
+ &lt;/tr&gt;
+ &lt;/tbody&gt;
+ &lt;/table&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+
+</code>
+</pre>
+<p>Most of this should make sense. We are creating a table with a caption. The caption is the <code>path</code> data property on this component. There is also a back button that fires the <code>goBack</code> method when clicked. We will make this in a minute. Then we iterate through each of the files using <code>v-for</code> and create rows in the table for each one. We use <code>v-if</code> to only show certain icons and links based on the type of the file. Files from Github are generally either files (<code>file</code>) or directories (<code>dir</code>). Then we display a download link but only if it is of type <code>file</code>. Notice here I am using the HTML5 attribute <code>download</code> to tell the browser to download the file and not go to the page pointed to by the <code>href</code> attribute. The availability on this <a href="http://caniuse.com/#feat=download">is spotty right now</a> but should be well supported in the future.</p>
+<p>Check out the page in the browser &#x2026; and there&#x2019;s nothing. Why? Well we have created the component, but we never added it to our <code>index.html</code>. So let&#x2019;s do that! Add the following to the <code>index.html</code> under the <code>hr</code>.</p>
+<pre><code class="language-markup">
+
+&lt;github-file-explorer username="laravel" repo="laravel"&gt;&lt;/github-file-explorer&gt;
+
+</code>
+</pre>
+<p>This adds the component to our HTML and Vue will display it using the logic we have just created. Notice here we have used <a href="http://vuejs.org/guide/components.html#camelCase_vs-_kebab-case">kebab-case</a> syntax when we put the component in HTML, but when we defined it in our Vue instance, we used camel-case. This is because JavaScript can&#x2019;t have hyphens in variable names. Don&#x2019;t worry! Vue will make the conversion for us!</p>
+<p>Now, view your application in the browser. Voila! You should be able to see the files that are in the Laravel repository. Let&#x2019;s get <code>changePath</code> and <code>goBack</code> working so we can navigate the whole file structure. Input the following as methods in our component.</p>
+<pre><code class="language-javascript">
+ changePath: function(path) {
+ this.path = '/' + path;
+ this.getFiles();
+ },
+ goBack: function() {
+ this.path = this.path.split('/').slice(0, -1).join('/');
+ if (this.path === '') this.path = '/';
+ 
+ this.getFiles();
+ }
+</code>
+</pre>
+<p>Change path takes in a path, which is passed in from our template, sets the <code>path</code> data property equal to this path with a slash on the front, and then calls <code>getFiles</code> to update the files our Vue instance is watching. <code>goBack</code> removes the right-most portion of the URL and then calls <code>getFiles</code> also.</p>
+<p>Check out our application in the browser. Now we can navigate through the file structure! Woohoo! Also give downloading a file a try. Clicking on the link will just download the file to your computer. Super simple.</p>
+<p>Let&#x2019;s do one last thing to change the look of our explorer. Right now the files are spit out in whatever order Github returns them. Let&#x2019;s take back control from Github and reorder them! Let&#x2019;s put the directories on top in alphabetical order and then the files underneath them in alphabetical order. Put the following in the <code>computed</code> object in our component.</p>
+<pre><code class="language-javascript">
+ sortedFiles: function() {
+ return this.files.slice(0).sort(function(a, b) {
+ if (a.type !== b.type) {
+ if (a.type === 'dir') {
+ return -1;
+ } else {
+ return 1;
+ }
+ } else {
+ if (a.name &lt; b.name) {
+ return -1;
+ } else {
+ return 1;
+ }
+ }
+ });
+ }
+</code>
+</pre>
+<p>This piece of code gives us a <code>sortedFiles</code> property on our Vue instance that we can use in our template. Since <code>sort</code> changes an array &#x201C;in place,&#x201D; we create a copy using <code>slice(0)</code>. We then call <code>sort</code> on this copy and pass it a custom sorting function that gets passed a pair of our files to compare. This function checks if they are the same type. If they are, then it checks if the type of the first one is a directory. If it is, then it returns -1, which means it should be before the other one in the array. If it&#x2019;s not a directory, then it returns 1, meaning it should be after the other one. If they are the same type, then it will check to see if the name of the first one is less than the name of the second. Easiest way to think about this is uppercase letters are less than lowercase letters and then it goes in order of the alphabet. So &#x201C;a&#x201D; is less than &#x201C;b&#x201D; and &#x201C;A&#x201D; is less than &#x201C;a.&#x201D;</p>
+<p>Now we need to update our template to use this array instead of the raw <code>files</code> array. Update the <code>v-for</code> to use this array like so.</p>
+<pre><code class="language-markup">
+ &lt;tr v-for="file in sortedFiles"&gt;
+</code>
+</pre>
+<p><a href="https://scotch.io/wp-content/uploads/2015/11/file-explorer.jpg"><img src="https://scotch.io/wp-content/uploads/2015/11/file-explorer.jpg" alt="file-explorer" width="3016" class="alignnone size-full wp-image-11759 img-responsive img-thumbnail"></a></p>
+<p>Now refresh the page if it hasn&#x2019;t already and view your work! Boom!</p>
+<h2>Making it Interactive</h2>
+<p>So we have a nice Github explorer here, but it isn&#x2019;t all that great if we can&#x2019;t update the repo shown without updating the HTML. Let&#x2019;s make it work with the text field we created earlier. First we need to tell our component to watch the repo prop and update our files when we do. Add the following to our component.</p>
+<pre><code class="language-javascript">
+ watch: {
+ repo: function(newVal, oldVal) {
+ this.getFiles();
+ }
+ },
+</code>
+</pre>
+<p>Here we define a <code>watch</code> object. The keys of this object are properties on the component that should be watched by Vue, and if updated, the callback will be run. In this one, all we do is call our trusty method <code>getFiles</code> to update the files we have locally.</p>
+<p>Now that we have the component watching the <code>repo</code> prop, we now need to make sure that the prop is dynamic instead of being static as it is now. Change the declaration of the component in our <code>index.html</code> to look like the following.</p>
+<pre><code>&lt;github-file-explorer :username="username" :repo="repo"&gt;&lt;/github-file-explorer&gt;
+</code></pre>
+<p>Here we are setting up a one-way binding between username on the component and username on the parent. <code>:username</code> references the data attribute <code>username</code> on the component. When we pass in <code>username</code> to it, this means any time the parent&#x2019;s username is updated, then the <code>username</code> property on the component will update also.</p>
+<p><a href="https://scotch.io/wp-content/uploads/2015/11/final.jpg"><img src="https://scotch.io/wp-content/uploads/2015/11/final.jpg" alt="final" width="900" class="alignnone size-full wp-image-11760 img-responsive img-thumbnail"></a></p>
+<p>Now check it out in the browser. In the text box, type the name of your favorite repo on Github. If you can&#x2019;t think of one try using <code>jakeboyles/MadeInCincy</code>. You will see the files populate. You can now fully navigate the file structure of any public Github repository.</p>
+<h2>Wrapping up</h2>
+<p>We have done alot. There was alot to talk through. However, think about how little code was actually necessary to write, and the code we did write was not all that crazy. Vue handles all the data-binding stuff for us so that it&#x2019;s one less thing we have to worry about. If you have any questions or just want to say, &#x201C;Hello,&#x201D; please leave a comment below.</p>
+
+					
+
+
+
+					
+				</div>
+
+									
+					</div>
+</body></html>

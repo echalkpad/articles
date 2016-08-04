@@ -1,0 +1,296 @@
+<!DOCTYPE html><html><head><title>Connect your Raspberry Pi to Wireless Enterprise Environments with WPA supplicant</title></head><body>
+<h1>Connect your Raspberry Pi to Wireless Enterprise Environments with WPA supplicant</h1><p><a href="https://netbeez.net/2014/10/14/connect-your-raspberry-pi-to-wireless-enterprise-environments-with-wpa-supplicant/" target="_new">Original URL</a></p>
+<p><blockquote>It&#x2019;s not a surprise that, at NetBeez, we love the Raspberry Pi! This little device can do magic on wired as well as wireless networks. Few weeks ago, Panos posted an article that offered some&hellip;</blockquote></p>
+<div>
+
+ 
+ <div class="entry-content clearfix">
+
+ 
+ <p><img class="alignleft size-medium wp-image-1351" src="https://netbeez.net/wp-content/uploads/2014/10/Wireless-Client-AP-Radius-300x147.png%20300w,%20https://netbeez.net/wp-content/uploads/2014/10/Wireless-Client-AP-Radius.png%20850w" alt="Wireless Client - AP - Radius" width="300">It&#x2019;s not a surprise that, at NetBeez, we love the Raspberry Pi! This little device can do magic on wired as well as wireless networks. Few weeks ago, Panos posted an article that offered some examples on how to use the <a href="http://netbeez.net/2014/08/19/raspberry-pi-and-distributed-network-monitoring-iperf/">Raspberry Pi for distributed monitoring with Iperf</a>. Here, I want to talk a little about using this platform, or any other Linux client, to connect to enterprise wireless networks.</p>
+<h3><strong><br>
+Wireless security</strong></h3>
+<p>First of all, there are different types of security settings that can be used for wireless networks. In the section below, I want to list each of one them, from the weakest to the most secure option and shed some light on all options available.</p>
+
+<h4>Open</h4>
+<p>This configuration does not require any password. The wireless client simply connects to the open SSID. This is the case of a coffee shop, like Starbucks, or of an enterprise&#x2019;s guest internet access that offers free wireless services to its customers. Typically, a client that accesses such a free wireless service is redirected to a captive portal where it has to accept the terms and conditions of service before being able to use the network.</p>
+<h4>WEP</h4>
+<p>WEP (Wired Equivalent Privacy) is a security setting that uses pre-defined passwords. It can be easily exploited and, for this reason, should not be used to protect your home or work wireless network.The most common versions of WEP are:</p>
+<ul>
+<li>WEP-40 also known as WEP-64: It uses 40 bits of key and a 24-bit initialization vector. It can be also expressed with a string of 10 hexadecimal characters (remember 4 bits for 1 hex).</li>
+<li>WEP-104 also known as WEP-128: It uses 104 bits of key and a 24-bit initialization vector. It can be also expressed with a string of 26 hexadecimal characters.</li>
+</ul>
+<h4>WPA</h4>
+<p>WPA (Wi-Fi Protected Access) is, from a security perspective, more secure than WEP, but it can be still exploited by an attacker. For the key encryption protocol, WPA can be configured to use TKIP or CCMP, which is based on AES (CCMP and AES are used interchangeably). CCMP is more secure than TKIP and should be used when possible. However, not all the hardware vendors may support CCMP. For this reason, WPA networks can be configured with the following options:</p>
+<ul>
+<li>WEP CCMP</li>
+<li>WEP CCMP/TKIP (CCMP preferred, TKIP as fallback)</li>
+<li>WEP TKIP</li>
+</ul>
+<p>For the authentication part, in WPA can either use:</p>
+<ul>
+<li>A Pre-Shared Key (WPA-PSK) that is convenient for a home or small office environment. In this setup, all the users share the same password so if this is compromised or one of the employees leave, you will have to change the password and update your access point and wireless clients.</li>
+<li>The Extensible Authentication Protocol (EAP), a framework that support different authentication methods. This is a form of enterprise authentication that creates a unique authentication profile for each user. The EAP framework will be discussed in the next paragraph.</li>
+</ul>
+<h4>WPA2</h4>
+<p>Also known as IEEE 802.11i-2004, WPA2 only uses CCMP as the encryption algorithm. As with WPA, the authentication on WPA2 networks can be based on pre-shared keys (WPA2-PSK) or on the EAP framework.</p>
+<p><strong><b>Do you want to learn how you can monitor your wireless network with NetBeez? Watch the video </b>:</strong> <a href="https://netbeez.net/resources/watch-end-user-visibility-from-a-wireless-perspective/">Watch End-User Visibility From a Wireless Perspective</a></p>
+<p><img class=" wp-image-5539 aligncenter" src="https://netbeez.net/wp-content/uploads/2014/01/WiFi-BEEZ-300x232.png%20300w,%20https://netbeez.net/wp-content/uploads/2014/01/WiFi-BEEZ-1024x790.png%201024w,%20https://netbeez.net/wp-content/uploads/2014/01/WiFi-BEEZ.png%201052w" alt="WiFi BEEZ" width="198"></p>
+<h3><strong>WPA supplicant</strong></h3>
+<p>The WPA supplicant software (available <a href="https://wiki.archlinux.org/index.php/WPA_supplicant" target="_blank">here</a>) is not mandatory if you are connecting your wireless client to a home network that uses one of the pre-shared key methods (WEP, WPA-PSK, WPA2-PSK) to authenticate its clients. Since in our case we want to deploy our wireless client in an enterprise network, the WPA supplicant software it is needed. Wireless enterprise networks generally use one of the most common WPA or WPA2 Extensible Authentication Protocol (<a href="http://en.wikipedia.org/wiki/Extensible_Authentication_Protocol" target="_blank">EAP</a>) methods, such as PEAP, EAP-TLS, EAP-TTLS, and LEAP.</p>
+<p>To instruct our wireless Raspberry Pi to use the WPA supplicant software, we have to edit the /etc/network/interfaces and add the following configuration lines under the wlan0 interface:</p>
+
+
+
+		<div id="crayon-569fe869a41ee862549681" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a41ee862549681-1"><span class="crayon-e">auto </span><span class="crayon-e">wlan0</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ee862549681-2"><span class="crayon-v">allow</span><span class="crayon-o">-</span><span class="crayon-e">hotplug </span><span class="crayon-e">wlan0</span></p><p class="crayon-line" id="crayon-569fe869a41ee862549681-3"><span class="crayon-e">iface </span><span class="crayon-e">wlan0 </span><span class="crayon-e">inet </span><span class="crayon-e">dhcp</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ee862549681-4"><span class="crayon-v">wpa</span><span class="crayon-o">-</span><span class="crayon-e">ssid </span><span class="crayon-v">netbeez</span><span class="crayon-o">-</span><span class="crayon-v">enterprise</span><span class="crayon-o">-</span><span class="crayon-e">wireless</span></p><p class="crayon-line" id="crayon-569fe869a41ee862549681-5"><span class="crayon-v">pre</span><span class="crayon-o">-</span><span class="crayon-e">up </span><span class="crayon-v">wpa_supplicant</span><span class="crayon-o">-</span><span class="crayon-v">B</span><span class="crayon-o">-</span><span class="crayon-v">Dwext</span><span class="crayon-o">-</span><span class="crayon-i">i</span><span class="crayon-v">wlan0</span><span class="crayon-o">-</span><span class="crayon-v">c</span><span class="crayon-o">/</span><span class="crayon-v">etc</span><span class="crayon-o">/</span><span class="crayon-v">wpa_supplicant</span><span class="crayon-o">/</span><span class="crayon-v">wpa_supplicant</span><span class="crayon-sy">.</span><span class="crayon-v">conf</span><span class="crayon-o">-</span><span class="crayon-v">f</span><span class="crayon-o">/</span><span class="crayon-t">var</span><span class="crayon-o">/</span><span class="crayon-v">log</span><span class="crayon-o">/</span><span class="crayon-v">wpa_supplicant</span><span class="crayon-sy">.</span><span class="crayon-e">log</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ee862549681-6"><span class="crayon-v">post</span><span class="crayon-o">-</span><span class="crayon-e">down </span><span class="crayon-v">killall</span><span class="crayon-o">-</span><span class="crayon-i">q</span><span class="crayon-v">wpa_supplicant</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Then we have to edit the /etc/wpa_supplicant/wpa_supplicant.conf file based on your specific configuration:</p>
+
+
+
+		<div id="crayon-569fe869a41ff151470033" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a41ff151470033-1"><span class="crayon-v">ctrl_interface</span><span class="crayon-o">=</span><span class="crayon-o">/</span><span class="crayon-t">var</span><span class="crayon-o">/</span><span class="crayon-v">run</span><span class="crayon-o">/</span><span class="crayon-e">wpa_supplicant</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-2"><span class="crayon-v">update_config</span><span class="crayon-o">=</span><span class="crayon-cn">1</span></p><p class="crayon-line" id="crayon-569fe869a41ff151470033-3"><span class="crayon-v">network</span><span class="crayon-o">=</span><span class="crayon-sy">{</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-4"><span class="crayon-v">ssid</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line" id="crayon-569fe869a41ff151470033-5"><span class="crayon-v">proto</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-6"><span class="crayon-v">pairwise</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line" id="crayon-569fe869a41ff151470033-7"><span class="crayon-v">group</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-8"><span class="crayon-v">key_mgmt</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line" id="crayon-569fe869a41ff151470033-9"><span class="crayon-v">eap</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-10"><span class="crayon-v">identity</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line" id="crayon-569fe869a41ff151470033-11"><span class="crayon-v">password</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-12"><span class="crayon-v">ca_cert</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line" id="crayon-569fe869a41ff151470033-13"><span class="crayon-v">client_cert</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-14"><span class="crayon-v">private_key</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line" id="crayon-569fe869a41ff151470033-15"><span class="crayon-v">private_key_password</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-16"><span class="crayon-v">phase1</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p><p class="crayon-line" id="crayon-569fe869a41ff151470033-17"><span class="crayon-v">phase2</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a41ff151470033-18"><span class="crayon-v">eapol_flags</span><span class="crayon-o">=</span>&#x201D;&#x201D;</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>In the following table I listed some of the most important configuration options to consider when editing the wpa_supplicant file:</p>
+<table>
+<tbody>
+<tr>
+<td>Option</td>
+<td>Defines</td>
+<td>Values</td>
+</tr>
+<tr>
+<td>proto</td>
+<td>Wireless security settings</td>
+<td>Default value: WPA RSNWPA = for <em>WPA only networks</em>RSN = for <em>WPA2 only networks</em>Leave default value for WPA/WPA2 networks.</td>
+</tr>
+<tr>
+<td>key_mgmt</td>
+<td>Accepted authentication protocols</td>
+<td>Default value: WPA-PSK WPA-EAPWPA-PSK = for <em>WPA with pre-shared key</em>WPA-EAP = for <em>WPA using EAP methods</em>IEEE8021X = <em>IEEE 802.1X using EAP</em>NONE = <em>plaintext or static WEP</em></td>
+</tr>
+<tr>
+<td>pairwise</td>
+<td>Accepted pairwise (unicast) ciphers for WPA</td>
+<td>Default value: CCMP TKIPCCMP = for <em>WPA2 only networks</em>TKIP = for <em>WPA only networks</em>Leave default value for WPA CCMP/TKIP networks</td>
+</tr>
+<tr>
+<td>group</td>
+<td>Accepted pairwise (broadcast/multicast) ciphers for WPA</td>
+<td>Default value: CCMP TKIP WEP40 WEP140CCMP = for <em>WPA CCMP or WPA2</em>TKIP = for <em>WPA TKIP</em>WEP104 = <em>for WEP with 128 bits key</em>WEP40 = <em>for WEP with 64 bits key</em></td>
+</tr>
+<tr>
+<td>auth_alg</td>
+<td>Accepted authentication algorithms</td>
+<td>If not set, automatic detection is usedOPEN = <em>required for WPA and WPA2</em>SHARED = <em>required for WEP</em>LEAP = <em>required for LEAP only</em></td>
+</tr>
+<tr>
+<td>psk</td>
+<td>Pre-shared key</td>
+<td>Specify the 256 bit pre-shared key, for WPA-PSK and WPA2-PSK networks</td>
+</tr>
+<tr>
+<td>eap</td>
+<td>EAP methods</td>
+<td>Define the list of EAP methods accepted. If not set, all the methods are accepted by default. Otherwise, the user can restrict accepted methods, which should be space separated:PEAP = required for PEAPv0/EAP-MSCHAPV2TLS = required for the EAP-TLS with client and server certificateTTLS = required for EAP-TTLSLEAP = required for LEAP</td>
+</tr>
+</tbody>
+</table>
+<h3>EAP methods</h3>
+<p>In wireless enterprise environments, the EAP framework is king. Below are the most common EAP methods along with their wpa_supplicant settings (taken from <a href="http://www.lsi.upc.edu/lclsi/Manuales/wireless/files/wpa_supplicant.conf">here</a>):</p>
+<h4>PEAP (Protected EAP)</h4>
+<p>There are many variations of the Protected EAP method, but the PEAPv0/EAP-MSCHAPV2 is generally the most common configuration that is used in an enterprise environment. This authentication protocol requires the server-side public key certificate to establish the secure TLS tunnel (PEAPv0) that protects the transmission of the user credentials (MS-CHAPV2).</p>
+
+
+
+		<div id="crayon-569fe869a420b565905299" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a420b565905299-1"><span class="crayon-v">network</span><span class="crayon-o">=</span><span class="crayon-sy">{</span></p><p class="crayon-line" id="crayon-569fe869a420b565905299-3"><span class="crayon-v">key_mgmt</span><span class="crayon-o">=</span><span class="crayon-v">WPA</span><span class="crayon-o">-</span><span class="crayon-e">EAP</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a420b565905299-4"><span class="crayon-v">eap</span><span class="crayon-o">=</span><span class="crayon-e">PEAP</span></p><p class="crayon-line" id="crayon-569fe869a420b565905299-5"><span class="crayon-v">identity</span><span class="crayon-o">=</span><span class="crayon-s">"&lt;em&gt;user@example.com&lt;/em&gt;"</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a420b565905299-6"><span class="crayon-v">password</span><span class="crayon-o">=</span><span class="crayon-s">"&lt;em&gt;password&lt;/em&gt;"</span></p><p class="crayon-line" id="crayon-569fe869a420b565905299-7"><span class="crayon-v">ca_cert</span><span class="crayon-o">=</span><span class="crayon-s">"/etc/cert/ca.pem"</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a420b565905299-8"><span class="crayon-v">phase2</span><span class="crayon-o">=</span><span class="crayon-s">"auth=MSCHAPV2"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h4>EAP-TLS (Transport Security Layer)</h4>
+<p>This method is considered one of the most secure and relies on a RADIUS server as the authentication backend. It uses the Public Key Infrastructure (PKI) and requires an x.509 client side certificate to communicate with the authentication server. It is covered in the RFC 5216. The client certificate, client private key, and CA certificate should be stored in PEM/DER format. If you receive your certificate in PKCS#12 format, you can convert it to the PEM format with the following commands:</p>
+<p># Extract the user certificate and private key from the P12 container</p>
+
+
+
+		<div id="crayon-569fe869a4213106345712" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a4213106345712-1"><span class="crayon-e">openssl </span><span class="crayon-v">pkcs12</span><span class="crayon-o">-</span><span class="crayon-st">in</span><span class="crayon-v">example</span><span class="crayon-sy">.</span><span class="crayon-v">p12</span><span class="crayon-o">-</span><span class="crayon-e">out </span><span class="crayon-v">user</span><span class="crayon-sy">.</span><span class="crayon-i">pem</span>&#x2013;<span class="crayon-v">clcerts</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p># Extract the CA certificate from the P12 container</p>
+
+
+
+		<div id="crayon-569fe869a421b859094028" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a421b859094028-1"><span class="crayon-e">openssl </span><span class="crayon-v">pkcs12</span><span class="crayon-o">-</span><span class="crayon-st">in</span><span class="crayon-v">example</span><span class="crayon-sy">.</span><span class="crayon-v">p12</span><span class="crayon-o">-</span><span class="crayon-e">out </span><span class="crayon-v">ca</span><span class="crayon-sy">.</span><span class="crayon-v">pem</span><span class="crayon-o">-</span><span class="crayon-v">cacerts</span><span class="crayon-o">-</span><span class="crayon-v">nokeys</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>The wpa_supplicant.conf file will be configured the following way:</p>
+
+
+
+		<div id="crayon-569fe869a4222105987995" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a4222105987995-1"><span class="crayon-v">network</span><span class="crayon-o">=</span><span class="crayon-sy">{</span></p><p class="crayon-line" id="crayon-569fe869a4222105987995-3"><span class="crayon-v">key_mgmt</span><span class="crayon-o">=</span><span class="crayon-v">WPA</span><span class="crayon-o">-</span><span class="crayon-e">EAP</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a4222105987995-4"><span class="crayon-v">eap</span><span class="crayon-o">=</span><span class="crayon-e">TLS</span></p><p class="crayon-line" id="crayon-569fe869a4222105987995-5"><span class="crayon-v">identity</span><span class="crayon-o">=</span><span class="crayon-s">"&lt;em&gt;user@example.com&lt;/em&gt;"</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a4222105987995-6"><span class="crayon-v">ca_cert</span><span class="crayon-o">=</span><span class="crayon-s">"/etc/cert/ca.pem"</span></p><p class="crayon-line" id="crayon-569fe869a4222105987995-7"><span class="crayon-v">client_cert</span><span class="crayon-o">=</span>&#x201D;<span class="crayon-o">/</span><span class="crayon-v">etc</span><span class="crayon-o">/</span><span class="crayon-v">cert</span><span class="crayon-o">/</span><span class="crayon-v">user</span><span class="crayon-sy">.</span><span class="crayon-i">pem</span>&#x201D;</p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a4222105987995-8"><span class="crayon-v">private_key</span><span class="crayon-o">=</span>&#x201D;<span class="crayon-o">/</span><span class="crayon-v">etc</span><span class="crayon-o">/</span><span class="crayon-v">cert</span><span class="crayon-o">/</span><span class="crayon-v">user</span><span class="crayon-sy">.</span><span class="crayon-i">key</span>&#x201D;</p><p class="crayon-line" id="crayon-569fe869a4222105987995-9"><span class="crayon-v">private_key_password</span><span class="crayon-o">=</span>&#x201D;<span class="crayon-o">&lt;</span><span class="crayon-v">em</span><span class="crayon-o">&gt;</span><span class="crayon-v">password</span><span class="crayon-o">&lt;</span><span class="crayon-o">/</span><span class="crayon-v">em</span><span class="crayon-o">&gt;</span>&#x201D;</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h4>EAP-TTLS (Tunneled Transport Layer Security)</h4>
+<p>This method is very similar to the PEAPv0/MSCHAPV2 method. A server-side public key certificate is used to authenticate the server and establish a secure tunnel through which the client credentials are transmitted. The client can be authenticated via a CA-signed certificate with the server or just authenticates via traditional username and password credentials.</p>
+
+
+
+		<div id="crayon-569fe869a422a988613956" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a422a988613956-1"><span class="crayon-v">network</span><span class="crayon-o">=</span><span class="crayon-sy">{</span></p><p class="crayon-line" id="crayon-569fe869a422a988613956-3"><span class="crayon-v">key_mgmt</span><span class="crayon-o">=</span><span class="crayon-v">WPA</span><span class="crayon-o">-</span><span class="crayon-e">EAP</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a422a988613956-4"><span class="crayon-v">eap</span><span class="crayon-o">=</span><span class="crayon-v">TTLS</span></p><p class="crayon-line" id="crayon-569fe869a422a988613956-5"><span class="crayon-p"># Phase1 / outer authentication</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a422a988613956-6"><span class="crayon-v">anonymous_identity</span><span class="crayon-o">=</span><span class="crayon-s">"anonymous@example.com"</span></p><p class="crayon-line" id="crayon-569fe869a422a988613956-7"><span class="crayon-v">ca_cert</span><span class="crayon-o">=</span><span class="crayon-s">"/etc/cert/ca.pem"</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a422a988613956-8"><span class="crayon-p"># Phase 2 / inner authentication via user certificate</span></p><p class="crayon-line" id="crayon-569fe869a422a988613956-9"><span class="crayon-v">phase2</span><span class="crayon-o">=</span><span class="crayon-s">"autheap=TLS"</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a422a988613956-10"><span class="crayon-v">ca_cert2</span><span class="crayon-o">=</span><span class="crayon-s">"/etc/cert/ca2.pem"</span></p><p class="crayon-line" id="crayon-569fe869a422a988613956-11"><span class="crayon-v">client_cert2</span><span class="crayon-o">=</span><span class="crayon-s">"/etc/cer/user.pem"</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a422a988613956-12"><span class="crayon-v">private_key2</span><span class="crayon-o">=</span><span class="crayon-s">"/etc/cer/user.prv"</span></p><p class="crayon-line" id="crayon-569fe869a422a988613956-13"><span class="crayon-v">private_key2_passwd</span><span class="crayon-o">=</span><span class="crayon-s">"&lt;em&gt;password&lt;/em&gt;"</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a422a988613956-14"><span class="crayon-v">priority</span><span class="crayon-o">=</span><span class="crayon-cn">2</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h4>LEAP (Lightweight Extensible Authentication Protocol)</h4>
+<p>This method was developed by Cisco before the ratification of the 802.11i standard and is supported by a wide range of operating systems (Windows, Linux, Mac) and wireless vendors. LEAP supports Windows NT/2000 Active Directory profiles and authenticates against a RADIUS server. For this reason, LEAP was largely adopted in wireless enterprise environments and may still be used by several organizations. However, since it relies on the MS-CHAPv2 authentication protocol, it can be exploited, so it is highly recommended to use it with complex passwords or to adopt, if possible, a different EAP method.</p>
+
+
+
+		<div id="crayon-569fe869a4232662760897" class="crayon-syntax crayon-theme-arduino-ide crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-569fe869a4232662760897-1"><span class="crayon-v">network</span><span class="crayon-o">=</span><span class="crayon-sy">{</span></p><p class="crayon-line" id="crayon-569fe869a4232662760897-3"><span class="crayon-v">key_mgmt</span><span class="crayon-o">=</span><span class="crayon-v">WPA</span><span class="crayon-o">-</span><span class="crayon-e">EAP</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a4232662760897-4"><span class="crayon-v">auth_alg</span><span class="crayon-o">=</span><span class="crayon-e">LEAP</span></p><p class="crayon-line" id="crayon-569fe869a4232662760897-5"><span class="crayon-v">eap</span><span class="crayon-o">=</span><span class="crayon-e">LEAP</span></p><p class="crayon-line crayon-striped-line" id="crayon-569fe869a4232662760897-6"><span class="crayon-v">identity</span><span class="crayon-o">=</span><span class="crayon-s">"&lt;em&gt;user&lt;/em&gt;"</span></p><p class="crayon-line" id="crayon-569fe869a4232662760897-7"><span class="crayon-v">password</span><span class="crayon-o">=</span><span class="crayon-s">"&lt;em&gt;password&lt;/em&gt;"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>I hope that this post was beneficial to shed some light on how you can configure your wireless Raspberry Pi, or Linux client running a WPA supplicant, to connect to a wireless enterprise environment.</p>
+<p><strong>Do you want to learn how we do WiFi monitoring at NetBeez? Sign up for a one-to-one demo!</strong><br>
+<code></code></p>
+
+<p class="mc-field-group"><label for="mce-EMAIL">Email Address <span class="asterisk">* </span><br>
+</label> </p>
+<p class="mc-field-group"><label for="mce-NAME">Name </label> </p>
+<p class="mc-field-group"><label for="mce-COMP">Company </label> </p>
+
+
+
+
+
+
+
+
+
+ 
+ </div>
+ 
+
+ 
+ 
+
+ 
+ 
+ </div>
+</body></html>

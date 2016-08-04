@@ -1,0 +1,1546 @@
+<!DOCTYPE html><html><head><title>Non-root GPU passthrough setup</title></head><body>
+<h1>Non-root GPU passthrough setup</h1><p><a href="http://www.evonide.com/non-root-gpu-passthrough-setup/" target="_new">Original URL</a></p>
+<p><blockquote>If you want to use Linux as your main operating system and don&#x2019;t want to do compromises like using a dual-boot solution with Windows there is an alternative called GPU passthrough. You&hellip;</blockquote></p>
+<div><div class="pure_content">
+
+<p>If you want to use Linux as your main operating system and don&#x2019;t want to do compromises like using a dual-boot solution with Windows there is an alternative called GPU passthrough. You basically pass through your GPU into a virtual machine s.t. your guest can fully utilize it according to your desires. The bottleneck of doing this is negligible (in my tests the 3DMark benchmark results were almost equal).</p>
+
+<p>There are already a lot of guides and tutorials about how to make a GPU passthrough setup with QEMU. Among the best resources I could find are:</p>
+
+<p>Although considering all of those and putting a lot of effort into setting up my own setup I had to deal with many annoying and very time consuming issues.<br>
+One of those issues is that most of the available guides just start QEMU with root privileges. This means a QEMU breakout directly leads to full control over your host system.</p>
+
+<p>This article is meant as a frequently updated guide (last update: <strong>10.02.2016</strong>) and (hopefully) complete walkthrough for everyone who is considering to make a non-root GPU passthrough setup with QEMU.<br>
+It was successfully tested with an up-to-date Archlinux and Xubuntu 15.10 (Wily), but should be compatible with any other distribution having a newer kernel version (preferably versions &gt;= 3.9).</p>
+
+
+
+<h3><span id="GPU_passthrough_with_QEMU">GPU passthrough with QEMU</span></h3>
+<p>I don&#x2019;t take any responsibilities whatsoever in case you brick your system by following this guide.</p>
+<h4><span id="Hardware_requirements">Hardware requirements</span></h4>
+<p>This setup has the following requirements on your hardware:</p>
+<ul>
+<li>IOMMU compatible hardware (referred to as VT-D for Intel and VI for AMD):
+<ul>
+<li>CPU</li>
+<li>Mainboard and bios (reading the mainboard&#x2019;s online manual can help).</li>
+</ul>
+</li>
+<li>Two GPUs: one will be used for the host system and the other for the guest. An integrated GPU i.e. iGPU will do for the host.</li>
+<li>One monitor with two different inputs like DP and HDMI. Two inputs are necessary, because you need to switch between your host and guest video output. You can also use a KVM switch or utilize a second monitor (the latter is recommended).</li>
+</ul>
+<h4><span id="Basic_preparations">Basic preparations</span></h4>
+<p>For this guide we will use QEMU (which makes use of KVM). One graphics card will be exclusively allocated to the guest system while the other takes care of running our host system. To achieve this we can make use of the Linux VFIO driver (available in kernel versions &gt;= 3.9?).</p>
+<p>Make sure your system is up to date:</p>
+
+
+		<div id="crayon-56bb6c812895a902939674" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c812895a902939674-1">sudo apt-get update</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c812895a902939674-2">sudo apt-get upgrade</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Enable IOMMU support in your bootloader: ensure the default grub config contains &#x201C;intel_iommu=on&#x201D; if you have an Intel cpu and &#x201C;amd_iommu=on&#x201D; for an AMD cpu:</p>
+
+
+		<div id="crayon-56bb6c8128970384038453" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128970384038453-1">/etc/default/grub</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128970384038453-2">[...]</p><p class="crayon-line" id="crayon-56bb6c8128970384038453-3">GRUB_CMDLINE_LINUX_DEFAULT="[...] intel_iommu=on"</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>then do</p>
+
+
+		<div id="crayon-56bb6c8128978811199124" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128978811199124-1">sudo grub-mkconfig | sudo tee /boot/grub/grub.cfg</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>and ensure /boot/grub/grub.cfg is properly updated.</p>
+<h4><span id="Dedicated_GPU_isolation">Dedicated GPU isolation</span></h4>
+<p>Dedicated GPU isolation can be done by using pci-stub with VFIO (available since 3.9+) or directly using vfio-pci (available since 4.1+). The latter is recommended since you don&#x2019;t need to rebind the GPU with VFIO after each boot. Ensure it is installed by running:</p>
+
+
+		
+
+
+<p>No output means everything is ok. If there is an error you need to install pci-stub (c.f. related sections in <a href="https://www.pugetsystems.com/labs/articles/Multiheaded-NVIDIA-Gaming-using-Ubuntu-14-04-KVM-585/" target="_blank">Puget system&#x2019;s guide</a>).</p>
+<p>At this point there are at least two possibilities to load the correct modules:</p>
+<ul>
+<li>Archlinux:<br>
+You need to modify &#x201C;/etc/mkinitcpio.conf&#x201D; and update the initial ramdisk environment. Please refer to the VFIO-PCI section here: <a href="https://wiki.archlinux.org/index.php/PCI_passthrough_via_OVMF#vfio-pci" target="_blank">https://wiki.archlinux.org/index.php/PCI_passthrough_via_OVMF#vfio-pci</a></li>
+<li>Debian based systems:<br>
+You can load all necessary passthrough modules like VFIO by adding them into the modules file:<br>
+
+
+		<div id="crayon-56bb6c8128988016244084" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128988016244084-1">/etc/modules</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128988016244084-2">vfio</p><p class="crayon-line" id="crayon-56bb6c8128988016244084-3">vfio_iommu_type1</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128988016244084-4">vfio_pci</p><p class="crayon-line" id="crayon-56bb6c8128988016244084-5">kvm</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128988016244084-6">kvm_intel</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<ul>
+<li><strong>Attention:</strong><br>
+if you don&#x2019;t have vfio-pci support don&#x2019;t forget to add pci_stub here, too!</li>
+</ul>
+</li>
+</ul>
+<p>Assuming vfio-pci is available you can then get the ID of your dedicated GPU and also its audio device (used for DP/HDMI):</p>
+
+
+		<div id="crayon-56bb6c812898f197187485" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c812898f197187485-1">lspci -nnk</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c812898f197187485-2">[...]</p><p class="crayon-line" id="crayon-56bb6c812898f197187485-3">02:00.0 VGA compatible controller [0300]: NVIDIA Corporation GM200 [GeForce GTX 980 Ti] [10de:17c8] (rev a1)</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c812898f197187485-4">&#xA0;&#xA0;&#xA0;&#xA0;Subsystem: eVga.com. Corp. Device [3842:4996]</p><p class="crayon-line" id="crayon-56bb6c812898f197187485-5">&#xA0;&#xA0;&#xA0;&#xA0;Kernel driver in use: vfio-pci</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c812898f197187485-6">02:00.1 Audio device [0403]: NVIDIA Corporation Device [10de:0fb0] (rev a1)</p><p class="crayon-line" id="crayon-56bb6c812898f197187485-7">&#xA0;&#xA0;&#xA0;&#xA0;Subsystem: eVga.com. Corp. Device [3842:4996]</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c812898f197187485-8">&#xA0;&#xA0;&#xA0;&#xA0;Kernel driver in use: vfio-pci</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>In this case the important ids are: <strong>10de:17c8</strong> and <strong>10de:0fb0</strong>. Further, we can then add those ids to the VFIO modprobe config so that the VFIO-PCI drivers will be bound to those devices on boot:</p>
+
+
+		<div id="crayon-56bb6c8128995413055986" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128995413055986-1">/etc/modprobe.d/vfio-pci.conf</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128995413055986-2">options vfio-pci ids=10de:17c8,10de:0fb0</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Finally, for Debian run:</p>
+
+
+		
+
+
+<p>and for Archlinux with a normal linux kernel run:</p>
+
+
+		
+
+
+<p>in order for the changes to be applied on boot. At this point you should restart your system and verify with &#x201C;lspci -nnk&#x201D; if the entry &#x201C;Kernel driver in use: vfio-pci&#x201D; is available for the dedicated GPU.</p>
+<p>In case you have made it this far most things should be ready for the next step: setting up QEMU and telling it to forward our dedicated GPU.</p>
+<h4><span id="QEMU_setup">QEMU setup</span></h4>
+<p>Install QEMU (assuming you have a x86-64 system):</p>
+
+
+		<div id="crayon-56bb6c81289a1667804467" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289a1667804467-1">sudo apt-get install qemu-system-x86-64</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>First we will need a QEMU image for our VM (unless you want to forward a SATA controller or use another storage device for which I won&#x2019;t go into detail at this point). Many guides use virtio controller and virtio drivers. Although they are improving performance, my advice is to avoid them at least for now since they unnecessarily complicate things. You can create a disk with 60 GB space and qcow2 format (makes use of compression) with:</p>
+
+
+		<div id="crayon-56bb6c81289a7375345557" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289a7375345557-1">qemu-img create -f qcow2 qemu_vm.qcow2 60G</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Alternatively, you can use a raw image here, however, doing so won&#x2019;t improve performance much and will eat up more space than necessary (I have to verify this claim first though). The next thing is taking care of the boot process. To be able to boot disks with GPT partitions we need EFI. Further, this requires UEFI (which is a replacement for the old bios version). UEFI support is provided by using OVMF and can be downloaded pre-compiled from Gerd Hoffman&#x2019;s site <a href="https://www.kraxel.org/repos/jenkins/edk2/" target="_blank">https://www.kraxel.org/repos/jenkins/edk2/</a>. Install it using:</p>
+
+
+		<div id="crayon-56bb6c81289ac619985589" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289ac619985589-1">rpm -i edk2.git-ovmf-x64-*.rpm</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>If you use a Debian based distribution like Ubuntu you can use the following commands to extract it:</p>
+
+
+		<div id="crayon-56bb6c81289b0979914158" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289b0979914158-1">sudo apt-get install rpm2cpio</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b0979914158-2">rpm2cpio edk2.git-ovmf-x64-*.rpm | (cd /; sudo cpio -i --make-directories)</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>We assume that /usr/share/edk2.git/ovmf-x64/ is available at this point. Then copy the OVMF settings file to the current directory:</p>
+
+
+		<div id="crayon-56bb6c81289b4005941738" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289b4005941738-1">cp /usr/share/edk2.git/ovmf-x64/OVMF_VARS-pure-efi.fd .</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>A basic QEMU start script can look like this:</p>
+
+
+		<div id="crayon-56bb6c81289b8365585666" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289b8365585666-1"><span class="crayon-p">#!/bin/bash</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-3"><span class="crayon-p"># Basic CPU settings.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-4"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -cpu host,kvm=off"</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-5"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -smp 8,sockets=1,cores=4,threads=2"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-6"><span class="crayon-p"># Enable KVM full virtualization support.</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-7"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -enable-kvm"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-8"><span class="crayon-p"># Assign memory to the vm.</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-9"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -m 4000"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-10"><span class="crayon-p"># VFIO GPU and GPU sound passthrough.</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-11"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device vfio-pci,host=02:00.0,multifunction=on"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-12"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device vfio-pci,host=02:00.1"</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-13"><span class="crayon-p"># Supply OVMF (general UEFI bios, needed for EFI boot support with GPT disks).</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-14"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -drive if=pflash,format=raw,readonly,file=/usr/share/edk2.git/ovmf-x64/OVMF_CODE-pure-efi.fd"</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-15"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -drive if=pflash,format=raw,file=$(pwd)/OVMF_VARS-pure-efi.fd"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-16"><span class="crayon-p"># Load our created VM image as a harddrive.</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-17"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -hda $(pwd)/qemu_vm.qcow2"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-18"><span class="crayon-p"># Load our OS setup image e.g. ISO file.</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-19"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -cdrom $(pwd)/windows_10_professional.iso"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-20"><span class="crayon-p"># Use the following emulated video device (use none for disabled).</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-21"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -vga qxl"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289b8365585666-22"><span class="crayon-p"># Redirect QEMU's console input and output.</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-23"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -monitor stdio"</span></p><p class="crayon-line" id="crayon-56bb6c81289b8365585666-25"><span class="crayon-e">sudo </span><span class="crayon-v">qemu</span><span class="crayon-o">-</span><span class="crayon-v">system</span><span class="crayon-o">-</span><span class="crayon-v">x86</span><span class="crayon-sy">_</span>64<span class="crayon-sy">$</span><span class="crayon-v">OPTS</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<ul>
+<li>Adjust the number of virtual cores, physical cores and threads with the &#x201C;-smp&#x201D; option for your CPU accordingly.</li>
+<li>We use &#x201C;kvm=off&#x201D; to trick Nvidia cards into believing they are not passed through (else the card might reject working with errorcode 43).</li>
+<li>In above configuration my dedicated GPU&#x2019;s PCI ids were <strong><span>02:00.0</span></strong> and <strong><span>02:00.1</span></strong> you should lookup yours by executing &#x201C;lspci&#x201D; and adjust them accordingly.</li>
+<li>Using &#x201C;-vga qxl&#x201D; makes QEMU use the QXL paravirtual graphic card as the main emulated VGA device. This gives us a window where we can directly see what&#x2019;s going on in the VM. Many guides recommended directly making use of the passthrough and switch to the dedicated GPU&#x2019;s output. However, I had no signal i.e. my screen <strong>just stayed black</strong>. This method makes it way easier to setup the OS first which then in turn will use the correct drivers. Further, we can avoid passing through any USB devices yet since they would lead to deadlocks during a failure within the vm.</li>
+<li>Instead of an iso image you can also directly pass any device (e.g. passing a USB stick with -cdrom /dev/sdX where sdX is the correct device name works just fine).</li>
+<li><strong>Hint:<br>
+</strong>Already at this point you can verify if the passthrough is working by starting QEMU and writing &#x201C;info pci&#x201D; into the QEMU console:<br>
+
+
+		<div id="crayon-56bb6c81289bd331778999" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289bd331778999-1">QEMU 2.5.0 monitor - type 'help' for more information</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289bd331778999-2">(qemu) info pci</p><p class="crayon-line" id="crayon-56bb6c81289bd331778999-3">[...]</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289bd331778999-4">Bus&#xA0; 0, device&#xA0;&#xA0; 5, function 0:</p><p class="crayon-line" id="crayon-56bb6c81289bd331778999-5">&#xA0;&#xA0;VGA controller: PCI device 10de:17c8</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Here you can see that my device with the id 10de:17c8 was correctly mapped into the vm.</p>
+</li>
+</ul>
+<p>If you have fully installed your desired OS and booted into it you should make sure that the passed-through GPU is correctly identified (e.g. in the device manager of Windows or by using lspci in Linux). In my case I had to download and install the newest Nvidia GPU drivers in order for the GPU to be correctly identified in Windows 10. Once this step was done I was able to switch to the other monitor port and was finally able to see the guest&#x2019;s dedicated GPU output :).</p>
+<ul>
+<li><strong>Hint:<br>
+</strong>If you want to manage the VM with your dedicated GPU&#x2019;s video output you can just click into the QXL window and then switch to your other monitor input.</li>
+<li><strong>Attention:<br>
+</strong>Linux can refuse to show output on the dedicated GPU when QXL is running (you can verify this by using &#x201C;xrandr&#x201D;). In order to fix this you can deactivate the QXL device s.t. only the dedicated GPU will be known to the guest:<br>
+
+
+		<div id="crayon-56bb6c81289c3101230349" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289c3101230349-1"><span class="crayon-p"># Use an emulated video device (use none for disabled).</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289c3101230349-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -vga none -device qxl"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p><del>However, doing so will require passing through a mouse/keyboard to control the vm.</del></p>
+<ul>
+<li>
+<p><del></del><strong>Update:</strong><br>
+By appending &#x201C;-device qxl&#x201D; you can disable the QXL video output while still being able to control the VM exactly the same way as in the given hint above (thx to Reddit user /u/SxxxX for pointing this out).</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>The next step is to forward the keyboard and mouse for better responsiveness (QXL is too slow). Here you can either pass through a complete USB controller or rather pass through a specific USB device. Since I was unable to pass through a USB 3.0 controller I had to pass through specific devices (if you want to try to pass through a complete USB controller you can refer to Step 7 in <a href="https://www.pugetsystems.com/labs/articles/Multiheaded-NVIDIA-Gaming-using-Ubuntu-14-04-KVM-585/" target="_blank">Puget system&#x2019;s guide</a>).</p>
+<p>To forward the usb devices just get their ids:</p>
+
+
+		<div id="crayon-56bb6c81289c8592412183" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289c8592412183-1">lsusb</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289c8592412183-2">[...]</p><p class="crayon-line" id="crayon-56bb6c81289c8592412183-3">Bus 001 Device 004: ID 046d:c051 Logitech, Inc. G3 (MX518) Optical Mouse</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289c8592412183-4">Bus 001 Device 003: ID 046d:c316 Logitech, Inc. HID-Compliant Keyboard</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Once you have all ids you can forward those devices in our QEMU startup script with:</p>
+
+
+		<div id="crayon-56bb6c81289ce054397277" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289ce054397277-1"><span class="crayon-p"># Passthrough USB devices.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289ce054397277-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -usb"</span></p><p class="crayon-line" id="crayon-56bb6c81289ce054397277-3"><span class="crayon-p"># USB mouse</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289ce054397277-4"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -usbdevice host:046d:c051"</span></p><p class="crayon-line" id="crayon-56bb6c81289ce054397277-5"><span class="crayon-p"># USB keyboard</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289ce054397277-6"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -usbdevice host:046d:c316"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h4><span id="Sound">Sound</span></h4>
+<p>We will now take care of getting working sound. To find out more about QEMU&#x2019;s supported sound devices consider:</p>
+
+
+		<div id="crayon-56bb6c81289d2762369141" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289d2762369141-1">qemu-system-x86_64 -soundhw ?</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289d2762369141-2">Valid sound card names (comma separated):</p><p class="crayon-line" id="crayon-56bb6c81289d2762369141-3">sb16&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Creative Sound Blaster 16</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289d2762369141-4">es1370&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;ENSONIQ AudioPCI ES1370</p><p class="crayon-line" id="crayon-56bb6c81289d2762369141-5">ac97&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;Intel 82801AA AC97 Audio</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289d2762369141-6">adlib&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; Yamaha YM3812 (OPL2)</p><p class="crayon-line" id="crayon-56bb6c81289d2762369141-7">gus&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; Gravis Ultrasound GF1</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289d2762369141-8">cs4231a&#xA0;&#xA0;&#xA0;&#xA0; CS4231A</p><p class="crayon-line" id="crayon-56bb6c81289d2762369141-9">hda&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; Intel HD Audio</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289d2762369141-10">pcspk&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0; PC speaker</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Adjust our startup script to use the Intel HD Audio (hda) device:</p>
+
+
+		<div id="crayon-56bb6c81289d6595275487" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289d6595275487-1"><span class="crayon-p"># Emulate a sound device.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289d6595275487-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -soundhw hda"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>We further need to specify an audio driver we would like to use. Let&#x2019;s give ALSA a try:</p>
+
+
+		<div id="crayon-56bb6c81289da265082597" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289da265082597-1"><span class="crayon-p"># Select a QEMU sound driver and specify its settings.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289da265082597-2"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line" id="crayon-56bb6c81289da265082597-3"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">"$VM_SOUND QEMU_AUDIO_DRV=alsa"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289da265082597-4"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">"$VM_SOUND QEMU_ALSA_DAC_BUFFER_SIZE=512"</span></p><p class="crayon-line" id="crayon-56bb6c81289da265082597-5"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">"$VM_SOUND QEMU_ALSA_DAC_PERIOD_SIZE=170"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Alternatively you can also use Pulseaudio (it doesn&#x2019;t have the best reputation though and I don&#x2019;t recommend using it until really necessary&#x2026;):</p>
+
+
+		<div id="crayon-56bb6c81289de066642526" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289de066642526-1"><span class="crayon-p"># Select a QEMU sound driver and specify its settings.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289de066642526-2"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line" id="crayon-56bb6c81289de066642526-3"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">"$VM_SOUND QEMU_AUDIO_DRV=pa"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289de066642526-4"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">"$VM_SOUND QEMU_PA_SAMPLES=128"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>To get more information about the above used sound parameters and some further sound driver information consider:</p>
+
+
+		<div id="crayon-56bb6c81289e2042273537" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289e2042273537-1">qemu-system-x86_64 -audio-help</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Finally, we need to rewrite the QEMU startup script to consider the sound environment settings:</p>
+
+
+		<div id="crayon-56bb6c81289e6397124157" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289e6397124157-1">sudo $VM_SOUND qemu-system-x86_64 $OPTS</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>If you have crackles in your sound using ALSA try adjusting the buffer and period sizes.</p>
+<ul>
+<li><strong>Question:<br>
+</strong>Do you have any advice about how to improve the input (microphone) quality at this point?</li>
+</ul>
+<p>Whereas the above configuration worked instantly for Xubuntu, using Archlinux lead to horrible sound seemingly because of permission issues while setting the ALSA buffer and period sizes.<br>
+To solve this you can alternatively use the ac97 device and leave out any ALSA parameters in the environment variable.</p>
+
+
+		<div id="crayon-56bb6c81289ea033867320" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289ea033867320-1"><span class="crayon-p"># Emulate a sound device.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289ea033867320-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -soundhw ac97"</span></p><p class="crayon-line" id="crayon-56bb6c81289ea033867320-3"><span class="crayon-p"># Select a QEMU sound driver and specify its settings.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289ea033867320-4"><span class="crayon-v">VM_SOUND</span><span class="crayon-o">=</span><span class="crayon-s">"QEMU_AUDIO_DRV=alsa"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<ul>
+<li><strong>Attention:<br>
+</strong>Windows won&#x2019;t detect your sound device correctly. You have to use exactly the right drivers which are Intel drivers in this case (there are many drivers and you can waste a lot of time by choosing wrong ones here). You can find the correct AC 97 drivers for QEMU here: <a href="http://www.driverscape.com/download/intel%28r%29-82801aa-ac-97-audio-controller" target="_blank">Intel 82801AA AC97 Audio</a> (don&#x2019;t download the first driver since this is adware. Use the second link with the zip file instead).</li>
+</ul>
+<h4><span id="Network">Network</span></h4>
+<p>The network seemed to work directly out of the box i.e. I could utilize about 5-6 MB/s with my 50 Mbit/s internet connection so I didn&#x2019;t investigate further here. However, there are some things you can do to improve the performance if necessary (c.f. Performance Tweaks Section).</p>
+<h4><span id="Synergy">Synergy</span></h4>
+<p>Synergy allows you to share the mouse and keyboard across multiple operating systems which is very helpful when we pass through USB devices. I recommend using Synergy as a server within the guest system while running it as a client on the host system.</p>
+<ul>
+<li><strong>Attention</strong>:<br>
+Don&#x2019;t use Synergy versions &lt;1.7 (they have a bug that doesn&#x2019;t allow you to press multiple keys at once. This is very annoying when typing capitalized letters&#x2026;). You should download a version &gt;= 1.7 (<span>for your host and guest</span>) at <a href="http://www.synergy-project.org/nightly" target="_blank">http://www.synergy-project.org/nightly</a>.</li>
+</ul>
+<p>Make the guest&#x2019;s Synergy accessible by forwarding its default port (24800 is default):</p>
+
+
+		<div id="crayon-56bb6c81289ef095758184" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289ef095758184-1"><span class="crayon-p"># Synergy port forward...</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289ef095758184-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -redir tcp:24800::24800"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<ul>
+<li><strong>Hint:<br>
+</strong>In my case I had to add &#x201C;setxkbmap de nodeadkeys&#x201D; to fix an issue with the German keyboard layout and Synergy.</li>
+</ul>
+<p>Now you can configure the Synergy server and client by setting a proper client name. Finally, you should be able to connect to localhost on the client side while Synergy is running on both systems.</p>
+<ul>
+<li><strong>Hint:<br>
+</strong>During gaming you want to lock the mouse to one specific monitor. You can do this by pressing the Scroll-Lock button. If you don&#x2019;t have a Scroll-Lock button on your keyboard you can specify another button in the Synergy server settings. In my case I have bound a mouse button for this.</li>
+</ul>
+<p>If you are using Synergy as a server on your host and as a client in your guest (e.g. when you don&#x2019;t want to use USB passthrough) and experience weird mouse movements ingame try setting &#x201C;Send relative mouse moves&#x201D; in the Synergy server.</p>
+
+<p><span><strong>Congratulations if you have made it this far!</strong></span></p>
+<p>Your basic GPU passthrough setup should work by now. We can now take care of removing the requirements of QEMU to be started as the root user.</p>
+<h3><span id="Permissions_for_non-root_GPU_passthrough">Permissions for non-root GPU passthrough</span></h3>
+<p>At this point you should have a setup that is working as root. The next steps in this chapter will help to improve the overall QEMU security. Please keep in mind that using a passthrough setup even as non-root is risky since the GPU can have a lot of control over the system. Further, we are granting the VM access to other devices like USB devices which doesn&#x2019;t really improve the situation. Thus, please don&#x2019;t expect this chapter to be a guarantee for a really bulletproof setup. All we will do here is to decrease the attack surface as much as possible.</p>
+<h4><span id="Basic_permissions">Basic permissions</span></h4>
+<p>We&#x2019;ll create the user &#x201C;qemu_vga&#x201D; with a disabled password (s.t. you have to use &#x201C;su&#x201D;/&#x201D;sudo&#x201D; as an admin) for the purpose of running QEMU:</p>
+
+
+		<div id="crayon-56bb6c81289f6307965851" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289f6307965851-1">sudo adduser --disabled-password qemu_vga</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>We can now add the qemu_vga user to the audio and kvm group:</p>
+
+
+		<div id="crayon-56bb6c81289fb054678223" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c81289fb054678223-1">sudo usermod -a -G audio qemu_vga</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c81289fb054678223-2">sudo usermod -a -G kvm qemu_vga</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Let&#x2019;s allow our current user (in my case evonide) sudo access to the qemu_vga user (this way we don&#x2019;t need to type any passwords to start our vm later):</p>
+
+
+		<div id="crayon-56bb6c8128a00564940415" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a00564940415-1">/etc/sudoers</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a00564940415-2">[...]</p><p class="crayon-line" id="crayon-56bb6c8128a00564940415-3">evonide ALL=(qemu_vga) NOPASSWD:ALL</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Ensure that our user has write access to our vm image and the OVMF variables file:</p>
+
+
+		<div id="crayon-56bb6c8128a04474224904" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a04474224904-1">sudo chown qemu_vga:qemu_vga qemu_vm.qcow2</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a04474224904-2">sudo chown qemu_vga:qemu_vga OVMF_VARS-pure-efi.fd</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>You have at least two options regarding the QEMU startup script:</p>
+<ol>
+<li>Make sure the QEMU startup script is non writable by the qemu_vga user.</li>
+<li>Never execute the QEMU startup script with your main user, but rather only execute it with &#x201C;sudo -Hu qemu_vga /path/to/the/qemu_script.sh&#x201D;.</li>
+</ol>
+<p>If you neglect those points a possible breakout would mean the qemu_vga user would be able to write arbitrary commands into the startup script which would get executed by your user once you start the VM. For this guide I assume you use option 1, however, using option 2 would be okay, too. Just don&#x2019;t forget to remove the redundant &#x201C;sudo&#x201D; command in the QEMU script if you decide to go with it.</p>
+<p>Next, if you want to use QXL (recommended for testing) you need to give our qemu_vga user access to the XServer by modifying our QEMU script:</p>
+
+
+		<div id="crayon-56bb6c8128a09901253664" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a09901253664-1"><span class="crayon-p">#!/bin/bash</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a09901253664-2"><span class="crayon-v">xhost</span><span class="crayon-o">+</span><span class="crayon-v">SI</span><span class="crayon-o">:</span><span class="crayon-v">localuser</span><span class="crayon-o">:</span><span class="crayon-v">qemu_vga</span><span class="crayon-o">&gt;</span><span class="crayon-o">/</span><span class="crayon-v">dev</span><span class="crayon-o">/</span><span class="crayon-t">null</span></p><p class="crayon-line" id="crayon-56bb6c8128a09901253664-3"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">""</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a09901253664-4"><span class="crayon-sy">[</span><span class="crayon-sy">.</span><span class="crayon-sy">.</span><span class="crayon-sy">.</span><span class="crayon-sy">]</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<ul>
+<li><strong>Attention:<br>
+</strong>Granting XSever access to the user qemu_vga is a bad idea from many point of views regarding security. You should only do this while testing and using QXL. You can avoid any windows by using &#x201C;-nographic&#x201D; together with the &#x201C;-vga none&#x201D; option (c.f. Miscellaneous Section).</li>
+</ul>
+<h4><span id="Device_permissions">Device permissions</span></h4>
+<p>To avoid errors like:</p>
+
+
+		<div id="crayon-56bb6c8128a0d761380147" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a0d761380147-1">qemu-system-x86_64: -device vfio-pci,host=02:00.0,multifunction=on: vfio: error opening /dev/vfio/1: Permission denied</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>We need set proper permissions for the VFIO and USB devices by granting all users in the kvm group access. We will add a VFIO rule and our USB device ids (c.f. USB passthrough in the previous chapter) to the Linux udev rules like this:</p>
+
+
+		<div id="crayon-56bb6c8128a11845357875" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a11845357875-1">/etc/udev/rules.d/10-qemu-hw-users.rules</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a11845357875-2">SUBSYSTEM=="vfio", OWNER="root", GROUP="kvm"</p><p class="crayon-line" id="crayon-56bb6c8128a11845357875-3">SUBSYSTEM=="usb", ATTR{idVendor}=="046d", ATTR{idProduct}=="c31c" OWNER="root", GROUP="kvm"</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a11845357875-4">SUBSYSTEM=="usb", ATTR{idVendor}=="046d", ATTR{idProduct}=="c051" OWNER="root", GROUP="kvm"</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>You can then reload all udev rules with:</p>
+
+
+		<div id="crayon-56bb6c8128a15506545816" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a15506545816-1">sudo udevadm control --reload-rules</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a15506545816-2">sudo udevadm trigger</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>If this doesn&#x2019;t work you might have to restart your system at this point. Please verify if the rights are correctly set with:</p>
+
+
+		<div id="crayon-56bb6c8128a19446676671" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a19446676671-1">ls -la /dev/vfio</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a19446676671-2">[...]</p><p class="crayon-line" id="crayon-56bb6c8128a19446676671-3">crw-rw----&#xA0;&#xA0;1 root kvm&#xA0;&#xA0;244,&#xA0;&#xA0; 0 Feb&#xA0;&#xA0;8 16:13 1</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>and</p>
+
+
+		<div id="crayon-56bb6c8128a1d813067571" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a1d813067571-1">ls -la /dev/bus/usb/*</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a1d813067571-2">[...]</p><p class="crayon-line" id="crayon-56bb6c8128a1d813067571-3">crw-rw---- 1 root kvm&#xA0;&#xA0;189, 2 Feb&#xA0;&#xA0;8 16:16 00</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Here you should see similar entries for your devices.</p>
+<p>Further, we want QEMU to start as our new user so we can modify the startup once again:</p>
+
+
+		<div id="crayon-56bb6c8128a23732254649" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a23732254649-1">sudo -Hu qemu_vga bash -c "$VM_SOUND qemu-system-x86_64 $OPTS"</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>If you prefer using a password for qemu_vga and prefer using &#x201C;su&#x201D; instead you can go with:</p>
+
+
+		<div id="crayon-56bb6c8128a27113602691" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a27113602691-1">su - qemu_vga -c "$VM_SOUND qemu-system-x86_64 $OPTS"</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<ul>
+<li><strong>Attention:<br>
+</strong>At this point it is important to notice the &#x201C;-&#x201D; after su. This takes care of creating a new environment for the user. Avoiding this can lead to several XServer permission errors.</li>
+</ul>
+<h4><span id="Memory_permissions">Memory permissions</span></h4>
+<p>If you would start QEMU at this point you would get an error similar to the following one:</p>
+
+
+		<div id="crayon-56bb6c8128a2b648367563" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a2b648367563-1">qemu-system-x86_64: -device vfio-pci,host=02:00.0,multifunction=on: vfio_dma_map(0x557e0d0279b0, 0x0, 0xc0000, 0x7f5674000000) = -12 (Cannot allocate memory)</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a2b648367563-2">qemu-system-x86_64: -device vfio-pci,host=02:00.0,multifunction=on: VFIO_MAP_DMA: -12</p><p class="crayon-line" id="crayon-56bb6c8128a2b648367563-3">[...]</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Our user should be able to allocate enough memory for the vm. To fix this we need to modify the limits file:</p>
+
+
+		<div id="crayon-56bb6c8128a2f922683882" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a2f922683882-1">/etc/security/limits.conf</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a2f922683882-2">qemu_vga soft memlock 20000000</p><p class="crayon-line" id="crayon-56bb6c8128a2f922683882-3">qemu_vga hard memlock 20000000</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Here I have granted the user qemu_vga access to at most 20 GiB. Since we will switch to the user with &#x201C;sudo&#x201D; or &#x201C;su&#x201D; we need to ensure those limits will be considered:</p>
+
+
+		<div id="crayon-56bb6c8128a34318957195" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a34318957195-1">/etc/pam.d/sudo, /etc/pam.d/su and /etc/pam.d/su-l (only if available)</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a34318957195-2">(uncomment/add the following line)</p><p class="crayon-line" id="crayon-56bb6c8128a34318957195-3">session&#xA0;&#xA0;&#xA0;&#xA0;required&#xA0;&#xA0; pam_limits.so</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Verify the locked memory limit with:</p>
+
+
+		<div id="crayon-56bb6c8128a38126452242" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a38126452242-1">sudo -Hu qemu_vga bash -c "ulimit -l"</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h4><span id="Sound_permissions">Sound permissions</span></h4>
+<p>The next important step is to get the sound running. One option is to use the ac97 and ALSA without parameters solution (as described in the first Chapter). However, I wanted to be able to further customize ALSA with parameters to further improve the sound quality. <strong>This was definitively the most difficult part of the setup</strong>. Unfortunately, the following steps only worked for Xubuntu. When starting our setup at this point with the ALSA driver you might get the following error:</p>
+
+
+		<div id="crayon-56bb6c8128a3c802864563" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a3c802864563-1">(qemu) alsa: Requested buffer size 512 was rejected, using 1881</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a3c802864563-2">alsa: Requested period size 170 was rejected, using 940</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>After a lot of research and even after reading QEMU-ALSA sourcecode I was unable to find the reason behind it. Alternatively trying Pulseaudio (as described in the previous chapter) lead to the following error:</p>
+
+
+		<div id="crayon-56bb6c8128a40656613279" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a40656613279-1">pulseaudio: pa_context_connect() failed</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a40656613279-2">pulseaudio: Reason: Connection refused</p><p class="crayon-line" id="crayon-56bb6c8128a40656613279-3">pulseaudio: Failed to initialize PA contextaudio: Could not init `pa' audio driver</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>This problem can be solved by allowing anonymous authentication and sharing Pulseaudio access via a socket file like /tmp/pulse. <span>Update</span> the existing entry in the following way:</p>
+
+
+		<div id="crayon-56bb6c8128a44681178674" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a44681178674-1">/etc/pulse/default.pa</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a44681178674-2">[...]</p><p class="crayon-line" id="crayon-56bb6c8128a44681178674-3">load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Further, we need to tell the clients to connect to this socket:</p>
+
+
+		<div id="crayon-56bb6c8128a49876585552" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a49876585552-1">/etc/pulse/client.conf</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a49876585552-2">[...]</p><p class="crayon-line" id="crayon-56bb6c8128a49876585552-3">default-server = unix:/tmp/pulse</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Don&#x2019;t forget to kill and restart the Pulseaudio daemon:</p>
+
+
+		<div id="crayon-56bb6c8128a4d172302436" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a4d172302436-1">pulseaudio -k</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a4d172302436-2">pulseaudio -D</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<ul>
+<li><strong>Attention:<br>
+</strong>I later noticed that after rebooting my system there was a bug where the Pulseaudio daemon wouldn&#x2019;t startup. Adding &#x201C;pulseaudio -D&#x201D; to the Application Autostart in Xubuntu solved this problem though.</li>
+</ul>
+<p>By doing so I got Pulseaudio running. What absolutely stunned me was the fact that <span><strong>solving the Pulseaudio issue also solved the ALSA issue</strong></span> described before. I know that most Ubuntu versions (including Xubuntu) automatically come with Pulseaudio, too. However, the connection between ASLA, Pulseaudio and this error was very unclear to me.</p>
+<p>While the only working solution on Archlinux was using ALSA with ac97, all sound device and driver combinations worked successfully under Xubuntu.</p>
+
+<p>If you have reached this point you should have a basic GPU passthrough setup working with our qemu_vga user.</p>
+<h3></h3>
+<h4><span id="Hyper-V_enlightments">Hyper-V enlightments</span></h4>
+<p>You can activate several paravirt features within Windows by setting some CPU parameters referred to as Hyper-V enlightments.</p>
+<p>Consider: <a href="http://blog.wikichoon.com/2014/07/enabling-hyper-v-enlightenments-with-kvm.html" target="_blank">Cole Robinson&#x2019;s blog &#x2013; Enabling Hyper-V enlightenments with KVM</a></p>
+<p>You can adjust your CPU settings like this:</p>
+
+
+		<div id="crayon-56bb6c8128a52180946487" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a52180946487-1"><span class="crayon-p"># Basic CPU settings.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a52180946487-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -cpu host,kvm=off,hv_spinlocks=0x1fff,hv_relaxed,hv_vapic,hv_time,hv_vendor_id=Nvidia43FIX"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>However, <strong>setting hv parameters will lead to an NVIDIA error 43 with newer driver versions!</strong> Hence, we can use hv_vendor_id=Nvidia43FIX as a workaround. The latter only works with a newer QEMU version like 2.5.0 though.</p>
+<p>&#x201C;If you have an Intel CPU with APIC virtualization (starting with Ivy Bridge-E and Haswell), you should avoid using hv_vapic. It has more overhead than APICv, causing about 10-12% more VM exits.&#x201D; &#x2013; according to Reddit user /u/glowtape.</p>
+<p>Since the version in my repository didn&#x2019;t support this feature yet I compiled QEMU 2.5.0 on my own. You can find some very rudimentary advice on this in the Miscellaneous Section below.</p>
+<p>Unfortunately, I don&#x2019;t have any information on the real performance gain here. If you have any please feel free to contribute them here.</p>
+<h4><span id="Disk_tweaks">Disk tweaks</span></h4>
+
+<div class="usertext-body may-blank-within md-container ">
+<div class="md">
+<p>Apparently you can improve the disk IO performance by making use of the virtio drivers. You can either install them already during Windows installation by providing an ISO with the drivers as a secondary CDROM drive or by installing them afterwards.</p>
+<p>You can download the drivers on the <a href="https://fedoraproject.org/wiki/Windows_Virtio_Drivers#Direct_download" target="_blank">Fedora wiki &#x2013; Windows Virtio Drivers</a> site.</p>
+<p>The QEMU options for specifying a virtio drive would look something like this:</p>
+
+		<div id="crayon-56bb6c8128a57834632593" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a57834632593-1"><span class="crayon-p"># Make use of VIRTIO drivers for Windows.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a57834632593-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -object iothread,id=io1"</span></p><p class="crayon-line" id="crayon-56bb6c8128a57834632593-3"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -drive if=none,id=drive0,file=/dev/bcache/by-uuid/84ea4a08-eed7-4651-93b6-24d5ed6d570a,format=raw,aio=native,cache=none,cache.direct=on,discard=unmap"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a57834632593-4"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device virtio-scsi-pci,id=scsi0,ioeventfd=on,iothread=io1,num_queues=4,bus=pcie.0"</span></p><p class="crayon-line" id="crayon-56bb6c8128a57834632593-5"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device scsi-hd,drive=drive0,id=scsihd0"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+<p>Creates an iothread to move the IO away from the main QEMU thread, then specifies a disk drive without interface and ties it to a virtio SCSI controller. The relevant virtio driver to install in Windows is the SCSI Passthrough one.</p>
+<ul>
+<li>Many thanks to Reddit user /u/glowtape for pointing this out and providing the basic parameters!</li>
+</ul>
+</div>
+</div>
+
+<h4><span id="Memory_tweaks">Memory tweaks</span></h4>
+<h5><span id="Preallocation">Preallocation</span></h5>
+<p>Similar to VMware or other virtualization software you can preallocate enough memory for the vm:</p>
+
+
+		<div id="crayon-56bb6c8128a5d779908752" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a5d779908752-1"><span class="crayon-p"># Assign 4 GB memory to the vm.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a5d779908752-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -m 4000"</span></p><p class="crayon-line" id="crayon-56bb6c8128a5d779908752-3"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -mem-prealloc"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h5><span id="Hugepages">Hugepages</span></h5>
+<p>You can make use of hugepages to further improve ram performance. Please consider:</p>
+
+<p>Invoke them in the QEMU script like this:</p>
+
+
+		<div id="crayon-56bb6c8128a61474059177" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a61474059177-1"><span class="crayon-p"># Make use of hugepages.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a61474059177-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -mem-path /dev/hugepages"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+<p>I haven&#x2019;t tested this yet. Nevertheless, this should be one of the tweaks with the biggest performance gain.</p>
+<h5><span id="Other">Other</span></h5>
+<ul>
+<li>You should disable paging in the guest since the host system already takes care of that.</li>
+</ul>
+<h4><span id="V-CPU_pinning">V-CPU pinning</span></h4>
+<p>You can assign specific virtual cores to the vm to further improve performace. I am starting my vm like this:</p>
+
+
+		<div id="crayon-56bb6c8128a65003167903" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a65003167903-1">sudo -Hu qemu_vga bash -c "$VM_SOUND taskset -c 0-7 qemu-system-x86_64 $OPTS"</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Consider: <a href="http://www.linux-kvm.com/content/tip-running-your-vm-specific-cpus" target="_blank">Linux KVM &#x2013; Running your VM on specific CPUs</a> for more infos (thanks to the Archlinux forum user nbhs for his guide at this point)!</p>
+<h4><span id="QEMU_q35_machine_architecture">QEMU q35 machine architecture</span></h4>
+<p>By default QEMU uses pc-i440fx-2.1. Nevertheless, I often came across guides using the <a href="http://wiki.qemu.org/Features/Q35" target="_blank">QEMU q35 machine architecture</a>. It can be invoked like this:</p>
+
+
+		<div id="crayon-56bb6c8128a6a062916857" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a6a062916857-1"><span class="crayon-p"># Use another machine architecture and emulate PCI-E.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a6a062916857-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -machine type=q35,accel=kvm"</span></p><p class="crayon-line" id="crayon-56bb6c8128a6a062916857-3"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device ioh3420,bus=pcie.0,addr=1c.0,multifunction=on,port=1,chassis=1,id=root.1"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a6a062916857-4"><span class="crayon-p"># VFIO GPU and GPU sound passthrough.</span></p><p class="crayon-line" id="crayon-56bb6c8128a6a062916857-5"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device vfio-pci,host=02:00.0,bus=root.1,addr=00.0,multifunction=on"</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a6a062916857-6"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device vfio-pci,host=02:00.1,bus=root.1,addr=00.1"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>I don&#x2019;t use this architecture and I didn&#x2019;t detect any real performance gains by using it. Please convince me from the opposite if you made different experiences.</p>
+<h4><span id="Network-2">Network</span></h4>
+<p>To improve the network performance you can make use of virtio-net. In particular, you have to specify something like this:</p>
+
+		<div id="crayon-56bb6c8128a6e111241360" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a6e111241360-1"><span class="crayon-p"># Improve the network performance by utilizing virtio-net.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a6e111241360-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -device virtio-net,netdev=net0,mac=de:ad:be:ef:33:4a,bus=pcie.0"</span></p><p class="crayon-line" id="crayon-56bb6c8128a6e111241360-3"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -netdev tap,id=net0,ifname=vmtap0,script=./qemu-ifup,downscript=./qemu-ifdown"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+<p>Where <a href="http://pastebin.com/acHG4SXL" target="_blank">qemu-ifup</a> and <a href="http://pastebin.com/5zdnP740" target="_blank">qemu-ifdown</a> are helper scripts. To make use of this you further need a bridge called br0 on your interface with internet access.</p>
+<ul>
+<li>Big thanks to Reddit user /u/glowtape for providing the scripts and information necessary for this section!</li>
+</ul>
+<h4><span id="More">More</span></h4>
+<ul>
+<li><span>Please let me know if you know of any further tricks to improve the machine performance here.</span></li>
+</ul>
+<h3><span id="Miscellaneous">Miscellaneous</span></h3>
+<h4><span id="Rebinding">Rebinding</span></h4>
+<p>Apparently, it is also possible to assign the GPU to your host again once it has been used in the VM. I haven&#x2019;t tested this yet but according to Reddit user /u/glowtape you can just bind and unbind the VFIO drivers. This has the drawback that you have to stop XServer for rebinding.</p>
+<p>Please refer to his <a href="http://pastebin.com/Rb5d3nKm" target="_blank">startup script</a> to see how it can be done (links to the qemu-ifup and qemu-ifdown scripts can be found in the Network section above).</p>
+<h4><span id="OVMF">OVMF</span></h4>
+<p>You can adjust the standard resolution during boot (e.g. when using QXL) in the bios settings (press del key on boot). Go to &#x201C;Device Manager&#x201D; &#x2013; &#x201C;OVMF Platform Configuration&#x201D; &#x2013; &#x201C;Change Preferred&#x201D; and commit changes. This is helpful when using QXL for any tasks like OS management or OS installation.</p>
+<h4><span id="QEMU_settings">QEMU settings</span></h4>
+<p>In case you don&#x2019;t want the qemu_vga user to start a QEMU window or just don&#x2019;t want to grant it any XServer rights you can use</p>
+
+
+		<div id="crayon-56bb6c8128a74409359578" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a74409359578-1"><span class="crayon-p"># Use an emulated video device (use none for disabled).</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a74409359578-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -vga none"</span></p><p class="crayon-line" id="crayon-56bb6c8128a74409359578-3"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -nographic"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h4><span id="Monitor_switching">Monitor switching</span></h4>
+<p>I don&#x2019;t use it since I have to press a button on the monitor to switch the input. However, there are enough guides describing how you can utilize &#x201C;xrandr&#x201D; if your monitor supports automatic signal switching.</p>
+<ul>
+<li><strong>Request:<br>
+</strong>Please feel free to contribute if you have a working solution.</li>
+</ul>
+<h4><span id="Debugging">Debugging</span></h4>
+<p>You can add the following option to see some OVMF debug messages:</p>
+
+
+		<div id="crayon-56bb6c8128a79116671713" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a79116671713-1"><span class="crayon-p"># Activate QEMU debugging.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a79116671713-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -global isa-debugcon.iobase=0x402 -debugcon file:/tmp/qemu_vga.ovmf.log"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<h4><span id="Using_libvirt_and_virt-manager">Using libvirt and virt-manager</span></h4>
+<p>If you want a graphical interface for managing the vm you can try some of the following steps.</p>
+<ul>
+<li><strong>Attention:<br>
+</strong>This is an <span><strong>unfinished section</strong></span>. I had too many problems doing this.</li>
+</ul>
+<p>Consider the following resources:</p>
+
+<p>First install virt-manager (this automatically will install dependencies like libvirt):</p>
+
+
+		<div id="crayon-56bb6c8128a7d832734746" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a7d832734746-1">sudo apt-get install virt-manager</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>We then need to convert our whole QEMU-CLI startup script to a XML representation:</p>
+
+
+		<div id="crayon-56bb6c8128a82751742438" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a82751742438-1"><span class="crayon-c"># Convert to virt-manager...</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a82751742438-2"><span class="crayon-r">echo</span><span class="crayon-o">-</span><span class="crayon-i">ne</span><span class="crayon-s">"/usr/bin/qemu-system-x86_64 $OPTS"</span><span class="crayon-o">&gt;</span><span class="crayon-v">vm</span><span class="crayon-e">.args</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Already at this point I had to play around with the parameters since virsh was not able to convert all of them correctly. Once you have created the &#x201C;vm.args&#x201D; file though you can create a XML file by doing:</p>
+
+
+		<div id="crayon-56bb6c8128a87487007729" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a87487007729-1">virsh domxml-from-native qemu-argv vm.args &gt; VM_SETTINGS.xml</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>You can then load this XML into the virt-manager by doing:</p>
+
+
+		<div id="crayon-56bb6c8128a8b842182086" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a8b842182086-1">sudo cp VM_SETTINGS.xml /etc/libvirt/qemu/</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a8b842182086-2">virsh define /etc/libvirt/qemu/VM_SETTINGS.xml virt-manager</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Further, having installied libvirt and virt-manager might require you to setup some privileges:</p>
+<p>Apparmor settings:</p>
+
+
+		<div id="crayon-56bb6c8128a8f517576322" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a8f517576322-1">/etc/apparmor.d/abstractions/libvirt-qemu</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a8f517576322-2">[...]</p><p class="crayon-line" id="crayon-56bb6c8128a8f517576322-3">/dev/vfio/* rw,</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>then restart Apparmor with:</p>
+
+
+		<div id="crayon-56bb6c8128a93906093793" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a93906093793-1">sudo /etc/init.d/apparmor restart</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Qemu permissions (make sure the number for the VFIO device in the last line is correct):</p>
+
+
+		<div id="crayon-56bb6c8128a96695232793" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a96695232793-1">/etc/libvirt/qemu.conf</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a96695232793-2">-----------------------------------------</p><p class="crayon-line" id="crayon-56bb6c8128a96695232793-3">cgroup_device_acl = [</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a96695232793-4">&#xA0;&#xA0;&#xA0;&#xA0;"/dev/null", "/dev/full", "/dev/zero",</p><p class="crayon-line" id="crayon-56bb6c8128a96695232793-5">&#xA0;&#xA0;&#xA0;&#xA0;"/dev/random", "/dev/urandom",</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a96695232793-6">&#xA0;&#xA0;&#xA0;&#xA0;"/dev/ptmx", "/dev/kvm", "/dev/kqemu",</p><p class="crayon-line" id="crayon-56bb6c8128a96695232793-7">&#xA0;&#xA0;&#xA0;&#xA0;"/dev/rtc","/dev/hpet", "/dev/vfio/vfio",</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a96695232793-8">&#xA0;&#xA0;&#xA0;&#xA0;"/dev/vfio/1"</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Finally, you should have an entry in your virt-manager or virsh. Nevertheless, several bugs with passing through the GPU device at this point ruined the fun for me here.</p>
+<h4><span id="Compile_QEMU_250">Compile QEMU 2.5.0</span></h4>
+<ul>
+<li>Make sure all QEMU dependencies are met.</li>
+<li>Lookup the correct make parameters for your distribution, e.g. on Launchpad like <a href="https://launchpadlibrarian.net/234035056/buildlog_ubuntu-xenial-amd64.qemu_1%3A2.5+dfsg-1ubuntu3_BUILDING.txt.gz" target="_blank">here</a>.</li>
+<li>Remove any existing QEMU packages with your package manager.</li>
+<li>Compile everything and run &#x201C;make install&#x201D;.
+<ul>
+<li><strong>Attention:<br>
+</strong>There is no &#x201C;make uninstall&#x201D;. You can make use of <a href="https://www.howtoforge.com/howto_linux_debian_deb_checkinstall" target="_blank">checkinstall</a> to create a deb package first and install this one instead.</li>
+</ul>
+</li>
+</ul>
+<h4><span id="Share_directories_and_files">Share directories and files</span></h4>
+<p>Install samba and use the QEMU parameter:</p>
+
+
+		<div id="crayon-56bb6c8128a9b102829831" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a9b102829831-1"><span class="crayon-p"># Share a folder with our vm.</span></p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128a9b102829831-2"><span class="crayon-v">OPTS</span><span class="crayon-o">=</span><span class="crayon-s">"$OPTS -smb /directory/to/share"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+<p>Then you can access the shared directory over netshare at the location: \\10.0.2.4\qemu</p>
+<h4><span id="Saving_the_machine_state">Saving the machine state</span></h4>
+<p>Apparently there is no way like in VMware or Virtualbox to save the machine state. Executing &#x201C;savevm test&#x201D; in the QEMU window lead to the following error:</p>
+
+		<div id="crayon-56bb6c8128a9f251563927" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128a9f251563927-1">Device 'pflash1' is writable but does not support snapshots.</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+<p>This error can be fixed by converting the OVMF variables file into the qcow2 format:</p>
+
+		<div id="crayon-56bb6c8128aa5153725598" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128aa5153725598-1">qemu-img convert -O qcow2 OVMF_VARS-pure-efi.fd OVMF_VARS-pure-efi.qcow2</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+<p>However, this only lead to a new error stating that the state of our passed through VFIO device couldn&#x2019;t be saved:</p>
+
+		<div id="crayon-56bb6c8128aa9321369878" class="crayon-syntax crayon-theme-bncplus-modified crayon-font-monospace crayon-os-pc print-yes notranslate">
+		
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56bb6c8128aa9321369878-1">(qemu) savevm test</p><p class="crayon-line crayon-striped-line" id="crayon-56bb6c8128aa9321369878-2">State blocked by non-migratable device '0000:00:05.0/vfio-pci'</p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+<p>I guess the VFIO save state support is lacking. The question is whether there is any kind of feature request so far?</p>
+<ul>
+<li><strong>Update:</strong><br>
+The Reddit user /u/SxxxX has pointed out that this seems to be a very complex issue both on the GPU side and software side of things. Nevertheless, we can hope that a clever solution / workaround to this problem can and will be found.</li>
+</ul>
+<h4><span id="Automatic_setup_script">Automatic setup script</span></h4>
+<p>In addition to this guide an automatic script for guidance through the complete setup would be awesome. Please leave a comment or contact me if you are interested in setting something up.</p>
+<h3><span id="Discussion">Discussion</span></h3>
+<h4><span id="Other_virtualization_software">Other virtualization software</span></h4>
+<ul>
+<li>Using VMware for passthrough is only possible when you use VMware vSphere and special Nvidia cards like Quadro cards.<br>
+I could run VMware (unlike Virtualbox) with no problems in parallel to QEMU though.</li>
+<li>There is <a href="http://lime-technology.com/" target="_blank">unRAID</a> which also uses QEMU and apparently can be used for passthrough purposes.</li>
+<li>I have read some articles about XEN successfully supporting GPU passthrough, too.</li>
+</ul>
+<h4><span id="Complicated_solutions">Complicated solutions</span></h4>
+<p>During my research I have seen many things being done in a very complicated way. One examle is that you don&#x2019;t need pci-stub if your kernel already supports vfio-pci. Further, keep things simple by using short parameters like:</p>
+<ul>
+<li>-hda (only if you don&#x2019;t need performance gains through using virtio drivers)</li>
+<li>-cdrom</li>
+<li>-smb</li>
+</ul>
+<h3><span id="Issues">Issues</span></h3>
+<p>Overall the VM is really feeling nice and responsive. However, there are some issues that I encountered so far and am trying to fix.</p>
+<ul>
+<li>Mouse microlags:<br>
+My mouse stutters in some games although being passed through (also without Synergy). This happens under a Windows or Linux guest.</li>
+<li>Running QEMU parallel to Virtualbox is a nogo:<br>
+This seems to be an issue since Virtualbox and QEMU both share KVM. No solution in sight here?</li>
+</ul>
+<h3><span id="Conclusion">Conclusion</span></h3>
+<p>This whole setup was definitively one of the more/most frustrating things I have done so far. However, we need more articels and scripts to decrease the global frustration level while making awesome things like this. I hope this guide helps you to reduce your stress level and to create your own setup.</p>
+<p>In conclusion I can only say: <span>In the end it is absolutely worth the struggle.</span> It can really make up for not using dual-boot and gets you a step further away from using Windows as the main OS.<span><br>
+</span></p>
+
+<p>You can find my newest and optimized start script/s here:</p>
+<p><a href="https://github.com/evonide/gpu-passthrough" target="_blank">Github &#x2013; Evonide&#x2019;s GPU passthrough</a></p>
+
+<p>Last but not least:<br>
+Many THANKS, KUDOS and SHOUTOUTS to all people who have created those awesome guides, have provided useful information or have struggled and felt the pain of setting up something like this. Finally, my biggest thanks go to my colleague Dario Wei&#xDF;er for doing the setup with Archlinux and helping me with many issues.</p>
+
+<p>Please feel free to comment if you find any mistakes, if you want to share your own experiences or if you know about any other missing cool things.</p>
+
+</div>
+
+</div>
+</body></html>

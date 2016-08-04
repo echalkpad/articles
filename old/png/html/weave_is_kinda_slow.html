@@ -1,0 +1,322 @@
+<!DOCTYPE html><html><head><title>Weave is kinda slow</title></head><body>
+<h1>Weave is kinda slow</h1><p><a href="http://www.generictestdomain.net/docker/weave/networking/stupidity/2015/04/05/weave-is-kinda-slow/" target="_new">Original URL</a></p>
+<p><blockquote>In our new world of containers Docker, many old problems have been rediscovered. Thankfully, the fact that these problems were solved decades ago has not stopped people from coming up with their own&hellip;</blockquote></p>
+<div><article class="post-content">
+<p>In our new world of <del>containers</del> Docker, many old problems have been
+rediscovered. Thankfully, the fact that these problems were solved decades ago
+has not stopped people from coming up with their own solutions, and we now all
+get to witness the resulting disasters.</p>
+<p>The particular problem I&#x2019;ll talk about today is IP level overlay networks. The
+basic problem these overlay networks try to solve is &#x201C;I have 1 IP per machine,
+but I need <del>a subnet</del> multiple IPs per machine&#x201D;. This was originally relevant
+because you might want have a few networks and want to do some funky networking,
+then became relevant because you might have a few VMs and want to do some funky
+networking, and now, in 2015, it is relevant because you might have a few
+containers and want to do some funky networking. Obviously, these use cases are
+distinct enough to require their own implementations and protocols, as we will
+see.</p>
+<p>The way you solve this problem is usually via some sort of
+IP encapsulation, though the specific implementation will vary wildly. The
+<a href="https://www.ietf.org/rfc/rfc2003.txt">IP encapsulation RFC</a>
+talks about a structure that would look like</p>
+<div class="highlight"><pre><code class="language-text">| Encapsulated |
+| Packet |
++--------------+
+| Inner IP |
+| Header |
++--------------+
+| Outer IP |
+| Header |
++--------------+
+| Link |
+| Layer |
+</code></pre></div>
+<p>However, due to there being only 2 transport layer protocols that can traverse a
+firewall, we more often see</p>
+<div class="highlight"><pre><code class="language-text">| Encapsulated |
+| Packet |
++--------------+
+| Inner IP |
+| Header |
++--------------+
+| UDP |
+| Header |
++--------------+
+| Outer IP |
+| Header |
++--------------+
+| Link |
+| Layer |
+</code></pre></div>
+<p>In some cases, we get the following, due to the need for software to justify its
+existence via &#x201C;features&#x201D;:</p>
+<div class="highlight"><pre><code class="language-text">| Encapsulated |
+| Packet |
++--------------+
+| Inner IP |
+| Header |
++--------------+
+| Overlay |
+| Header |
++--------------+
+| UDP |
+| Header |
++--------------+
+| Outer IP |
+| Header |
++--------------+
+| Link |
+| Layer |
+</code></pre></div>
+<p>But usually that is just the sign of a
+<a href="http://www.dwheeler.com/secure-class/Secure-Programs-HOWTO/data-vs-control.html">poor implementation</a>.</p>
+<p>There are a couple of other standards for this,
+<a href="http://tools.ietf.org/html/rfc2784">GRE</a> and
+<a href="http://tools.ietf.org/html/rfc7348">VXLan</a>. GRE
+(generic routing encapsulation) is a network layer protocol that is most
+commonly used to do things such as
+IPv4 over IPv6, extending LANs over VPNs etc etc. VXLan (Virtual Extensible LAN)
+is a more recent protocol that was designed specifically to enable funky
+networking when working in VM heavy environments. The encapsulation provided by
+VXLan looks quite different however, as VXLan encapsulates link layer frames
+(though it itself is an application layer protocol; the frames are transmitted
+via UDP). This looks a bit like this:</p>
+<div class="highlight"><pre><code class="language-text">| Encapsulated |
+| frame |
++--------------+
+| VXLAN |
+| Header |
++--------------+
+| UDP |
+| Header |
++--------------+
+| Outer IP |
+| Header |
++--------------+
+| Link |
+| Layer |
+</code></pre></div>
+<p>Cisco have a
+<a href="http://www.cisco.com/c/dam/en/us/products/collateral/switches/nexus-9000-series-switches/white-paper-c11-729383.doc/_jcr_content/renditions/white-paper-c11-729383_1.jpg">nice diagram</a>
+that goes into some more detail.</p>
+<h2 id="weave">Weave</h2>
+<p><a href="http://weave.works/">Weave</a> is a company/open source project that provides an
+overlay network for your Docker containers. Due to their unique use case of
+providing each container with an IP, they have developed their own custom
+protocol, which looks something like this (courtesy of the
+<a href="http://weaveworks.github.io/weave/how-it-works.html">weave documentation</a>):</p>
+<div class="highlight"><pre><code class="language-text">+-----------------------------------+
+| Name of sending peer |
++-----------------------------------+
+| Frame 1: Name of capturing peer |
++-----------------------------------+
+| Frame 1: Name of destination peer |
++-----------------------------------+
+| Frame 1: Captured payload length |
++-----------------------------------+
+| Frame 1: Captured payload |
++-----------------------------------+
+| Frame 2: Name of capturing peer |
++-----------------------------------+
+| Frame 2: Name of destination peer |
++-----------------------------------+
+| Frame 2: Captured payload length |
++-----------------------------------+
+| Frame 2: Captured payload |
++-----------------------------------+
+| ... |
++-----------------------------------+
+| Frame N: Name of capturing peer |
++-----------------------------------+
+| Frame N: Name of destination peer |
++-----------------------------------+
+| Frame N: Captured payload length |
++-----------------------------------+
+| Frame N: Captured payload |
++-----------------------------------+
+| UDP Header |
++-----------------------------------+
+| IP Header |
+</code></pre></div>
+<p>This is quite different from the examples I talked about above. Weave captures
+data on the frame level, a la VXLan, but then collates multiple frames and
+transmits them together via UDP.
+This means that 2 packets sent by the container are not guaranteed to cross the
+network as 2 packets; if they are sent sufficiently close together, and the sum
+of their size is sufficiently smaller than the MTU, they may travel as a single
+packet. We&#x2019;ll see how this affects the connection speed.</p>
+
+<p>I have two boxes, <code>$IP1</code> and <code>$IP2</code>. They&#x2019;re both $5 digital ocean boxes, so should
+be representative of the standard machines used in enterprise settings today.
+I&#x2019;ll start off the test by running <code>qperf</code>, a network testing tool, on the first
+machine, and then running
+<code>qperf $IP1 tcp_bw tcp_lat</code> on the other. This will run a test on TCP
+bandwidth and latency between the two IPs:</p>
+<div class="highlight"><pre><code class="language-text">$ qperf $IP1 tcp_bw tcp_lat
+tcp_bw:
+ bw = 116 MB/sec
+tcp_lat:
+ latency = 91.8 us
+</code></pre></div>
+<p>So I guess you get roughly what you pay for. Anyway, the defining feature of the
+cloud is <del>clueless CTOs</del> poor networks, so this shouldn&#x2019;t be a problem. Let&#x2019;s
+try running the test under two Weave connected containers.</p>
+<h2 id="weave">Weave</h2>
+<p>So running things under Weave is a little more complicated. I&#x2019;ve annotated the
+commands below (this requires a Weave network to have been set up that includes
+the two machines).</p>
+<p>For the server:</p>
+<div class="highlight"><pre><code class="language-text">$ weave run \ # Weave requires you not use the standard docker command
+ 10.2.1.1/24 \ # The ip we're going to use
+ -p 4001:4001 \ # 4001 is used for testing
+ -p 4000:4000 \ # 4000 for coordination
+ -v $(which qperf):$(which qperf) \ # Avoiding building qperf in the container
+ tianon/gentoo-stage3 \ # At least it's not Ubuntu
+ qperf -lp 4000 # Tell qperf to use port 4000 for coordination
+</code></pre></div>
+<p>And for the client:</p>
+<div class="highlight"><pre><code class="language-text">$ C=$(weave run \ # `weave run` runs commands in daemon mode by default
+ 10.2.1.2/24 \ # as above
+ -v $(which qperf):$(which qperf) \ # as above
+ tianon/gentoo-stage3 \
+ qperf 10.2.1.1 \ # The IP of the server container
+ -lp 4000 \ # Use 4000 for coordination
+ -ip 4001 \ # Use 4001 for testing
+ tcp_bw tcp_lat # Test tcp bandwidth
+$ # Watch for the result in the logs
+$ docker logs $C
+tcp_bw:
+ bw = 6.91 MB/sec
+tcp_lat:
+ latency = 372 us
+</code></pre></div>
+<p>Boy, for all that work, that&#x2019;s pretty damn slow. Let&#x2019;s tabulate that data:</p>
+<table><thead>
+<tr>
+<th>Name</th>
+<th>TCP BW (MB/s)</th>
+<th>TCP Lat (&#xB5;s)</th>
+<th>BW %</th>
+<th>Lat %</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Native</td>
+<td>116</td>
+<td>91.8</td>
+<td>100</td>
+<td>100</td>
+</tr>
+<tr>
+<td>Weave</td>
+<td>6.91</td>
+<td>372</td>
+<td>5.96</td>
+<td>405</td>
+</tr>
+</tbody></table>
+<p>So two Weave networked container provide about a 6% of the throughput two native
+services might, at 4x the latency. Not great. I would guess that a lot of the
+time is spent simply getting the packet out of the kernel and into the Weave
+process.</p>
+<h2 id="flannel">Flannel</h2>
+<p>Weave&#x2019;s main competitor in the giving-each-container-an-ip space is
+<a href="https://github.com/coreos/flannel">flannel</a>, by CoreOS. Flannel offers a range
+of encapsulation protocols, all working at the IP level. By default it uses the UDP
+based encapsulation I described above, but also supports
+<a href="http://tools.ietf.org/html/rfc7348">VXLan encapsulation</a>, a recent encapsulation
+standard that has in-kernel support. I don&#x2019;t know about you, but I view every packet
+that avoids userspace as another step towards salvation.</p>
+<p>Flannel uses <a href="https://github.com/coreos/etcd">etcd</a> as its control plane, so I
+dumped it on <code>$IP1</code>, and then loaded up the first configuration I wanted to test,
+the default UDP encapsulation:</p>
+<div class="highlight"><pre><code class="language-text">$ etcdctl mk /coreos.com/network/config '{"Network":"10.0.0.0/16"}'
+</code></pre></div>
+<p>We then fire up flannel on each node, and tell Docker to use the flannel bridge</p>
+<div class="highlight"><pre><code class="language-text">$ flanneld -etcd-endpoints="http://$IP1:4001" &amp;
+$ source /run/flannel/subnet.env
+$ docker -d --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU}
+</code></pre></div>
+<p>With that done on each machine, I&#x2019;ll now fire up a container on <code>$IP1</code>, figure out
+what IP flannel has given me, and then run qperf</p>
+<div class="highlight"><pre><code class="language-text">$ docker run -ti --rm -v $(which qperf):$(which qperf) \
+ -p 4000:4000 -p 4001:4001\
+ tianon/gentoo-stage3 bash
+container$ hostname -I
+10.0.72.2
+container$ qperf -lp 4000
+</code></pre></div>
+<p>And on the other host, simply start a container and run the qperf client against
+the virtual IP:</p>
+<div class="highlight"><pre><code class="language-text">$ docker run --rm \
+ -v $(which qperf):$(which qperf) \
+ tianon/gentoo-stage3 \
+ qperf -lp 4000 -ip 4001 10.0.72.2 tcp_bw tcp_lat
+tcp_bw:
+ bw = 23 MB/sec
+tcp_lat:
+ latency = 164 u
+</code></pre></div>
+<p>So, not exactly great, though a fair bit better than Weave. This is likely due
+to the fact that Weave captures data via packet capture, while flanneld uses
+ipmasq, a lesser known library that allows userspace to make decisions on the
+destiny of packets coming out of iptables chains. However, as mentioned before,
+in kernel routing is what we would like, and neither of these solutions provide
+it. Let&#x2019;s turn on flannel&#x2019;s VXLan backend:</p>
+<div class="highlight"><pre><code class="language-text">$ etcdctl rm --recursive /coreos.com/network/subnets
+$ etcdctl set /coreos.com/network/config '{"Network":"10.0.0.0/16", "Backend": {"Type": "vxlan"}}'
+</code></pre></div>
+<p>And after performing the same process to set up the benchmark, we get</p>
+<div class="highlight"><pre><code class="language-text">tcp_bw:
+ bw = 112 MB/sec
+tcp_lat:
+ latency = 129 us
+</code></pre></div>
+<p>So, yeah, avoiding userspace is good.</p>
+
+<table><thead>
+<tr>
+<th>Name</th>
+<th>TCP BW (MB/s)</th>
+<th>TCP Lat (&#xB5;s)</th>
+<th>BW %</th>
+<th>Lat %</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Native</td>
+<td>116</td>
+<td>91.8</td>
+<td>100.00</td>
+<td>100.00</td>
+</tr>
+<tr>
+<td>Weave</td>
+<td>6.91</td>
+<td>372</td>
+<td>5.96</td>
+<td>405.23</td>
+</tr>
+<tr>
+<td>Flannel UDP</td>
+<td>23</td>
+<td>164</td>
+<td>19.83</td>
+<td>178.65</td>
+</tr>
+<tr>
+<td>Flannel VXLan</td>
+<td>112</td>
+<td>129</td>
+<td>96.55</td>
+<td>140.52</td>
+</tr>
+</tbody></table>
+<p>I think that speaks for itself. The only other thing I should mention at this
+point is that if you are relying on Weave&#x2019;s encryption feature, I would
+recommend investing in an actual VPN implementation. Weave rolls its own
+crypto, and I would not suggest people rely on Weave&#x2019;s custom protocol for
+confidentiality on their network links.</p>
+</article>
+</div>
+</body></html>

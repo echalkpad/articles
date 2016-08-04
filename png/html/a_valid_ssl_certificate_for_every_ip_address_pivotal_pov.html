@@ -1,0 +1,172 @@
+<!DOCTYPE html><html><head><title>A Valid SSL Certificate for Every IP Address | Pivotal P.O.V.</title></head><body>
+<h1>A Valid SSL Certificate for Every IP Address | Pivotal P.O.V.</h1><p><a href="http://blog.pivotal.io/labs/labs/sslip-io-a-valid-ssl-certificate-for-every-ip-address" target="_new">Original URL</a></p>
+<p><blockquote>sslip.io enables developers to equip their servers with valid SSL certificates for free (on the downside, the server's URI will be an awkward mash-up of the server's IP address and the sslip.io&hellip;</blockquote></p>
+<div><div class="post-34152 post type-post status-publish format-standard has-post-thumbnail hentry category-labs tag-bosh tag-cloud-foundry tag-devops tag-open-source channel-labs channel-pivotal-labs">
+								
+<p><a href="https://sslip.io/">sslip.io</a> enables developers to equip their servers with valid SSL certificates for free (on the downside, the server's URI will be an awkward mash-up of the server's IP address and the sslip.io domain, e.g. <a href="https://52-0-56-137.sslip.io/">https://52-0-56-137.sslip.io</a>). Two components make this possible: a custom DNS (<a href="https://en.wikipedia.org/wiki/Domain_Name_System">Domain Name System</a>) backend that resolves hostnames to an embedded IP address (e.g. 192-168-0-1.sslip.io resolves to 192.168.0.1), and an SSL key and wildcard certificate downloadable from GitHub.</p>
+<p>This blog post discusses how we <sup><a href="http://blog.pivotal.io/labs/labs/sslip-io-a-valid-ssl-certificate-for-every-ip-address#authors">[1]</a></sup> implemented the former component (the custom DNS backend) (the latter component's implementation, a file downloaded from GitHub, is trivial and thus not discussed).</p>
+<h3 id="sslip-io-implementation">sslip.io Implementation</h3>
+<ul>
+<li>We wanted the concept to be easy to understand. To that end, we made it similar to a popular service, <a href="http://xip.io/">xip.io</a>.</li>
+<li>We wanted it to be easy to implement. Fortunately, we didn't have to start from scratch&#x2014;<a href="https://github.com/sstephenson">Sam Stephenson</a> had already done much of the heavy lifting when he created xip.io, and he made the source code <a href="https://github.com/basecamp/xip-pdns">freely available</a>.</li>
+<li>We wanted it to be a <a href="https://bosh.io/docs/create-release.html">BOSH release</a>, so that we could deploy our servers using a single command (i.e. <code>bosh-init deploy sslip.yml</code>). Also, a stipulation of the Hack Day (a day that Pivotal Software set aside to work on fun projects) was that our project had to be Cloud Foundry-related. We wrote much of sslip.io during the Hack Day.</li>
+</ul>
+<h3 id="modifying-xip-io-to-create-sslip-io">Modifying xip.io to create sslip.io</h3>
+<p>xip.io's backend almost accomplished what we needed, but not quite: it lacked the ability to resolve hostnames that were in the sslip.io domain (i.e. not in an sslip.io subdomain). In fact, the typical sslip.io hostname did not resolve properly until it was 3 or more subdomains removed from the sslip.io domain. Here are some examples:</p>
+<table>
+<thead>
+<tr>
+<th>hostname</th>
+<th># of subdomains</th>
+<th>IP address(es)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.sslip.io</td>
+<td>0</td>
+<td>2.0.0.0 (broken)</td>
+</tr>
+<tr>
+<td>1.2.sslip.io</td>
+<td>1</td>
+<td>2.0.0.0 (broken)</td>
+</tr>
+<tr>
+<td>168.1.2.sslip.io</td>
+<td>2</td>
+<td>2.0.0.0 (broken)</td>
+</tr>
+<tr>
+<td>192.168.1.2.sslip.io</td>
+<td>3</td>
+<td>192.168.1.2 (good)</td>
+</tr>
+<tr>
+<td>www.192.168.1.2.sslip.io</td>
+<td>4</td>
+<td>192.168.1.2 (good)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The hostname must be in the sslip.io domain for the wildcard certificate to work properly</strong>; it will not work in an sslip.io subdomain. This is a technical limitation of wildcard certs and the manner in which browsers treat them (read more <a href="http://security.stackexchange.com/questions/10538/what-certificates-are-needed-for-multi-level-subdomains">here</a>).</p>
+<p>Our solution: use dashes, not dots, to separate the numbers embedded in the hostname. Some examples:</p>
+<table>
+<thead>
+<tr>
+<th>hostname</th>
+<th># of subdomains</th>
+<th>IP address(es)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>192-168-1-2.sslip.io</td>
+<td>0</td>
+<td>192.168.1.2</td>
+</tr>
+<tr>
+<td>10-9-8-7.sslip.io</td>
+<td>0</td>
+<td>10.9.8.7</td>
+</tr>
+<tr>
+<td>www-172-16-0-1.sslip.io</td>
+<td>0</td>
+<td>172.16.0.1</td>
+</tr>
+</tbody>
+</table>
+<p>We modified <em>xip-pdns.sh</em>, the core of the xip.io backend, to accommodate dashes as well as dots. Although we were surprised to discover that the xip.io backend program was a bash script, we found the coding to be tight, and making the needed changes was fairly straightforward:</p>
+<pre class="editor-colors lang-diff"><p class="line"><span class="text plain null-grammar"><span>@@&#xA0;-68,6&#xA0;+68,7&#xA0;@@&#xA0;log()&#xA0;{</span></span></p><p class="line"><span class="text plain null-grammar"><span>+DASHED_IP_SUBDOMAIN_PATTERN="(^|-|\.)(((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)-){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\$"</span></span></p><p class="line"><span class="text plain null-grammar"><span>@@&#xA0;-95,6&#xA0;+96,10&#xA0;@@&#xA0;subdomain_is_ip()&#xA0;{</span></span></p><p class="line"><span class="text plain null-grammar"><span>+subdomain_is_dashed_ip()&#xA0;{</span></span></p><p class="line"><span class="text plain null-grammar"><span>+&#xA0;&#xA0;[[&#xA0;"$SUBDOMAIN"&#xA0;=~&#xA0;$DASHED_IP_SUBDOMAIN_PATTERN&#xA0;]]</span></span></p><p class="line"><span class="text plain null-grammar"><span>@@&#xA0;-109,6&#xA0;+114,11&#xA0;@@&#xA0;resolve_ip_subdomain()&#xA0;{</span></span></p><p class="line"><span class="text plain null-grammar"><span>+resolve_dashed_ip_subdomain()&#xA0;{</span></span></p><p class="line"><span class="text plain null-grammar"><span>+&#xA0;&#xA0;[[&#xA0;"$SUBDOMAIN"&#xA0;=~&#xA0;$DASHED_IP_SUBDOMAIN_PATTERN&#xA0;]]&#xA0;||&#xA0;true</span></span></p><p class="line"><span class="text plain null-grammar"><span>+&#xA0;&#xA0;echo&#xA0;"${BASH_REMATCH[2]//-/.}"</span></span></p><p class="line"><span class="text plain null-grammar"><span>@@&#xA0;-174,6&#xA0;+184,9&#xA0;@@&#xA0;while&#xA0;read_query;&#xA0;do</span></span></p><p class="line"><span class="text plain null-grammar"><span>+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;elif&#xA0;subdomain_is_dashed_ip;&#xA0;then</span></span></p><p class="line"><span class="text plain null-grammar"><span>+&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;&#xA0;answer_subdomain_a_query_for&#xA0;dashed_ip</span></span></p></pre>
+<p>We made the changes, which led us to the next step: deploying our changes with BOSH.</p>
+<h3 id="creating-the-bosh-release">Creating the BOSH release</h3>
+<p>Creating the BOSH release posed no problems.</p>
+<ul>
+<li>We followed the <a href="https://bosh.io/docs/create-release.html">BOSH instructions</a></li>
+<li>The release is available on <a href="https://github.com/cloudfoundry-community/xip-release">GitHub</a></li>
+<li>We cut corners when creating a release. Specifically, in our <a href="https://github.com/cloudfoundry-community/xip-release/blob/master/packages/pdns-3.4.6/packaging">packaging script</a> we installed dependent packages (e.g. boost-devel, libmysqlclient-dev) directly using the OS (i.e. <code>yum</code> in the case of a CentOS stemcell, <code>apt-get</code> in the case of Ubuntu). This is strongly discouraged, but the alternative&#x2014;building releases for the dependencies&#x2014;would have jeopardized our ability to finish within the 8-hour span of Hack Day.</li>
+</ul>
+<h3 id="rolling-your-own">Rolling Your Own</h3>
+<p>Rolling your own version of an xip.io-style nameserver is fairly straightforward; the xip BOSH release has <a href="https://github.com/cloudfoundry-community/xip-release#deploying-a-custom-version-of-xip-to-amazon-aws">instructions</a> for setting up the Amazon AWS environment, deploying, and testing.</p>
+<p>Although there is work involved setting up the BOSH manifest (e.g. setting up the AWS VPC), it's not terribly burdensome. We encourage you to review the <a href="https://github.com/cloudfoundry-community/xip-release/blob/master/examples/xip-bosh-init-aws.yml">sample manifest</a>. Most of it is boilerplate; search for "CHANGEME" to see what would need to be changed to deploy your own version. Surprisingly little.</p>
+<h3 id="the-economics-of-sslip-io-238-55-per-year">The Economics of sslip.io: $238.55 per year</h3>
+<p>Costs are a vital but often-overlooked dimension of smaller engineering projects.</p>
+<p>The sslip.io service costs $238.55 per year, two-thirds of which are paid to Amazon AWS for two <sup><a href="http://blog.pivotal.io/labs/labs/sslip-io-a-valid-ssl-certificate-for-every-ip-address#rfc1034">[2]</a></sup> DNS nameservers that run 24 hours a day, answering queries for the sslip.io domain. In our case we were fortunate&#x2014;the servers were already in place for a previous project, eliminating that line item (i.e. we only had to pay for the registration and certificates, not for the servers).</p>
+<table>
+<thead>
+<tr>
+<th>Expense</th>
+<th>Vendor</th>
+<th>Cost</th>
+<th>Cost / year</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>sslip.io</em> domain name registration</td>
+<td>namecheap.com</td>
+<td>$164.40 5-year</td>
+<td>$32.88</td>
+</tr>
+<tr>
+<td>*<em>.sslip.io</em> wildcard cert</td>
+<td>cheapsslshop.com</td>
+<td>$165.00 3-year</td>
+<td>$55.00</td>
+</tr>
+<tr>
+<td>2 &#xD7; EC2 t2.micro instances</td>
+<td>Amazon AWS</td>
+<td>$0.0172 / hour <sup><a href="http://blog.pivotal.io/labs/labs/sslip-io-a-valid-ssl-certificate-for-every-ip-address#ec2_pricing">[3]</a></sup></td>
+<td>$150.67</td>
+</tr>
+</tbody>
+</table>
+<h3 id="a-mysterious-1-second-delay-unmasked">A Mysterious 1-Second Delay, Unmasked</h3>
+<p>In one of the more curious moments of troubleshooting, we noticed a mysterious 1+ second delay in the<br>
+PowerDNS server response. It became apparent that the delay was caused by a series of<br>
+unfortunate events (involving IPv6):</p>
+<ul>
+<li>the nameserver (<em>ns-he.nono.com</em>) had both IPv4 (78.47.249.19) and IPv6 addresses (2a01:4f8:d12:148e::2)</li>
+<li>the client (<em>maria.nono.com</em>) also had both IPv4 (10.9.9.140) and IPv6 (2601:646:0100:4253:aa66:7fff:fe03:4c1b) <sup><a href="http://blog.pivotal.io/labs/labs/sslip-io-a-valid-ssl-certificate-for-every-ip-address#emoji">[4]</a></sup> addresses</li>
+<li>the <code>nslookup</code> client had an affinity for the IPv6 address</li>
+<li>PowerDNS by default does not bind to the IPv6 address (a surprising and dismaying decision)</li>
+<li>the initial attempt to resolve to the nameserver's IPv6 address would fail</li>
+<li><em>nslookup</em> would fall back to the IPv4 address</li>
+<li>the lookup would succeed.</li>
+</ul>
+<p>The fix was to force PowerDNS to bind to the IPv6 port by adding the following lineto the <em>pdns.conf</em> file:</p>
+<pre class="editor-colors lang-text"></pre>
+<h3 id="acknowledgements">Acknowledgements</h3>
+<p>We'd like to thank Pivotal Software for setting aside a Hack Day where we could implement sslip.io as a proof of concept.</p>
+<p>We'd like to thank Sam Stephenson for writing xip.io, which was the initial inspiration for sslip.io, and for suggesting the domain name sslip.io.</p>
+<p><a href="https://github.com/justinjsmith">Justin Smith</a> consulted on the security implications of releasing an SSL certificate and key to the general public.</p>
+
+<p><a name="authors"><sup>1</sup></a> <a href="https://github.com/tylerschultz">Tyler Schultz</a>, <a href="https://github.com/APShirley">Alvaro Perez-Shirley</a>, and <a href="https://github.com/cunnie">Brian Cunnie</a> created sslip.io</p>
+<p><a name="rfc1034"><sup>2</sup></a> We must have at least two name servers; we can't get away with just one. Per <a href="http://tools.ietf.org/html/rfc1034">RFC 1034</a>:</p>
+<blockquote><p>
+By administrative fiat, we require every zone to be available on at least two servers, and many zones have more redundancy than that.
+</p></blockquote>
+<p><a name="ec2_pricing"><sup>3</sup></a> Amazon effectively charges <a href="https://aws.amazon.com/ec2/pricing/">$0.0086/hour</a> for a 1 year term all-upfront t2.micro reserved instance.</p>
+<p>For those among you who worry that a t2.micro instance might be underpowered to serve DNS, fear not. If anything, our t2.micro instance is overpowered:</p>
+<p>We use <code>top</code> to gauge our server's performance:</p>
+<pre class="editor-colors lang-text"></pre>
+<ul>
+<li>CPU is not stressed:
+<ul>
+<li>15-minute <a href="https://en.wikipedia.org/wiki/Load_%28computing%29">load average</a> is 0.05. We typically don't worry about a system until the load average (sometimes referred to as the "run queue") climbs above 6. Note that Linux systems, of which ours is one, has a generous accounting of load average: not only does it include processes that are waiting for CPU but also includes processes that are blocked on I/O. This means that on Linux systems "load average" is not a good measure of CPU usage; instead, it lumps I/O and CPU usage in the same bucket.</li>
+<li>CPU idle percentage is typically 98%. This means that 98% of the time the processor has nothing to do.</li>
+</ul>
+</li>
+<li>RAM is not stressed: of the 1015MiB of RAM, 182MiB are free, and only 6MiB of swap is used. We typically don't worry about RAM on Linux systems until the swap space used exceeds twice the physical RAM.</li>
+</ul>
+<p>Our disk space is adequate, too, as measured by <code>df</code>:</p>
+<pre class="editor-colors lang-text"></pre>
+<p>Note that our t2.micro instance is not exclusively dedicated to serving DNS; it's also running an <a href="http://www.pool.ntp.org/en/">NTP Pool</a> server, processing ~1700 NTP queries / second. And running an nginx server. And yet, in spite of those extra processes, the server is essentially doing nothing 95% of the time.</p>
+<p><a name="emoji"><sup>4</sup></a> The sharp-eyed reader may notice that ":0100" which appears in maria.nono.com's IPv6 address is not appropriately abbreviated (i.e. the leading "0" should be stripped). The reason the 0 isn't stripped is that when it is stripped, it becomes the emoji <a href="http://emojipedia.org/hundred-points-symbol/">"100"</a> (<img class="emoji" title=":100:" alt="100" src="http://blog.pivotal.io/opt/homebrew-cask/Caskroom/atom/1.0.7/Atom.app/Contents/Resources/app.asar/node_modules/roaster/node_modules/emoji-images/pngs/100.png">) in our <a href="https://atom.io/">Markdown editor</a>, which has the unfortunate side-effect of turning a conventional, boring IPv6 address into a spectacle.</p>
+							</div>
+
+							
+							</div>
+</body></html>

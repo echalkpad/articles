@@ -1,0 +1,237 @@
+<!DOCTYPE html><html><head><title>Create a Desktop Chat Application using the CEAN Stack and Electron</title></head><body>
+<h1>Create a Desktop Chat Application using the CEAN Stack and Electron</h1><p><a href="http://blog.couchbase.com/2016/january/create-a-desktop-chat-application-using-the-cean-stack-and-electron" target="_new">Original URL</a></p>
+<p><blockquote>So you're interested in creating a desktop chat application like Slack, but aren't sure where to start. Slack was very open in saying that they used Github's Electron platform for building the&hellip;</blockquote></p>
+<div><div class="textblock__content">
+				<p>So you're interested in creating a desktop chat application like Slack, but aren't sure where to start. Slack was very open in saying that they used Github's <a href="http://electron.atom.io">Electron</a> platform for building the desktop version of their software. This means that Slack was developed using web technologies.</p>
+
+<p>We're going to see how to create a real-time chat desktop application that is nowhere near as feature rich as Slack, but it will give you perspective on how you could expand to that point.</p>
+
+<h2>The Prerequisites</h2>
+
+<p>Although not requiring much, there are a few things that you'll need in order to be successful with what comes next:</p>
+
+<ul>
+ <li>Couchbase Server 4+</li>
+ <li>Node Package Manager (NPM)</li>
+</ul>
+
+<p>We need Couchbase Server because all chat messages will be cached in the database after being sent. This allows everyone joining the chat room to be able to see previous messages. This is important because people may be joining the chat later than others and we wouldn't want them to miss out on anything. The Node Package Manager (NPM) is required because we'll be using it to install Angular 2, and Electron. It is available through installing <a href="http://nodejs.org">Node.js</a>.</p>
+
+<p>With all that said, let's start designing our project.</p>
+
+<h2>Cloning the Socket.io Server</h2>
+
+<p>As you may know, this isn't the first tutorial I wrote on the subject of real-time chat using the CEAN stack. I actually wrote two others:</p>
+
+
+
+<p>To save us some time, we're going to use the server side code that we developed in the first CEAN stack tutorial, not the Ionic 2 tutorial. If you haven't already, I recommend you read through it. However, you can obtain the source code by <a href="https://github.com/couchbaselabs/cean-web-chat">downloading it</a> from GitHub, or by executing the following from your Terminal (Mac and Linux) or Command Prompt (Windows):</p>
+
+<pre>
+<code>
+git clone https://github.com/couchbaselabs/cean-web-chat
+</code>
+</pre>
+
+<p>With the server side code downloaded, navigate into the project using your Command Prompt or Terminal and install all the dependencies by executing:</p>
+
+<pre>
+<code>
+npm install
+</code>
+</pre>
+
+<p>At this point, your chat server code is ready to go!</p>
+
+<h3>Configuring Couchbase</h3>
+
+<p>Since Couchbase will be used with the Node.js application, we need a bucket configured and allowed to use N1QL queries. This was all explained in the first <a href="https://blog.nraboy.com/2016/01/create-a-real-time-chat-application-with-the-cean-stack-and-socket-io">CEAN stack chat tutorial</a>, but just as a refresher, let's see it again.</p>
+
+<p>Install a copy of Couchbase Server 4 and create a bucket called <strong>web-chat</strong> that has the query service enabled. Since we will be using N1QL queries we need to create a primary index. This can be done using the Couchbase Query (CBQ) client. On Mac execute the following from a Terminal:</p>
+
+<pre>
+<code>
+./Applications/Couchbase Server.app/Contents/Resources/couchbase-core/bin/cbq
+</code>
+</pre>
+
+<p>The same can be done on Windows using the Command Prompt like so:</p>
+
+<pre>
+<code>
+C:/Program Files/Couchbase/Server/bin/cbq.exe
+</code>
+</pre>
+
+<p>With CBQ open, execute the following to create an index:</p>
+
+<pre>
+<code>
+CREATE PRIMARY INDEX ON `web-chat` USING GSI;
+</code>
+</pre>
+
+<p>Couchbase Server is now ready to go!</p>
+
+<h2>Creating an Electron Project</h2>
+
+<p>Our Electron project is going to be a lot of cut and paste when it comes to code. This is because Electron pretty much accepts any web application you throw at it. Remember we have a very suitable web application bundled within our Socket.io server project.</p>
+
+<p>Create a new directory, maybe on your Desktop, and call it <strong>desktop-chat</strong> or whatever you think is most appropriate. Navigate into the project with your Terminal or Command Prompt and execute the following:</p>
+
+<pre>
+<code>
+npm init -y
+</code>
+</pre>
+
+<p>This creates a very basic NPM <strong>package.json</strong> file in our project. Now we need to install all our desktop application dependencies. Execute the following:</p>
+
+<pre>
+<code>
+npm install angular2@2.0.0-beta.0 systemjs typescript --save
+npm install electron-prebuilt --save-dev
+</code>
+</pre>
+
+<p>The first install will get all of our Angular 2 dependencies. In the server side project, the client facing UI was all made with Angular 2 and TypeScript. We'll do the same here. The second install obtains the Electron binary.</p>
+
+<p>Now open the <strong>package.json</strong> file found at the root of the project and swap out the <strong>scripts</strong> part with the following:</p>
+
+<pre>
+<code>
+"scripts": {
+ "start": "electron main.js"
+},
+</code>
+</pre>
+
+<p>We'll see what that means soon, but first create a <strong>main.js</strong> file at the root of the project. It should contain the following code:</p>
+
+<pre>
+<code>
+var app = require('app'); // Module to control application life.
+var BrowserWindow = require('browser-window'); // Module to create native browser window.
+
+// Keep a global reference of the window object, if you don't, the window will
+// be closed automatically when the JavaScript object is garbage collected.
+var mainWindow = null;
+
+// Quit when all windows are closed.
+app.on('window-all-closed', function() {
+ // On OS X it is common for applications and their menu bar
+ // to stay active until the user quits explicitly with Cmd + Q
+ if (process.platform != 'darwin') {
+ app.quit();
+ }
+});
+
+// This method will be called when Electron has finished
+// initialization and is ready to create browser windows.
+app.on('ready', function() {
+ // Create the browser window.
+ mainWindow = new BrowserWindow({width: 800, height: 600});
+
+ // and load the index.html of the app.
+ mainWindow.loadURL('file://' + __dirname + '/public/index.html');
+
+ // Emitted when the window is closed.
+ mainWindow.on('closed', function() {
+ // Dereference the window object, usually you would store windows
+ // in an array if your app supports multi windows, this is the time
+ // when you should delete the corresponding element.
+ mainWindow = null;
+ });
+});
+</code>
+</pre>
+
+<p>The above may look familiar for two reasons. One I took it from a <a href="http://blog.couchbase.com/build-a-desktop-app-with-github-electron-and-couchbase">previous post</a> I wrote on Electron and two, it came pretty much straight from the Electron documentation. Our important line, however, is this:</p>
+
+<pre>
+<code>
+mainWindow.loadURL('file://' + __dirname + '/public/index.html');
+</code>
+</pre>
+
+<p>This means all our Angular 2 code will be in the <strong>public</strong> directory starting with the <strong>index.html</strong> file.</p>
+
+<p>Copy the <strong>public</strong> directory from the <strong>cean-web-chat</strong> project you cloned from GitHub, and place it in the Electron project's root. There is already an <strong>index.html</strong> file in it, but we need to change a few things. Open it and change the <strong>script</strong> paths to the following:</p>
+
+<pre>
+<code>
+&lt;script src="../node_modules/angular2/bundles/angular2-polyfills.js"&gt;&lt;/script&gt;
+&lt;script src="../node_modules/systemjs/dist/system.src.js"&gt;&lt;/script&gt;
+&lt;script src="../node_modules/rxjs/bundles/Rx.js"&gt;&lt;/script&gt;
+&lt;script src="../node_modules/angular2/bundles/angular2.dev.js"&gt;&lt;/script&gt;
+&lt;script src="../node_modules/angular2/bundles/http.dev.js"&gt;&lt;/script&gt;
+&lt;script src="../node_modules/angular2/bundles/router.dev.js"&gt;&lt;/script&gt;
+</code>
+</pre>
+
+<p>We did this because our library paths are not in the same place as they were in the server side application.</p>
+
+<p>A few more things to do before we're ready to see it in action. Open your Electron project's <strong>public/app/default/default.ts</strong> file and create a new variable within the class as so:</p>
+
+<pre>
+<code>
+socketHost: string;
+</code>
+</pre>
+
+<p>This should be done within the class. Because we're no longer on the same host as the server, we need to tell our desktop client what host to connect to. Inside the constructor, set <strong>socketHost</strong> to whatever the host should be:</p>
+
+<pre>
+<code>
+this.socketHost = "http://192.168.57.1:3000";
+</code>
+</pre>
+
+<p>Our HTTP request in the constructor is no longer valid because our client is not bundled within the server. We need to define the host we just set. It can be done like so:</p>
+
+<pre>
+<code>
+http.get(this.socketHost + "/fetch").subscribe((success) =&gt; {
+</code>
+</pre>
+
+<p>Finally, find the line where you define your Socket.io object. That too needs a host to point to. Change it to look like the following:</p>
+
+<pre>
+<code>
+this.socket = io(this.socketHost);
+</code>
+</pre>
+
+<p>You should be good at this point!</p>
+
+<h2>Seeing it in Action</h2>
+
+<p>You'll need two Command Prompts or Terminals open for this. The first Terminal will run the Socket.io Node.js server that connects to Couchbase Server. Execute the following, with the GitHub project as your working directory, to do so:</p>
+
+<pre>
+<code>
+node app.js
+</code>
+</pre>
+
+<p>If the server started then you're in good shape. In the second Terminal, execute the following, with the Electron project as your working directory:</p>
+
+<pre>
+<code>
+npm start
+</code>
+</pre>
+
+<p>Remember we made the <strong>start</strong> script within our <strong>package.json</strong> file? That's how we use it.</p>
+
+<p>Try sending some messages. They should save to Couchbase Server and if you open another client or load the embedded chat client from the GitHub project, you can do a chat.</p>
+
+<h2>Conclusion</h2>
+
+<p>You just saw how to convert an existing web application into a cross platform desktop application. This application offered real-time chat using bleeding edge technologies like Angular 2, Couchbase, <a href="http://www.socket.io">Socket.io</a>, and Node.js.</p>
+
+<p>If you did not already, I recommend checking out the previous posts I did on the topic of Socket.io with Couchbase. They are good reads and can open the door to possibilities for you.</p>
+			</div>
+		</div>
+</body></html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html><html><head><title>twitter-fabric/galley</title></head><body>
+<h1>twitter-fabric/galley</h1><p><a href="https://github.com/twitter-fabric/galley" target="_new">Original URL</a></p>
+<p><blockquote>Overview Galley is a command-line tool for orchestrating Docker containers in development and test environments. Galley automatically starts a container&#x2019;s dependencies and connects them using&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content"><p><a href="https://github.com/twitter-fabric/galley/blob/master/docs/images/galley-red.png" target="_blank"><img src="https://github.com/twitter-fabric/galley/raw/master/docs/images/galley-red.png" alt="Galley"></a></p>
+
+<p><a href="https://github.com/twitter-fabric/galley"><img src="https://camo.githubusercontent.com/457f0b14286e5d5ff0445dd53a8b724580b20f34/68747470733a2f2f696d672e736869656c64732e696f2f7472617669732f727573742d6c616e672f727573742e737667" alt="Travis"></a></p>
+
+<h2><a id="user-content-overview" class="anchor" href="https://github.com/twitter-fabric/galley#overview"></a>Overview</h2>
+
+<p>Galley is a command-line tool for orchestrating <a href="https://www.docker.com/">Docker</a> containers in development
+and test environments. Galley automatically starts a container&#x2019;s dependencies and connects them using Docker&#x2019;s
+<code>Links</code> and <code>VolumesFrom</code> mappings. Use Galley to start up a web server that connects to a database. Then, use it to
+start up a web server, its database, an intermediate data service (and its database), some queues, worker processes, and
+the monitoring server they all connect to.</p>
+
+<p><strong>Latest version:</strong> 1.0.0 release!</p>
+
+<h3><a id="user-content-what-makes-galley-different" class="anchor" href="https://github.com/twitter-fabric/galley#what-makes-galley-different"></a>What makes Galley different?</h3>
+
+<p>Galley was built to support <a href="http://fabric.io">Fabric</a>&#x2019;s internal development process: multiple teams
+sharing a dozen or more services across a
+variety of source code repositories. What is under active development by one team might just be a dependency to
+another, so Galley gives engineers the flexibility to start the service or services they&#x2019;re working with using
+local source code, while getting pre-built images for any dependencies.</p>
+
+<p>Galley keeps service dependencies in a central &#x201C;Galleyfile&#x201D; configuration so that you can always start up any
+service in your system, along with any necessary transitive dependencies.</p>
+
+<h3><a id="user-content-features" class="anchor" href="https://github.com/twitter-fabric/galley#features"></a>Features</h3>
+
+<ul>
+<li>Run Docker containers, linking them to their dependencies</li>
+<li>Dynamic mapping of local source code into containers</li>
+<li>Custom environments to easily run isolated development and test containers side-by-side</li>
+<li>&#x201C;Addons&#x201D; to define optional configuration for services</li>
+<li>Automatic re-use of running containers to support developing multiple services simultaneously</li>
+<li>Protected &#x201C;stateful&#x201D; containers (<em>e.g.</em> databases)</li>
+<li>JavaScript-based configuration for higher-order service definitions</li>
+</ul>
+
+<p>Galley also has special support for running under a VM, such as when using <a href="https://docs.docker.com/machine/">docker-machine</a> on Mac OS X:</p>
+
+<ul>
+<li>Built-in <code>rsync</code> support for massively-improved disk performance with VirtualBox for local source code.</li>
+<li>Port forwarding to let other machines or mobile devices connect to containers in the VM</li>
+</ul>
+
+<p>And, for continuous integration machines:</p>
+
+<ul>
+<li>A <code>--repairSourceOwnership</code> flag keeps containers running as root from generating files that only root can delete</li>
+<li>Cleanup command to free up disk space from unused images</li>
+</ul>
+
+<h3><a id="user-content-bug-reports-and-discussion" class="anchor" href="https://github.com/twitter-fabric/galley#bug-reports-and-discussion"></a>Bug Reports and Discussion</h3>
+
+<p>If you find something wrong with Galley, please let us know on the
+<a href="https://github.com/twitter-fabric/galley/issues">issues</a> page.</p>
+
+<p>You can also chat with us or ask for help on the
+<a href="https://groups.google.com/forum/#!forum/galley-discuss">galley-discuss@googlegroups.com</a> mailing list.</p>
+
+<h2><a id="user-content-galley-concepts" class="anchor" href="https://github.com/twitter-fabric/galley#galley-concepts"></a>Galley concepts</h2>
+
+<p>To use Galley you define a set of <strong>services</strong> in a central <strong>Galleyfile</strong>. These definitions specify
+Docker options for each service (image, links, volumes, <em>etc.</em>).</p>
+
+<p>When you use <code>galley run &lt;service&gt;.&lt;env&gt;</code>, you provide a <strong>primary service</strong> that you want to interact with, and the
+<strong>environment</strong> to run it in. Environments are used in service definitions to vary the configuration, for example to
+specify different dependencies between &#x201C;dev&#x201D; and &#x201C;test&#x201D; modes.</p>
+
+<p>Environments can also have a namespace, such as <code>.dev.1</code> or <code>test.cucumber</code>. If a service does not have a
+configuration for a namespaced environment, the one for the base environment is used instead.</p>
+
+<p>Not all services must have environment-specific configurations. For a service with no environment configuration, the
+services' base environment configuration is used.</p>
+
+<h2><a id="user-content-quick-start" class="anchor" href="https://github.com/twitter-fabric/galley#quick-start"></a>Quick start</h2>
+
+<div class="highlight highlight-text-shell-session"><pre>$ <span class="pl-s1">npm install -g galley-cli</span>
+$ <span class="pl-s1">git clone https://github.com/twitter-fabric/galley-template.git</span>
+$ <span class="pl-s1"><span class="pl-c1">cd</span> galley-template</span>
+$ <span class="pl-s1">galley run demo.dev</span></pre></div>
+
+<h2><a id="user-content-setting-up-galley" class="anchor" href="https://github.com/twitter-fabric/galley#setting-up-galley"></a>Setting up Galley</h2>
+
+<h3><a id="user-content-installation" class="anchor" href="https://github.com/twitter-fabric/galley#installation"></a>Installation</h3>
+
+<p>Galley is distributed as a command-line tool, <code>galley</code>, and a library. Install the command-line
+tool globally from the <a href="https://www.npmjs.com/package/galley-cli">galley-cli NPM package</a>:</p>
+
+<div class="highlight highlight-text-shell-session"><pre>$ <span class="pl-s1">npm install -g galley-cli</span></pre></div>
+
+<h3><a id="user-content-create-a-galleyfile-package" class="anchor" href="https://github.com/twitter-fabric/galley#create-a-galleyfile-package"></a>Create a Galleyfile package</h3>
+
+<p>Galley keeps your system&#x2019;s configuration in a central Galleyfile. This file must be in a directory with
+an NPM package.json file that depends on the <a href="https://www.npmjs.com/package/galley">galley NPM package</a>.
+You will typically symlink the Galleyfile into the local directory where you keep your repositories.</p>
+
+<p>When you run the <code>galley</code> tool, it recursively walks up your directories until it finds a Galleyfile
+or a symlink to one. It then uses the galley library depended on by that package to execute your
+commands.</p>
+
+<p>The easiest way to get started with a Galleyfile is to clone our template:</p>
+
+<div class="highlight highlight-text-shell-session"><pre>$ <span class="pl-s1">git clone https://github.com/twitter-fabric/galley-template.git</span></pre></div>
+
+<p>You can also create an NPM package from scratch:</p>
+
+<div class="highlight highlight-text-shell-session"><pre>$ <span class="pl-s1">npm init</span>
+$ <span class="pl-s1">npm install --save galley</span>
+$ <span class="pl-s1">npm shrinkwrap</span></pre></div>
+
+<h3><a id="user-content-writing-a-galleyfile" class="anchor" href="https://github.com/twitter-fabric/galley#writing-a-galleyfile"></a>Writing a Galleyfile</h3>
+
+<p>A Galleyfile is a JavaScript module that exports a configuration hash that defines your services and
+their dependencies.</p>
+
+<p>Services are expected to share a common Galleyfile that defines the dependencies among
+them. You should put your Galleyfile in a common place, and then symlink to it from a
+parent directory for your services. The <code>galley</code> CLI tool will search for a Galleyfile recursively
+from the directory it&#x2019;s run in.</p>
+
+<h4><a id="user-content-example" class="anchor" href="https://github.com/twitter-fabric/galley#example"></a>Example</h4>
+
+<p>The file below defines a Rails &#x201C;www&#x201D; service that depends on a MySQL DB in test and both a MySQL DB and a beanstalk
+queue in development. Additionally, it expects to have a &#x201C;config-files&#x201D; volume mounted in. The container&#x2019;s source
+code is kept in <code>/code/www</code>, so you can use <code>galley run -s .</code> to map a local directory over it.</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-c">// Example Galleyfile.js for a small Rails app.</span>
+<span class="pl-c1">module</span>.exports <span class="pl-k">=</span> {
+ CONFIG<span class="pl-k">:</span> {
+ registry<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>docker.example.biz<span class="pl-pds">'</span></span>
+ },
+
+ <span class="pl-s"><span class="pl-pds">'</span>config-files<span class="pl-pds">'</span></span><span class="pl-k">:</span> {},
+ <span class="pl-s"><span class="pl-pds">'</span>beanstalk<span class="pl-pds">'</span></span><span class="pl-k">:</span> {},
+
+ <span class="pl-s"><span class="pl-pds">'</span>www-mysql<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ image<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>mysql<span class="pl-pds">'</span></span>,
+ stateful<span class="pl-k">:</span> <span class="pl-c1">true</span>
+ },
+
+ <span class="pl-s"><span class="pl-pds">'</span>www<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ env<span class="pl-k">:</span> {
+ RAILS_ENV<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>dev<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>development<span class="pl-pds">'</span></span>,
+ <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span>
+ }
+ },
+ links<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>dev<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>www-mysql:mysql<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>beanstalk<span class="pl-pds">'</span></span>],
+ <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>www-mysql<span class="pl-pds">'</span></span>]
+ },
+ ports<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>dev<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>3000:3000<span class="pl-pds">'</span></span>]
+ },
+ source<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>/code/www<span class="pl-pds">'</span></span>,
+ volumesFrom<span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>config-files<span class="pl-pds">'</span></span>]
+ }
+};</pre></div>
+
+<p>Then, from a common parent directory of your services' source directories:</p>
+
+<div class="highlight highlight-text-shell-session"><pre>$ <span class="pl-s1">ln -s ../../path/to/Galleyfile.js <span class="pl-c1">.</span></span></pre></div>
+
+<h3><a id="user-content-running-galley" class="anchor" href="https://github.com/twitter-fabric/galley#running-galley"></a>Running Galley</h3>
+
+<p>Once you&#x2019;ve written a Galleyfile and symlinked it, try it out:</p>
+
+
+
+<pre><code>Galleyfile: /path/to/found/Galleyfile.js
+ beanstalk
+ config-files
+ www [.dev, .test]
+ www-mysql
+</code></pre>
+
+<h2><a id="user-content-command-reference" class="anchor" href="https://github.com/twitter-fabric/galley#command-reference"></a>Command reference</h2>
+
+<h3><a id="user-content-run" class="anchor" href="https://github.com/twitter-fabric/galley#run"></a><code>run</code></h3>
+
+<p><strong>Examples:</strong></p>
+
+<pre><code># Starts the www service with its dev dependencies. Runs the image&#x2019;s default CMD.
+galley run www.dev
+
+# Maps the current directory in as the &#x201C;source&#x201D; directory, uses test dependencies, and runs &#x201C;rake spec&#x201D;.
+galley run -s . www.test rake spec
+</code></pre>
+
+<p>Starts up the given service, using the environment both to name containers and to affect the service configuration.
+Dependencies, either <code>links</code> or <code>volumesFrom</code>, will be started up first and recursively. Containers will be named
+<code>&lt;service&gt;.&lt;env&gt;</code>. STDOUT, STDERR, and STDIN are piped from the terminal to the container.</p>
+
+<p>When Galley exits it will remove the primary service container by default, but leave any dependencies running.</p>
+
+<p>Galley will <em>always</em> recreate the container for the named (&#x201C;primary&#x201D;) service. For dependencies, Galley will look
+for existing containers that match the <code>&lt;service&gt;.&lt;env&gt;</code> naming pattern, starting them if necessary. It will
+delete and recreate them if:</p>
+
+<ul>
+<li>their source image doesn&#x2019;t match the current image for their image name (<em>e.g.</em> if an image was built or pulled
+since first starting the container)</li>
+<li>their current <code>Links</code> don&#x2019;t include everything in the current configuration (typically because a container they
+depend upon has been recreated, but sometimes because an addon changes the configuration)</li>
+</ul>
+
+<p>If a service is configured to be &#x201C;stateful&#x201D; in the Galleyfile, Galley will not recreate it.
+This is useful for development database services that would get wiped if that happened, losing hard-won state. The
+<code>--recreate</code> and <code>--unprotectStateful</code> command line options affect these behaviors; see <code>galley run --help</code> for
+more info.</p>
+
+<p>Similar to <code>docker run</code>, you can provide a command and arguments after the service name to run those instead
+of the image&#x2019;s default CMD. In this case, Galley will let Docker name the container randomly, to avoid naming
+conflicts with any other instances of that service that are running.</p>
+
+<p>You can use the <code>-a</code> option to enable any &#x201C;addons&#x201D; configured for your services (primary or otherwise). Addons can
+bring in additional dependencies or modify environment variables.</p>
+
+<p>If you&#x2019;ve configured a &#x201C;source&#x201D; directory for the primary service, then you can use the <code>-s</code> option to map a local
+directory to it. (This is more convenient than <code>-v</code> for the common case of regularly mapping to the same
+destination.)</p>
+
+<p>Run also takes a number of parameters that are the equivalent to <code>docker run</code> parameters. See <code>galley run --help</code>
+for a complete list.</p>
+
+<h3><a id="user-content-list" class="anchor" href="https://github.com/twitter-fabric/galley#list"></a><code>list</code></h3>
+
+<p><strong>Examples:</strong></p>
+
+<pre><code>galley list
+</code></pre>
+
+<p>Prints the name of each service in the Galleyfile, along with the environments it&#x2019;s configured for and which
+addons affect it.</p>
+
+<h3><a id="user-content-stop-env" class="anchor" href="https://github.com/twitter-fabric/galley#stop-env"></a><code>stop-env</code></h3>
+
+<p><strong>Examples:</strong></p>
+
+<pre><code># Stops all dev containers
+galley stop-env dev
+</code></pre>
+
+<p>Stops all containers whose names end in <code>.&lt;env&gt;</code>. Useful for freeing up memory in your VM or as a prelude to a
+<code>galley cleanup</code> to wipe your slate.</p>
+
+<h3><a id="user-content-pull" class="anchor" href="https://github.com/twitter-fabric/galley#pull"></a><code>pull</code></h3>
+
+<p><strong>Examples:</strong></p>
+
+<pre><code># Fetches the www image and its &#x201C;test&#x201D; environment transitive dependencies
+galley pull www.test
+
+# Fetches &#x201C;dev&#x201D; images, including dependencies added by the &#x201C;beta&#x201D; addon
+galley pull -a beta www.dev
+</code></pre>
+
+<p>Pulls the latest image for the given primary service and any transitive dependencies that come from its
+environment. Can take <code>-a</code> to include addons in the dependency tree.</p>
+
+<p><code>galley pull</code> just updates the local Docker images, it doesn&#x2019;t cause any changes to running containers. A follow-up
+<code>galley run</code> will recreate any non-&#x201C;stateful&#x201D; containers for dependencies whose images have changed.</p>
+
+<h3><a id="user-content-cleanup" class="anchor" href="https://github.com/twitter-fabric/galley#cleanup"></a><code>cleanup</code></h3>
+
+<p><strong>Examples:</strong></p>
+
+<pre><code>galley cleanup
+</code></pre>
+
+<p>Removes any stopped containers that match Galley&#x2019;s naming conventions, provided they are not for &#x201C;stateful&#x201D;
+services. Removes their volumes as well. See <code>galley cleanup --help</code> for options that affect what&#x2019;s removed.</p>
+
+<p>Deletes any dangling Docker images on the machine, to free up disk space.</p>
+
+<h2><a id="user-content-galleyfile-reference" class="anchor" href="https://github.com/twitter-fabric/galley#galleyfile-reference"></a>Galleyfile reference</h2>
+
+<p>A Galleyfile is a JavaScript or CoffeeScript module that exports a configuration hash. The keys for the hash are
+the names of services in your system. Each service must have an entry, even if its value is just an empty hash.</p>
+
+<p>Additionally, the special <code>CONFIG</code> key labels a hash of global configuration values.</p>
+
+<h3><a id="user-content-global-config" class="anchor" href="https://github.com/twitter-fabric/galley#global-config"></a>Global config</h3>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-c1">module</span>.exports <span class="pl-k">=</span> {
+ CONFIG<span class="pl-k">:</span> {
+ registry<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>docker.example.biz<span class="pl-pds">'</span></span>,
+ rsync<span class="pl-k">:</span> {
+ image<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>docker.example.biz/rsync<span class="pl-pds">'</span></span>,
+ module<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>root<span class="pl-pds">'</span></span>
+ }
+ }
+ &#x2026;
+};</pre></div>
+
+<p><strong>registry:</strong> The Docker registry to use when services have default image names.</p>
+
+<p><strong>rsync:</strong> Custom Docker image name and Rsync module name to use to make a container that runs an Rsync daemon. See
+<a href="https://github.com/twitter-fabric/galley#rsync-support">rsync support</a> for more information.</p>
+
+<h3><a id="user-content-service-config" class="anchor" href="https://github.com/twitter-fabric/galley#service-config"></a>Service config</h3>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-s"><span class="pl-pds">'</span>www<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ env<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>HOST<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>localhost<span class="pl-pds">'</span></span>,
+ <span class="pl-s"><span class="pl-pds">'</span>PROXY_FAYE<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>1<span class="pl-pds">'</span></span>
+ }
+ },
+ ports<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>dev<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>3000:3000<span class="pl-pds">'</span></span>]
+ },
+ links<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>dev<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>mongo<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>beanstalk<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>data-service<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>redis<span class="pl-pds">'</span></span>],
+ <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>mongo<span class="pl-pds">'</span></span>],
+ <span class="pl-s"><span class="pl-pds">'</span>test.cucumber<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>mongo<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>beanstalk<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>data-service<span class="pl-pds">'</span></span>],
+ },
+ source<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>/code/www<span class="pl-pds">'</span></span>,
+ volumesFrom<span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>config-files<span class="pl-pds">'</span></span>]
+}</pre></div>
+
+<p><strong>addons</strong>: Hash of name to a hash of additional configuration values. Additional configuration can include
+<code>links</code>, <code>ports</code>, <code>volumesFrom</code>, and <code>env</code>. When the addon is enabled via the <code>-a</code> flag to <code>run</code> or <code>pull</code>, array
+values (<code>links</code>, <code>ports</code>, <code>volumesFrom</code>) are concatenated with the service&#x2019;s base configuration (and any other addons). <code>env</code> values are merged, with addons taking precidence over the base values.</p>
+
+<p><strong>binds</strong>: Array of &#x201C;Bind&#x201D; strings to map host directories into the container. String format matches Docker:
+<code>"host_path:container_path"</code></p>
+
+<p><strong>command</strong>: Command to override the default from the image. Can either be a string, which Docker will run with
+<code>/bin/sh -c</code>, or an array of strings, which should be an executable and its arguments.</p>
+
+<p><strong>entrypoint</strong>: Override the default entrypoint from the image. String path for an executable in the container.</p>
+
+<p><strong>env</strong>: Hash of environment variable names and their values to set in the container. If the values are themselves
+hashes, they are assumed to be from Galley &#x201C;env&#x201D; to value.</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-s"><span class="pl-pds">'</span>my-app<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ env<span class="pl-k">:</span> {
+ <span class="pl-c">// $HOST will always be "localhost" in the container</span>
+ <span class="pl-s"><span class="pl-pds">'</span>HOST<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>localhost<span class="pl-pds">'</span></span>,
+
+ <span class="pl-c">// "galley run my-app.dev" will set $RAILS_ENV to "development"</span>
+ <span class="pl-c">// "galley run my-app.test" will set $RAILS_ENV to "test"</span>
+ <span class="pl-c">// "galley run my-app.test.cucumber" will also set $RAILS_ENV to "test"</span>
+ <span class="pl-c">// "galley run my-app.other" will not have $RAILS_ENV defined</span>
+ <span class="pl-s"><span class="pl-pds">'</span>RAILS_ENV<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>dev<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>development<span class="pl-pds">'</span></span>,
+ <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span>
+ }
+ }
+}</pre></div>
+
+<p><strong>image</strong>: Image name to generate the container from. Defaults to the service&#x2019;s name from the default registry.</p>
+
+<p><strong>links</strong>: Array of links to make to other containers. Elements are either <code>"service_name"</code> or
+<code>"service_name:alias"</code> (where &#x201C;alias&#x201D; is the hostname this container will see the service as). Alternately, the value
+can be a hash of environment name to array of links.</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-s"><span class="pl-pds">'</span>data-service<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ links<span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>data-service-mysql:mysql<span class="pl-pds">'</span></span>]
+},
+
+<span class="pl-s"><span class="pl-pds">'</span>my-app<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ links<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>dev<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>my-app-mysql:mysql<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>data-service<span class="pl-pds">'</span></span>],
+ <span class="pl-s"><span class="pl-pds">'</span>test<span class="pl-pds">'</span></span><span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>my-app-mysql:mysql<span class="pl-pds">'</span></span>]
+ }
+},
+
+<span class="pl-s"><span class="pl-pds">'</span>data-service-mysql<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ image<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>docker.example.biz/mysql<span class="pl-pds">'</span></span>
+},
+
+<span class="pl-s"><span class="pl-pds">'</span>my-app-mysql<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ image<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>docker.example.biz/mysql<span class="pl-pds">'</span></span>
+},</pre></div>
+
+<p><strong>ports</strong>: Array of ports to publish when the service is run as the primary service. Array values are either
+<code>"host_port:container_port"</code> or <code>"container_port"</code>. If a host port is ommitted, Docker will assign a random host
+port to proxy in. Alternately, can be a hash of environment name to array of port values.</p>
+
+<p><strong>restart</strong>: Boolean. If <code>true</code>, applies a Docker <code>RestartPolicy</code> of &#x201C;always&#x201D; to the container. Default is <code>false</code>.</p>
+
+<p><strong>source</strong>: String path to a source code directory inside the container. If <code>-s</code> is provided to <code>galley run</code>, Galley
+will bind that directory to the source directory in the container.</p>
+
+<p><strong>stateful</strong>: Boolean. If <code>true</code>, Galley will not remove the container in <code>galley run</code> or <code>galley cleanup</code>, even if it
+is stale or missing links. Can be overridden for a command by the <code>--unprotectStateful</code> flag. Default is <code>false</code>.</p>
+
+<p><strong>user</strong>: User to run the container as.</p>
+
+<p><strong>volumesFrom</strong>: Array of services whose containers should be volume-mounted into this service&#x2019;s container.
+Alternately, can be a hash of environment name to array of service names.</p>
+
+<h3><a id="user-content-addons" class="anchor" href="https://github.com/twitter-fabric/galley#addons"></a>Addons</h3>
+
+<div class="highlight highlight-source-js"><pre># <span class="pl-c1">EXAMPLE</span>
+<span class="pl-c1">module</span>.exports <span class="pl-k">=</span> {
+ &#x2026;
+ ADDONS<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>beta<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>www<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ env<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>USE_BETA_SERVICE<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>1<span class="pl-pds">'</span></span>
+ },
+ links<span class="pl-k">:</span> [<span class="pl-s"><span class="pl-pds">'</span>beta<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>uploader<span class="pl-pds">'</span></span>]
+ },
+ <span class="pl-s"><span class="pl-pds">'</span>uploader<span class="pl-pds">'</span></span><span class="pl-k">:</span> {
+ env<span class="pl-k">:</span> {
+ <span class="pl-s"><span class="pl-pds">'</span>USE_BETA_SERVICE<span class="pl-pds">'</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>1<span class="pl-pds">'</span></span>
+ }
+ }
+ }
+ }
+ &#x2026;
+};</pre></div>
+
+<p>Addons are extra configurations that can be applied from the command line. An addon can include
+additional <code>links</code>, <code>ports</code>, <code>volumesFrom</code>, and <code>env</code> values that are merged with a service&#x2019;s
+base configuration. Addons are defined globally because they can affect multiple services.</p>
+
+<h3><a id="user-content-galleycfg-reference" class="anchor" href="https://github.com/twitter-fabric/galley#galleycfg-reference"></a>.galleycfg reference</h3>
+
+<p>Galley can write a .galleycfg JSON configuration file into <code>~</code> when you run <code>galley config</code>.
+Currently, the only state read from the config file is the default value of the <code>--rsync</code> flag.</p>
+
+<p>You can write to the .galleycfg file with:</p>
+
+<p><code>galley config set key value</code></p>
+
+<p>An example .galleycfg:</p>
+
+<pre><code>{
+ "rsync": true
+}
+</code></pre>
+
+<h3><a id="user-content-best-practices" class="anchor" href="https://github.com/twitter-fabric/galley#best-practices"></a>Best practices</h3>
+
+<ul>
+<li>Mark any databases as &#x201C;stateful&#x201D; to keep them from being automatically recreated. This keeps your local
+development data from disappearing on you.</li>
+<li>Use addons for optional dependencies that developers don&#x2019;t need all the time.</li>
+<li>Only publish ports from your &#x201C;dev&#x201D; environment so that they won&#x2019;t conflict when you run &#x201C;dev&#x201D; and &#x201C;test&#x201D;
+simultaneously.</li>
+<li>Use constants and loops in your Galleyfile if they&#x2019;ll make your configuration clearer and easier to maintain.</li>
+</ul>
+
+<h3><a id="user-content-rsync-support" class="anchor" href="https://github.com/twitter-fabric/galley#rsync-support"></a>rsync support</h3>
+
+<p>Galley includes built-in support for using rsync to copy local source changes into a container. This provides
+a significant speed boost over VirtualBox&#x2019;s shared folders when working on Mac OS X with <code>docker-machine</code>.</p>
+
+<p>To use it, just add <code>--rsync</code> to your <code>galley run</code> commands when you use <code>--source</code>.</p>
+
+<p>You can turn on <code>--rsync</code> by default with:</p>
+
+<div class="highlight highlight-text-shell-session"><pre>$ <span class="pl-s1">galley config <span class="pl-c1">set</span> rsync <span class="pl-c1">true</span></span></pre></div>
+
+<p>rsync support requires that an rsync server container be run and volume-mapped in to your service&#x2019;s
+container. By default, Galley downloads and uses <a href="https://hub.docker.com/r/galley/rsync/">galley/rsync</a>,
+but you can specify your own container in the <code>CONFIG</code> section of your Galleyfile.</p>
+
+<p><strong>Caveat:</strong> Galley&#x2019;s rsyncing goes one way, from outside the container to inside it. Files changed or created
+inside the container are not copied back out to the local disk. In the cases where you need to have a
+bi-directional mapping, use <code>--rsync false</code> to temporarily disable rsync.</p>
+
+<p>Also note that <code>--rsync</code> only affects the <code>--source</code> mapping, not any <code>--volume</code> mappings that you specify.</p>
+
+<h3><a id="user-content-docker-defaults" class="anchor" href="https://github.com/twitter-fabric/galley#docker-defaults"></a>Docker defaults</h3>
+
+<p>Galley uses a handful of defaults when working with Docker containers that we&#x2019;ve found are appropriate for
+development and testing. You should be aware of these, especially if you have a lot of other Docker experience.
+If these aren&#x2019;t working out for you, let us know; we always want to learn about new use cases!</p>
+
+<p>(In these cases, the &#x201C;primary service&#x201D; is the one specified on the command line.)</p>
+
+<ul>
+<li>If Galley is being run in a TTY, the primary service&#x2019;s container is, too (<code>docker run -t</code>)</li>
+<li>The primary service container is always run with STDIN allocated (<code>docker run -i</code>)</li>
+<li>The primary service container is always removed when Galley stops (<code>docker run --rm</code>)</li>
+<li>Volumes are always removed when removing a container (<code>docker rm -v</code>)</li>
+<li>Containers are started with an <code>/etc/hosts</code> entry that points their service name to 127.0.0.1</li>
+</ul>
+
+<h2><a id="user-content-contributing" class="anchor" href="https://github.com/twitter-fabric/galley#contributing"></a>Contributing</h2>
+
+<p>We welcome GitHub issues and pull requests. Please match the existing CoffeeScript style, conventions, and test
+coverage.</p>
+
+<p>First run <code>npm install</code> to fetch dependencies.</p>
+
+<p>Galley uses <code>gulp</code> for building:</p>
+
+<pre><code>$ gulp watch # watches the Galley directory for changes to compile
+$ gulp compile # compile galley before running tests (if you&#x2019;re not running gulp watch)
+$ gulp test # runs mocha specs
+$ gulp acceptance # builds the acceptance images and runs some acceptance tests
+</code></pre>
+</article>
+ </div>
+</body></html>

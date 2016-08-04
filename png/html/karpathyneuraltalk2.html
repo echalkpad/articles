@@ -1,0 +1,108 @@
+<!DOCTYPE html><html><head><title>karpathy/neuraltalk2</title></head><body>
+<h1>karpathy/neuraltalk2</h1><p><a href="https://github.com/karpathy/neuraltalk2" target="_new">Original URL</a></p>
+<p><blockquote>Recurrent Neural Network captions your images. Now much faster and better than the original NeuralTalk. Compared to the origianl NeuralTalk this implementation is batched, uses Torch, runs on a GPU,&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content">
+
+<p>Recurrent Neural Network captions your images. Now much faster and better than the original <a href="https://github.com/karpathy/neuraltalk">NeuralTalk</a>. Compared to the origianl NeuralTalk this implementation is <strong>batched, uses Torch, runs on a GPU, and supports CNN finetuning</strong>. All of these together result in about ~200x increase in training speed and in a much better performance.</p>
+
+<p>This is an early code release that works great but is slightly hastily released and probably requires some code reading of inline comments (which I tried to be quite good with in general). I will be improving it over time but wanted to push the code out there because I promised it to too many people.</p>
+
+<p>This current code (and the pretrained model) gets ~0.9 CIDEr, which would place it around spot #8 on the <a href="https://competitions.codalab.org/competitions/3221#results">codalab leaderboard</a>. I will submit the actual result soon.</p>
+
+<p><a href="https://camo.githubusercontent.com/684a313b08ebab8d1d0aec023e84ba59d57e8cdc/68747470733a2f2f7261772e6769746875622e636f6d2f6b617270617468792f6e657572616c74616c6b322f6d61737465722f7669732f7465617365722e6a706567" target="_blank"><img src="https://raw.github.com/karpathy/neuraltalk2/master/vis/teaser.jpeg" alt="teaser results"></a></p>
+
+<p>You can find a few more example results on the <a href="http://cs.stanford.edu/people/karpathy/neuraltalk2/demo.html">demo page</a>. These results will improve a bit more once the last few bells and whistles are in place (e.g. beam search, ensembling, reranking).</p>
+
+<h3><a id="user-content-requirements" class="anchor" href="https://github.com/karpathy/neuraltalk2#requirements"></a>Requirements</h3>
+
+<p>This code is written in Lua and requires <a href="http://torch.ch/">Torch</a>. If you're on Ubuntu, installing Torch in your home directory may look something like: </p>
+
+<div class="highlight highlight-source-shell"><pre>$ curl -s https://raw.githubusercontent.com/torch/ezinstall/master/install-deps <span class="pl-k">|</span> bash
+$ git clone https://github.com/torch/distro.git <span class="pl-k">~</span>/torch --recursive
+$ <span class="pl-c1">cd</span> <span class="pl-k">~</span>/torch<span class="pl-k">;</span> 
+$ ./install.sh <span class="pl-c"># and enter "yes" at the end to modify your bashrc</span>
+$ <span class="pl-c1">source</span> <span class="pl-k">~</span>/.bashrc</pre></div>
+
+<p>See the Torch installation documentation for more details. After Torch is installed we need to get a few more packages using <a href="https://luarocks.org/">LuaRocks</a> (which already came with the Torch install). In particular:</p>
+
+<div class="highlight highlight-source-shell"><pre>$ luarocks install nn
+$ luarocks install nngraph 
+$ luarocks install image </pre></div>
+
+<p>If you'd like to train on an NVIDIA GPU using CUDA (which you really, really want to since we're using a VGGNet), you'll of course need a GPU, and you will have to install the <a href="https://developer.nvidia.com/cuda-toolkit">CUDA Toolkit</a>. Then get the <code>cutorch</code> and <code>cunn</code> packages:</p>
+
+<div class="highlight highlight-source-shell"><pre>$ luarocks install cutorch
+$ luarocks install cunn</pre></div>
+
+<p>We're also going to need the <a href="http://www.kyne.com.au/%7Emark/software/lua-cjson-manual.html">cjson</a> library so that we can load/save json files. Look under their section 2.4 for easy luarocks install.</p>
+
+<p>If you'd like to train your models you will need <a href="https://github.com/szagoruyko/loadcaffe">loadcaffe</a>, since we are using the VGGNet.</p>
+
+<div class="highlight highlight-source-shell"><pre>luarocks install loadcaffe</pre></div>
+
+<p>Lastly, if you want to train you will also need to install <a href="https://github.com/deepmind/torch-hdf5">torch-hdf5</a>, and <a href="http://www.h5py.org/">h5py</a>, since we will be using hdf5 files to store the preprocessed data.</p>
+
+<h3><a id="user-content-i-just-want-to-caption-images" class="anchor" href="https://github.com/karpathy/neuraltalk2#i-just-want-to-caption-images"></a>I just want to caption images</h3>
+
+<p>In this case you want to run the evaluation script on a pretrained model checkpoint. 
+I trained a decent one on the <a href="http://mscoco.org/">MS COCO dataset</a> that you can run on your images.
+The pretrained checkpoint can be downloaded here: <a href="http://cs.stanford.edu/people/karpathy/neuraltalk2/checkpoint_v1.zip">pretrained checkpoint link</a> (600MB). It's large because it contains the weights of a finetuned VGGNet. Now place all your images of interest into a folder, e.g. <code>blah</code>, and run
+the eval script:</p>
+
+<div class="highlight highlight-source-shell"><pre>$ th <span class="pl-c1">eval</span>.lua -model /path/to/model -image_folder /path/to/image/directory</pre></div>
+
+<p>The eval script will create an <code>vis.json</code> file inside the <code>vis</code> folder, which can then be visualized with the provided HTML interface:</p>
+
+<div class="highlight highlight-source-shell"><pre>$ <span class="pl-c1">cd</span> vis
+$ python -m SimpleHTTPServer</pre></div>
+
+<p>Now visit <code>localhost:4000</code> in your browser and you should see your predicted captions.</p>
+
+<p>You can see an <a href="http://cs.stanford.edu/people/karpathy/neuraltalk2/demo.html">example visualization demo page here</a>.</p>
+
+<h3><a id="user-content-id-like-to-train-my-own-network-on-ms-coco" class="anchor" href="https://github.com/karpathy/neuraltalk2#id-like-to-train-my-own-network-on-ms-coco"></a>I'd like to train my own network on MS COCO</h3>
+
+<p>Great, first we need to some preprocessing. Head over to the <code>coco/</code> folder and run the IPython notebook to download the dataset and do some very simple preprocessing. The notebook will combine the train/val data together and create a very simple and small json file that contains a large list of image paths, and raw captions for each image, of the form:</p>
+
+<pre><code>[{ file_path: 'path/img.jpg', captions: ['a caption', ...] }, ...]
+</code></pre>
+
+<p>Once we have this, we're ready to invoke the <code>prepro.py</code> script, which will read all of this in and create a dataset (an hdf5 file and a json file) ready for consumption in the Lua code. For example, for MS COCO we can run the prepro file as follows:</p>
+
+<div class="highlight highlight-source-shell"><pre>$ python prepro.py --input_json coco/coco_raw.json --num_val 5000 --num_test 5000 --images_root coco/images --word_count_threshold 5 --output_json coco/cocotalk.json --output_h5 coco/cocotalk.h5</pre></div>
+
+<p>This is telling the script to read in all the data (the images and the captions), allocate 5000 images for val/test splits respectively, and map all words that occur &lt;= 5 times to a special <code>UNK</code> token. The resulting <code>json</code> and <code>h5</code> files are about 30GB and contain everything we want to know about the dataset. The last thing we need is the <a href="http://www.robots.ox.ac.uk/%7Evgg/research/very_deep/">VGG-16 caffe checkpoint</a>, (under Models section, "16-layer model" bullet point).</p>
+
+<p>We're now ready to train!</p>
+
+<div class="highlight highlight-source-shell"><pre>$ th train.lua -input_h5 coco/cocotalk.h5 -input_json coco/cocotalk.json</pre></div>
+
+<p>The train script will take over, and start dumping checkpoints into the folder specified by <code>checkpoint_path</code> (default = current folder). You also have to point the train script to the VGGNet protos (see the options inside <code>train.lua</code>).</p>
+
+<p>If you'd like to evaluate BLEU/METEOR/CIDEr scores during training, turn on <code>language_eval</code> option, but don't forget to download the <a href="https://github.com/tylin/coco-caption">cococaption code</a> into <code>coco-caption</code> directory.</p>
+
+<h3><a id="user-content-id-like-to-train-on-my-own-data" class="anchor" href="https://github.com/karpathy/neuraltalk2#id-like-to-train-on-my-own-data"></a>I'd like to train on my own data</h3>
+
+<p>No problem, create a json file in the exact same form as before:</p>
+
+<pre><code>[{ file_path: 'path/img.jpg', captions: ['a caption', ...] }, ...]
+</code></pre>
+
+<p>and invoke the <code>prepro.py</code> script to preprocess all the images and data into and hdf5 file and json file. Then invoke <code>train.lua</code> (see detailed options inside code).</p>
+
+<p><strong>A few notes on training.</strong> When you're training you might want to proceed in stages. Notice that by default finetuning is disabled. When you train with no finetuning (I found Adam works best, by the way) your score will climb to ~0.7 CIDEr in ~day and then get stuck. At this point I like to stop the training, and rstart training but now with finetuning (i.e. <code>-finetune_cnn_after 0</code>), and using the flag <code>start_from</code> to continue from the previous checkpoint. You'll see your score rise up to about 0.9 CIDEr over ~2 days or so (on MS COCO).</p>
+
+<h3><a id="user-content-license" class="anchor" href="https://github.com/karpathy/neuraltalk2#license"></a>License</h3>
+
+<p>BSD License.</p>
+
+<h3><a id="user-content-acknowledgements" class="anchor" href="https://github.com/karpathy/neuraltalk2#acknowledgements"></a>Acknowledgements</h3>
+
+<p>Parts of this code were written in collaboration with my labmate <a href="http://cs.stanford.edu/people/jcjohns/">Justin Johnson</a>. </p>
+
+<p>I'm very grateful for <a href="https://developer.nvidia.com/deep-learning">NVIDIA</a>'s support in providing GPUs that made this work possible.</p>
+
+<p>I'm also very grateful to the maintainers of Torch for maintaining a wonderful deep learning library.</p>
+</article>
+ </div>
+</body></html>

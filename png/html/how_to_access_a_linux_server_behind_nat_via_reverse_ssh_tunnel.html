@@ -1,0 +1,100 @@
+<!DOCTYPE html><html><head><title>How to access a Linux server behind NAT via reverse SSH tunnel</title></head><body>
+<h1>How to access a Linux server behind NAT via reverse SSH tunnel</h1><p><a href="http://xmodulo.com/access-linux-server-behind-nat-reverse-ssh-tunnel.html" target="_new">Original URL</a></p>
+<p><blockquote>You are running a Linux server at home, which is behind a NAT router or restrictive firewall. Now you want to SSH to the home server while you are away from home. How would you set that up? SSH port&hellip;</blockquote></p>
+<div><div class="entry-content">
+
+<p>You are running a Linux server at home, which is behind a NAT router or restrictive firewall. Now you want to SSH to the home server while you are away from home. How would you set that up? SSH port forwarding will certainly be an option. However, port forwarding can become tricky if you are dealing with multiple nested NAT environment. Besides, it can be interfered with under various ISP-specific conditions, such as restrictive ISP firewalls which block forwarded ports, or carrier-grade NAT which shares IPv4 addresses among users.</p>
+<h2>What is Reverse SSH Tunneling?</h2>
+<p>One alternative to SSH port forwarding is <strong>reverse SSH tunneling</strong>. The concept of reverse SSH tunneling is simple. For this, you will need another host (so-called "relay host") outside your restrictive home network, which you can connect to via SSH from where you are. You could set up a relay host using a <a target="_blank" rel="nofollow" href="http://xmodulo.com/go/digitalocean">VPS instance</a> with a public IP address. What you do then is to set up a persistent SSH tunnel from the server in your home network to the public relay host. With that, you can connect "back" to the home server from the relay host (which is why it's called a "reverse" tunnel). As long as the relay host is reachable to you, you can connect to your home server wherever you are, or however restrictive your NAT or firewall is in your home network.</p>
+<p><a target="_blank" rel="nofollow" href="https://www.flickr.com/photos/xmodulo/17162647378/"><img src="https://farm8.staticflickr.com/7742/17162647378_c7d9f10de8_b.jpg"></a></p>
+<h2>Set up a Reverse SSH Tunnel on Linux</h2>
+<p>Let's see how we can create and use a reverse SSH tunnel. We assume the following. We will be setting up a reverse SSH tunnel from <tt>homeserver</tt> to <tt>relayserver</tt>, so that we can SSH to <tt>homeserver</tt> via <tt>relayserver</tt> from another computer called <tt>clientcomputer</tt>. The public IP address of <tt>relayserver</tt> is 1.1.1.1.</p>
+<p>On <tt>homeserver</tt>, open an SSH connection to <tt>relayserver</tt> as follows.</p>
+<p class="console">
+homeserver~$ ssh -fN -R 10022:localhost:22 relayserver_user@1.1.1.1
+</p>
+<p>Here the port 10022 is any arbitrary port number you can choose. Just make sure that this port is not used by other programs on <tt>relayserver</tt>.</p>
+<p>The "-R 10022:localhost:22" option defines a reverse tunnel. It forwards traffic on port 10022 of <tt>relayserver</tt> to port 22 of <tt>homeserver</tt>.</p>
+<p>With "-fN" option, SSH will go right into the background once you successfully authenticate with an SSH server. This option is useful when you do not want to execute any command on a remote SSH server, and just want to forward ports, like in our case.</p>
+<p>After running the above command, you will be right back to the command prompt of <tt>homeserver</tt>.</p>
+<p>Log in to <tt>relayserver</tt>, and verify that 127.0.0.1:10022 is bound to <tt>sshd</tt>. If so, that means a reverse tunnel is set up correctly.</p>
+<p class="console">
+relayserver~$ sudo netstat -nap | grep 10022
+</p>
+<pre>
+tcp 0 0 127.0.0.1:10022 0.0.0.0:* LISTEN 8493/sshd 
+</pre>
+<p>Now from any other computer (e.g., <tt>clientcomputer</tt>), log in to <tt>relayserver</tt>. Then access <tt>homeserver</tt> as follows.</p>
+<p class="console">
+relayserver~$ ssh -p 10022 homeserver_user@localhost
+</p>
+<p>One thing to take note is that the SSH login/password you type for <tt>localhost</tt> should be for <tt>homeserver</tt>, not for <tt>relayserver</tt>, since you are logging in to <tt>homeserver</tt> via the tunnel's local endpoint. So do not type login/password for <tt>relayserver</tt>. After successful login, you will be on <tt>homeserver</tt>.</p>
+<h2>Connect Directly to a NATed Server via a Reverse SSH Tunnel</h2>
+<p>While the above method allows you to reach <tt>homeserver</tt> behind NAT, you need to log in twice: first to <tt>relayserver</tt>, and then to <tt>homeserver</tt>. This is because the end point of an SSH tunnel on <tt>relayserver</tt> is binding to loopback address (127.0.0.1).</p>
+<p>But in fact, there is a way to reach NATed <tt>homeserver</tt> directly with a single login to <tt>relayserver</tt>. For this, you will need to let <tt>sshd</tt> on <tt>relayserver</tt> forward a port not only from loopback address, but also from an external host. This is achieved by specifying <tt>GatewayPorts</tt> option in <tt>sshd</tt> running on <tt>relayserver</tt>.</p>
+<p>Open /etc/ssh/sshd_conf of <tt>relayserver</tt> and add the following line.</p>
+<p class="console">
+relayserver~$ vi /etc/ssh/sshd_conf
+</p>
+<pre>
+GatewayPorts clientspecified
+</pre>
+<p>Restart <tt>sshd</tt>.</p>
+<p>Debian-based system:</p>
+
+
+
+
+<p class="console">
+relayserver~$ sudo /etc/init.d/ssh restart
+</p>
+<p>Red Hat-based system:</p>
+<p class="console">
+relayserver~$ sudo systemctl restart sshd
+</p>
+<p>Now let's initiate a reverse SSH tunnel from <tt>homeserver</tt> as follows.</p>
+<p class="console">
+homeserver~$ ssh -fN -R 1.1.1.1:10022:localhost:22 relayserver_user@1.1.1.1
+</p>
+<p>Log in to <tt>relayserver</tt> and confirm with <tt>netstat</tt> command that a reverse SSH tunnel is established successfully.</p>
+<p class="console">
+relayserver~$ sudo netstat -nap | grep 10022
+</p>
+<pre>
+tcp 0 0 1.1.1.1:10022 0.0.0.0:* LISTEN 1538/sshd: dev 
+</pre>
+<p>Unlike a previous case, the end point of a tunnel is now at 1.1.1.1:10022 (<tt>relayserver</tt>'s public IP address), not 127.0.0.1:10022. This means that the end point of the tunnel is reachable from an external host.</p>
+<p>Now from any other computer (e.g., <tt>clientcomputer</tt>), type the following command to gain access to NATed <tt>homeserver</tt>.</p>
+<p class="console">
+clientcomputer~$ ssh -p 10022 homeserver_user@1.1.1.1
+</p>
+<p>In the above command, while 1.1.1.1 is the public IP address of <tt>relayserver</tt>, <tt>homeserver_user</tt> must be the user account associated with <tt>homeserver</tt>. This is because the real host you are logging in to is <tt>homeserver</tt>, not <tt>relayserver</tt>. The latter simply relays your SSH traffic to <tt>homeserver</tt>.</p>
+<h2>Set up a Persistent Reverse SSH Tunnel on Linux</h2>
+<p>Now that you understand how to create a reverse SSH tunnel, let's make the tunnel "persistent", so that the tunnel is up and running all the time (regardless of temporary network congestion, SSH timeout, relay host rebooting, etc.). After all, if the tunnel is not always up, you won't be able to connect to your home server reliably.</p>
+<p>For a persistent tunnel, I am going to use a tool called <tt>autossh</tt>. As the name implies, this program allows you to automatically restart an SSH session should it breaks for any reason. So it is useful to keep a reverse SSH tunnel active.</p>
+<p>As the first step, let's set up <a target="_blank" href="http://xmodulo.com/how-to-enable-ssh-login-without.html">passwordless SSH login</a> from <tt>homeserver</tt> to <tt>relayserver</tt>. That way, <tt>autossh</tt> can restart a broken reverse SSH tunnel without user's involvement.</p>
+<p>Next, <a href="http://ask.xmodulo.com/install-autossh-linux.html" target="_blank">install <tt>autossh</tt></a> on <tt>homeserver</tt> where a tunnel is initiated.</p>
+<p>From <tt>homeserver</tt>, run <tt>autossh</tt> with the following arguments to create a persistent SSH tunnel destined to <tt>relayserver</tt>.</p>
+<p class="console">
+homeserver~$ autossh -M 10900 -fN -o "PubkeyAuthentication=yes" -o "StrictHostKeyChecking=false" -o "PasswordAuthentication=no" -o "ServerAliveInterval 60" -o "ServerAliveCountMax 3" -R 1.1.1.1:10022:localhost:22 relayserver_user@1.1.1.1
+</p>
+<p>The "-M 10900" option specifies a monitoring port on <tt>relayserver</tt> which will be used to exchange test data to monitor an SSH session. This port should not be used by any program on <tt>relayserver</tt>.</p>
+<p>The "-fN" option is passed to <tt>ssh</tt> command, which will let the SSH tunnel run in the background.</p>
+<p>The "-o XXXX" options tell <tt>ssh</tt> to:</p>
+<ul>
+<li>Use key authentication, not password authentication.
+</li><li>Automatically accept (unknown) SSH host keys.
+</li><li>Exchange keep-alive messages every 60 seconds.
+</li><li>Send up to 3 keep-alive messages without receiving any response back.
+</li></ul>
+<p>The rest of reverse SSH tunneling related options remain the same as before.</p>
+<p>If you want an SSH tunnel to be automatically up upon boot, you can add the above <tt>autossh</tt> command in /etc/rc.local.</p>
+<h2>Conclusion</h2>
+<p>In this post, I talked about how you can use a reverse SSH tunnel to access a Linux server behind a restrictive firewall or NAT gateway from outside world. While I demonstrated its use case for a home network, you must be careful when applying it for corporate networks. Such a tunnel can be considered as a breach of a corporate policy, as it circumvents corporate firewalls and can expose corporate networks to outside attacks. There is a great chance it can be misused or abused. So always remember its implication before setting it up.</p>
+<div><br><h3><img src="http://xmodulo.com/images/rss_small.png"> Subscribe to Xmodulo</h3>
+<p>Do you want to receive <strong>Linux FAQs, detailed tutorials and tips</strong> published at Xmodulo? Enter your email address below, and we will deliver our Linux posts straight to your email box, for free. Delivery powered by Google Feedburner.</p>
+</div>
+</div> 
+ 				 
+ 			</div>
+</body></html>

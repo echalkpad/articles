@@ -1,0 +1,75 @@
+<!DOCTYPE html><html><head><title>Make a Mobile App with ReactJS in 30 Minutes</title></head><body>
+<h1>Make a Mobile App with ReactJS in 30 Minutes</h1><p><a href="https://scotch.io/tutorials/make-a-mobile-app-with-reactjs-in-30-minutes" target="_new">Original URL</a></p>
+<p><blockquote>Now we have an interface with no logic. Before we can link together the Button to the display of photos, we need to grab the photos from Flickr using React conventions. First, get yourself a Flickr&hellip;</blockquote></p>
+<div><div class="tile-content">
+
+<p>Now we have an interface with no logic. Before we can link together the Button to the display of photos, we need to grab the photos from Flickr using React conventions. First, get yourself a Flickr account and API key using their quick <a href="https://www.flickr.com/services/apps/create/noncommercial/">sign up form</a>.</p>
+<p>After filling it out (and signing up if necessary) copy the Public Key they give you and add it as a constant to <code>App.jsx</code>. You&#x2019;ll also need the URL that&#x2019;s used for searching for photos, which I found by using their [API explorer](https://www.flickr.com/services/api explore/flickr.photos.search).</p>
+<p>It should look like this:</p>
+<pre><code class="language-javascript">
+const key = '__YOUR_KEY_HERE__';
+const base = 'https://api.flickr.com/services/rest/?api_key=${key}&amp;format=rest&amp;format=json&amp;nojsoncallback=1';
+</code></pre>
+<p>Be sure to put your key instead of &#x201C;<strong>YOUR_KEY_HERE</strong>&#x201C;.</p>
+<p><em>Note: <code>const</code> is a new feature in the next version of JavaScript, called ES6. It&#x2019;s just like a variable, but one that can never be changed once it&#x2019;s set. How can we use this in our app now? Reapp has a <a href="https://scotch.io/tutorials/webpack.github.io">Webpack</a> build system built in that gives you all sorts of features, including ES6 support!</em></p>
+<p>Next, define <code>getInitialState()</code> on our React class, so our component can track the photos we&#x2019;ll be fetching. We add this as the first property after <code>React.createClass</code>. Because we&#x2019;re storing photos in a list, add an array:</p>
+<pre><code class="language-javascript">
+getInitialState() {
+ return {
+ photos: []
+ }
+},
+</code></pre>
+<p>This will give us access to <code>this.state.photos</code> in our render function. In the UI we&#x2019;ll need a Button and Input to use for searching:</p>
+<pre><code class="language-javascript">
+import Button from 'reapp-ui/components/Button';
+import Input from 'reapp-ui/components/Input';
+</code></pre>
+<p>And then change the <code>render()</code> function:</p>
+<pre><code class="language-javascript">
+ render() {
+ var { photos } = this.state;
+
+ return (
+ &lt;View title="Flickr Search"&gt;
+ &lt;Input ref="search img-responsive" /&gt;
+ &lt;Button onTap={this.handleSearch}&gt;Search Images&lt;/Button&gt;
+
+ &lt;div className="verticalCenter"&gt;
+ {!photos.length &amp;&amp;
+ &lt;p&gt;No photos!&lt;/p&gt;
+ }
+ &lt;/div&gt;
+ &lt;/View&gt;
+ );
+ }
+</code></pre>
+<p>And we get this:</p>
+<div class="text-center">
+ <img src="https://cask.scotch.io/2015/03/no-photos-281x500.png" alt="no-photos" width="281" class="aligncenter size-large wp-image-7415 img-responsive">
+</div>
+<p>Pretty easy! There&#x2019;s a few things to note here. First, notice the <a href="http://facebook.github.io/react/docs/more-about-refs.html">ref property</a> on the Input? Ref is short for reference, and lets us track DOM elements in our class. We&#x2019;ll use that in the future for getting the value of the field.</p>
+<p>Also, note <code>className="verticalCenter"</code> on the div. Two things: Because we&#x2019;re using JSX that compiles to JS objects ([more reading here](http://facebook.github.io react/docs/jsx-in-depth.html)), we can&#x2019;t use the normal <code>class</code> attribute, so instead use use the JavaScript convention of <code>className</code> to set the class. The <code>verticalCenter</code> property is given to us by Reapp, that will align things centered on our page.</p>
+<p>Finally, the <code>onTap</code> property on Button? It&#x2019;s pointing to <code>this.handleSearch</code>. But, we don&#x2019;t have any handleSearch function. React will expect that function defined on the class, so lets wire it up. First, <code>npm install --save superagent</code> which gives us the excellent <a href="https://github.com/visionmedia/superagent">Superagent</a> request library. Then, import it:</p>
+<pre><code class="language-javascript">
+import Superagent from 'superagent';
+</code></pre>
+<p>Finally, define handleSearch:</p>
+<pre><code class="language-javascript">
+ handleSearch() {
+ let searchText = this.refs.search.getDOMNode().value;
+ Superagent
+ .get(`${base}&amp;method=flickr.photos.search&amp;text=${searchText}&amp;per_page=10&amp;page=1`, res =&gt; {
+ if (res.status === 200 &amp;&amp; res.body.photos)
+ this.setState({
+ photos: res.body.photos.photo
+ });
+ });
+ },
+</code></pre>
+<p>A few notes:</p>
+<ul>
+<li><code>this.refs.search.getDOMNode()</code> returns the input DOM node that we put the &#x201C;search&#x201D; ref on earlier.</li>
+<li><code>${base}</code> will grab the URL we put in the constant.</li>
+<li><code>this.setState</code> will take our response photos and put them into the <code>this.state.photos</code> array we defined earlier in <code>getInitialState</code>. </li></ul></div></div>
+</body></html>

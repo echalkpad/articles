@@ -1,0 +1,294 @@
+<!DOCTYPE html><html><head><title>Understanding the box model by building a navigation bar</title></head><body>
+<h1>Understanding the box model by building a navigation bar</h1><p><a href="http://www.chenhuijing.com/blog/that-navigation-bar-design/" target="_new">Original URL</a></p>
+<p><blockquote>Working in an agency means that most of the work I do is project-based. This means building a new design every couple of months (or less, if you know what I mean). The interesting part is, after a&hellip;</blockquote></p>
+<div><div class="post-content">
+<p>Working in an agency means that most of the work I do is project-based. This means building a new design every couple of months (or less, if you know what I mean). The interesting part is, after a while, I discover each designer&#x2019;s style and preferences. An example would be the navigation UI, I had three consecutive projects where the navigation UI had a similar style. This particular element stood out to me, not only because I&#x2019;d seen it twice before, but because I found that it touched almost every aspect of the box model.</p>
+
+<p>That&#x2019;s a phrase most of us hear pretty often. I&#x2019;ll be honest, the first time I saw this design, I thought to myself, it looks simple enough. No, brain. Wrong conclusion <span class="kaomoji">&#xCA0;_&#xCA0;</span>.</p>
+<figure>
+<svg width="370" height="47"><g><path></path><path></path><path></path></g></svg>
+<figcaption>Minimalism is in, I suppose</figcaption>
+</figure>
+<p>Let&#x2019;s break the requirements down piece by piece.</p>
+<ol>
+<li>Each link should be delimited by a vertical line, with equal space on both the right and left. The first and last links should NOT have these delimiters on their left and right, respectively.</li>
+<li>The delimiter should be the same height as the text.</li>
+<li>The text on the link should have an underline applied upon hover, but there should be some breathing space between the text and the underline.</li>
+<li>Hover effects apply to individual links only.</li>
+<li>The entire link box should be clickable, and the hover effect should kick in once the cursor enters the link box.</li>
+<li>The active state of each link should be the same as when the link is hovered.</li>
+</ol>
+<p>I&#x2019;m going to step through my actual thought process, which is essentially my box-model journey. If you just want the end result, <a href="http://www.chenhuijing.com/blog/that-navigation-bar-design/#step-2-style-the-navigation-to-match-design-attempt-3">skip right to it</a>. But in the words of <a href="http://www.arthurashe.org/life-story.html">Arthur Ashe</a> (what can I say, I&#x2019;m an athlete too <span class="kaomoji">&#xAF;\_(&#x30C4;)_/&#xAF;</span>):</p>
+<blockquote>
+<p>Success is a journey not a destination. The doing is usually more important than the outcome. - Arthur Ashe</p>
+</blockquote>
+<h2 id="step-1-basic-bare-bones-mark-up-and-styles">Step 1: Basic bare-bones mark-up and styles</h2>
+<p>Let&#x2019;s start off with the most basic mark-up, an unordered list in a <code class="highlighter-rouge">nav</code> element, with the text of each link wrapped in an <code class="highlighter-rouge">a</code> tag.</p>
+<pre><code class="language-markup">&lt;nav&gt;
+ &lt;ul&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;Link 1&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;Link 2&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;Link 3&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;Link 4&lt;/a&gt;&lt;/li&gt;
+ &lt;/ul&gt;
+&lt;/nav&gt;</code></pre>
+<p>Then, apply some simple CSS to get the list in a horizontal configuration.</p>
+<pre><code class="language-css">li {
+ display: inline-block;
+}</code></pre>
+<figure>
+<svg width="213" height="65"><g><path></path><a href=""><text><tspan>Link 1</tspan></text></a><a href=""><text><tspan>Link 2</tspan></text></a><a href=""><text><tspan>Link 3</tspan></text></a><a href=""><text><tspan>Link 4</tspan></text></a></g></svg>
+<figcaption>Bare-bones navigation bar</figcaption>
+</figure>
+
+<p>This is the step with oh-so-many variations. There are loads of ways to get the navigation to look like the design, given the number of elements available to work with. I started off just putting in fonts, colours, and some padding.</p>
+<pre><code class="language-css">nav {
+ font-family: 'Slim Jim', 'Impact', 'Arial Black', sans-serif;
+ background: black;
+}
+li {
+ display: inline-block;
+ padding: 1rem; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old not such a good idea */
+ border-left: 1px solid white; /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old neither is this */
+ &amp;:first-child {
+ border-left: none;
+ }
+}
+a {
+ color: white;
+ text-decoration: none;
+ &amp;:hover {
+ border-bottom: 2px solid white;
+ }
+}</code></pre>
+<p>That code will give you something like this, which somehow, doesn&#x2019;t fit the bill. Also, the underline only appears when you hover over the text, not the entire link box. <span class="kaomoji">(&#x256F;&#xB0;&#x25A1;&#xB0;&#xFF09;&#x256F;&#xFE35; &#x253B;&#x2501;&#x253B;</span></p>
+<figure>
+<svg width="370" height="50"><g><path></path><path></path><path></path><path></path></g></svg>
+<figcaption>Something doesn't look quite right here.</figcaption>
+</figure>
+<h2 id="interlude-learn-the-box-model-padawan">Interlude: Learn the box model, padawan</h2>
+<p>If you think about it, web pages are just content in boxes, but laid out in a myriad of patterns and designs. Browsers render these boxes based on the properties we give them. Each box is described to the browser based on the <strong>box model</strong>, which determines how much a space a box takes up on the page.</p>
+<p class="no-margin">The model is made up of four boxes, from inside to outside:</p>
+<ul>
+<li class="no-margin">Content</li>
+<li class="no-margin">Padding</li>
+<li class="no-margin">Border</li>
+<li>Margin</li>
+</ul>
+<figure>
+<svg width="516" height="280"><g><path></path><path></path><path></path><path></path><text><tspan>Margin</tspan></text><text><tspan>Border</tspan></text><text><tspan>Padding</tspan></text><text><tspan>Content</tspan></text><path></path><text><tspan>Margin edge</tspan></text><text><tspan>Padding edge</tspan></text><text><tspan>Border edge</tspan></text><text><tspan>Content edge</tspan></text></g></svg>
+<figcaption>The box model, visualised</figcaption>
+</figure>
+<h3 id="content">Content</h3>
+<p>This area encompasses the actual content of the element, the text, background, image(s) and so on. It stops at the content edge. Referring to the above diagram, it&#x2019;s everything in the blue box.</p>
+<h3 id="padding">Padding</h3>
+<p>Padding extends to the padding edge. Any content in the content area (like background or an image) will extend into the padding. The amount padding between the content area and the padding edge is controlled via the <code class="highlighter-rouge">padding</code> property. Refer to the green area in the diagram above.</p>
+<h3 id="border">Border</h3>
+<p>Border extends to the border edge. By default, backgrounds extend underneath the border area. The thickness of the border is controlled by the <code class="highlighter-rouge">border</code> property. Refer to the yellow area in the diagram above.</p>
+<h3 id="margin">Margin</h3>
+<p>Margin extends to the margin edge. However, it is an &#x201C;empty&#x201D; area that separates the elements its neighbouring elements. The space the margin takes up is controlled via the <code class="highlighter-rouge">margin</code> property. There is one particular behaviour of margins that we need to take note of. It&#x2019;s called <strong>margin collapsing</strong>.</p>
+<p>This happens when margins of adjacent block elements combine into a single margin, which takes the larger value of the two. This phenomena only occurs vertically, which means for <code class="highlighter-rouge">margin-top</code> and <code class="highlighter-rouge">margin-bottom</code>. Horizontal margins ( <code class="highlighter-rouge">margin-left</code> and <code class="highlighter-rouge">margin-right</code> ) never collapse. Here are some common scenarios where margins collapse.</p>
+<p class="no-margin"><strong>Adjacent block elements</strong></p>
+<p>We start off with 2 block elements stacked on top on each other.</p>
+<pre><code class="language-markup">&lt;div class="block1"&gt;&lt;/div&gt;
+&lt;div class="block2"&gt;&lt;/div&gt;</code></pre>
+<pre><code class="language-css">.block1 {
+ width: 300px;
+ height: 100px;
+ background: lawngreen;
+}
+.block2 {
+ width: 300px;
+ height: 100px;
+ background: orange;
+}</code></pre>
+<p>Given they have no margins, they will look something like this:</p>
+<figure>
+<svg width="300" height="200"><g><path></path><text><tspan>.block1</tspan></text><g><path></path><text><tspan>.block2</tspan></text></g></g></svg>
+<figcaption>2 block elements on top of each other.</figcaption>
+</figure>
+<p>Now, let&#x2019;s add some margin to the bottom and top of the first and second element respectively.</p>
+<pre><code class="language-css">.block1 {
+ width: 300px;
+ height: 100px;
+ background: lawngreen;
+ margin-bottom: 2rem;
+}
+.block2 {
+ width: 300px;
+ height: 100px;
+ background: orange;
+ margin-top: 1rem;
+}</code></pre>
+<p>If the first element has a margin-bottom of 2 rem, and the second element has a margin-top of 1 rem, the resultant margin between them will be 2 rem. You can think of it as the smaller margin (that of the second element) having <em>collapsed</em>.</p>
+<figure>
+<svg width="360" height="232"><g><path></path><text><tspan>.block1</tspan></text><path></path><text><tspan>.block2</tspan></text><path></path><text><tspan>2 rem</tspan></text><path></path><path></path></g></svg>
+<figcaption>Margin collapses to 2 rem</figcaption>
+</figure>
+<p>In the event of negative margins, the sum of the positive and negative margins will be the resultant value. E.g. if the top element has a margin-bottom of 2 rem and the bottom element has a margin-top of -1 rem, the resultant margin will be 1 rem.</p>
+<p class="no-margin"><strong>Parent/child elements</strong></p>
+<p>Margin collapse also occurs when both the parent and child elements have vertical margins that touch. Take a look at this code:</p>
+<pre><code class="language-css">.block2 {
+ width: 300px;
+ height: 100px;
+ background: orange;
+ margin-top: 2rem;
+}
+.block2-1 {
+ width: 268px;
+ height: 50px;
+ background: yellow;
+ margin-top: 1rem;
+}</code></pre>
+<p>You&#x2019;d think that the margin between <code class="highlighter-rouge">.block1</code> and <code class="highlighter-rouge">.block2</code> will be 2 rem and there will be a margin of 1 rem between the edge of <code class="highlighter-rouge">.block2</code> and the top of <code class="highlighter-rouge">.block2-1</code>, right? Nope. The margins collapse into one combined margin, which again, takes the larger of the 2 values.</p>
+<figure>
+<svg width="360" height="232"><g><path></path><text><tspan>.block1</tspan></text><path></path><text><tspan>.block2</tspan></text><path></path><path></path><text><tspan>2 rem</tspan></text><path></path><path></path><text><tspan>.block2-1</tspan></text></g></svg>
+<figcaption>Again, the margin of .block2-1 is collapsed</figcaption>
+</figure>
+<p>If there was no margin on <code class="highlighter-rouge">.block2</code>, and a <code class="highlighter-rouge">margin-top</code> of 1 rem on the child element <code class="highlighter-rouge">.block2-1</code>, then the space between <code class="highlighter-rouge">.block1</code> and <code class="highlighter-rouge">.block2</code> is 1 rem.</p>
+<pre><code class="language-css">.block2 {
+ width: 300px;
+ height: 100px;
+ background: orange;
+ margin-top: 0;
+}
+.block2-1 {
+ width: 268px;
+ height: 50px;
+ background: yellow;
+ margin-top: 1rem;
+}</code></pre>
+<figure>
+<svg width="367" height="217"><g><path></path><text><tspan>.block1</tspan></text><path></path><text><tspan>.block2</tspan></text><path></path><text><tspan>1 rem</tspan></text><path></path><path></path><text><tspan>.block2-1</tspan></text></g></svg>
+<figcaption>Margin of inner div .block2-1 becomes the margin of .block2</figcaption>
+</figure>
+<p>If you don&#x2019;t want margins to collapse between parent and child elements, you&#x2019;ll have to prevent their margins to coming in contact with each other. We can do that by adding padding or a border. Assume box-sizing has been set to <code class="highlighter-rouge">border-box</code>.</p>
+<pre><code class="language-css">.block2 {
+ width: 300px;
+ height: 100px;
+ background: orange;
+ margin-top: 0;
+ padding: 1px;
+}
+.block2-1 {
+ width: 268px;
+ height: 50px;
+ background: yellow;
+ margin-top: 1rem;
+}</code></pre>
+<figure>
+<svg width="417" height="217"><g><path></path><text><tspan>.block1</tspan></text><path></path><text><tspan>.block2</tspan></text><text><tspan>1 rem + 1 px</tspan></text><path></path><path></path><text><tspan>.block2-1</tspan></text></g></svg>
+<figcaption>And the collapse magically disappears</figcaption>
+</figure>
+<p>Also, elements which are floated, and elements which are positioned absolutely never suffer from collapsed margins.</p>
+<h3 id="the-box-sizing-property">The box-sizing property</h3>
+<p>We also need to understand a CSS property called <strong>box-sizing</strong>. This property alters the default box model, which affects the way your browser calculates the width and height of your elements. There are two values this property accepts: <code class="highlighter-rouge">content-box</code> and <code class="highlighter-rouge">border-box</code>. By default, this property is set to <code class="highlighter-rouge">content-box</code>.</p>
+<p class="no-margin">For example, we have some code for a simple <code>div</code>:</p>
+<pre><code class="language-css">div {
+ margin: 10px;
+ border: 1px solid green;
+ padding: 10px;
+ height: 100px;
+ width: 100px;
+}</code></pre>
+<p>This <code>div</code>, by default (which means <code class="language-css">box-sizing: content-box;</code>), will have its height and width measured by <strong>content</strong> only. Now, because it also has a border and some padding, the browser will recognise the dimensons of this <code>div</code> as <em>122px</em> by <em>122px</em>.</p>
+<figure>
+<svg width="300" height="324"><g><path></path><path></path><path></path><path></path><text><tspan>10</tspan></text><text><tspan>10</tspan></text><text><tspan>1</tspan></text><text><tspan>10</tspan></text><text><tspan>Margin</tspan></text><text><tspan>Border</tspan></text><text><tspan>Padding</tspan></text><text><tspan>1</tspan></text><text><tspan>10</tspan></text><text><tspan>100 x 100</tspan></text><text><tspan>10</tspan></text><text><tspan>10</tspan></text><text><tspan>10</tspan></text><text><tspan>1</tspan></text><text><tspan>1</tspan></text><text><tspan>10</tspan></text><path></path><path></path><path></path><text><tspan>100px</tspan></text></g></svg>
+<figcaption>Content-box takes the width of the <strong>content only</strong>.</figcaption>
+</figure>
+<p>If we set a <code class="language-css">box-sizing: border-box;</code> property to it, the browser sees things a little differently. The browser will consider the width and height of the content, padding and border, to be the dimensions of this <code>div</code>. So the width of the content box becomes <em>78px</em> while the height of the content box becomes <em>78px</em>.</p>
+<figure>
+<svg width="300" height="324"><g><path></path><path></path><path></path><path></path><text><tspan>10</tspan></text><text><tspan>10</tspan></text><text><tspan>1</tspan></text><text><tspan>10</tspan></text><text><tspan>Margin</tspan></text><text><tspan>Border</tspan></text><text><tspan>Padding</tspan></text><text><tspan>1</tspan></text><text><tspan>10</tspan></text><text><tspan>78 x 78</tspan></text><text><tspan>10</tspan></text><text><tspan>10</tspan></text><text><tspan>10</tspan></text><text><tspan>1</tspan></text><text><tspan>1</tspan></text><text><tspan>10</tspan></text><path></path><path></path><path></path><text><tspan>100px</tspan></text></g></svg>
+<figcaption>Border-box <strong>includes</strong> padding and border widths</figcaption>
+</figure>
+<p>Alright, now that we&#x2019;ve got all that covered, it&#x2019;s back to our scheduled programming.</p>
+
+<p>We want the clickable area take up the entire link box. We also need to have a delimiter that&#x2019;s the same height at the link text. And we want the underline to only cover the length of the text itself. Unfortunately, there&#x2019;s no straightforward way to do this.</p>
+<p>###Entire link box should be a clickable area</p>
+<p>Let&#x2019;s try this styling thing one more time. To tackle the clickable area problem, we apply the padding to the <code class="highlighter-rouge">a</code> tag instead of the <code class="highlighter-rouge">li</code> like so:</p>
+<pre><code class="language-css">li {
+ display: inline-block;
+}
+a {
+ color: white;
+ text-decoration: none;
+ display: block;
+ padding: 1rem;
+}</code></pre>
+<p>Note that <code class="highlighter-rouge">a</code> elements by default are <code class="highlighter-rouge">display: inline</code> and if you want the vertical padding to take, you&#x2019;ll have to set it to <code class="highlighter-rouge">display: block</code> (you can do <code class="highlighter-rouge">display:inline-block</code> too). So now the entire link box is clickable. But our underline ends up on the edge of the link box too.</p>
+<h3 id="underline-the-link-text-when-clickable-area-is-hovered">Underline the link text when clickable area is hovered</h3>
+<p>To get around that problem, we&#x2019;ll have to wrap the link text with a <code class="highlighter-rouge">span</code>. I couldn&#x2019;t just use the <code class="highlighter-rouge">text-decoration: underline</code> property because it &#x201C;doesn&#x2019;t look good&#x201D;. Instead, a white bottom border was used instead.</p>
+<pre><code class="language-markup">&lt;nav&gt;
+ &lt;ul&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;&lt;span&gt;Link 1&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;&lt;span&gt;Link 2&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;&lt;span&gt;Link 3&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="javascript:void(0)"&gt;&lt;span&gt;Link 4&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;
+ &lt;/ul&gt;
+&lt;/nav&gt;</code></pre>
+<pre><code class="language-css">a {
+ color: white;
+ text-decoration: none;
+ display: block;
+ padding: 1rem;
+ &amp;:hover span {
+ border-bottom: 2px solid white;
+ }
+}</code></pre>
+<p>There are advantages to this, in that there are more ways you can control the look of the underline as opposed to using text decoration. By using the <code class="highlighter-rouge">:hover</code> pseudo-class, we can trigger the <code class="highlighter-rouge">span</code> to display its white bottom border the moment the cursor enters the link box.</p>
+<figure>
+<svg width="370" height="47"><g><path></path><path></path><path></path></g></svg>
+<figcaption>Okay, so far so good</figcaption>
+</figure>
+<h3 id="delimiter-should-be-same-height-as-text-with-equal-horizontal-spacing">Delimiter should be same height as text with equal horizontal spacing</h3>
+<p>If you followed along during that long interlude about the box model, you&#x2019;d realise that this is quite tricky. Because we want the delimiter to be the same height as the text, we can&#x2019;t just apply a right border to the link box and call it a day (<em>*glares at designer*</em> ). How about applying the border to the <code class="highlighter-rouge">span</code> instead? Keep in mind that the box model goes content, then padding, then border, then margin. Padding will extend the content, but margin will not.</p>
+<p>Applying a white 1 px right border to the <code class="highlighter-rouge">span</code> displays a delimiter that kisses the text (it is the right height, though). Okay, let&#x2019;s put in some right padding on the <code class="highlighter-rouge">span</code> as well. But padding also means that the underline will extend beyond the length of the text, not to mention it adds to the existing padding from the <code class="highlighter-rouge">a</code> already <span class="kaomoji">(&#x256F;&#xB0;&#x25A1;&#xB0;&#xFF09;&#x256F;&#xFE35; &#x253B;&#x2501;&#x253B;</span>.</p>
+<figure>
+<svg width="370" height="47"><g><path></path><path></path><path></path><path></path></g></svg>
+<figcaption>Well, that didn't come out right</figcaption>
+</figure>
+
+<p>Third time&#x2019;s the charm (otherwise I might throw my keyboard out the window&#x2026;just kidding). But we&#x2019;ve learnt a lot from all those previous missteps. We now know we probably shouldn&#x2019;t use the <code class="highlighter-rouge">span</code> to handle the delimiter. There is one more thing we can use though, the <code class="highlighter-rouge">:after</code> pseudo-element. Pseudo-elements are mainly used for styling purposes, which suits the situation well.</p>
+<pre><code class="language-css">a {
+ color: white;
+ text-decoration: none;
+ display: block;
+ padding: 1rem 0rem 1rem 1rem;
+ &amp;:after {
+ content: '';
+ display: inline-block;
+ vertical-align: middle;
+ width: 1px;
+ height: 1rem;
+ border-right: 1px solid white;
+ margin-left: 1rem;
+ }
+ &amp;:hover span {
+ border-bottom: 2px solid white;
+ }
+}</code></pre>
+<p>Pseudo-elements are inline by default, so we set <code class="highlighter-rouge">display: inline-block</code> to allow us to style it accordingly. Because the pseudo-elements are inserted before or after the <em>content</em> of the element, a margin on the pseudo-element becomes an extension of the content of the element itself. So this additional space is still a clickable area.</p>
+<p>The final touch is to remove the right padding on the <code class="highlighter-rouge">a</code> to compensate for the left margin on the pseudo-element. And we&#x2019;re finally done!</p>
+<figure>
+<svg width="370" height="47"><g><path></path><path></path><path></path></g></svg>
+<figcaption>This took a while to get too =_=</figcaption>
+</figure>
+<p>If the amount of code on the pseudo-element gets to you, you can always just use the pipe character instead. The end result looks similar anyway.</p>
+<pre><code class="language-css">a {
+ color: white;
+ text-decoration: none;
+ display: block;
+ padding: 1rem 0rem 1rem 1rem;
+ &amp;:after {
+ content: '|';
+ margin-left: 1rem;
+ }
+}</code></pre>
+<h2 id="wrapping-up">Wrapping up</h2>
+<p>In spite of all the time I spent building this particular navigation bar, I do appreciate the experience. I probably wouldn&#x2019;t have understood the box model completely if not for it. In the event my designer ever reads this article, please know that in spite of all the times I show my &#x201C;angry developer face&#x201D; (something like this <span class="kaomoji">&#xCA0;_&#xCA0;</span>), I still love you all the same <img class="emoji" title=":heart:" alt=":heart:" src="https://assets.github.com/images/icons/emoji/unicode/2764.png" width="20">.</p>
+<h2 id="further-reading">Further reading</h2>
+
+
+</div>
+</div>
+</body></html>

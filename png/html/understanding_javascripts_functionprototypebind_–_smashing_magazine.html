@@ -1,0 +1,535 @@
+<!DOCTYPE html><html><head><title>Understanding JavaScript’s Function.prototype.bind – Smashing Magazine</title></head><body>
+<h1>Understanding JavaScript’s Function.prototype.bind – Smashing Magazine</h1><p><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/" target="_new">Original URL</a></p>
+<p><blockquote>Function binding is most probably your least concern when beginning with JavaScript, but when you realize that you need a solution to the problem of how to keep the context of this within another&hellip;</blockquote></p>
+<div><article class="post-130370 post type-post status-publish format-standard has-post-thumbnail hentry category-coding tag-javascript tag-techniques tag-tools">
+
+		
+
+			
+
+	
+	
+
+	<p>Function binding is most probably your least concern when beginning with JavaScript, but when you realize that you need a solution to the problem of how to keep the context of <code>this</code> within another function, then you might not realize that what you actually need is <code>Function.prototype.bind()</code>.</p>
+<p>The first time you hit upon the problem, you might be inclined to set <code>this</code> to a variable that you can reference when you change context. Many people opt for <code>self</code>, <code>_this</code> or sometimes <code>context</code> as a variable name. They&#x2019;re all usable and nothing is wrong with doing that, but there is a better, dedicated way.</p>
+<p><a href="https://twitter.com/jaffathecake/">Jack Archibald tweets about</a><sup class="po" id="note-1"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#1">1</a></sup> caching <code>this</code>:</p>
+<blockquote class="twitter-tweet" lang="en">
+<p>Ohhhh I would do anything for scope, but I won't do that = this</p>
+<p>&#x2014; Jake Archibald (@jaffathecake) February 20, 2013</p></blockquote>
+<p>It should have been more apparent to me when <a href="https://twitter.com/sindresorhus/">Sindre Sorhus spelled it out</a><sup class="po" id="note-2"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#2">2</a></sup>:</p>
+<blockquote class="twitter-tweet" lang="en">
+<p><a href="https://twitter.com/benhowdle">@benhowdle</a><sup class="po" id="note-3"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#3">3</a></sup> <a href="https://twitter.com/search?q=%24this&amp;src=ctag">$this</a><sup class="po" id="note-4"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#4">4</a></sup> for jQuery, for plain JS i don't, use .bind()</p>
+<p>&#x2014; Sindre Sorhus (@sindresorhus) February 22, 2013</p></blockquote>
+<p>I ignored this wise advice for many months.</p>
+<h3 id="what-problem-are-we-actually-looking-to-solve">What Problem Are We Actually Looking To Solve? <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#what-problem-are-we-actually-looking-to-solve" class="sr hsl">Link</a></h3>
+<p>Here is sample code in which one could be forgiven for caching the context to a variable:</p>
+<pre><code class="language-javascript">var myObj = {
+
+ specialFunction: function () {
+
+ },
+
+ anotherSpecialFunction: function () {
+
+ },
+
+ getAsyncData: function (cb) {
+ cb();
+ },
+
+ render: function () {
+ var that = this;
+ this.getAsyncData(function () {
+ that.specialFunction();
+ that.anotherSpecialFunction();
+ });
+ }
+};
+
+myObj.render();
+</code></pre>
+
+<p>If we had left our function calls as <code>this.specialFunction()</code>, then we would have received the following error:</p>
+<pre><code class="language-javascript">Uncaught TypeError: Object [object global] has no method 'specialFunction'
+</code></pre>
+
+<p>We need to keep the context of the <code>myObj</code> object referenced for when the callback function is called. Calling <code>that.specialFunction()</code> enables us to maintain that context and correctly execute our function. However, this could be neatened somewhat by using <code>Function.prototype.bind()</code>.</p>
+<p>Let&#x2019;s rewrite our example:</p>
+<pre><code class="language-javascript">render: function () {
+
+ this.getAsyncData(function () {
+
+ this.specialFunction();
+
+ this.anotherSpecialFunction();
+
+ }.bind(this));
+
+}
+</code></pre>
+
+<h4 id="what-did-we-just-do">What Did We Just Do? <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#what-did-we-just-do" class="sr hsl">Link</a></h4>
+<p>Well, <code>.bind()</code> simply creates a new function that, when called, has its <code>this</code> keyword set to the provided value. So, we pass our desired context, <code>this</code> (which is <code>myObj</code>), into the <code>.bind()</code> function. Then, when the callback function is executed, <code>this</code> references <code>myObj</code>.</p>
+<p>If you&#x2019;re interested to see what <code>Function.prototype.bind()</code> might look like and what its doing internally, here is a very simple example:</p>
+<pre><code class="language-javascript">Function.prototype.bind = function (scope) {
+ var fn = this;
+ return function () {
+ return fn.apply(scope);
+ };
+}
+</code></pre>
+
+<p>And here is a very simple use case:</p>
+<pre><code class="language-javascript">var foo = {
+ x: 3
+}
+
+var bar = function(){
+ console.log(this.x);
+}
+
+bar(); // undefined
+
+var boundFunc = bar.bind(foo);
+
+boundFunc(); // 3
+</code></pre>
+
+<p>We&#x2019;ve created a new function that, when executed, has its <code>this</code> set to <code>foo</code> &#x2014; not the global scope, as in the example where we called <code>bar();</code>.</p>
+<h3 id="browser-support">Browser Support <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#browser-support" class="sr hsl">Link</a></h3>
+<table class="table-overview">
+<tbody>
+<tr>
+<th>Browser</th>
+<th>Version support</th>
+</tr>
+<tr>
+<td>Chrome</td>
+<td>7</td>
+</tr>
+<tr>
+<td>Firefox (Gecko)</td>
+<td>4.0 (2)</td>
+</tr>
+<tr>
+<td>Internet Explorer</td>
+<td>9</td>
+</tr>
+<tr>
+<td>Opera</td>
+<td>11.60</td>
+</tr>
+<tr>
+<td>Safari</td>
+<td>5.1.4</td>
+</tr></tbody>
+</table>
+<p>As you can see, unfortunately, <code>Function.prototype.bind</code> isn&#x2019;t supported in Internet Explorer 8 and below, so you&#x2019;ll run into problems if you try to use it without a fallback.</p>
+<p>Luckily, Mozilla Developer Network, being the wonderful resource it is, <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind">provides a rock-solid alternative</a><sup class="po" id="note-5"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#5">5</a></sup> if the browser hasn&#x2019;t implemented the native <code>.bind()</code> method:</p>
+<pre><code class="language-javascript">if (!Function.prototype.bind) {
+ Function.prototype.bind = function (oThis) {
+ if (typeof this !== "function") {
+ // closest thing possible to the ECMAScript 5 internal IsCallable function
+ throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");
+ }
+
+ var aArgs = Array.prototype.slice.call(arguments, 1),
+ fToBind = this,
+ fNOP = function () {},
+ fBound = function () {
+ return fToBind.apply(this instanceof fNOP &amp;&amp; oThis
+ ? this
+ : oThis,
+ aArgs.concat(Array.prototype.slice.call(arguments)));
+ };
+
+ fNOP.prototype = this.prototype;
+ fBound.prototype = new fNOP();
+
+ return fBound;
+ };
+}
+</code></pre>
+
+
+<h3 id="patterns-for-usage">Patterns For Usage <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#patterns-for-usage" class="sr hsl">Link</a></h3>
+<p>When learning something, I find it useful not only to thoroughly learn the concept, but to see it <em>applied</em> to what I&#x2019;m currently working on (or something close to it). Hopefully, some of the examples below can be applied to your code or to problems you&#x2019;re facing.</p>
+<h4 id="click-handlers">Click Handlers <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#click-handlers" class="sr hsl">Link</a></h4>
+<p>One use is to track clicks (or to perform an action after a click) that might require us to store information in an object, like so:</p>
+<pre><code class="language-javascript">var logger = {
+ x: 0,
+ updateCount: function(){
+ this.x++;
+ console.log(this.x);
+ }
+}
+</code></pre>
+
+<p>We might assign click handlers like this and subsequently call the <code>updateCount()</code> in our <code>logger</code> object:</p>
+<pre><code class="language-javascript">document.querySelector('button').addEventListener('click', function(){
+ logger.updateCount();
+});
+</code></pre>
+
+<p>But we&#x2019;ve had to create an unnecessary anonymous function to allow the <code>this</code> keyword to stand correct in the <code>updateCount()</code> function.</p>
+<p>This could be neatened up, like so:</p>
+<pre><code class="language-javascript">document.querySelector('button').addEventListener('click', logger.updateCount.bind(logger));
+</code></pre>
+
+<p>We&#x2019;ve used the subtly handy <code>.bind()</code> function to create a new function and then set the scope to be bound to the <code>logger</code> object.</p>
+<h4 id="settimeout">setTimeout <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#settimeout" class="sr hsl">Link</a></h4>
+<p>If you&#x2019;ve ever worked with templating engines (such as Handlebars) or especially with certain MV* frameworks (I can only speak of Backbone.js from experience), then you might be aware of the problem that occurs when you render the template but want to access the new DOM nodes immediately after your render call.</p>
+<p>Suppose we try to instantiate a jQuery plugin:</p>
+<pre><code class="language-javascript">var myView = {
+
+ template: '/* a template string containing our &lt;select /&gt; */',
+
+ $el: $('#content'),
+
+ afterRender: function () {
+ this.$el.find('select').myPlugin();
+ },
+
+ render: function () {
+ this.$el.html(this.template());
+ this.afterRender();
+ }
+}
+
+myView.render();
+</code></pre>
+
+<p>You might find that it works &#x2014; but not all the time. Therein lies the problem. It&#x2019;s a rat race: Whatever happens to get there first wins. Sometimes it&#x2019;s the render, sometimes it&#x2019;s the plugin&#x2019;s instantiation.</p>
+<p>Now, unbeknownst to some, we can use a slight hack with <code>setTimeout()</code>.</p>
+<p>With a slight rewrite, we can safely instantiate our jQuery plugin once the DOM nodes are present:</p>
+<pre><code class="language-javascript">//
+
+ afterRender: function () {
+ this.$el.find('select').myPlugin();
+ },
+
+ render: function () {
+ this.$el.html(this.template());
+ setTimeout(this.afterRender, 0);
+ }
+
+//
+</code></pre>
+
+<p>However, we will receive the trusty message that the function <code>.afterRender()</code> cannot be found.</p>
+<p>What we do, then, is throw our <code>.bind()</code> into the mix:</p>
+<pre><code class="language-javascript">//
+
+ afterRender: function () {
+ this.$el.find('select').myPlugin();
+ },
+
+ render: function () {
+ this.$el.html(this.template());
+ setTimeout(this.afterRender.bind(this), 0);
+ }
+
+//
+</code></pre>
+
+<p>Now, our <code>afterRender()</code> function will execute in the correct context.</p>
+<h4 id="tidier-event-binding-with-queryselectorall">Tidier Event Binding With querySelectorAll <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#tidier-event-binding-with-queryselectorall" class="sr hsl">Link</a></h4>
+<p>The DOM API improved significantly once it included such useful methods as <code>querySelector</code>, <code>querySelectorAll</code> and the <code>classList</code> API, to name a few of the many.</p>
+<p>However, there&#x2019;s not really a way to natively add events to a <code>NodeList</code> as of yet. So, we end up stealing the <code>forEach</code> function from the <code>Array.prototype</code> to loop, like so:</p>
+<pre><code class="language-javascript">Array.prototype.forEach.call(document.querySelectorAll('.klasses'), function(el){
+ el.addEventListener('click', someFunction);
+});
+</code></pre>
+
+<p>We can do better than that, though, with our friend <code>.bind()</code>:</p>
+<pre><code class="language-javascript">var unboundForEach = Array.prototype.forEach,
+ forEach = Function.prototype.call.bind(unboundForEach);
+
+forEach(document.querySelectorAll('.klasses'), function (el) {
+ el.addEventListener('click', someFunction);
+});
+</code></pre>
+
+<p>We now have a tidy method to loop our DOM nodes.</p>
+<h4 id="conclusion">Conclusion <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/#conclusion" class="sr hsl">Link</a></h4>
+<p>As you can see, the <code>.bind()</code> function can be subtly included for many different purposes, as well as to neaten existing code. Hopefully, this overview has given you what you need to add <code>.bind()</code> to your own code (if necessary!) and to harness the power of transforming the value of <code>this</code>.</p>
+<p><em>(al, il)</em></p>
+
+	
+
+
+	
+	<div class="lt"><a href="https://www.smashingmagazine.com/tag/javascript/">JavaScript</a><a href="https://www.smashingmagazine.com/tag/techniques/">Techniques</a><a href="https://www.smashingmagazine.com/tag/tools/">Tools</a></div>
+<p>
+	<a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/" class="top">&#x2191; Back to top</a>
+	<a class="sot single" href="https://twitter.com/intent/tweet?original_referer=https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/&amp;source=tweetbutton&amp;text=Understanding%20JavaScript%E2%80%99s%20Function.prototype.bind&amp;url=https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/&amp;via=smashingmag">Tweet it</a><a class="sot single" href="http://www.facebook.com/sharer/sharer.php?u=https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/">Share on Facebook</a></p>
+
+</article>
+</div><hr class="rdb-page-break" /><div><article class="post-130370 post type-post status-publish format-standard has-post-thumbnail hentry category-coding tag-javascript tag-techniques tag-tools">
+
+		
+
+			
+
+	
+	
+
+	<p>Function binding is most probably your least concern when beginning with JavaScript, but when you realize that you need a solution to the problem of how to keep the context of <code>this</code> within another function, then you might not realize that what you actually need is <code>Function.prototype.bind()</code>.</p>
+<p>The first time you hit upon the problem, you might be inclined to set <code>this</code> to a variable that you can reference when you change context. Many people opt for <code>self</code>, <code>_this</code> or sometimes <code>context</code> as a variable name. They&#x2019;re all usable and nothing is wrong with doing that, but there is a better, dedicated way.</p>
+<p><a href="https://twitter.com/jaffathecake/">Jack Archibald tweets about</a><sup class="po" id="note-1"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#1">1</a></sup> caching <code>this</code>:</p>
+<blockquote class="twitter-tweet" lang="en">
+<p>Ohhhh I would do anything for scope, but I won't do that = this</p>
+<p>&#x2014; Jake Archibald (@jaffathecake) February 20, 2013</p></blockquote>
+<p>It should have been more apparent to me when <a href="https://twitter.com/sindresorhus/">Sindre Sorhus spelled it out</a><sup class="po" id="note-2"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#2">2</a></sup>:</p>
+<blockquote class="twitter-tweet" lang="en">
+<p><a href="https://twitter.com/benhowdle">@benhowdle</a><sup class="po" id="note-3"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#3">3</a></sup> <a href="https://twitter.com/search?q=%24this&amp;src=ctag">$this</a><sup class="po" id="note-4"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#4">4</a></sup> for jQuery, for plain JS i don't, use .bind()</p>
+<p>&#x2014; Sindre Sorhus (@sindresorhus) February 22, 2013</p></blockquote>
+<p>I ignored this wise advice for many months.</p>
+<h3 id="what-problem-are-we-actually-looking-to-solve">What Problem Are We Actually Looking To Solve? <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#what-problem-are-we-actually-looking-to-solve" class="sr hsl">Link</a></h3>
+<p>Here is sample code in which one could be forgiven for caching the context to a variable:</p>
+<pre><code class="language-javascript">var myObj = {
+
+ specialFunction: function () {
+
+ },
+
+ anotherSpecialFunction: function () {
+
+ },
+
+ getAsyncData: function (cb) {
+ cb();
+ },
+
+ render: function () {
+ var that = this;
+ this.getAsyncData(function () {
+ that.specialFunction();
+ that.anotherSpecialFunction();
+ });
+ }
+};
+
+myObj.render();
+</code></pre>
+
+<p>If we had left our function calls as <code>this.specialFunction()</code>, then we would have received the following error:</p>
+<pre><code class="language-javascript">Uncaught TypeError: Object [object global] has no method 'specialFunction'
+</code></pre>
+
+<p>We need to keep the context of the <code>myObj</code> object referenced for when the callback function is called. Calling <code>that.specialFunction()</code> enables us to maintain that context and correctly execute our function. However, this could be neatened somewhat by using <code>Function.prototype.bind()</code>.</p>
+<p>Let&#x2019;s rewrite our example:</p>
+<pre><code class="language-javascript">render: function () {
+
+ this.getAsyncData(function () {
+
+ this.specialFunction();
+
+ this.anotherSpecialFunction();
+
+ }.bind(this));
+
+}
+</code></pre>
+
+<h4 id="what-did-we-just-do">What Did We Just Do? <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#what-did-we-just-do" class="sr hsl">Link</a></h4>
+<p>Well, <code>.bind()</code> simply creates a new function that, when called, has its <code>this</code> keyword set to the provided value. So, we pass our desired context, <code>this</code> (which is <code>myObj</code>), into the <code>.bind()</code> function. Then, when the callback function is executed, <code>this</code> references <code>myObj</code>.</p>
+<p>If you&#x2019;re interested to see what <code>Function.prototype.bind()</code> might look like and what its doing internally, here is a very simple example:</p>
+<pre><code class="language-javascript">Function.prototype.bind = function (scope) {
+ var fn = this;
+ return function () {
+ return fn.apply(scope);
+ };
+}
+</code></pre>
+
+<p>And here is a very simple use case:</p>
+<pre><code class="language-javascript">var foo = {
+ x: 3
+}
+
+var bar = function(){
+ console.log(this.x);
+}
+
+bar(); // undefined
+
+var boundFunc = bar.bind(foo);
+
+boundFunc(); // 3
+</code></pre>
+
+<p>We&#x2019;ve created a new function that, when executed, has its <code>this</code> set to <code>foo</code> &#x2014; not the global scope, as in the example where we called <code>bar();</code>.</p>
+<h3 id="browser-support">Browser Support <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#browser-support" class="sr hsl">Link</a></h3>
+<table class="table-overview">
+<tbody>
+<tr>
+<th>Browser</th>
+<th>Version support</th>
+</tr>
+<tr>
+<td>Chrome</td>
+<td>7</td>
+</tr>
+<tr>
+<td>Firefox (Gecko)</td>
+<td>4.0 (2)</td>
+</tr>
+<tr>
+<td>Internet Explorer</td>
+<td>9</td>
+</tr>
+<tr>
+<td>Opera</td>
+<td>11.60</td>
+</tr>
+<tr>
+<td>Safari</td>
+<td>5.1.4</td>
+</tr></tbody>
+</table>
+<p>As you can see, unfortunately, <code>Function.prototype.bind</code> isn&#x2019;t supported in Internet Explorer 8 and below, so you&#x2019;ll run into problems if you try to use it without a fallback.</p>
+<p>Luckily, Mozilla Developer Network, being the wonderful resource it is, <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind">provides a rock-solid alternative</a><sup class="po" id="note-5"><a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#5">5</a></sup> if the browser hasn&#x2019;t implemented the native <code>.bind()</code> method:</p>
+<pre><code class="language-javascript">if (!Function.prototype.bind) {
+ Function.prototype.bind = function (oThis) {
+ if (typeof this !== "function") {
+ // closest thing possible to the ECMAScript 5 internal IsCallable function
+ throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");
+ }
+
+ var aArgs = Array.prototype.slice.call(arguments, 1),
+ fToBind = this,
+ fNOP = function () {},
+ fBound = function () {
+ return fToBind.apply(this instanceof fNOP &amp;&amp; oThis
+ ? this
+ : oThis,
+ aArgs.concat(Array.prototype.slice.call(arguments)));
+ };
+
+ fNOP.prototype = this.prototype;
+ fBound.prototype = new fNOP();
+
+ return fBound;
+ };
+}
+</code></pre>
+
+<section>
+
+</section>
+<h3 id="patterns-for-usage">Patterns For Usage <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#patterns-for-usage" class="sr hsl">Link</a></h3>
+<p>When learning something, I find it useful not only to thoroughly learn the concept, but to see it <em>applied</em> to what I&#x2019;m currently working on (or something close to it). Hopefully, some of the examples below can be applied to your code or to problems you&#x2019;re facing.</p>
+<h4 id="click-handlers">Click Handlers <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#click-handlers" class="sr hsl">Link</a></h4>
+<p>One use is to track clicks (or to perform an action after a click) that might require us to store information in an object, like so:</p>
+<pre><code class="language-javascript">var logger = {
+ x: 0,
+ updateCount: function(){
+ this.x++;
+ console.log(this.x);
+ }
+}
+</code></pre>
+
+<p>We might assign click handlers like this and subsequently call the <code>updateCount()</code> in our <code>logger</code> object:</p>
+<pre><code class="language-javascript">document.querySelector('button').addEventListener('click', function(){
+ logger.updateCount();
+});
+</code></pre>
+
+<p>But we&#x2019;ve had to create an unnecessary anonymous function to allow the <code>this</code> keyword to stand correct in the <code>updateCount()</code> function.</p>
+<p>This could be neatened up, like so:</p>
+<pre><code class="language-javascript">document.querySelector('button').addEventListener('click', logger.updateCount.bind(logger));
+</code></pre>
+
+<p>We&#x2019;ve used the subtly handy <code>.bind()</code> function to create a new function and then set the scope to be bound to the <code>logger</code> object.</p>
+<h4 id="settimeout">setTimeout <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#settimeout" class="sr hsl">Link</a></h4>
+<p>If you&#x2019;ve ever worked with templating engines (such as Handlebars) or especially with certain MV* frameworks (I can only speak of Backbone.js from experience), then you might be aware of the problem that occurs when you render the template but want to access the new DOM nodes immediately after your render call.</p>
+<p>Suppose we try to instantiate a jQuery plugin:</p>
+<pre><code class="language-javascript">var myView = {
+
+ template: '/* a template string containing our &lt;select /&gt; */',
+
+ $el: $('#content'),
+
+ afterRender: function () {
+ this.$el.find('select').myPlugin();
+ },
+
+ render: function () {
+ this.$el.html(this.template());
+ this.afterRender();
+ }
+}
+
+myView.render();
+</code></pre>
+
+<p>You might find that it works &#x2014; but not all the time. Therein lies the problem. It&#x2019;s a rat race: Whatever happens to get there first wins. Sometimes it&#x2019;s the render, sometimes it&#x2019;s the plugin&#x2019;s instantiation.</p>
+<p>Now, unbeknownst to some, we can use a slight hack with <code>setTimeout()</code>.</p>
+<p>With a slight rewrite, we can safely instantiate our jQuery plugin once the DOM nodes are present:</p>
+<pre><code class="language-javascript">//
+
+ afterRender: function () {
+ this.$el.find('select').myPlugin();
+ },
+
+ render: function () {
+ this.$el.html(this.template());
+ setTimeout(this.afterRender, 0);
+ }
+
+//
+</code></pre>
+
+<p>However, we will receive the trusty message that the function <code>.afterRender()</code> cannot be found.</p>
+<p>What we do, then, is throw our <code>.bind()</code> into the mix:</p>
+<pre><code class="language-javascript">//
+
+ afterRender: function () {
+ this.$el.find('select').myPlugin();
+ },
+
+ render: function () {
+ this.$el.html(this.template());
+ setTimeout(this.afterRender.bind(this), 0);
+ }
+
+//
+</code></pre>
+
+<p>Now, our <code>afterRender()</code> function will execute in the correct context.</p>
+<h4 id="tidier-event-binding-with-queryselectorall">Tidier Event Binding With querySelectorAll <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#tidier-event-binding-with-queryselectorall" class="sr hsl">Link</a></h4>
+<p>The DOM API improved significantly once it included such useful methods as <code>querySelector</code>, <code>querySelectorAll</code> and the <code>classList</code> API, to name a few of the many.</p>
+<p>However, there&#x2019;s not really a way to natively add events to a <code>NodeList</code> as of yet. So, we end up stealing the <code>forEach</code> function from the <code>Array.prototype</code> to loop, like so:</p>
+<pre><code class="language-javascript">Array.prototype.forEach.call(document.querySelectorAll('.klasses'), function(el){
+ el.addEventListener('click', someFunction);
+});
+</code></pre>
+
+<p>We can do better than that, though, with our friend <code>.bind()</code>:</p>
+<pre><code class="language-javascript">var unboundForEach = Array.prototype.forEach,
+ forEach = Function.prototype.call.bind(unboundForEach);
+
+forEach(document.querySelectorAll('.klasses'), function (el) {
+ el.addEventListener('click', someFunction);
+});
+</code></pre>
+
+<p>We now have a tidy method to loop our DOM nodes.</p>
+<h4 id="conclusion">Conclusion <a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2#conclusion" class="sr hsl">Link</a></h4>
+<p>As you can see, the <code>.bind()</code> function can be subtly included for many different purposes, as well as to neaten existing code. Hopefully, this overview has given you what you need to add <code>.bind()</code> to your own code (if necessary!) and to harness the power of transforming the value of <code>this</code>.</p>
+<p><em>(al, il)</em></p>
+
+	
+
+
+	
+	<div class="lt"><a href="https://www.smashingmagazine.com/tag/javascript/">JavaScript</a><a href="https://www.smashingmagazine.com/tag/techniques/">Techniques</a><a href="https://www.smashingmagazine.com/tag/tools/">Tools</a></div>
+<p>
+	<a href="https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/comment-page-2" class="top">&#x2191; Back to top</a>
+	<a class="sot single" href="https://twitter.com/intent/tweet?original_referer=https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/&amp;source=tweetbutton&amp;text=Understanding%20JavaScript%E2%80%99s%20Function.prototype.bind&amp;url=https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/&amp;via=smashingmag">Tweet it</a><a class="sot single" href="http://www.facebook.com/sharer/sharer.php?u=https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/">Share on Facebook</a></p>
+
+</article>
+</div>
+</body></html>

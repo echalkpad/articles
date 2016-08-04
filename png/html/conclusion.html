@@ -1,0 +1,442 @@
+<!DOCTYPE html><html><head><title>Conclusion</title></head><body>
+<h1>Conclusion</h1><p><a href="https://blog.abourget.net/en/2016/02/25/go-bridges-to-javascript-and-python/" target="_new">Original URL</a></p>
+<p><blockquote>This is the content of a talk given at Golang Montr&#xE9;al meetup on February 22nd 2016, at Google Montr&#xE9;al. This is a high level introduction to different bridges that exist between Go and&hellip;</blockquote></p>
+<div><div class="description">
+
+
+
+
+
+<blockquote>
+<p><em>This is the content of a talk given at Golang Montr&#xE9;al
+<a href="https://golangmontreal.org/en/events/gomtl-01-go-16-release-party-feb-22nd/">meetup on February 22nd 2016</a>,
+at Google Montr&#xE9;al.</em></p>
+</blockquote>
+
+<p>This is a high level introduction to different bridges that exist
+between Go and other languages. It is not meant to be exhaustive nor
+does it go very deep in each subject, but I hope it is at least
+entertaining.</p>
+
+
+<p>
+ <iframe src="https://www.youtube.com/embed/YmI7Gw4iq3w"></iframe>
+ </p>
+
+
+<h2 id="javascript:0afea0b973787e0099a3ccd7196fdd87">Javascript</h2>
+
+<h3 id="otto:0afea0b973787e0099a3ccd7196fdd87">Otto</h3>
+
+<p>The <a href="https://github.com/robertkrimen/otto">otto</a> library &#x2013; not to be
+confused with <a href="https://github.com/hashicorp/otto">Otto</a>,
+<a href="https://www.ottoproject.io/"><em>the new Vagrant</em></a> &#x2013; is an ECMAScript
+5.1 implementation in native Go. It can thus run javascript code in a
+portable way, shipping your single binary with the VM included
+(without Cgo or anything of the sort).</p>
+
+<p>Get it with:</p>
+
+<pre><code>go get github.com/robertkrimen/otto/...
+</code></pre>
+
+<p>and check
+<a href="https://godoc.org/github.com/robertkrimen/otto">the docs here</a>. If
+you&#x2019;re interested in the AST parser, check
+<a href="http://godoc.org/github.com/robertkrimen/otto/parser">the parser package</a></p>
+
+<p>This will also install the <code>otto</code> program, so you can run it on the command line like:</p>
+
+<pre><code>$ otto
+var hello = "world";
+var someMath = 1 + 2 + 3;
+console.log("Hello", hello, someMath);
+^D
+Hello world 6
+</code></pre>
+
+<p>This is a simple execution on the command line. Now let&#x2019;s use it in
+our program. Open up <code>jsvm/main.go</code> and write:</p>
+
+<pre><code>package main
+
+import (...)
+
+func main() {
+	vm := otto.New()
+	vm.Set("val1", 123)
+	vm.Set("val2", 234)
+ out, err := vm.Run(`
+ret = val1 + val2;
+ `)
+	if err != nil {
+		log.Fatalln("Error running VM:", err)
+	}
+	log.Println("Out:", out)
+
+	ret, err := vm.Get("ret")
+	val3, err := ret.ToInteger()
+	if err != nil {
+		log.Fatalln("Can't convert to Integer:", err)
+	}
+
+	fmt.Println("Result:", val3)
+}
+</code></pre>
+
+<p>and run:</p>
+
+<pre><code>$ cd jsvm
+$ go run main.go
+</code></pre>
+
+<p>And you&#x2019;ll see:</p>
+
+<pre><code>Result: 357
+[INSERT THE REAL THING]
+</code></pre>
+
+<p>It seems slow because <code>go run</code> compiles and runs, so you can try:</p>
+
+<pre><code>go build -v .
+time ./jsvm
+</code></pre>
+
+<p>Otto can also pre-compile javascript into a <code>Script</code> object, so you
+don&#x2019;t need to reparse it on the next run, thereby increasing
+performance.</p>
+
+<p>There you go: you can run Javascript inside a Go program, and keep
+Go&#x2019;s portability.</p>
+
+<h3 id="gopherjs:0afea0b973787e0099a3ccd7196fdd87">GopherJS</h3>
+
+<p><a href="http://www.gopherjs.org/">GopherJS</a> is a Go to Javascript compiler.
+It supports almost everything, including Goroutines and almost all of
+the standard library. You can try things in the
+<a href="http://www.gopherjs.org/playground/">playground</a>.</p>
+
+<p>Here we will try it out and show a couple of patterns at work.</p>
+
+<p>Install the library and program with:</p>
+
+<pre><code>go get -v github.com/gopherjs/gopherjs
+</code></pre>
+
+<p>and open up <code>gopherjs/code.go</code> to insert:</p>
+
+<pre><code>package main
+
+// run goimports
+
+func main() {
+	//resp, err := http.Get("https://example.com")
+	resp, err := http.Get("https://cors-test.appspot.com/test")
+	if err != nil {
+ println("Failed HTTP query:", err)
+	}
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+ println("Couldn't read body:", err)
+	}
+
+	println("My output", string(content))
+
+	js.Global.Call("alert", "We're done!")
+}
+</code></pre>
+
+<p>Then run:</p>
+
+<pre><code>gopherjs build
+</code></pre>
+
+<p>Notice the <code>gopherjs.js</code> file and its accompanying source maps. This
+will allow us to know which line caused errors when debugging. Mapping
+directly to our Go code!</p>
+
+<p>Why is the generated <code>.js</code> file this big, you ask? It contains the Go
+runtime, management of concurrency, channels, goroutines, chunks of
+the standard library you need to your operations, and your code. It&#x2019;s
+the same &#x201C;single-binary&#x201D; distribution you get for other platforms like
+Mac, Windows or Linux.</p>
+
+<p>Then run:</p>
+
+<pre><code>gopherjs serve
+</code></pre>
+
+<p>and navigate to
+<a href="http://localhost:8080/github.com/abourget/polyglot/gopherjs/">http://localhost:8080/github.com/abourget/polyglot/gopherjs/</a>
+&#x2026; you&#x2019;ll see that the request succeeds !</p>
+
+<p>As an example, here&#x2019;s how you&#x2019;d modify the DOM in Go:</p>
+
+<pre><code>gopher := `[insert the content of https://raw.githubusercontent.com/golang-samples/gopher-vector/master/gopher-front.svg here]`
+js.Global.Get("document").Get("body").Set("innerHTML", gopher)
+</code></pre>
+
+<p>The last crazy thing we could do is insert the <code>otto</code> VM and run javascript&#x2026; in the browser.</p>
+
+<p>Add these to our <code>main</code> function:</p>
+
+<pre><code>otto.New().Run(`console.log("This runs in otto, under gopherjs, in the browser (!!)")`)
+</code></pre>
+
+<p>You can imagine the <code>otto</code> code is quite complex, but it all compiles
+to javascript through GopherJS and runs fine in the browser, showing
+how sophisticated GopherJS really is.</p>
+
+<p>The generated <code>gopherjs.js</code> file is enlarged because the whole
+javascript interpreter is in there.</p>
+
+<h4 id="gopherjs-conclusion:0afea0b973787e0099a3ccd7196fdd87">GopherJS Conclusion</h4>
+
+<p>GopherJS led to the creation of a Web/Desktop/Mobile gaming engine
+called <a href="http://ajhager.com/enj/">Enj</a> continued as
+<a href="https://github.com/ajhager/engi">ENGi</a>. All in Go, but compiles to
+javascript, desktop and Android via GoMobile.</p>
+
+
+
+<p>GopherJS also has a
+<a href="https://github.com/gopherjs/gopherjs/wiki/bindings">list of bindings</a>
+to different web frameworks (like Angular, D3, Chrome, jQuery, WebGL),
+so you can write nice Go code and JS is called via the GopherJS API. I
+find it hilarious.</p>
+
+<p>Some might think it&#x2019;s stupidity, but I think they&#x2019;re wrong. It might
+just be the future of the web. Read more about <a href="https://medium.com/javascript-scene/what-is-webassembly-the-dawn-of-a-new-era-61256ec5a8f6">WebAssembly
+here</a>.</p>
+
+<p>Check out <a href="https://github.com/tidwall/digitalrain">https://github.com/tidwall/digitalrain</a> and its
+<a href="http://tidwall.github.io/digitalrain/">live demo</a> to see an app in
+action. It&#x2019;s alllll Go.
+<a href="https://groups.google.com/forum/#!topic/golang-nuts/2xhqPFpzEos">This thread</a>
+lists more examples.</p>
+
+<p>Last note, is about
+<a href="https://github.com/gophergala2016/cmd-go-js">cmd-go-js</a> which is a
+&#x201C;feature branch&#x201D; of the <code>go</code> command, that supports GopherJS as an
+additional <code>GOARCH=js</code>.</p>
+
+<h2 id="python-via-gopy:0afea0b973787e0099a3ccd7196fdd87">Python, via gopy</h2>
+
+<p><a href="https://github.com/go-python/gopy">gopy</a> is a deceptively simply way
+to write Go code and load it in Python.</p>
+
+<p>Let&#x2019;s first install:</p>
+
+<pre><code>go get -v github.com/go-python/gopy
+</code></pre>
+
+<p>Write in <code>ext/user.go</code>:</p>
+
+<pre><code>package ext
+
+type User struct {
+	Username string
+	Fullname string
+	Password string
+}
+</code></pre>
+
+<p>We&#x2019;ll add the <code>SetPassword(password string)</code> method that will use a
+really powerful Go encryption that we&#x2019;ll
+<a href="http://www.dotnetperls.com/rot13-go">take from here</a>. I loooove
+that algorithm, because <em>encrypts</em> <code>cat</code> as <code>png</code>.</p>
+
+<pre><code>func (u *User) SetPassword(input string) {
+	u.Password = strings.Map(rot13, input)
+}
+</code></pre>
+
+<p>Don&#x2019;t forget the content of the <code>rot13</code> function below
+<code>SetPassword()</code>.</p>
+
+<p>Soon, you&#x2019;ll be able to use it from Python !</p>
+
+<p>Run:</p>
+
+<pre><code>$ gopy bind .
+</code></pre>
+
+<p>This generates an <code>ext.so</code> file that we can load directly with
+Python&#x2019;s <code>import ext</code>:</p>
+
+<pre><code>$ python
+&gt;&gt;&gt; import ext
+&gt;&gt;&gt; u1 = ext.User(Fullname="My name")
+&gt;&gt;&gt; u1.Fullname
+'My name'
+&gt;&gt;&gt; u1.SetPassword("this is a very secretive password and cat")
+&gt;&gt;&gt; u1.Password
+'guvf vf n irel frpergvir cnffjbeq naq png'
+</code></pre>
+
+<p>See ? <code>png</code>? I just love it.</p>
+
+<h4 id="breaking-the-gil:0afea0b973787e0099a3ccd7196fdd87">Breaking the GIL</h4>
+
+<p>That&#x2019;s all cool, but we already have a <code>rot13</code> implementation in
+Python! What&#x2019;s the use ?</p>
+
+<p>Let&#x2019;s try it in Python:</p>
+
+<pre><code>$ python
+&gt;&gt;&gt; import codecs
+&gt;&gt;&gt; codecs.encode("cat", "rot13")
+'png'
+</code></pre>
+
+<p>What makes our use case interesting is this:</p>
+
+<pre><code>&gt;&gt;&gt; import thread
+&gt;&gt;&gt; thread.start_new_thread(lambda: [codecs.encode("have a cat", "rot_13") for x in xrange(10000000)], ())
+</code></pre>
+
+<p>and watch out your CPUs. Welcome to the GIL: you can&#x2019;t have more than
+one core run Python code.</p>
+
+<p>So let&#x2019;s try an example that makes Go shine: concurrency and
+multi-core use &#x2013; breaking the dreaded Global Interpreter Lock !</p>
+
+<p>Add to a new <code>ext/maximus.go</code> such a thing:</p>
+
+<pre><code>package ext
+
+func MaxOutResources() func() {
+	done := make(chan struct {})
+
+	f := func() {
+		for {
+			input := "cat"
+			for i := 0; i &lt; 100000; i++ {
+				input = strings.Map(rot13, input)
+			}
+
+			select {
+			case &lt;-done:
+				fmt.Println("ffiieeeww!", input)
+				return
+			default:
+			}
+		}
+	}
+
+	go f()
+	go f()
+	go f()
+	go f()
+
+	return func() {
+		close(done)
+	}
+}
+</code></pre>
+
+<p>This function will spin 4 goroutines, in parallel of the Python
+process, doing incredible calculations, and allows the caller to shut
+down the operations, tapping into Go&#x2019;s concurrency system.</p>
+
+<p>Now rebuilding and running through python would look like:</p>
+
+<pre><code>$ gopy bind .
+$ python
+&gt;&gt;&gt; import ext
+&gt;&gt;&gt; f = ext.MaxOutResources()
+&gt;&gt;&gt;
+</code></pre>
+
+<p>Now watch your CPU max out <em>all your cores</em> !</p>
+
+<p>Call <code>f()</code> to stop everything:</p>
+
+<pre><code>&gt;&gt;&gt; f()
+ffiieeeww! cat
+ffiieeeww! cat
+ffiieeeww! cat
+ffiieeeww! cat
+</code></pre>
+
+<p>Now you know what 100000 iterations of ROT13 does to your passwords.</p>
+
+<h4 id="dynamically-build-and-load:0afea0b973787e0099a3ccd7196fdd87">Dynamically build and load</h4>
+
+<p>There is a small python wrapper script around this in
+<code>$GOPATH/src/github.com/go-python/gopy/gopy.py</code> that you can copy to
+our work dir and run with something like:</p>
+
+<pre><code>python
+&gt;&gt;&gt; import gopy
+&gt;&gt;&gt; ext = gopy.load("github.com/abourget/polyglot/py")
+&gt;&gt;&gt; u1 = ext.User()
+&gt;&gt;&gt; u1.SetPassword("very secure password")
+etc...
+</code></pre>
+
+<p>This internally runs the <code>gopy bind</code> calls and imports it in Python
+directly.</p>
+
+
+
+<p>Now mind you, <code>gopy</code> is nowhere near perfect. There are cases where
+it will plainly crash, but there is a case for running Go code within
+your Python program, for performance or reusability.</p>
+
+<h4 id="additional-readings:0afea0b973787e0099a3ccd7196fdd87">Additional readings&#x2026;</h4>
+
+<p><a href="https://blog.filippo.io/building-python-modules-with-go-1-5/">This post</a>
+is a great starter on the internals of building Go-based python extensions.</p>
+
+<p>Python bridges also include <a href="https://github.com/sbinet/go-python">https://github.com/sbinet/go-python</a> : Go
+bindings to call into the CPython 2 C-level API.</p>
+
+
+
+<p>I initially wanted to do a talk that covered all bindings to other
+languages, but we wouldn&#x2019;t have had time to see any of them. I leave
+links here for your curiosity and many some other time I&#x2019;ll cover
+other bridges.</p>
+
+<h2 id="other-bridges:0afea0b973787e0099a3ccd7196fdd87">Other bridges</h2>
+
+<p><strong>Ruby</strong> via <a href="https://github.com/ffi/ffi/">https://github.com/ffi/ffi/</a>, see
+<a href="https://c7.se/go-and-ruby-ffi/">https://c7.se/go-and-ruby-ffi/</a> . See also a very experimental Ruby
+interpreter <a href="https://github.com/grubby/grubby">https://github.com/grubby/grubby</a> . There is also
+<a href="https://github.com/DavidHuie/quartz">https://github.com/DavidHuie/quartz</a> which involes running a separate
+process and transparently communicating via RPC. The last is is a
+binding to <code>mruby</code> in Go, by none other than HashiCorp&#x2019;s founder,
+Mitchell Hashimoto (of Vagrant fame). Check it here:
+<a href="https://github.com/mitchellh/go-mruby">https://github.com/mitchellh/go-mruby</a> .</p>
+
+<p><strong>Android</strong> and <strong>iOS</strong> via
+<a href="https://github.com/golang/mobile">Go Mobile</a> which allows you to
+write libraries for iOS and Android that you can load in their
+respective IDE. You can also write native application that compile to
+native packages. More details on
+<a href="https://github.com/golang/go/wiki/Mobile">the Go Mobile wiki</a></p>
+
+<p><strong>Lua</strong> via pure-go implementations of the language. There are actually <em>two</em> of them, <a href="https://github.com/Shopify/go-lua">https://github.com/Shopify/go-lua</a> and <a href="https://github.com/yuin/gopher-lua">https://github.com/yuin/gopher-lua</a> .</p>
+
+<h2 id="other-oddities:0afea0b973787e0099a3ccd7196fdd87">Other oddities</h2>
+
+<p>campher: Perl bindings for Go, by Brad Fitzpatrick: <a href="https://github.com/bradfitz/campher">https://github.com/bradfitz/campher</a>
+llgo: LLVM front-end for Go, in Go: <a href="http://llvm.org/svn/llvm-project/llgo/trunk/README.TXT">http://llvm.org/svn/llvm-project/llgo/trunk/README.TXT</a></p>
+
+<p>Attempts at interactive Go REPLs:
+<a href="https://github.com/motemen/gore">gore</a>,
+<a href="https://github.com/mkouhei/gosh">gosh</a> and
+<a href="https://github.com/rocky/go-fish">go-fish</a>. Attempts at a Go
+scripting language interpreter: <a href="https://github.com/sbinet/igo">igo</a> and
+<a href="https://github.com/sbinet/go-eval">go-eval</a>.</p>
+
+<h3 id="about-the-presentation:0afea0b973787e0099a3ccd7196fdd87">About the presentation</h3>
+
+<p>Those interested in my <code>.emacs.d</code> dir,
+<a href="https://github.com/abourget/my.emacs.d">it is available here</a>.</p>
+</div>
+
+ 
+ </div>
+</body></html>

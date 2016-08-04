@@ -1,0 +1,128 @@
+<!DOCTYPE html><html><head><title>extranapkins's series in functional Python</title></head><body>
+<h1>extranapkins's series in functional Python</h1><p><a href="http://mike.place/2016/extranapkins/" target="_new">Original URL</a></p>
+<p><blockquote>2016-02-03 Inspired by Douglas Hofstadter&#x2019;s and Martin Gardner&#x2019;s deeply profound works on mathematical series and recursion, and Joel Grus&#x2019;s talk Stupid Itertools Tricks for Data&hellip;</blockquote></p>
+<div><div class="post">
+ 
+ 
+ <span class="post-date">2016-02-03</span>
+ 
+ <p>Inspired by <a href="https://en.wikipedia.org/wiki/G%C3%B6del,_Escher,_Bach">Douglas
+Hofstadter&#x2019;s</a> and
+<a href="https://en.wikipedia.org/wiki/Martin_Gardner">Martin Gardner&#x2019;s</a> deeply
+profound works on mathematical series and recursion, and Joel Grus&#x2019;s talk
+<a href="https://www.youtube.com/watch?v=ThS4juptJjQ">Stupid Itertools Tricks for Data
+Science</a>, I present a functional
+Python implementation of extranapkins&#x2019;s series.</p>
+
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">I've got eight words for you: I've got two words for you: Fuck off</p>&#x2014; ''Steve'' (@extranapkins) <a href="https://twitter.com/extranapkins/status/627001477169573889">July 31, 2015</a></blockquote>
+
+
+<p>The 0th item in this series is</p>
+
+<pre><code>"Fuck off"
+</code></pre>
+
+<p>The 1st item is</p>
+
+<pre><code>"I've got two words for you: Fuck off"
+</code></pre>
+
+<p>The 2nd item is</p>
+
+<pre><code>"I've got eight words for you: I've got two words for you: Fuck off"
+</code></pre>
+
+<p>The <code>n+1</code>th item in this series is</p>
+
+<pre><code>"I've got L_n words for you: S_n"
+</code></pre>
+
+<p>where <code>S_n</code> is the <code>n</code>th item in the series, and <code>L_n</code> is the number of words
+in <code>S_n</code>, expressed in words. Thus, here is a Python function that takes the
+<code>n</code>th item and returns the <code>n+1</code>th item in extranapkins&#x2019;s series:</p>
+
+<pre><code class="language-python">from num2words import num2words
+
+def next_ens(s):
+ n = num2words(len(s.split()))
+ return "I've got {} words for you: {}".format(n, s)
+</code></pre>
+
+<p>Given <code>next_ens()</code> we can generate successive items in the series by hand:</p>
+
+<pre><code class="language-python">&gt;&gt;&gt; next_ens('Fuck off')
+"I've got two words for you: Fuck off"
+&gt;&gt;&gt; next_ens(next_ens('Fuck off'))
+"I've got eight words for you: I've got two words for you: Fuck off"
+</code></pre>
+
+<p>We could automate this with recursion or a loop. But we can do it more quickly,
+with less code, and at the same time eliminate the dangers of variable
+mutation, the irritant of
+<a href="https://docs.python.org/3/library/sys.html#sys.setrecursionlimit"><code>sys.setrecursionlimit</code></a>,
+and the inefficiencies of <a href="http://mike.place/2016/memoization/">recursion with memoization</a>, by
+using the tools of functional programming.</p>
+
+<p>In particular we&#x2019;ll use <a href="https://github.com/joelgrus/stupid-itertools-tricks-pydata/blob/master/src/stupid_tricks.py#L15-L17">Joel Grus&#x2019;s python
+implementation</a>
+of <a href="https://www.haskell.org/hoogle/?hoogle=iterate">Haskell&#x2019;s <code>iterate()</code>
+function</a>. This takes a
+function <code>f</code> and an initial value <code>x</code>, and returns an iterator that yields the
+items in the infinite series <code>x</code>, <code>f(x)</code>, <code>f(f(x))</code>, <code>f(f(f(x)))</code>, &#x2026;
+using lazy evaluation.</p>
+
+<pre><code>from itertools import accumulate, repeat
+
+def iterate(f, x):
+ return accumulate(repeat(x), lambda fx, _: f(fx))
+</code></pre>
+
+<p>You might have to stare at <code>iterate()</code> for a while (or <a href="https://www.youtube.com/watch?v=ThS4juptJjQ">watch Joel&#x2019;s
+talk</a>) to figure out how it does
+what it does. I also needed a pen and paper. Having to stare at a line for ten
+minutes is part of the hazing ritual of functional programming. After a while
+you can stop caring how these functions work, and take them on trust.</p>
+
+<p>Anyway, we can use <code>next_ens()</code>, which tells you how to get from the <code>n</code>th to
+the <code>n+1</code>th item, and <code>iterate()</code>, to create an iterator <code>ens</code> that yields the
+items in the series&#x2026;</p>
+
+<pre><code class="language-python">&gt;&gt;&gt; ens = iterate(next_ens, 'Fuck off')
+&gt;&gt;&gt; next(ens)
+'Fuck off'
+&gt;&gt;&gt; next(ens)
+"I've got two words for you: Fuck off"
+&gt;&gt;&gt; next(ens)
+"I've got eight words for you: I've got two words for you: Fuck off"
+</code></pre>
+
+<p>&#x2026;and with Joel&#x2019;s <a href="https://github.com/joelgrus/stupid-itertools-tricks-pydata/blob/master/src/stupid_tricks.py#L9-L10">Python implementation of <code>take()</code></a>&#x2026;</p>
+
+<pre><code class="language-python">from itertools import islice
+
+def take(n, it):
+ return [x for x in islice(it, n)]
+</code></pre>
+
+<p>&#x2026;we can evaluate the first <code>n</code> items&#x2026;</p>
+
+<pre><code class="language-python">&gt;&gt;&gt; ens = iterate(next_ens, 'Fuck off')
+&gt;&gt;&gt; take(5, ens)
+['Fuck off', "I've got two words for you: Fuck off", "I've got eight words for you: I've got two words for you: Fuck off", "I've got fourteen words for you: I've got eight words for you: I've got two words for you: Fuck off", "I've got twenty words for you: I've got fourteen words for you: I've got eight words for you: I've got two words for you: Fuck off"]
+</code></pre>
+
+<p>&#x2026;or just the nth item:</p>
+
+<pre><code class="language-python">&gt;&gt;&gt; ens = iterate(next_ens, 'Fuck off')
+&gt;&gt;&gt; take(100, ens)[-1]
+"I've got nine hundred and twenty-one words for you: I've got nine hundred and twelve words for you: I've got nine hundred and three words for you: I've got eight hundred and ninety-four words for you: I've got eight hundred and eighty-five words for you: I've got eight hundred and seventy-six words for you: I've got eight hundred and sixty-seven words for you: I've got eight hundred and fifty-eight words for you: I've got eight hundred and forty-nine words for you: I've got eight hundred and forty words for you: I've got eight hundred and thirty-one words for you: I've got eight hundred and twenty-two words for you: I've got eight hundred and thirteen words for you: I've got eight hundred and four words for you: I've got seven hundred and ninety-five words for you: I've got seven hundred and eighty-six words for you: I've got seven hundred and seventy-seven words for you: I've got seven hundred and sixty-eight words for you: I've got seven hundred and fifty-nine words for you: I've got seven hundred and fifty words for you: I've got seven hundred and forty-one words for you: I've got seven hundred and thirty-two words for you: I've got seven hundred and twenty-three words for you: I've got seven hundred and fourteen words for you: I've got seven hundred and five words for you: I've got six hundred and ninety-six words for you: I've got six hundred and eighty-seven words for you: I've got six hundred and seventy-eight words for you: I've got six hundred and sixty-nine words for you: I've got six hundred and sixty words for you: I've got six hundred and fifty-one words for you: I've got six hundred and forty-two words for you: I've got six hundred and thirty-three words for you: I've got six hundred and twenty-four words for you: I've got six hundred and fifteen words for you: I've got six hundred and six words for you: I've got five hundred and ninety-seven words for you: I've got five hundred and eighty-eight words for you: I've got five hundred and seventy-nine words for you: I've got five hundred and seventy words for you: I've got five hundred and sixty-one words for you: I've got five hundred and fifty-two words for you: I've got five hundred and forty-three words for you: I've got five hundred and thirty-four words for you: I've got five hundred and twenty-five words for you: I've got five hundred and sixteen words for you: I've got five hundred and seven words for you: I've got five hundred words for you: I've got four hundred and ninety-one words for you: I've got four hundred and eighty-two words for you: I've got four hundred and seventy-three words for you: I've got four hundred and sixty-four words for you: I've got four hundred and fifty-five words for you: I've got four hundred and forty-six words for you: I've got four hundred and thirty-seven words for you: I've got four hundred and twenty-eight words for you: I've got four hundred and nineteen words for you: I've got four hundred and ten words for you: I've got four hundred and one words for you: I've got three hundred and ninety-two words for you: I've got three hundred and eighty-three words for you: I've got three hundred and seventy-four words for you: I've got three hundred and sixty-five words for you: I've got three hundred and fifty-six words for you: I've got three hundred and forty-seven words for you: I've got three hundred and thirty-eight words for you: I've got three hundred and twenty-nine words for you: I've got three hundred and twenty words for you: I've got three hundred and eleven words for you: I've got three hundred and two words for you: I've got two hundred and ninety-three words for you: I've got two hundred and eighty-four words for you: I've got two hundred and seventy-five words for you: I've got two hundred and sixty-six words for you: I've got two hundred and fifty-seven words for you: I've got two hundred and forty-eight words for you: I've got two hundred and thirty-nine words for you: I've got two hundred and thirty words for you: I've got two hundred and twenty-one words for you: I've got two hundred and twelve words for you: I've got two hundred and three words for you: I've got one hundred and ninety-four words for you: I've got one hundred and eighty-five words for you: I've got one hundred and seventy-six words for you: I've got one hundred and sixty-seven words for you: I've got one hundred and fifty-eight words for you: I've got one hundred and forty-nine words for you: I've got one hundred and forty words for you: I've got one hundred and thirty-one words for you: I've got one hundred and twenty-two words for you: I've got one hundred and thirteen words for you: I've got one hundred and four words for you: I've got ninety-eight words for you: I've got ninety-two words for you: I've got eighty-six words for you: I've got eighty words for you: I've got seventy-four words for you: I've got sixty-eight words for you: I've got sixty-two words for you: I've got fifty-six words for you: I've got fifty words for you: I've got forty-four words for you: I've got thirty-eight words for you: I've got thirty-two words for you: I've got twenty-six words for you: I've got twenty words for you: I've got fourteen words for you: I've got eight words for you: I've got two words for you: Fuck off"
+</code></pre>
+
+<p>So there you go: extranapkins&#x2019;s series in functional Python.</p>
+
+
+ </div>
+
+ 
+ </div>
+</body></html>

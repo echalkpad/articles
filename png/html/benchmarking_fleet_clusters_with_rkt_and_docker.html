@@ -1,0 +1,81 @@
+<!DOCTYPE html><html><head><title>Benchmarking Fleet Clusters With Rkt And Docker</title></head><body>
+<h1>Benchmarking Fleet Clusters With Rkt And Docker</h1><p><a href="https://blog.giantswarm.io/benchmarking-fleet-clusters-with-rkt-docker/" target="_new">Original URL</a></p>
+<p><blockquote>On Tuesday we showed you how you can simulate CoreOS clusters on a single machine with Onsho. We also mentioned that we are working on improving fleet to make it more performant for use in highly&hellip;</blockquote></p>
+<div><div class="body">
+ <p>On Tuesday we showed you how you can <a href="https://blog.giantswarm.io/replicate-data-center-locally-with-onsho/">simulate CoreOS clusters on a single machine with Onsho</a>. We also mentioned that we are working on <a href="https://github.com/coreos/fleet/pull/1426">improving fleet to make it more performant</a> for use in highly scalable microservice infrastructures. The fleet PR is a first effort to merge the changes we made to <a href="https://github.com/giantswarm/fleet">our internal fork of fleet</a> upstream.</p>
+
+<p>When working on performance improvements, you need to test if your changes actually did improve the performance. As we couldn&#x2019;t find a benchmarking tool for fleet out there, we decided to build our own. Enter <a href="https://github.com/giantswarm/nomi">Nomi</a>, a simple tool to benchmark and stress test <a href="https://github.com/coreos/fleet/">fleet</a> clusters.</p>
+
+<p>Nomi lets you define benchmarks using a simple YAML definition. Based on that it deploys units to your fleet cluster, measuring delays in start and stop times as well as CPU load of <code>fleetd</code> and <code>systemd</code> per host. You can choose raw <code>systemd</code> units (to measure raw fleet performance) or let Nomi deploy standard Docker or rkt containers (based on alpine). Latter will let you stress test your cluster with the different container engines to show up eventual bottlenecks that might occur when using Docker or rkt. </p>
+
+<h2 id="benchmarkingfleet">Benchmarking Fleet</h2>
+
+<p>The easiest way to run a benchmark with Nomi is using its <a href="https://hub.docker.com/r/giantswarm/nomi/">Docker image</a> on one of your fleet cluster nodes.</p>
+
+<pre><code class="language-nohighlight">docker run -ti \ 
+ -v $PLOTS_DIR:/nomi_plots \
+ -v /var/run/fleet.sock:/var/run/fleet.sock \
+ --net=host \
+ --pid=host \
+ giantswarm/nomi:latest \
+run \ 
+ --addr=192.68.10.101:54541 \
+ --generate-gnuplots \
+ --raw-instructions="(sleep 1) (start 10 100) (sleep 60) (stop-all)"
+</code></pre>
+
+<p>Be sure to give the Docker container the IP and port of your host using the <code>-addr</code> parameter.</p>
+
+<p>In the above example we are using the <code>--raw-instructions</code> parameter to run Nomi with a simple set of benchmark instructions. For more complex instructions you can <a href="https://github.com/giantswarm/nomi#benchmark-file-definition">use YAML files to specify benchmarks</a>. For example:</p>
+
+<pre><code>instancegroup-size: 1 
+instructions: 
+ - start:
+ max: 8
+ interval: 200
+ - expect-running:
+ symbol: &lt;
+ amount: 10
+ - sleep: 10
+ - start:
+ max: 3
+ interval: 300
+ - sleep: 200
+ - stop: stop-all
+</code></pre>
+
+<h2 id="collectingandshowingmetrics">Collecting And Showing Metrics</h2>
+
+<p>Once Nomi is running it will collect metrics including delays in starting and stopping of units in the cluster as well as CPU usage of <code>fleetd</code> and <code>systemd</code> for each cluster node. We measure only CPU resource usage as these tools are rather CPU-intensive.</p>
+
+<p>After the benchmark has finished Nomi will output the gathered data. By default, it prints a histogram to <code>stdout</code> that shows the delay of units when starting in the cluster.</p>
+
+<pre><code>1.249-8.583 48.9% &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x258F; 440 
+8.583-15.92 21.2% &#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x258B; 191 
+15.92-23.25 4.89% &#x2588;&#x2588;&#x258F; 44 
+23.25-30.59 4.22% &#x2588;&#x258A; 38 
+30.59-37.92 5.22% &#x2588;&#x2588;&#x258F; 47 
+37.92-45.25 4.78% &#x2588;&#x2588; 43 
+45.25-52.59 4.56% &#x2588;&#x2589; 41 
+52.59-59.92 3.33% &#x2588;&#x258D; 30 
+59.92-67.26 2.11% &#x2589; 19 
+67.26-74.59 0.778% &#x258D; 7 
+</code></pre>
+
+<p>Additionally, you can choose out of three output types. First, you can dump the whole metrics as a JSON file to stdout, so that you can then use that to analyze or visualize to your liking. Second, you can dump into a tarred HTML/javascript file that uses <a href="https://d3js.org/">d3.js</a> to visualize the benchmarks.</p>
+
+<p><img src="https://blog.giantswarm.io/content/images/2016/02/units_start_multi.png" alt=""></p>
+
+<p>The third option is to generate GNUplots. For this you need GNUplot support on your system or use the Docker container like in the example above. Nomi comes with several plots including delay plots of start and stop operations, and CPU usage plots of <code>fleetd</code> and <code>systemd</code> for all cluster nodes. Additionally, you can generate your own customized plots based on the metrics gathered.</p>
+
+<h2 id="getyourclusterupandtest">Get Your Cluster Up And Test</h2>
+
+<p>If you are using fleet anywhere in your infrastructure (no matter if on CoreOS or any other Linux distribution) you should try this tool out. Check out the <a href="https://github.com/giantswarm/nomi">GitHub repo</a> for details. You can try out different fleet versions and benchmark them against each other. Changing out your fleet version is especially easy with <a href="https://github.com/giantswarm/yochu">Yochu</a>. You can also measure performance differences with different container engines, like rkt or Docker, under stress.</p>
+
+<p>If you are not using fleet, yet, you should try it out with our previously released CoreOS provisioning tools. You can use <a href="https://github.com/giantswarm/kocho">Kocho</a> for quickly provisioning CoreOS clusters with fleet on AWS. Alternatively, use <a href="https://github.com/giantswarm/mayu">Mayu</a> to either get a bare metal cluster running, or setup a local test environment in combination with <a href="https://github.com/giantswarm/onsho">Onsho</a>.</p>
+
+<p>Check it out and tell us what you think in the comments below, on HackerNews, <a href="irc://irc.freenode.org:6667/#giantswarm">IRC (#giantswarm)</a>, or <a href="https://groups.google.com/forum/#!forum/giantswarm">our mailing list</a>.</p>
+ </div>
+
+ </div>
+</body></html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html><html><head><title>Ubuntu9.04</title></head><body>
+<h1>Ubuntu9.04</h1><p><a href="https://libdlo.freedesktop.org/wiki/Ubuntu9.04/" target="_new">Original URL</a></p>
+<p><blockquote>Ubuntu 9.04 follows similar steps, but requires some additional modifications vs the Ubuntu8.10 instructions, because of some new issues and increased reliance on xrandr. xf86-driver-displaylink&hellip;</blockquote></p>
+<div><div id="content">
+<p>Ubuntu 9.04 follows similar steps, but requires some additional modifications vs the <a href="https://libdlo.freedesktop.org/wiki/Ubuntu8.10/">Ubuntu8.10</a> instructions, because of some new issues and increased reliance on xrandr. </p>
+
+<ol>
+<li><p><a href="https://libdlo.freedesktop.org/wiki/xf86-driver-displaylink/">xf86-driver-displaylink</a> "make install" puts displaylink_drv file in /usr/local/lib/xorg/modules/drivers, while Ubuntu 9.04 only looks in /usr/lib by default </p>
+
+<ul>
+<li>copy or link file to /usr/lib or change X configuration to also look in /usr/local/lib/xorg/modules/drivers </li>
+</ul></li>
+<li>Unbuntu 9.04 relies on more X RandR support, which is incomplete in <a href="https://libdlo.freedesktop.org/wiki/xf86-driver-displaylink/">xf86-driver-displaylink</a>. In particular, there's a small but nasty problem of X coming up with the screen rotate not set normally. The effect to the end user is windows are sometimes positioned off-screen. In particular, with the GDM greeter/login, the login will come up on screen initially, but any menus will come up offscreen, and any move of the window will cause it to disappear. Once logged in, most other Gnome elements (like the taskbar) appear to be gone, because they're off screen. </li>
+</ol>
+
+<p>These randr X/GDM errors may also be visible in the users' .xsession-errors. </p>
+
+<p>Until the a proper fix is understood, a workaround is to call xrandr -o 0 within the user session. This can be done by hand each login, or run for every new user session by adding these three lines into /etc/gdm/Init/Default after the defintion of the gdmwhich() function: </p>
+
+<pre>XRANDR=`gdmwhich xrandr`
+if [ "x$XRANDR" != "x" ] ; then
+ $XRANDR -o 0
+fi</pre>
+
+<p>It would seem like this could be fixed by setting some defaults in <a href="https://libdlo.freedesktop.org/wiki/xf86-driver-displaylink/">xf86-driver-displaylink</a>. Ideas or patches welcome! </p>
+
+<ol>
+<li><p>There is at least one gnome bug that may cause GDM login prompt and the gnome shell to not load or crash easily. When these problems occur, log of errors appears in ~/.xsession-errors for the user logging in </p>
+
+<ul>
+<li>glib bug for DISPLAY other than :0 (see detail below) </li>
+<li>glib/gnome problems with xrandr functionality implemented in the displaylink X server 
+Ubuntu 9.04 includes gnome glib 2.20, which has a small glibc bug that affects scenarios with multiple X servers running. There is a source patch available, but no package update, making Ubuntu 9.04 not recommended for <span class="createlink"><a href="https://secure.freedesktop.org/write/libdlo/ikiwiki.cgi?page=DisplayLink&amp;from=Ubuntu9.04&amp;do=create" rel="nofollow">?</a>DisplayLink</span> users, unless you're willing to follow the steps below: </li>
+</ul></li>
+<li><p>wget <a href="http://ftp.gnome.org/pub/gnome/sources/glib/2.20/glib-2.20.1.tar.gz">http://ftp.gnome.org/pub/gnome/sources/glib/2.20/glib-2.20.1.tar.gz</a> </p></li>
+<li>tar -zxvf glib-2.20.1.tar.gz </li>
+<li>cd glib-2.20.1/gio </li>
+<li>wget <a href="http://launchpadlibrarian.net/27278363/C%3A%5Ccygwin%5Chome%5Cgwa%5Cglib-fix.patch">http://launchpadlibrarian.net/27278363/C%3A%5Ccygwin%5Chome%5Cgwa%5Cglib-fix.patch</a> and rename it fix.patch </li>
+<li>patch gdesktopappinfo.c fix.patch </li>
+<li>cd .. </li>
+<li>./configure --prefix=/usr 
+<ul>
+<li>configure may point out some packages you have to sudo apt-get install </li>
+</ul></li>
+<li>sudo make install 
+See <a href="https://bugs.launchpad.net/glib/+bug/346964">https://bugs.launchpad.net/glib/+bug/346964</a> for background </li>
+</ol>
+
+</div>
+
+
+
+
+
+</div>
+</body></html>

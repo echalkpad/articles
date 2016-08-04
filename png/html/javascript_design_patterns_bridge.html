@@ -1,0 +1,346 @@
+<!DOCTYPE html><html><head><title>JavaScript Design Patterns: Bridge</title></head><body>
+<h1>JavaScript Design Patterns: Bridge</h1><p><a href="http://www.joezimjs.com/javascript/javascript-design-patterns-bridge/" target="_new">Original URL</a></p>
+<p><blockquote>In my last blog post article I discussed the Singleton Design Pattern and how it is used in JavaScript. This time around the Bridge design pattern is poking its head up and asking for a bit of&hellip;</blockquote></p>
+<div><div class="entry-content">
+
+		<p>In my last blog post article I discussed the <a title="JavaScript Design Patterns: Singleton" href="http://www.joezimjs.com/javascript/javascript-design-patterns-singleton/">Singleton Design Pattern</a> and how it is used in JavaScript. This time around the Bridge design pattern is poking its head up and asking for a bit of attention, making it the second in the JavaScript Design Patterns series.</p>
+<p>Every place I&#x2019;ve read about the Bridge pattern likes to quote the Gang of Four directly in their description of what the Bridge pattern is, so I figure why not me too? The Bridge pattern should &#x201C;decouple an abstraction from its implementation so that the two can vary independently.&#x201D; Bridges are quite beneficial in event-driven applications, which are quite common in JavaScript. Considering that fact, it&#x2019;s surprisingly one of the most underused design patterns.</p>
+<h2>Event Listeners Example</h2>
+<p>In the following examples, I&#x2019;ll be using a bit of <a title="Official jQuery Home" href="http://jquery.com" target="_blank">jQuery</a>, so if you don&#x2019;t know what a function does or how it works, you can look at their <a title="jQuery Documentation" href="http://docs.jquery.com" target="_blank">documentation</a>.</p>
+<p>Below you&#x2019;ll see a small bit of code using an API method called <code>getXById</code>, which is badly implemented. We are using a click event to determine which element to pull the id from. The callback itself is <code>getXById</code>, which gets the id from the clicked element and uses AJAX to get X from the server using the Id it found.</p>
+<div class="geshi javascript">
+<ol><li class="li1">
+<p class="de1">getXById = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; <span class="kw2">var</span> id = <span class="kw1">this</span>.<span class="me1">id</span>;</p>
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; $.<span class="me1">ajax</span><span class="br0">(</span><span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; &#xA0; &#xA0; url:<span class="st0">'/getx?id='</span> + id,</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; &#xA0; &#xA0; success: <span class="kw2">function</span><span class="br0">(</span>response<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; &#xA0; &#xA0; &#xA0; &#xA0; console.<span class="me1">log</span><span class="br0">(</span>response<span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; <span class="br0">}</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">$<span class="br0">(</span><span class="st0">'someElement'</span><span class="br0">)</span>.<span class="me1">bind</span><span class="br0">(</span><span class="st0">'click'</span>, getXById<span class="br0">)</span>;</p>
+</li>
+</ol></div>
+<p>This code isn&#x2019;t all that bad if it&#x2019;s only meant to be used that one specific way on the one specific page, but it&#x2019;s (supposedly) part of an API, so this needs to be changed a lot. Let&#x2019;s decouple <code>getXById</code> from the event listener and the implementation of what is done with the result:</p>
+<div class="geshi javascript">
+<ol><li class="li1">
+<p class="de1">getXById = <span class="kw2">function</span><span class="br0">(</span>id, callback<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; $.<span class="me1">ajax</span><span class="br0">(</span><span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; &#xA0; &#xA0; url:<span class="st0">'/getx?id='</span> + id,</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; &#xA0; &#xA0; success: callback</p>
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">getXBridge = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; <span class="kw2">var</span> id = <span class="kw1">this</span>.<span class="me1">id</span>;</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; getXById<span class="br0">(</span><span class="kw1">this</span>.<span class="me1">id</span>, <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; &#xA0; &#xA0; console.<span class="me1">log</span><span class="br0">(</span>response<span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; &#xA0; <span class="br0">}</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">$<span class="br0">(</span><span class="st0">'someElement'</span><span class="br0">)</span>.<span class="me1">bind</span><span class="br0">(</span><span class="st0">'click'</span>, getXBridge<span class="br0">)</span>;</p>
+</li>
+</ol></div>
+<p>Now the <code>getXById</code> can be used just about anywhere and you can do anything with X now.</p>
+<h2>Classical Example</h2>
+<p>What I mean by &#x201C;classical&#x201D; is two-fold: the example is more common to classic object-oriented programming languages and it is uses classes. Technically JavaScript doesn&#x2019;t have classes but you mimic interfaces and use prototypes to mimic classes. Originally this example was in the book <a title="Head First Design Patterns on Amazon" href="http://www.amazon.com/First-Design-Patterns-Elisabeth-Freeman/dp/0596007124" target="_blank">Head First Design Patterns</a>, which uses Java in their example. However, this is one the minor patterns in the back of the book that didn&#x2019;t actually have a code example, so I&#x2019;m really just using the diagrams (except I recreated them because I&#x2019;m awesome).</p>
+<h3>Our Starting Product</h3>
+<p><img class="aligncenter size-full wp-image-86" title="Original Remote Control Diagram: Bridge Pattern" src="http://www.joezimjs.com/wp-content/uploads/original_remote.png" alt="Original Remote Control Diagram" width="550">We start with the <code>RemoteControl</code> Interface. <code>ToshibaRemote</code> and <code>SonyRemote</code> both implement that interface to work with their respective televisions. With this code, you can call <code>on()</code>, <code>off()</code>, or <code>setChannel()</code> on any remote and even though all the TVs are different, it&#x2019;ll work. What happens though, when you want to make improvements on the remotes? That&#x2019;s where the Bridge pattern comes in:</p>
+<p><img class="aligncenter size-full wp-image-85" title="Bridge Remote Control Diagram: Bridge Patten" src="http://www.joezimjs.com/wp-content/uploads/bridge_remote.png" alt="Bridge Remote Control Diagram" width="550"></p>
+<p>Now, since the TVs adhere to an interface and all of the remotes adhere to another interface &#x2013; actually just a class because it only needs the one implementation &#x2013; we can create variations to either on through inheritance and still be compatible. Wanna see some code? I&#x2019;ll show you the code for the new solution with the Bridge pattern, but I don&#x2019;t think you need to see the code for the original. I really don&#x2019;t think many of you need to see any code at all, but I&#x2019;m sure there are those out there who&#x2019;d like to see it anyway. We&#x2019;re programmers, right? Show us the code!</p>
+<div class="geshi javascript">
+<ol><li class="li1">
+<p class="de1"><span class="kw2">var</span> RemoteControl = <span class="kw2">function</span><span class="br0">(</span>tv<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">tv</span> = tv;</p>
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">on</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; <span class="kw1">this</span>.<span class="me1">tv</span>.<span class="me1">on</span><span class="br0">(</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">off</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; <span class="kw1">this</span>.<span class="me1">tv</span>.<span class="me1">off</span><span class="br0">(</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">setChannel</span> = <span class="kw2">function</span><span class="br0">(</span>ch<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; <span class="kw1">this</span>.<span class="me1">tv</span>.<span class="me1">tuneChannel</span><span class="br0">(</span>ch<span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1"><span class="coMULTI">/* Newer, Better Remote Control */</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="kw2">var</span> PowerRemote = <span class="kw2">function</span><span class="br0">(</span>tv<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">tv</span> = tv;</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">currChannel</span> = <span class="nu0">0</span>;</p>
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">setChannel</span> = <span class="kw2">function</span><span class="br0">(</span>ch<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; <span class="kw1">this</span>.<span class="me1">currChannel</span> = ch;</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; <span class="kw1">this</span>.<span class="me1">tv</span>.<span class="me1">tuneChannel</span><span class="br0">(</span>ch<span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">nextChannel</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; <span class="kw1">this</span>.<span class="me1">setChannel</span><span class="br0">(</span><span class="kw1">this</span>.<span class="me1">currChannel</span> + <span class="nu0">1</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">prevChannel</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; <span class="kw1">this</span>.<span class="me1">setChannel</span><span class="br0">(</span><span class="kw1">this</span>.<span class="me1">currChannel</span> &#x2013; <span class="nu0">1</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+<p class="de1">PowerRemote.<span class="me1">prototype</span> = <span class="kw2">new</span> RemoteControl<span class="br0">(</span><span class="br0">)</span>;</p>
+</li>
+
+
+<li class="li1">
+<p class="de1"><span class="coMULTI">/** TV Interface</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="coMULTI">&#xA0;Since there are no Interfaces in JavaScript I'm just</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="coMULTI">&#xA0;going to use comments to define what the implementors</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="coMULTI">&#xA0;should implement</span></p>
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+<p class="de1"><span class="coMULTI">&#xA0;function on</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="coMULTI">&#xA0;function off</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="coMULTI">&#xA0;function tuneChannel(channel)</span></p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1"><span class="coMULTI">/* Sony TV */</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="kw2">var</span> SonyTV = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">on</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; console.<span class="me1">log</span><span class="br0">(</span><span class="st0">'Sony TV is on'</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">off</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; console.<span class="me1">log</span><span class="br0">(</span><span class="st0">'Sony TV is off'</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">tuneChannel</span> = <span class="kw2">function</span><span class="br0">(</span>ch<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; console.<span class="me1">log</span><span class="br0">(</span><span class="st0">'Sony TV tuned to channel '</span> + ch<span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1"><span class="coMULTI">/* Toshiba TV */</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="kw2">var</span> ToshibaTV = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">on</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; console.<span class="me1">log</span><span class="br0">(</span><span class="st0">'Welcome to Toshiba entertainment'</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">off</span> = <span class="kw2">function</span><span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; console.<span class="me1">log</span><span class="br0">(</span><span class="st0">'Goodbye Toshiba user'</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1">&#xA0;<span class="kw1">this</span>.<span class="me1">tuneChannel</span> = <span class="kw2">function</span><span class="br0">(</span>ch<span class="br0">)</span> <span class="br0">{</span></p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0; console.<span class="me1">log</span><span class="br0">(</span><span class="st0">'Channel '</span> + ch + <span class="st0">' is set on your Toshiba television'</span><span class="br0">)</span>;</p>
+</li>
+<li class="li1">
+
+</li>
+<li class="li1">
+
+</li>
+
+<li class="li1">
+<p class="de1"><span class="coMULTI">/* Let's see it in action */</span></p>
+</li>
+<li class="li1">
+<p class="de1"><span class="kw2">var</span> sony = <span class="kw2">new</span> SonyTV<span class="br0">(</span><span class="br0">)</span>,</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;toshiba = <span class="kw2">new</span> ToshibaTV<span class="br0">(</span><span class="br0">)</span>,</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;std_remote = <span class="kw2">new</span> RemoteControl<span class="br0">(</span>sony<span class="br0">)</span>,</p>
+</li>
+<li class="li1">
+<p class="de1">&#xA0;pwr_remote = <span class="kw2">new</span> PowerRemote<span class="br0">(</span>toshiba<span class="br0">)</span>;</p>
+</li>
+
+<li class="li1">
+<p class="de1">std_remote.<span class="me1">on</span><span class="br0">(</span><span class="br0">)</span>; &#xA0; &#xA0; &#xA0; &#xA0; &#xA0; &#xA0;<span class="co1">// prints "Sony TV is on"</span></p>
+</li>
+<li class="li1">
+<p class="de1">std_remote.<span class="me1">setChannel</span><span class="br0">(</span><span class="nu0">55</span><span class="br0">)</span>; &#xA0;<span class="co1">// prints "Sony TV tuned to channel 55"</span></p>
+</li>
+<li class="li1">
+<p class="de1">std_remote.<span class="me1">setChannel</span><span class="br0">(</span><span class="nu0">20</span><span class="br0">)</span>; &#xA0;<span class="co1">// prints "Sony TV tuned to channel 20"</span></p>
+</li>
+<li class="li1">
+<p class="de1">std_remote.<span class="me1">off</span><span class="br0">(</span><span class="br0">)</span>; &#xA0; &#xA0; &#xA0; &#xA0; &#xA0; <span class="co1">// prints "Sony TV is off"</span></p>
+</li>
+
+<li class="li1">
+<p class="de1">pwr_remote.<span class="me1">on</span><span class="br0">(</span><span class="br0">)</span>; &#xA0; &#xA0; &#xA0; &#xA0; &#xA0; &#xA0;<span class="co1">// prints "Welcome to Toshiba entertainment"</span></p>
+</li>
+<li class="li1">
+<p class="de1">pwr_remote.<span class="me1">setChannel</span><span class="br0">(</span><span class="nu0">55</span><span class="br0">)</span>; &#xA0;<span class="co1">// prints "Channel 55 is set on your Toshiba television"</span></p>
+</li>
+<li class="li1">
+<p class="de1">pwr_remote.<span class="me1">nextChannel</span><span class="br0">(</span><span class="br0">)</span>; &#xA0; <span class="co1">// prints "Channel 56 is set on your Toshiba television"</span></p>
+</li>
+<li class="li1">
+<p class="de1">pwr_remote.<span class="me1">prevChannel</span><span class="br0">(</span><span class="br0">)</span>; &#xA0; <span class="co1">// prints "Channel 55 is set on your Toshiba television"</span></p>
+</li>
+<li class="li1">
+<p class="de1">pwr_remote.<span class="me1">off</span><span class="br0">(</span><span class="br0">)</span>; &#xA0; &#xA0; &#xA0; &#xA0; &#xA0; <span class="co1">// prints "Goodbye Toshiba user"</span></p>
+</li>
+</ol></div>
+<p>Well, that just about wraps things up for the Bridge pattern in JavaScript. If you haven&#x2019;t yet, make sure you go back and read about the <a title="JavaScript Design Patterns: Singleton" href="http://www.joezimjs.com/javascript/javascript-design-patterns-singleton/">Singleton Pattern</a>. Also keep an eye out for the next article in this series: the Composite Pattern. If you thought this was helpful or you just plain liked the article, please spread the word using the social sharing buttons below the post. Thanks!</p>
+<p>JavaScript Design Patterns series:<br></p><ol class="yarpp-posts"><li><a href="http://www.joezimjs.com/javascript/javascript-design-patterns-singleton/" rel="bookmark" title="JavaScript Design Patterns: Singleton">JavaScript Design Patterns: Singleton</a></li>
+</ol><br class="clear"></div>
+
+	</div>
+</body></html>

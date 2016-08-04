@@ -1,0 +1,177 @@
+<!DOCTYPE html><html><head><title>An Introduction to MATLAB metaprogramming</title></head><body>
+<h1>An Introduction to MATLAB metaprogramming</h1><p><a href="http://daniel-levin.github.io/2015/05/16/intro-to-matlab-metaprog.html" target="_new">Original URL</a></p>
+<p><blockquote>This post will provide a brief introduction to metaprogramming in MATLAB. MATLAB is both an old and highly specialised language. For this reason, it lacks many of the features found in more modern&hellip;</blockquote></p>
+<div><article class="post-content">
+ <p>This post will provide a brief introduction to metaprogramming in MATLAB.
+MATLAB is both an old and highly specialised language.
+For this reason, it lacks many of the features found in more modern and general purpose programming languages.
+However, with a few simple tools, we will find that MATLAB is flexible enough to allow for very simple metaprogramming.</p>
+
+
+<p>Roughly speaking, metaprogramming is the process of treating a program as data - meaning that a program can be generated or manipulated as though it were a normal piece of data.
+Languages such as Ruby expose a number of metaprogramming features.
+MATLAB offers no such suite of tools whose express purpose is metaprogramming.
+With a little bit of creativity, this can actually be done, using the symbolic toolbox.</p>
+
+<p>Note that it might be a <em>bit</em> of a stretch to call the content of this post metaprogramming, but I feel that it is sufficiently similar to justify the label.</p>
+
+<h3 id="dependencies">Dependencies</h3>
+<p>The code in this post works because of the following:</p>
+
+<ul>
+ <li>Functions are first class objects</li>
+ <li>Functions can be declared anonymously</li>
+ <li>Symbolic expressions can be mutated programatically.</li>
+</ul>
+
+<p>In broad strokes, this lets us declare symbolic expressions, modify them, and turn them into functions.
+This is the core idea in this post.</p>
+
+<h3 id="using-and-modifying-symbolic-expressions">Using and modifying symbolic expressions</h3>
+<p>First, let&#x2019;s declare a symbolic variable</p>
+
+
+
+<p>MATLAB will now treat <code>x</code> not as a numerical variable but rather a symbol.
+This lets us build up more complicated expressions.
+For example:</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">x</span> <span class="o">+</span> <span class="n">x</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="mi">2</span><span class="o">*</span><span class="n">x</span>
+<span class="o">&gt;&gt;</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="n">x</span>^<span class="mi">2</span>
+<span class="o">&gt;&gt;</span> <span class="nb">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>^<span class="mi">2</span> <span class="o">+</span> <span class="nb">cos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>^<span class="mi">2</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="nb">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>^<span class="mi">2</span> <span class="o">+</span> <span class="nb">cos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>^<span class="mi">2</span></code></pre></div>
+
+<p>Of course, the last expression is just .
+MATLAB knows this:</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">simplify</span><span class="p">(</span><span class="nb">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>^<span class="mi">2</span> <span class="o">+</span> <span class="nb">cos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>^<span class="mi">2</span><span class="p">)</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="mi">1</span></code></pre></div>
+
+<p>We can also do calculus:</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="mi">3</span><span class="o">*</span><span class="n">x</span>^<span class="mi">2</span> <span class="o">+</span> <span class="nb">sin</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="mi">6</span><span class="o">*</span><span class="n">x</span> <span class="o">+</span> <span class="nb">cos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span> <span class="n">int</span><span class="p">(</span><span class="mi">6</span><span class="o">*</span><span class="n">x</span> <span class="o">+</span> <span class="nb">cos</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="nb">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="mi">3</span><span class="o">*</span><span class="n">x</span>^<span class="mi">2</span>
+<span class="o">&gt;&gt;</span> <span class="n">taylor</span><span class="p">(</span><span class="nb">exp</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="s">'Order'</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="n">x</span>^<span class="mi">9</span><span class="o">/</span><span class="mi">362880</span> <span class="o">+</span> <span class="n">x</span>^<span class="mi">8</span><span class="o">/</span><span class="mi">40320</span> <span class="o">+</span> <span class="n">x</span>^<span class="mi">7</span><span class="o">/</span><span class="mi">5040</span> <span class="o">+</span> <span class="n">x</span>^<span class="mi">6</span><span class="o">/</span><span class="mi">720</span> <span class="o">+</span> <span class="n">x</span>^<span class="mi">5</span><span class="o">/</span><span class="mi">120</span> <span class="o">+</span> <span class="n">x</span>^<span class="mi">4</span><span class="o">/</span><span class="mi">24</span> <span class="o">+</span> <span class="n">x</span>^<span class="mi">3</span><span class="o">/</span><span class="mi">6</span> <span class="o">+</span> <span class="n">x</span>^<span class="mi">2</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span></code></pre></div>
+
+<p>The symbolic toolbox comes with a function called <code>matlabFunction</code> that will turn a symbolic expression into a function:</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">p</span> <span class="p">=</span> <span class="n">matlabFunction</span><span class="p">(</span><span class="n">x</span>^<span class="mi">2</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">x</span> <span class="o">+</span> <span class="nb">sin</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="n">p</span> <span class="p">=</span>
+<span class="p">@(</span><span class="n">x</span><span class="p">)</span><span class="n">x</span><span class="o">.*</span><span class="mf">2.0</span><span class="o">+</span><span class="nb">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">+</span><span class="n">x</span><span class="o">.^</span><span class="mi">2</span>
+<span class="o">&gt;&gt;</span> <span class="n">p</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+<span class="nb">ans</span> <span class="p">=</span>
+<span class="mf">0.6387</span></code></pre></div>
+
+<p>With these tools in hand, we can start writing programs that write programs.</p>
+
+<h3 id="fourier-series-approximations">Fourier Series Approximations</h3>
+<p>A Fourier series is an approximation of a function using a linear combination of sines and cosines of different periods.
+A real function can be approximated by such a series as follows:</p>
+
+
+
+<p>where:</p>
+
+
+
+
+
+
+
+<p>The approximation is exact for certain classes of functions, but we will write a program to approximate arbitrary real functions using a truncated version of the series.</p>
+
+
+<p>Now, we will implement a function that takes a function, and returns another function that is its (truncated) Fourier series approximation.
+There are better ways to implement a Fourier series, but this is a neat demonstration of metaprogramming in MATLAB.</p>
+
+<p>The function should work as follows</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">g</span> <span class="p">=</span> <span class="n">fourierapprox</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">N</span><span class="p">);</span></code></pre></div>
+
+<p>where <code>f</code> is a function and <code>N</code> is the highest term to approximate <code>f</code> to, with <code>g</code> being the approximating function.</p>
+
+<p>First, we create a symbolic expression that will eventually be converted to a MATLAB function,
+and call the independent variable .
+Then, we add the first term to the series:</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="k">function</span>[fn] <span class="p">=</span><span class="nf">fourierapprox</span><span class="p">(</span>f, N<span class="p">)</span>
+<span class="n">series</span> <span class="p">=</span> <span class="n">sym</span><span class="p">();</span>
+ <span class="n">x</span> <span class="p">=</span> <span class="n">sym</span><span class="p">(</span><span class="s">'x'</span><span class="p">);</span>
+ <span class="n">a_0</span> <span class="p">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="nb">pi</span><span class="p">)</span> <span class="o">*</span> <span class="n">integral</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="o">-</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">pi</span><span class="p">);</span>
+ <span class="n">series</span> <span class="p">=</span> <span class="n">series</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="o">*</span><span class="n">a_0</span><span class="p">;</span>
+ <span class="c">...</span>
+<span class="k">end</span></code></pre></div>
+
+<p>(Notice that we are using MATLAB&#x2019;s built-in numerical routines to compute the necessary integrals.)</p>
+
+<p>Next, we need to add a finite (<code>N</code>) linear combination of sines and cosines to <code>series</code>:</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="k">function</span>[fn] <span class="p">=</span><span class="nf">fourierapprox</span><span class="p">(</span>f, N<span class="p">)</span>
+<span class="n">series</span> <span class="p">=</span> <span class="n">sym</span><span class="p">();</span>
+ <span class="n">x</span> <span class="p">=</span> <span class="n">sym</span><span class="p">(</span><span class="s">'x'</span><span class="p">);</span>
+ <span class="n">a_0</span> <span class="p">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="nb">pi</span><span class="p">)</span> <span class="o">*</span> <span class="n">integral</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="o">-</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">pi</span><span class="p">);</span>
+ <span class="n">series</span> <span class="p">=</span> <span class="n">series</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="o">*</span><span class="n">a_0</span><span class="p">;</span>
+ <span class="k">for</span> <span class="n">n</span> <span class="p">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">N</span>
+ <span class="n">a_n</span> <span class="p">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="nb">pi</span><span class="p">)</span> <span class="o">*</span> <span class="n">integral</span><span class="p">(@(</span><span class="n">x</span><span class="p">)</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">.*</span> <span class="nb">cos</span><span class="p">(</span><span class="n">n</span><span class="o">*</span><span class="n">x</span><span class="p">),</span> <span class="o">-</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">pi</span><span class="p">);</span>
+ <span class="n">series</span> <span class="p">=</span> <span class="n">series</span> <span class="o">+</span> <span class="n">a_n</span> <span class="o">*</span> <span class="nb">cos</span><span class="p">(</span><span class="n">n</span><span class="o">*</span><span class="n">x</span><span class="p">);</span>
+ <span class="n">b_n</span> <span class="p">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="nb">pi</span><span class="p">)</span> <span class="o">*</span> <span class="n">integral</span><span class="p">(@(</span><span class="n">x</span><span class="p">)</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">.*</span> <span class="nb">sin</span><span class="p">(</span><span class="n">n</span><span class="o">*</span><span class="n">x</span><span class="p">),</span> <span class="o">-</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">pi</span><span class="p">);</span>
+ <span class="n">series</span> <span class="p">=</span> <span class="n">series</span> <span class="o">+</span> <span class="n">b_n</span> <span class="o">*</span> <span class="nb">sin</span><span class="p">(</span><span class="n">n</span><span class="o">*</span><span class="n">x</span><span class="p">);</span>
+ <span class="k">end</span>
+ <span class="n">fn</span> <span class="p">=</span> <span class="n">matlabFunction</span><span class="p">(</span><span class="n">series</span><span class="p">);</span>
+<span class="k">end</span></code></pre></div>
+
+<p>The last line is key: it converts the purely symbolic variable <code>series</code> into an executable function.
+This means that <code>fn</code> behaves as though it was hard coded!
+Calling this &#x2018;metaprogramming&#x2019; is correct, because we generated this function programatically.</p>
+
+<h3 id="running-this-function">Running this function</h3>
+<p>Let&#x2019;s use <code>fourierapprox</code> to generate some approximating functions.</p>
+
+<p>The following function will plot the original function and the Fourier approximation on the same axes,
+over the specified interval.</p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="k">function</span>[ output_args ] <span class="p">=</span><span class="nf">plotfourierapprox</span><span class="p">(</span>f, N, a, b<span class="p">)</span>
+<span class="n">fplot</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">[</span><span class="n">a</span> <span class="n">b</span><span class="p">],</span> <span class="s">'r'</span><span class="p">);</span>
+ <span class="n">hold</span> <span class="n">on</span><span class="p">;</span>
+ <span class="n">pn</span> <span class="p">=</span> <span class="n">fourierapprox</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">N</span><span class="p">);</span>
+ <span class="n">fplot</span><span class="p">(</span><span class="n">pn</span><span class="p">,</span> <span class="p">[</span><span class="n">a</span> <span class="n">b</span><span class="p">],</span> <span class="s">'b'</span><span class="p">);</span>
+<span class="k">end</span></code></pre></div>
+
+<h4 id="square-wave">Square Wave</h4>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">plotfourierapprox</span><span class="p">(@</span><span class="n">square</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span></code></pre></div>
+
+<p><img src="http://daniel-levin.github.io/square_5.png" alt="Square"></p>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">plotfourierapprox</span><span class="p">(@</span><span class="n">square</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span></code></pre></div>
+
+<p><img src="http://daniel-levin.github.io/square_15.png" alt="Square"></p>
+
+<h4 id="fx--x3"></h4>
+
+<div class="highlight"><pre><code class="language-matlab"><span class="o">&gt;&gt;</span> <span class="n">plotfourierapprox</span><span class="p">(@(</span><span class="n">x</span><span class="p">)</span> <span class="n">x</span><span class="o">.^</span><span class="mi">3</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span></code></pre></div>
+
+<p><img src="http://daniel-levin.github.io/cube_10.png" alt="Cube"></p>
+
+
+<p>Metaprogramming is not a programming paradigm typically used in MATLAB.
+I wanted to demonstrate that it is not only possible but also useful.</p>
+
+ </article>
+
+ 
+ 
+ </div>
+</body></html>

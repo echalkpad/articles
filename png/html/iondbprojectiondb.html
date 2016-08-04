@@ -1,0 +1,227 @@
+<!DOCTYPE html><html><head><title>iondbproject/iondb</title></head><body>
+<h1>iondbproject/iondb</h1><p><a href="https://github.com/iondbproject/iondb" target="_new">Original URL</a></p>
+<p><blockquote>"What is this?" Currently in the Arduino world, there doesn't exist an associative array or map implementation that is both easy to use and performance competitive. There also is little support for&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content">
+
+<h2><a id="user-content-what-is-this" class="anchor" href="https://github.com/iondbproject/iondb#what-is-this"></a>"What is this?"</h2>
+
+<p>Currently in the Arduino world, there doesn't exist an associative array or map implementation that is both easy to use <em>and</em> performance competitive. There also is little support for disk based storage options that don't involve writing it yourself. IonDB is fast, functional, and offers disk based storage out of the box.</p>
+
+<p>In general, IonDB supports:</p>
+
+<ul>
+<li>Storing arbitrary values associated to a key</li>
+<li>Duplicate key support</li>
+<li>Range and Equality queries</li>
+<li>Disk based persistent data storage</li>
+</ul>
+
+<h2><a id="user-content-preamble" class="anchor" href="https://github.com/iondbproject/iondb#preamble"></a>Preamble</h2>
+
+<p>These inclusions are necessary for any IonDB usage:</p>
+
+<div class="highlight highlight-source-c"><pre>#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>SD.h<span class="pl-pds">&gt;</span></span> <span class="pl-c">//If using file based implementations</span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>dictionary.h<span class="pl-pds">"</span></span></pre></div>
+
+<p>Then include some (or all) necessary implementation handlers:</p>
+
+<div class="highlight highlight-source-c"><pre>#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>slhandler.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>oadictionaryhandler.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>oafdictionaryhandler.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>ffdictionaryhandler.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>bpptreehandler.h<span class="pl-pds">"</span></span></pre></div>
+
+<p>In the setup() function, initialize a dictionary (Shown here, a skiplist):</p>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-k">void</span> <span class="pl-en">setup</span>() {
+ <span class="pl-c">//Declare the dictionary and handler structs</span>
+ <span class="pl-c1">dictionary_handler_t</span> handler;
+ <span class="pl-c1">dictionary_t</span> dictionary;
+
+ <span class="pl-c">//Initialize handler</span>
+ <span class="pl-c1">sldict_init</span>(&amp;handler);
+
+ <span class="pl-c">//Create dictionary: Given handler, dictionary, key type, key size, value size, dict size</span>
+ <span class="pl-c1">dictionary_create</span>(&amp;handler, &amp;dictionary, key_type_numeric_signed, <span class="pl-k">sizeof</span>(<span class="pl-k">int</span>), <span class="pl-c1">60</span>, <span class="pl-c1">10</span>);
+}</pre></div>
+
+<h4><a id="user-content-implementation-handler-methods" class="anchor" href="https://github.com/iondbproject/iondb#implementation-handler-methods"></a>Implementation handler methods:</h4>
+
+<table><thead>
+<tr>
+<th>Implementation</th>
+<th>Handler Method</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Skiplist</td>
+<td>sldict_init</td>
+</tr>
+<tr>
+<td>Open Address Hash</td>
+<td>oadict_init</td>
+</tr>
+<tr>
+<td>Open Address File Hash</td>
+<td>oafdict_init</td>
+</tr>
+<tr>
+<td>Flat File</td>
+<td>ffdict_init</td>
+</tr>
+<tr>
+<td>B+ Tree</td>
+<td>bpptree_init</td>
+</tr>
+</tbody></table>
+
+<h4><a id="user-content-dictionary-size-meanings" class="anchor" href="https://github.com/iondbproject/iondb#dictionary-size-meanings"></a>Dictionary size meanings:</h4>
+
+<table><thead>
+<tr>
+<th>Implementation</th>
+<th>Dictionary Size</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Skiplist</td>
+<td>Skiplist maximum height</td>
+</tr>
+<tr>
+<td>Open Address Hash</td>
+<td>Number of records</td>
+</tr>
+<tr>
+<td>Open Address File Hash</td>
+<td>Number of records</td>
+</tr>
+<tr>
+<td>Flat File</td>
+<td>Not used</td>
+</tr>
+<tr>
+<td>B+ Tree</td>
+<td>Not used</td>
+</tr>
+</tbody></table>
+
+<h3><a id="user-content-keys-and-values" class="anchor" href="https://github.com/iondbproject/iondb#keys-and-values"></a>Keys and values</h3>
+
+<p>Keys and values are <strong>specific type agnostic</strong>, there are only three categories of keys. Two macros are provided to bridge the gap between IonDB keys and concrete keys.</p>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-c">/* Key creation */</span>
+
+<span class="pl-c">//Suppose the key is an int</span>
+<span class="pl-k">int</span> my_key = <span class="pl-c1">64</span>;
+<span class="pl-c1">ion_key_t</span> key = IONIZE(my_key); <span class="pl-c">//A prepared key</span>
+
+<span class="pl-c">//Inline is fine too:</span>
+<span class="pl-c1">ion_key_t</span> key = IONIZE(<span class="pl-c1">64</span>);
+
+<span class="pl-c">//Any type is supported</span>
+<span class="pl-k">unsigned</span> <span class="pl-k">long</span> <span class="pl-k">long</span> my_key = <span class="pl-c1">2147483648ull</span>;
+<span class="pl-c1">ion_key_t</span> key = IONIZE(my_key);
+
+<span class="pl-c">/* Key retrieval */</span>
+
+<span class="pl-c">//Retrieve an int from a key</span>
+<span class="pl-k">int</span> my_key = NEUTRALIZE(<span class="pl-k">int</span>, key);
+
+<span class="pl-c">//Retrieve unsigned long long from a key</span>
+<span class="pl-k">unsigned</span> <span class="pl-k">long</span> <span class="pl-k">long</span> my_key = NEUTRALIZE(<span class="pl-k">unsigned</span> <span class="pl-k">long</span> <span class="pl-k">long</span>, key);</pre></div>
+
+<h4><a id="user-content-ionization-functions" class="anchor" href="https://github.com/iondbproject/iondb#ionization-functions"></a>Ionization functions</h4>
+
+<table><thead>
+<tr>
+<th>Function</th>
+<th>Type</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>IONIZE(any)</td>
+<td>IONIZE :: any -&gt; ion_key_t</td>
+</tr>
+<tr>
+<td>NEUTRALIZE(atype, key)</td>
+<td>NEUTRALIZE :: ion_key_t -&gt; atype</td>
+</tr>
+</tbody></table>
+
+<h4><a id="user-content-key-categories" class="anchor" href="https://github.com/iondbproject/iondb#key-categories"></a>Key categories:</h4>
+
+<ul>
+<li>key_type_numeric_signed</li>
+<li>key_type_numeric_unsigned</li>
+<li>key_type_char_array (String)</li>
+</ul>
+
+<h2><a id="user-content-file-based-implementations" class="anchor" href="https://github.com/iondbproject/iondb#file-based-implementations"></a>File based implementations</h2>
+
+<p>An SD shield, and a FAT formatted SD card is required to work with IonDB. The Arduino ethernet shield is recommended. The following initialization is required when working with file bsaed implementations:</p>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-c">//Use pin 10 if using an Uno, pin 53 if Mega</span>
+<span class="pl-en">pinMode</span>(<span class="pl-c1">10</span>, OUTPUT);
+<span class="pl-c">//Change depending on what SD shield is used</span>
+SD.begin(<span class="pl-c1">4</span>);</pre></div>
+
+<h2><a id="user-content-usage" class="anchor" href="https://github.com/iondbproject/iondb#usage"></a>Usage</h2>
+
+<h3><a id="user-content-insert" class="anchor" href="https://github.com/iondbproject/iondb#insert"></a>Insert</h3>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-c1">ion_key_t</span> key = IONIZE(some_key);
+<span class="pl-c1">ion_value_t</span> value = some_value;
+<span class="pl-en">dictionary_insert</span>(&amp;dictionary, key, value);</pre></div>
+
+<h3><a id="user-content-delete" class="anchor" href="https://github.com/iondbproject/iondb#delete"></a>Delete</h3>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-c1">ion_key_t</span> key = IONIZE(some_key);
+<span class="pl-en">dictionary_delete</span>(&amp;dictionary, key);</pre></div>
+
+<h3><a id="user-content-query" class="anchor" href="https://github.com/iondbproject/iondb#query"></a>Query</h3>
+
+<div class="highlight highlight-source-c"><pre><span class="pl-c1">ion_key_t</span> key = IONIZE(some_key);
+<span class="pl-c1">ion_value_t</span> my_value = malloc(value_size); <span class="pl-c">// Create buffer to hold returned value</span>
+<span class="pl-en">dictionary_get</span>(&amp;dictionary, key, my_value);
+<span class="pl-c">// Process data</span>
+<span class="pl-c">//...</span>
+<span class="pl-en">free</span>(my_value);</pre></div>
+
+<h3><a id="user-content-cursors" class="anchor" href="https://github.com/iondbproject/iondb#cursors"></a>Cursors</h3>
+
+<p>A functional implementation exists for equality cursors (Multiple value query on same key) and range cursors (Query key-value pairs across a bound of keys), however a dictionary level interface for cursor access has yet to be finalized. Implementation level access is demonstrated in the Benchmark source.</p>
+
+<h2><a id="user-content-full-example" class="anchor" href="https://github.com/iondbproject/iondb#full-example"></a>Full Example</h2>
+
+<p>Written in Arduino compliant wiring.</p>
+
+<div class="highlight highlight-source-c"><pre>#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>SD.h<span class="pl-pds">&gt;</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>dictionary.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>slhandler.h<span class="pl-pds">"</span></span>
+
+<span class="pl-k">void</span> <span class="pl-en">setup</span>() {
+ <span class="pl-c">//Declare the dictionary and handler structs</span>
+ <span class="pl-c1">dictionary_handler_t</span> handler;
+ <span class="pl-c1">dictionary_t</span> dictionary;
+
+ <span class="pl-c">//Initialize handler</span>
+ <span class="pl-c1">sldict_init</span>(&amp;handler);
+
+ <span class="pl-c">//Create dictionary: Given handler, dictionary, key type, key size, value size, dict size</span>
+ <span class="pl-c1">dictionary_create</span>(&amp;handler, &amp;dictionary, key_type_numeric_signed, <span class="pl-k">sizeof</span>(<span class="pl-k">int</span>), <span class="pl-c1">60</span>, <span class="pl-c1">10</span>);
+
+ <span class="pl-c1">ion_key_t</span> key = <span class="pl-c1">IONIZE</span>(<span class="pl-c1">42</span>);
+ <span class="pl-c1">ion_value_t</span> value = (<span class="pl-c1">ion_value_t</span>) <span class="pl-s"><span class="pl-pds">"</span>Hello IonDB<span class="pl-pds">"</span></span>;
+
+ <span class="pl-c1">dictionary_insert</span>(&amp;dictionary, key, value);
+
+ <span class="pl-c1">ion_value_t</span> returned_value = (<span class="pl-c1">ion_value_t</span>) <span class="pl-c1">malloc</span>(<span class="pl-c1">60</span>); <span class="pl-c">//from value_size</span>
+ <span class="pl-c1">dictionary_get</span>(&amp;dictionary, key, returned_value);
+ <span class="pl-c1">printf</span>(<span class="pl-s"><span class="pl-pds">"</span>Returned <span class="pl-c1">%s</span><span class="pl-cce">\n</span><span class="pl-pds">"</span></span>, returned_value);
+ <span class="pl-c1">free</span>(returned_value);
+}
+
+<span class="pl-k">void</span> <span class="pl-en">loop</span>() {}</pre></div>
+</article>
+ </div>
+</body></html>

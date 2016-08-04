@@ -1,0 +1,491 @@
+<!DOCTYPE html><html><head><title>Glow: Map Reduce for Golang</title></head><body>
+<h1>Glow: Map Reduce for Golang</h1><p><a href="https://blog.gopheracademy.com/advent-2015/glow-map-reduce-for-golang/" target="_new">Original URL</a></p>
+<p><blockquote>Having been a Java developer for many years, I have simply lost interest in Java and want to code everything in Go, mostly due to Go&#x2019;s simplicity and performance. But it&#x2019;s Java that is&hellip;</blockquote></p>
+<div><div id="content-font">
+ 
+
+<p>Having been a Java developer for many years, I have simply lost
+interest in Java and want to code everything in Go, mostly due to
+Go&#x2019;s simplicity and performance. But it&#x2019;s Java that is having fun in
+the party of big data. Go is sitting alone as a wall flower. There
+is no real map reduce system for Go, until now!</p>
+
+<p><a href="https://github.com/chrislusf/glow">Glow</a> is aiming to be a simple
+and scalable map reduce system, all in pure Go. Not only the system
+setup is simple and scalable, but also writing and running the map
+reduce code.</p>
+
+<p>Glow also provides <a href="https://github.com/chrislusf/glow/wiki#glow-apis">Map()/Filter()/Reduce() functions</a>, which works
+well in standalone mode. It&#x2019;s totally fine to just run in standalone
+mode. Let&#x2019;s face it, very often you do not have that much data that
+has to run on a distributed system. Glow can fully utilize Go&#x2019;s
+efficiency and goroutines to process fairly large amount of data.
+And if you really need to scale up, you can scale up with Glow by
+by running it in distributed mode.</p>
+
+<p>This time I will cover:</p>
+
+<ol>
+<li>Write a simple word count in standalone mode.</li>
+<li>Setup the distributed system.</li>
+<li>Run the word count in distributed mode.</li>
+<li>Process data on Hdfs and mongodb, and input and output data via Go channels.</li>
+</ol>
+
+<p>People already read about Glow can skip to section 4 for a more
+realistic use case.</p>
+
+<h2 id="boring-word-count:fba516203a27e034a54ec0b318ef96f7">Boring Word Count</h2>
+
+<p>In distributed computing, the equivilent of hello word is a word
+count:</p>
+
+<pre><code class="language-go">package main
+
+import (
+ "strings"
+
+ "github.com/chrislusf/glow/flow"
+)
+
+func main() {
+ flow.New().TextFile(
+ "/etc/passwd", 3,
+ ).Filter(func(line string) bool {
+ return !strings.HasPrefix(line, "#")
+ }).Map(func(line string, ch chan string) {
+ if strings.HasPrefix(line, "#"){
+ return
+ }
+ for _, token := range strings.Split(line, ":") {
+ ch &lt;- token
+ }
+ }).Map(func(key string) int {
+ return 1
+ }).Reduce(func(x int, y int) int {
+ return x + y
+ }).Map(func(x int) {
+ println("count:", x)
+ }).Run()
+}
+</code></pre>
+
+<p>Here we load the &#x201C;/etc/passwd&#x201D; file and partitioned into 3 shards.
+Each shard is processed by 1 filter, 2 mappers, reduced to one
+count, and printed out via a mapper.</p>
+
+<p>Let&#x2019;s run this file:</p>
+
+<pre><code>$ go run t.go
+count: 532
+</code></pre>
+
+<p>I hope you like the code here. It may not look as simple as other
+languages that are skipping data types. But when a project gets
+reasonably large, readability is a big deal. Glow&#x2019;s anonymous
+functions have the right amount of type information, which helps to
+understand the code, especially when someone else wrote it.</p>
+
+<p>If you do not have much data now, you can actually stop here and run
+Glow in standalone mode. Glow&#x2019;s API works for both standalone
+mode and distributed mode. I highly encourage you start using Glow
+in standalone mode. It should just work.</p>
+
+<h2 id="go-channels-in-glow:fba516203a27e034a54ec0b318ef96f7">Go channels in Glow</h2>
+
+<p>Glow works natually with channels. The data flows from one dataset
+to the next dataset via channels, either in standalone mode or
+distributed mode.</p>
+
+<p>Another interesting usage of channel is that a channel can be a
+mapper&#x2019;s result emitter. Usually 1 mapper emits 1 result, which
+can be represented as function&#x2019;s return result, e.g.,
+<code>func(key string) int</code>. But if a mapper can emit 0 or more
+than 1 result, this won&#x2019;t work. The channel fits nicely here. If the
+last parameter of a mapper funtion is a channel, e.g.,
+<code>func(line string, ch chan string)</code>, it will be treated
+as the result emitter.</p>
+
+<h2 id="setup-glow-cluster:fba516203a27e034a54ec0b318ef96f7">Setup Glow Cluster</h2>
+
+<p>Now let us setup the Glow cluster, just in case you need to scale up.
+Setting up Glow Cluster is super easy. First, build the &#x201C;glow&#x201D; binary file:</p>
+
+<pre><code>$ go get github.com/chrislusf/glow
+</code></pre>
+
+<p>The compiled binary file is usually <code>$GOPATH/bin/glow</code>.
+Now copy it to any computer, and run this:</p>
+
+<pre><code>// start a master on one computer
+&gt; glow master
+// run one or more agents on computers
+&gt; glow agent --dir ./glow/data --max.executors=16 --memory=2048 --master="localhost:8930" --port 8931
+// it's fine to run several agents on the same computer
+&gt; glow agent --dir ./glow/data2 --max.executors=8 --memory=512 --master="localhost:8930" --port 8932
+</code></pre>
+
+<p>Either master or agent only takes 5~6 MB memory. They are quiet
+and efficient. I highly recommend run this &#x201C;glow agent&#x201D; on any
+machine you can find, so that you can tap into the compute power any
+time you want, with one line of code change as follows.</p>
+
+<h2 id="distributed-execution:fba516203a27e034a54ec0b318ef96f7">Distributed Execution</h2>
+
+<p>Just insert this line to the import section, around line 7:</p>
+
+<pre><code class="language-go"> _ "github.com/chrislusf/glow/driver"
+</code></pre>
+
+<p>Now the word count can run distributedly this way:</p>
+
+<pre><code>$ go run t.go -glow
+2015/12/08 00:54:46 localhost:8930 allocated 1 executors.
+2015/12/08 00:54:46 localhost:8930 allocated 1 executors.
+2015/12/08 00:54:46 localhost:8930 allocated 2 executors.
+2015/12/08 00:54:46 localhost:8930 allocated 1 executors.
+127.0.0.1:8931&gt;count: 532
+</code></pre>
+
+<p>Also, you can visualize the flow. Run this command:</p>
+
+<pre><code>$ go run t.go -glow -glow.flow.plot &gt; x.dot
+$ dot -Tpng -owc.png x.dot
+</code></pre>
+
+<p>And the flow graph looks like this:</p>
+
+<p><img src="https://blog.gopheracademy.com/postimages/advent-2015/glow-word-count-flow.png" alt="Word Count Flow">
+</p>
+
+<h2 id="something-wrong:fba516203a27e034a54ec0b318ef96f7">Something wrong!</h2>
+
+<p>You may get a different result when running distributedly vs
+standalone! This is because I cheated!</p>
+
+<p>The input file &#x201C;/etc/passwd&#x201D; could be different on different servers.
+The file should be sent to the executor that&#x2019;s running the
+TextFile() function. Let&#x2019;s change the TextFile() call to this:</p>
+
+<pre><code class="language-go"> TextFile("passwd", 3)
+</code></pre>
+
+<p>And make sure the file is shipped to the executor:</p>
+
+<pre><code>$ go run t.go -glow -glow.related.files="/etc/passwd"
+...
+127.0.0.1:8931&gt;count: 532
+</code></pre>
+
+<p>As you can see, still many things can break when it comes to
+distributed mode. We need to understand how Glow works first.</p>
+
+<h2 id="glow-underneath:fba516203a27e034a54ec0b318ef96f7">Glow Underneath</h2>
+
+<h2 id="how-glow-works:fba516203a27e034a54ec0b318ef96f7">How Glow works?</h2>
+
+<p>The word count code looks simple, but does many things. It can act as either a driver or an executor depending on command line
+parameters.</p>
+
+<p>When the driver starts, it will ask the Glow master for resources.
+The master knows the system&#x2019;s resource usage by the heartbeats from
+the Glow agents. The master will assign agents to the driver when
+available. By design, the Glow distributed system theorectically can
+run even with just one executor.</p>
+
+<p>Then for each task, the driver would contact the assigned agents,
+and send a binary clone of itself, but run in executor mode. The
+driver will also tell the executor the input data locations.</p>
+
+<p>Started by the agents, the executor will pull the data via network
+channels, process it, and write output to local agent.</p>
+
+<p>The driver can send and receive data to the executors via network
+channels also.</p>
+
+<h2 id="code-structure:fba516203a27e034a54ec0b318ef96f7">Code structure</h2>
+
+<p>For many simple cases, the word count example is enough. However,
+in order to run the code as either driver or executor, this structure
+is recommended.</p>
+
+<pre><code class="language-go">package main
+
+import (
+ "flag"
+
+ _ "github.com/chrislusf/glow/driver"
+ "github.com/chrislusf/glow/flow"
+)
+
+
+var (
+ f1 = flow.New()
+ f2 = flow.New()
+
+ // input or output channel if any
+ inputChan = make(chan InputType)
+ outputChan = make(chan OutputType)
+)
+
+func init() {
+ // flow definitions
+ f1.Channel(inputChan).Map(...).Reduce(...).AddOutout(outputChan)
+ f2.Slice(...).Map(...).Reduce(...)
+}
+
+func main() {
+ // these 2 lines are needed
+ // to differentiate executor mode and driver mode.
+ // Just always add them.
+ flag.Parse()
+ flow.Ready()
+
+ // start the flow
+ go f1.Run()
+
+ // feed into input channel if any
+ ...
+
+ // wait for the output channel if any
+ ...
+
+ // possibly start other flow
+ f2.Run()
+}
+
+</code></pre>
+
+<p>So basically 2 things to follow:</p>
+
+<ol>
+<li>the <code>flag.Parse()</code> and <code>flow.Ready()</code> need to
+be called after the main() starts.</li>
+<li>the flow definitions should be inside <code>init()</code></li>
+</ol>
+
+<h2 id="why-define-flows-in-init:fba516203a27e034a54ec0b318ef96f7">Why define flows in init()?</h2>
+
+<p>It is worth noting that I declared the flow definition in init()
+function.</p>
+
+<p>This is because Go currently lacks the capability to dynamically
+compile and load a piece of code. This impacts the design of Glow.
+In distributed mode, Glow needs to send the compiled binary to Glow
+Agents, and then run the binary in executor mode by adding flow id
+and task id to existing command line options.</p>
+
+<p>To achieve this correctly, the flows should be statically
+deterministic. The flows and the flow steps should not change given
+the same command line parameters.</p>
+
+<p>Go&#x2019;s init() is an ideal place to cleanly define flows, in one or
+multiple files.</p>
+
+<h2 id="how-to-make-flows-dynamically:fba516203a27e034a54ec0b318ef96f7">How to make flows dynamically?</h2>
+
+<p>As mentioned above, the flows are static. How to dynamically change
+the flow?</p>
+
+<p>Actually we do not change flows. We can just define multiple flows,
+and dynamically invoke a flow based on the results coming out of the
+flow via channels.</p>
+
+<p>The flow definitions can be thought as machines. Your code can have
+many machines, defined in several files&#x2019; init() functions.
+Depending on your situation, you can start a machine, feed it via
+Go&#x2019;s channels, and read the output also via Go&#x2019;s channels.</p>
+
+<p>A typical example would be running Linear Regression until the error
+is small enough. The error can be sent back to the driver, and the
+driver can decide whether it needs to run one more round of
+regression.</p>
+
+<h2 id="a-more-real-example:fba516203a27e034a54ec0b318ef96f7">A more real example</h2>
+
+<p>Let&#x2019;s assume you have a folder of log access files on hdfs, and want
+to join it with a Mongodb database of user accounts, to find out
+the most active user age group. The expected output is pairs of
+<code>age range ~ access count</code>.</p>
+
+<p>Let&#x2019;s define the data types first. In Glow, the data between each
+steps are in common Go types. For current example, the overly
+simplified types for log line and user account are:</p>
+
+<pre><code class="language-go">type LogLine struct {
+ Page string
+ UserId int
+}
+type UserAccount struct {
+ UserId int
+ Age int
+}
+</code></pre>
+
+<p>Go&#x2019;s strict type system is one of my favorite Go features. This would
+make refactoring super easy. When there are lots of data processing
+flows, detecting schema changes during compile time is invaluable.</p>
+
+<p>We will use Go&#x2019;s channels to feed data from the driver to the
+executors, and read the outputs out also via channels.</p>
+
+<p>However, the log files usually are fairly large. It&#x2019;s not efficient
+to read all data to the driver, and scatter them out to the cluster.
+Instead, we will just use the driver to list files under the
+folder, and send the list of files via channel to the executors.
+Each executor will pull its own input data from hdfs. This is
+<a href="https://github.com/chrislusf/glow/blob/master/source/hdfs/hdfs.go#L16">implemented in the <code>hdfs.Source</code> function</a>.</p>
+
+<p>We will read the data from Mongodb from an executor.</p>
+
+<p>Here is the complete source code.</p>
+
+<pre><code class="language-go">package main
+
+import (
+ "flag"
+ "fmt"
+ "strconv"
+ "strings"
+
+ _ "github.com/chrislusf/glow/driver"
+ "github.com/chrislusf/glow/flow"
+ "github.com/chrislusf/glow/source/hdfs"
+ "labix.org/v2/mgo"
+)
+
+type LogLine struct {
+ Url string
+ UserId int
+}
+type User struct {
+ Id int
+ Age int
+}
+
+type AccessByAgeGroup struct {
+ AgeRange int
+ Count int
+}
+
+var (
+ f = flow.New()
+ flowOut = make(chan AccessByAgeGroup)
+)
+
+func init() {
+
+ lines := hdfs.Source(
+ // each executor reads a file from hdfs
+ f,
+ "hdfs://localhost:9000/etc",
+ 3, // listed files are partitioned to 8 shards
+ ).Map(func(line string, ch chan LogLine) {
+ parts := strings.Split(line, ",")
+ userId, _ := strconv.Atoi(parts[1])
+ ch &lt;- LogLine{parts[0], userId}
+ }).Map(func(line LogLine) (int, int) {
+ return line.UserId, 1
+ }).ReduceByKey(func(a, b int) int {
+ return a + b
+ })
+
+ users := f.Source(func(out chan User) {
+ // an executor reads from mongodb
+ iterate("mongodb://127.0.0.1", "example", "users",
+ func(iter *mgo.Iter) {
+ var user User
+ for iter.Next(&amp;user) {
+ out &lt;- user
+ }
+ },
+ )
+ }, 3).Map(func(user User) (int, int) {
+ return user.Id, user.Age / 10
+ })
+
+ lines.Join(users).Map(func(userId int, count int, ageRange int) (int, int) {
+ return ageRange, count
+ }).ReduceByKey(func(a, b int) int {
+ return a + b
+ }).AddOutput(flowOut) // the 2 ints fit into type AccessByAgeGroup
+
+}
+
+func main() {
+ // needed to run on each executor
+ flag.Parse()
+ // needed to differentiate executor mode and driver mode.
+ flow.Ready()
+
+ // just start the flow
+ go f.Run()
+
+ // wait for the output
+ for t := range flowOut {
+ fmt.Printf("age %d~%d, access count:%d\n",
+ t.AgeRange*10, (t.AgeRange+1)*10, t.Count)
+ }
+
+}
+
+func iterate(mongodbUrl, dbName, collectionName string, fn func(*mgo.Iter)) {
+ session, err := mgo.Dial(mongodbUrl)
+ if err != nil {
+ println(err)
+ return
+ }
+ iter := session.DB(dbName).C(collectionName).Find(nil).Iter()
+ fn(iter)
+ if err := iter.Close(); err != nil {
+ println(err)
+ }
+}
+
+</code></pre>
+
+<p>Assume the file is x.go. Similarly, just run this in standalone mode:</p>
+
+<pre><code>$ go run x.go
+</code></pre>
+
+<p>Run in distributed mode:</p>
+
+<pre><code>$ go run x.go -glow
+</code></pre>
+
+<p>Generate the flow diagram:</p>
+
+<pre><code>$ go run x.go -glow -glow.flow.plot &gt; x.dot
+$ dot -Tpng -ojoin.png x.dot
+</code></pre>
+
+<p>The generated flow chart is:
+<img src="https://blog.gopheracademy.com/postimages/advent-2015/glow-join-flow.png" alt="Join Flow">
+</p>
+
+<h2 id="final-words:fba516203a27e034a54ec0b318ef96f7">Final words</h2>
+
+<p>Glow is simple, but powerful. Setting up a Glow cluster is super
+easy. A simple piece of code is all you need to run distributedly.</p>
+
+<p>Conceptually, we just use Go&#x2019;s channels to connect to a flow.</p>
+
+<p>Glow has many components underneath. But the code is fairly easy to
+read, with potential to improve or customize. I welcome everyone to
+start using it and welcome any improvements.</p>
+
+<p>Glow&#x2019;s APIs, e.g., Map()/Reduce()/Filter() functions, can be used in
+standalone mode also. It makes code easy to read and write. This
+could also be quite useful.</p>
+
+<p>Golang&#x2019;s channel is an ideal model for moving data along the
+processing system. Glow currently works with batch proccesing, and
+may support stream processing in the future.</p>
+
+<p>Glow also need to add monitoring, fault tolerant error handling, etc.
+Lots of work to be done. Welcome to any kind of contribution!</p>
+
+ </div>
+ </div>
+</body></html>

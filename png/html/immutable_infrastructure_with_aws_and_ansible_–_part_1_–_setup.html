@@ -1,0 +1,177 @@
+<!DOCTYPE html><html><head><title>Immutable Infrastructure with AWS and Ansible – Part 1 – Setup</title></head><body>
+<h1>Immutable Infrastructure with AWS and Ansible – Part 1 – Setup</h1><p><a href="http://vcdxpert.com/?p=105" target="_new">Original URL</a></p>
+<p><blockquote>Immutable infrastructure is a very powerful concept that brings stability, efficiency, and fidelity to your applications through automation and the use of successful patterns from programming.&hellip;</blockquote></p>
+<div><div class="clearfix entry-content">
+		
+<p>Immutable infrastructure is a very powerful concept that brings stability, efficiency, and fidelity to your applications through automation and the use of successful patterns from programming. &#xA0;The general idea is that you never make changes to running infrastructure. &#xA0;Instead, you ensure that all infrastructure is created through automation, and to make a change, you simply create&#xA0;a new version&#xA0;of the infrastructure, and destroy the old one. &#xA0;Chad Fowler was one of the first to <a href="http://chadfowler.com/blog/2013/06/23/immutable-deployments/" target="_blank">mention this concept on his blog</a>, and I believe it resonates with anyone that has spent a significant amount of time doing system administration:</p>
+<h2>&#x201C;Why? Because an old system inevitably grows warts&#x2026;&#x201D;</h2>
+<p><em>They start as one-time hacks during outages. A quick edit to a config file saves the day. &#x201C;We&#x2019;ll put it back into Chef later,&#x201D; we say, as we finally head off to sleep after a marathon fire fighting session.</em></p>
+<p><em>Cron jobs spring up in unexpected places, running obscure but critical functions that only one person knows about. Application code is deployed outside of the normal straight-from-source-control process.</em></p>
+<p><em>The system becomes finicky. It only accepts deploys in a certain manual way. The init scripts no longer work unless you do something special and unexpected.</em></p>
+<p><em>And, of course the operating system has been patched again and again (in the best case) in line with the standard operating procedures, and the inevitable entropy sets in. Or, worse, it has never been patched and now you&#x2019;re too afraid of what would happen if you try.</em></p>
+<p><em>The system becomes a house of cards. You fear any change and you fear replacing it since you don&#x2019;t know everything about how it works. &#xA0;</em>&#x2014; Chad Fowler &#x2013; <a href="http://chadfowler.com/blog/2013/06/23/immutable-deployments/" target="_blank">Trash Your Servers and Burn Your Code: Immutable Infrastructure and Disposable Components</a></p>
+<h2>Requirements</h2>
+<p>To begin performing immutable infrastructure provisioning, you&#x2019;ll need a few&#xA0;things first. &#xA0;You need some type of &#x201C;cloud&#x201D; infrastructure. &#xA0;This doesn&#x2019;t necessarily mean you need a virtual server somewhere in the cloud; what you really need is the ability to provision cloud infrastructure with an API. &#xA0;A permanent virtual server running in the cloud is the very opposite of immutable, as it will inevitably grow the warts Chad mentions above.</p>
+<h3>Amazon Web Services</h3>
+<p>For this series, we&#x2019;ll use Amazon Web Services as our cloud provider. &#xA0;Their APIs and services are frankly light years ahead of the competition. &#xA0;I&#x2019;m sure you could provision immutable infrastructure on other public cloud providers, but it wouldn&#x2019;t be as easy, and you might not have access to the wealth of features and services available that can make your infrastructure provisioning non-disruptive with zero downtime. &#xA0;If you&#x2019;ve never used AWS before, the good news is that you can get access to a <a href="https://aws.amazon.com/free/" target="_blank">&#x201C;free&#x201D; tier</a> that gives you limited amounts of compute resources per month for 12 months. &#xA0;750 hours a month of t2.micro instance usage should be plenty if you are just learning AWS in your free time, but please be aware that if you aren&#x2019;t careful, you can incur additional charges that aren&#x2019;t covered in your &#x201C;free&#x201D; tier.</p>
+<h3>Ansible</h3>
+<p>The second thing we&#x2019;ll need is an automation framework that allows us to treat infrastructure as code. &#xA0;Ansible has taken the world by storm due to it&#x2019;s simplicity and rich ecosystem of modules that are available to talk directly to infrastructure. &#xA0;There is a <a href="http://docs.ansible.com/ansible/list_of_cloud_modules.html" target="_blank">huge library of Ansible modules for provisioning cloud infrastructure</a>. &#xA0;The AWS specific modules cover almost every AWS service imaginable, and far exceed those available from other infrastructure as code tools like Chef and Puppet.</p>
+<h3>OS X or Linux</h3>
+<p>The third thing we&#x2019;ll need is an OS X or Linux workstation to do the provisioning from. &#xA0;As we get into the more advanced sections, I&#x2019;ll demonstrate how to provision a dedicated orchestrator that can perform provisioning operations on your behalf, but in the short-term, you&#x2019;ll need a UNIX-like operating system to run things from. &#xA0;If you&#x2019;re running Windows, you can download <a href="https://www.virtualbox.org/" target="_blank">VirtualBox from Oracle</a>, and <a href="http://www.ubuntu.com/download/desktop" target="_blank">Ubuntu Linux from Canonical</a>, then install Ubuntu Linux in a VM. &#xA0;The following steps will get your workstation setup properly to begin provisioning infrastructure in AWS:</p>
+<h4>Mac OS X&#xA0;Setup</h4>
+<ol>
+<li>Install Homebrew by executing the following command:<br>
+<code>ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"</code><br>
+You should see output like the following:<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.05-AM.png" rel="attachment wp-att-106"><img class="alignnone size-large wp-image-106" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.05-AM-768x442.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.05-AM-1024x589.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.05-AM.png%201188w" alt="Screen Shot 2016-01-08 at 11.14.05 AM" width="650"></a></li>
+<li>Install Ansible with Homebrew by executing the following command:<br>
+<code>brew install ansible</code><br>
+You should see output like the following: (note, I&#x2019;m actually running Ansible 2.0.0.2 now, but this output was for an older version; use Ansible 2.0+ as it&#x2019;s the future <img src="http://vcdxpert.com/wp-includes/images/smilies/simple-smile.png" alt=":)" class="wp-smiley"><br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.32-AM.png" rel="attachment wp-att-107"><img class="alignnone size-large wp-image-107" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.32-AM-300x269.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.32-AM-768x688.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.32-AM-1024x917.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.14.32-AM.png%201059w" alt="Screen Shot 2016-01-08 at 11.14.32 AM" width="650"></a></li>
+<li>Install the AWS Command Line Interface (CLI) with Homebrew by executing the following command:<br>
+<code>brew install awscli</code><br>
+You should see output like the following:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-2.15.32-PM.png" rel="attachment wp-att-109"><img class="alignnone size-large wp-image-109" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-2.15.32-PM-300x162.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-2.15.32-PM-768x414.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-2.15.32-PM-1024x551.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-2.15.32-PM.png%201025w" alt="Screen Shot 2016-01-08 at 2.15.32 PM" width="650"></a></li>
+<li>Install wget through homebrew by executing the following command:<br>
+<code>brew install wget</code><br>
+You should see output like the following:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.56.37-AM.png" rel="attachment wp-att-171"><img class="alignnone size-large wp-image-171" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.56.37-AM-300x33.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.56.37-AM-768x85.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.56.37-AM-1024x113.png%201024w" alt="Screen Shot 2016-01-22 at 11.56.37 AM" width="650"></a></li>
+</ol>
+<h4>Linux Setup</h4>
+<ol>
+<li>Install Ansible by executing the following command:<br>
+<code>sudo pip install ansible</code></li>
+<li>Install the AWS Command Line Interface (CLI) by executing the following command:<br>
+<code>sudo pip install awscli</code></li>
+<li>Install wget using your package manager.</li>
+</ol>
+<h4>Generic Workstation Setup</h4>
+<p>These steps need to be followed whether you&#x2019;re running a Mac or Linux for your workstation.</p>
+<ol>
+<li>Install a good text editor. &#xA0;My favorite is <a href="https://www.sublimetext.com/">Sublime Text 2</a>, but you can use whatever you want.</li>
+<li>Install the <a href="https://github.com/yaegashi/ansible-role-blockinfile" target="_blank">yaegashi.blockinfile Ansible role</a>&#xA0;from Ansible galaxy. &#xA0;This is a very useful role&#xA0;that will allow us to add blocks of text to configuration files, rather than simply changing single lines. &#xA0;Type the following command to install it:<br>
+<code>sudo ansible-galaxy install yaegashi.blockinfile</code><br>
+You should see output like the following:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.24.55-AM.png" rel="attachment wp-att-108"><img class="alignnone size-large wp-image-108" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.24.55-AM-300x35.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.24.55-AM-768x90.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.24.55-AM-1024x120.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-11.24.55-AM.png%201143w" alt="Screen Shot 2016-01-08 at 11.24.55 AM" width="650"></a></li>
+</ol>
+<h2>Amazon Setup</h2>
+<p>There are a few things you&#x2019;ll need to begin provisioning infrastructure in your AWS account. &#xA0;First, you&#x2019;ll need to make sure the default security group in your VPC allows traffic from your workstation. &#xA0;This is necessary because Ansible will configure your EC2 compute instances over SSH, and needs network connectivity to them from your workstation.</p>
+<ol>
+<li>Login to your AWS Console and select VPC from the bottom left of the dashboard.</li>
+<li>Click on Security Groups on the bottom left hand side under Security.</li>
+<li>Select/highlight the security group named &#x201C;default&#x201D;, and select the Inbound Rules tab. &#xA0;Click the Edit button, then click Add another&#xA0;rule, and for the rule type, select &#x201C;ALL Traffic&#x201D;, and insert your workstation&#x2019;s Internet IP address, with a /32 at the end to indicate the CIDR netmask. &#xA0;If you don&#x2019;t know your workstation&#x2019;s true Internet IP address, you can find it at <a href="https://www.whatismyip.com/" target="_blank">this website</a>.<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-3.34.08-PM.png" rel="attachment wp-att-118"><img class="alignnone size-large wp-image-118" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-3.34.08-PM-300x133.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-3.34.08-PM-768x341.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-3.34.08-PM-1024x455.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-08-at-3.34.08-PM.png%201222w" alt="Screen Shot 2016-01-08 at 3.34.08 PM" width="650"></a><br>
+Note: I blanked my IP address in the image above.</li>
+<li>Click Save to Save the Inbound Rules.</li>
+<li>Go back to the AWS Console dashboard, and click &#x201C;Identity &amp;&#xA0;Access Management.&#x201D; &#xA0;It is located towards the middle of the second column, under Security &amp; Identity.</li>
+<li>Click on Users on the left, then click &#x201C;Create New Users.&#x201D; &#xA0;Enter a username for yourself, and leave the checkbox selected to Generate an access key for each user. &#xA0;Click the Create button:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.04-PM.png" rel="attachment wp-att-125"><img class="alignnone size-large wp-image-125" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.04-PM-300x106.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.04-PM-768x271.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.04-PM-1024x361.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.04-PM.png%201145w" alt="Screen Shot 2016-01-09 at 5.49.04 PM" width="650"></a></li>
+<li>Your AWS credentials will be shown on the next screen. &#xA0;It&#x2019;s important to save these credentials, as they will not be shown again:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.31-PM.png" rel="attachment wp-att-126"><img class="alignnone size-full wp-image-126" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.31-PM-300x87.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.31-PM-768x224.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.49.31-PM.png%20871w" alt="Screen Shot 2016-01-09 at 5.49.31 PM" width="871"></a></li>
+<li>Using your text editor, edit a file named ~/.boto, which should include the credentials you were just given, in the following format:<br>
+
+
+		<div id="crayon-56a2ef5595428363387767" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line" id="crayon-56a2ef5595428363387767-1"><span class="crayon-i ">[Credentials]</span></p><p class="crayon-line crayon-striped-line" id="crayon-56a2ef5595428363387767-2">aws<span class="crayon-sy">_</span>access<span class="crayon-sy">_</span>key<span class="crayon-sy">_</span>id=<span class="crayon-sy">(</span>accesskey<span class="crayon-sy">)</span></p><p class="crayon-line" id="crayon-56a2ef5595428363387767-3">aws<span class="crayon-sy">_</span>secret<span class="crayon-sy">_</span>access<span class="crayon-sy">_</span>key=<span class="crayon-sy">(</span>secretaccesskey<span class="crayon-sy">)</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+</li>
+<li>At the command line, execute the following command, and input the same AWS credentials, along with the AWS region you are using:<br>
+<code>aws configure</code><br>
+For most of you, this will be either &#x201C;us-east-1&#x201D; or &#x201C;us-west-1&#x201D;. &#xA0;If you&#x2019;re not in the US, use <a href="http://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region">this page</a> to determine what your EC2 region is.</li>
+<li>Click on Groups, then click&#xA0;&#x201C;Create New Group&#x201D;:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.18-PM.png" rel="attachment wp-att-122"><img class="alignnone size-large wp-image-122" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.18-PM-300x118.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.18-PM-768x303.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.18-PM-1024x404.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.18-PM.png%201251w" alt="Screen Shot 2016-01-09 at 5.59.18 PM" width="650"></a></li>
+<li>Name the group PowerUsers, then click Next:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.35-PM.png" rel="attachment wp-att-123"><img class="alignnone size-full wp-image-123" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.35-PM-300x101.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-5.59.35-PM.png%20724w" alt="Screen Shot 2016-01-09 at 5.59.35 PM" width="724"></a></li>
+<li>In the Attach Policy step, search for &#x201C;PowerUser&#x201D; in the filter&#xA0;field, and check the box next to &#x201C;PowerUserAccess&#x201D;, then click &#x201C;Attach Policy&#x201D;:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.09-PM.png" rel="attachment wp-att-124"><img class="alignnone size-large wp-image-124" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.09-PM-300x123.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.09-PM-768x314.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.09-PM-1024x419.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.09-PM.png%201236w" alt="Screen Shot 2016-01-09 at 6.00.09 PM" width="650"></a></li>
+<li>Click Next to Review, and save your group.</li>
+<li>Select/Highlight the PowerUsers group you&#x2019;ve just created, and click Actions, then &#x201C;Add Users to Group&#x201D;:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.41-PM.png" rel="attachment wp-att-129"><img class="alignnone size-large wp-image-129" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.41-PM-300x59.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.41-PM-768x150.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.41-PM-1024x200.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.41-PM.png%201249w" alt="Screen Shot 2016-01-09 at 6.00.41 PM" width="650"></a></li>
+<li>Select the user account you just created, and add that user to the group:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.59-PM.png" rel="attachment wp-att-130"><img class="alignnone size-large wp-image-130" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.59-PM-300x62.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.59-PM-768x158.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.59-PM-1024x211.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.00.59-PM.png%201248w" alt="Screen Shot 2016-01-09 at 6.00.59 PM" width="650"></a></li>
+<li>Now, we&#x2019;ll need to create an IAM policy that gives zero access to any of our resources. &#xA0;The reason for this is that we&#x2019;ll be provisioning EC2 instances with an IAM policy attached, and if those instances get compromised, we don&#x2019;t want them to have permission to make any changes to our AWS account. &#xA0;Click Policies on the left hand side (still under Identity &amp; Access Management), then click Get Started:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.26-PM.png" rel="attachment wp-att-131"><img class="alignnone size-large wp-image-131" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.26-PM-300x171.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.26-PM-768x437.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.26-PM-1024x583.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.26-PM.png%201243w" alt="Screen Shot 2016-01-09 at 6.06.26 PM" width="650"></a></li>
+<li>Click Create Policy:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.39-PM.png" rel="attachment wp-att-132"><img class="alignnone size-large wp-image-132" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.39-PM-300x114.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.39-PM-768x292.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.39-PM-1024x390.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.06.39-PM.png%201264w" alt="Screen Shot 2016-01-09 at 6.06.39 PM" width="650"></a></li>
+<li>Select &#x201C;Create Your Own Policy&#x201D; from the list:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.07.11-PM.png" rel="attachment wp-att-133"><img class="alignnone size-large wp-image-133" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.07.11-PM-300x116.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.07.11-PM-768x297.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.07.11-PM-1024x396.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-09-at-6.07.11-PM.png%201247w" alt="Screen Shot 2016-01-09 at 6.07.11 PM" width="650"></a></li>
+<li>Give the policy a name, &#x201C;noaccess&#x201D;, and a description, then paste the following code into the policy document:<br>
+
+
+		<div id="crayon-56a2ef559543a931900393" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate">
+		
+			
+			
+			
+			<div class="crayon-main">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums ">
+					
+				</td>
+						<td class="crayon-code"><div class="crayon-pre"><p class="crayon-line crayon-striped-line" id="crayon-56a2ef559543a931900393-2"><span class="crayon-i ">"Version"</span><span class="">: "2012-10-17"</span><span class="crayon-o">,</span></p><p class="crayon-line" id="crayon-56a2ef559543a931900393-3"><span class="crayon-i ">"Statement"</span><span class="">: [</span></p><p class="crayon-line" id="crayon-56a2ef559543a931900393-5"><span class="crayon-i ">"Action"</span><span class="">: "*"</span><span class="crayon-o">,</span></p><p class="crayon-line crayon-striped-line" id="crayon-56a2ef559543a931900393-6"><span class="crayon-i ">"Effect"</span><span class="">: "Deny"</span><span class="crayon-o">,</span></p><p class="crayon-line" id="crayon-56a2ef559543a931900393-7"><span class="crayon-i ">"Resource"</span><span class="">: "*"</span></p></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+
+
+</li>
+<li>Click Validate Policy at the bottom. &#xA0;It should show &#x201C;This policy is valid,&#x201D; as you see below:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-10-at-7.27.10-AM.png" rel="attachment wp-att-134"><img class="alignnone size-large wp-image-134" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-10-at-7.27.10-AM-300x142.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-10-at-7.27.10-AM-768x363.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-10-at-7.27.10-AM-1024x485.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-10-at-7.27.10-AM.png%201230w" alt="Screen Shot 2016-01-10 at 7.27.10 AM" width="650"></a></li>
+<li>Click Create&#xA0;Policy, then click Roles on the left-hand side of the screen.<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.41-AM.png" rel="attachment wp-att-140"><img class="alignnone size-large wp-image-140" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.41-AM-300x135.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.41-AM-768x345.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.41-AM-1024x460.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.41-AM.png%201228w" alt="Screen Shot 2016-01-12 at 9.01.41 AM" width="650"></a></li>
+<li>Click Create New Role, then type in a role name, &#x201C;noaccess&#x201D;:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.54-AM.png" rel="attachment wp-att-141"><img class="alignnone size-large wp-image-141" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.54-AM-300x95.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.54-AM-768x244.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.01.54-AM-1024x325.png%201024w" alt="Screen Shot 2016-01-12 at 9.01.54 AM" width="650"></a></li>
+<li>Under the Select Role Type screen, select &#x201C;Amazon EC2&#x201D;:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.06-AM.png" rel="attachment wp-att-142"><img class="alignnone size-large wp-image-142" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.06-AM-300x133.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.06-AM-768x341.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.06-AM-1024x455.png%201024w" alt="Screen Shot 2016-01-12 at 9.02.06 AM" width="650"></a></li>
+<li>On the Attach Policy screen, filter for the &#x201C;noaccess&#x201D; policy we just created, and check the box next to it to select it:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.22-AM.png" rel="attachment wp-att-143"><img class="alignnone size-large wp-image-143" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.22-AM-300x76.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.22-AM-768x193.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.22-AM-1024x258.png%201024w" alt="Screen Shot 2016-01-12 at 9.02.22 AM" width="650"></a></li>
+<li>On the Review screen, click the Create Role button at the bottom right:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.33-AM.png" rel="attachment wp-att-144"><img class="alignnone size-large wp-image-144" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.33-AM-300x101.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.33-AM-768x258.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-9.02.33-AM-1024x344.png%201024w" alt="Screen Shot 2016-01-12 at 9.02.33 AM" width="650"></a></li>
+<li>Now, go back to the main screen of the AWS console, and click EC2 in the top left.</li>
+<li>Click &#x201C;Key Pairs&#x201D; under the Security section on the left:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.35-PM.png" rel="attachment wp-att-150"><img class="alignnone size-large wp-image-150" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.35-PM-300x199.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.35-PM-768x509.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.35-PM-1024x679.png%201024w" alt="Screen Shot 2016-01-12 at 1.38.35 PM" width="650"></a></li>
+<li>Click &#x201C;Create Key Pair&#x201D;, then give the Key Pair a name:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.56-PM.png" rel="attachment wp-att-151"><img class="alignnone size-full wp-image-151" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.56-PM-300x116.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.56-PM-768x296.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.38.56-PM.png%20986w" alt="Screen Shot 2016-01-12 at 1.38.56 PM" width="986"></a></li>
+<li>The private key will now be downloaded by your browser. &#xA0;Save this key in a safe place, like your ~/.ssh folder, and make sure it can&#x2019;t be read by other users by changing the mode on it:<br>
+<code>mv immutable.pem ~/.ssh<br>
+chmod 600 ~/.ssh/immutable.pem</code></li>
+<li>Run ssh-agent, and add the private key to it, by executing the following commands:<br>
+<code>eval <code>ssh-agent</code><br>
+ssh-add ~/.ssh/immutable.pem</code><br>
+You should see output like the following:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.49.16-PM.png" rel="attachment wp-att-152"><img class="alignnone size-large wp-image-152" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.49.16-PM-300x31.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.49.16-PM-768x79.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-1.49.16-PM-1024x106.png%201024w" alt="Screen Shot 2016-01-12 at 1.49.16 PM" width="650"></a></li>
+<li>Next, install pip using the following command:<br>
+<code>sudo easy_install pip</code><br>
+You should see output like the following:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.52.01-AM.png" rel="attachment wp-att-169"><img class="alignnone size-large wp-image-169" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.52.01-AM-300x161.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.52.01-AM-768x413.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.52.01-AM-1024x550.png%201024w" alt="Screen Shot 2016-01-22 at 11.52.01 AM" width="650"></a></li>
+<li>Then, install boto using the following command:<br>
+<code>sudo pip install boto</code><br>
+You should see output like the following:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.54.04-AM.png" rel="attachment wp-att-170"><img class="alignnone size-large wp-image-170" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.54.04-AM-300x50.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.54.04-AM-768x127.png%20768w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.54.04-AM-1024x170.png%201024w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-22-at-11.54.04-AM.png%201350w" alt="Screen Shot 2016-01-22 at 11.54.04 AM" width="650"></a></li>
+</ol>
+<p>The setup of your environment is now complete. &#xA0;To test and ensure you can communicate with the AWS EC2 API, execute the following command:<br>
+<code>aws ec2 describe-instances</code></p>
+<p>You should see output like the following:<br>
+<a href="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-10.00.17-AM.png" rel="attachment wp-att-146"><img class="alignnone size-full wp-image-146" src="http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-10.00.17-AM-300x55.png%20300w,%20http://vcdxpert.com/wp-content/uploads/2016/01/Screen-Shot-2016-01-12-at-10.00.17-AM.png%20529w" alt="Screen Shot 2016-01-12 at 10.00.17 AM" width="529"></a></p>
+<p>In the next article, we&#x2019;ll begin setting up our Ansible playbook and provisioning a test system.</p>
+			</div>
+
+	
+</div>
+</body></html>

@@ -1,0 +1,522 @@
+<!DOCTYPE html><html><head><title>Parsing an RSS News Feed with a Bash Script</title></head><body>
+<h1>Parsing an RSS News Feed with a Bash Script</h1><p><a href="http://www.linuxjournal.com/content/parsing-rss-news-feed-bash-script" target="_new">Original URL</a></p>
+<p><blockquote>I am involved in several free software projects, including one or two where I maintain the website. For one of those projects, we currently are updating the website. Ours is probably similar to other&hellip;</blockquote></p>
+<div><div class="content">
+
+ <img src="http://www.linuxjournal.com/files/linuxjournal.com/ufiles/imagecache/large-550px-centered/u1000009/bash-148836_960_720_0.png" alt="" title="" class="imagecache-large-550px-centered">
+<p>
+I am involved in several free software projects, including one or
+two where I maintain the website. For one of those projects, we
+currently are updating the website. Ours is probably similar to other free
+software projects. We use a hosting service for several key services,
+including news, but we run our website on a web server that we own. In our
+case, we run most of our project on SourceForge and run the website on
+a third-party service, so the news and website are on different systems.
+</p>
+
+<p>
+Not surprisingly, our project uses an RSS feed to pull news items from
+SourceForge to display on the project website. Previously, our website
+used a PHP script to cache a copy of the RSS file, then parse it every
+time a visitor arrived at our front page. That worked well, but was
+somewhat fragile if the remote news server was slow or temporarily
+unreachable.
+</p>
+
+<p>
+As we work on the website update, however, I want to improve how we display
+news items. I want to automate the news service to pull down a copy of
+the RSS feed, parse it and save the news items to a local file that
+the website can just include. That reduces complexity on the website,
+and it means the front page will load faster every time.
+</p>
+
+<p>
+Initially, I adapted our previous PHP website code into a PHP script
+that I could run from the command line. That did the job, but I thought
+there had to be a better way. I wondered if I could parse the
+RSS feed from a Bash script instead&#x2014;and, it turns out that you can! It's easy!
+</p>
+
+<h3>
+A Brief RSS Primer</h3>
+
+<p>
+You may know that RSS is just a form of XML, which itself is a simple
+markup language. XML elements are values set off by tags. A tag is
+any markup that begins with the less-than symbol (&lt;) and ends with the
+greater-than symbol (&gt;). Tags are one of three types:
+</p>
+
+<ol>
+<li><p>
+Start tags, to mark the start of a value (such as <code>&lt;item&gt;</code>).
+</p></li>
+
+<li><p>
+End tags, to mark the end of a value (<code>&lt;/item&gt;</code>).
+</p></li>
+
+<li><p>
+"Empty element" tags, which might contain values as attributes
+(<code>&lt;feedburner:info uri="linuxjournalcom" /&gt;</code>).
+</p></li></ol>
+
+<p>
+In RSS feeds, most values are set off by start and end tags, like this
+link to <em>Linux Journal</em>:
+
+</p><pre>
+<code>
+&lt;link&gt;http://www.linuxjournal.com/&lt;/link&gt;
+</code>
+</pre>
+
+
+<p>
+RSS feeds have a well defined format. After some header information to
+describe the news website or "channel", the RSS feed displays separate
+news items inside <code>&lt;item&gt;...&lt;/item&gt;</code> elements. Each news item contains
+a title, link, publication date, full description and other fields. A
+sample RSS file might look like this:
+
+</p><pre>
+<code>
+&lt;xml version="1.0" encoding="UTF-8" ?&gt;
+&lt;rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0"&gt;
+ &lt;channel&gt;
+ &lt;title&gt;RSS title&lt;/title&gt;
+ &lt;link&gt;http://www.example.com/&lt;/link&gt;
+ &lt;description&gt;RSS description&lt;/description&gt;
+ &lt;language&gt;en&lt;/language&gt;
+ &lt;item&gt;
+ &lt;title&gt;News item title&lt;/title&gt;
+ &lt;link&gt;http://www.example.com/link/to/news/item/&lt;/link&gt;
+ &lt;guid isPermaLink="true"&gt;identifier-5f4b02697d2006f72648ebd0d9c6ce96&lt;/guid&gt;
+ &lt;description&gt;Full news item text.&lt;/description&gt;
+ &lt;pubDate&gt;Fri, 01 Jul 2016 17:41:07 +0000&lt;/pubDate&gt;
+ &lt;/item&gt;
+ &lt;/channel&gt;
+&lt;/rss&gt;
+</code>
+</pre>
+
+
+<p>
+Although in most news feeds, the RSS data is transmitted without the
+indents or newlines. For example, the above sample RSS would more likely
+look like this:
+
+</p><pre>
+<code>
+&lt;xml version="1.0" encoding="UTF-8" ?&gt;&lt;rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0"&gt;&lt;channel&gt;&lt;title&gt;RSS title&lt;/title&gt;&lt;link&gt;http://www.example.com/&lt;/link&gt;&lt;description&gt;RSS
+description&lt;/description&gt;&lt;language&gt;en&lt;/language&gt;&lt;item&gt;&lt;title&gt;News item
+title&lt;/title&gt;&lt;link&gt;http://www.example.com/link/to/news/item/&lt;/link&gt;&lt;guid
+isPermaLink="true"&gt;identifier-5f4b02697d2006f72648ebd0d9c6ce96&lt;/guid&gt;&lt;description&gt;Full
+news item text.&lt;/description&gt;&lt;pubDate&gt;Fri, 01 Jul 2016 17:41:07
++0000&lt;/pubDate&gt;&lt;/item&gt;&lt;/channel&gt;&lt;/rss&gt;
+</code>
+</pre>
+
+
+<p>
+When pulling news items from an RSS feed, I'm concerned only with a few elements:
+</p>
+
+<ul><li><p>
+The title of the news item (<code>&lt;title&gt;</code>).
+</p></li>
+
+<li><p>
+The link to the full news item (<code>&lt;link&gt;</code>).
+</p></li>
+
+<li><p>
+The date the news item was published (<code>&lt;pubDate&gt;</code>).
+</p></li>
+
+<li><p>
+The full text of the news item (<code>&lt;description&gt;</code>).
+</p></li></ul>
+
+<p>
+And conveniently, all of those values are marked by start and end
+tags. That's the key assumption to parsing an RSS feed with a Bash
+script. For an RSS parser, I just want to grab values surrounded by
+start and end tags.
+</p>
+
+<h3>
+The "Read" Statement</h3>
+
+<p>
+You may not think Bash can parse data files, but it can with some clever
+thinking. Bash, like other UNIX shells before it, can read lines one at
+a time from a file via the built-in <code>read</code> statement.
+</p>
+
+<p>
+By default, the <code>read</code> statement reads a line of data and splits it
+into fields. Usually, <code>read</code> splits fields using space and tab, with
+newlines ending each lines, but you can change this behavior by setting
+the Internal Field Separator (IFS) value and the end-of-line delimiter.
+</p>
+
+<p>
+To parse an RSS feed using <code>read</code>, set the IFS to a greater-than symbol
+(&gt;) and the delimiter to a less-than symbol (&lt;). Each time Bash reads a
+line, it reads up to the next &lt; (the start of a tag) then splits that
+data at each &gt; (the end of a tag). This sample code reads the input
+and splits the data into the <code>TAG</code> and <code>VALUE</code> variables:
+
+</p><pre>
+<code>
+local IFS='&gt;'
+read -d '&lt;' TAG VALUE
+</code>
+</pre>
+
+
+<p>
+Let's explore how this works. Consider this simple input:
+
+</p><pre>
+<code>
+&lt;title&gt;RSS title&lt;/title&gt;
+</code>
+</pre>
+
+
+<p>
+The first time <code>read</code> parses this line, it stops at the first &lt;
+symbol. Since &lt; is the first character of the input, that means Bash
+finds an empty string. The split <code>TAG</code> and <code>VALUE</code> strings are also empty,
+which may seem odd, but that's okay, because an RSS parser isn't paying
+attention to empty tags anyway.
+</p>
+
+<p>
+The next time Bash reads the input, it gets <code>title&gt;RSS title</code> and stops
+at the next &lt; symbol. Then <code>read</code> splits the line at the &gt; symbol,
+which leaves <code>TAG</code> with <code>title</code> and <code>VALUE</code> with
+<code>RSS title</code>.
+</p>
+
+<p>
+The third time <code>read</code> parses the input, it reads the remaining text and
+stops at the end of the file. Bash splits the string <code>/title&gt;</code> into
+<code>TAG</code>
+containing <code>/title</code> and an empty <code>VALUE</code>.
+</p>
+
+<h3>
+A Simple Parser</h3>
+
+<p>
+With this <code>read</code> magic, it's easy to parse an RSS file with Bash. Let's
+start with a simple RSS parser that displays tags between <code>&lt; &gt;</code> and values
+between <code>{ }</code>, so you can see where tags and values begin and end. First,
+you'll need a Bash function called <code>xmlgetnext</code> to parse the data using
+<code>read</code>, since you'll be doing this again and again in the script:
+
+</p><pre>
+<code>
+xmlgetnext () {
+ local IFS='&gt;'
+ read -d '&lt;' TAG VALUE
+}
+</code>
+</pre>
+
+
+<p>
+Note that you define IFS locally, while leaving <code>TAG</code> and <code>VALUE</code> as global
+variables. Ordinarily, variables and their values in a Bash function are
+shared between the function and its caller, so you need to declare only IFS
+as local. You want the calling script to see the values of <code>TAG</code> and
+<code>VALUE</code>.
+</p>
+
+<p>
+Then, you loop using <code>while</code> as you parse the RSS input file and print the resulting
+<code>TAG</code> and <code>VALUE</code>. The Bash script is very brief:
+
+</p><pre>
+<code>
+#!/bin/sh
+xmlgetnext () {
+ local IFS='&gt;'
+ read -d '&lt;' TAG VALUE
+}
+
+cat $1 | while xmlgetnext ; do
+ echo "&lt;$TAG&gt;{$VALUE}"
+done
+</code>
+</pre>
+
+
+<p>
+Now, let's use the sample RSS file from earlier in the article. From that
+input, the simple parser should print this:
+
+</p><pre>
+<code>
+&lt;&gt;{}
+&lt;xml version="1.0" encoding="UTF-8" ?&gt;{}
+&lt;rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0"&gt;{}
+&lt;channel&gt;{}
+&lt;title&gt;{RSS title}
+&lt;/title&gt;{}
+&lt;link&gt;{http://www.example.com/}
+&lt;/link&gt;{}
+&lt;description&gt;{RSS description}
+&lt;/description&gt;{}
+&lt;language&gt;{en}
+&lt;/language&gt;{}
+&lt;item&gt;{}
+&lt;title&gt;{News item title}
+&lt;/title&gt;{}
+&lt;link&gt;{http://www.example.com/link/to/news/item/}
+&lt;/link&gt;{}
+&lt;guid isPermaLink="true"&gt;{identifier-5f4b02697d2006f72648ebd0d9c6ce96}
+&lt;/guid&gt;{}
+&lt;description&gt;{Full news item text.}
+&lt;/description&gt;{}
+&lt;pubDate&gt;{Fri, 01 Jul 2016 17:41:07 +0000}
+&lt;/pubDate&gt;{}
+&lt;/item&gt;{}
+&lt;/channel&gt;{}
+</code>
+</pre>
+
+
+<h3>
+Parsing an RSS News Feed</h3>
+
+<p>
+Remember that the RSS feed displays separate news items inside
+<code>&lt;item&gt;...&lt;/item&gt;</code> elements. Also, each news item contains
+a title, link, publication date and full description as
+<code>&lt;title&gt;...&lt;/title&gt;, &lt;link&gt;...&lt;/link&gt;, &lt;pubDate&gt;...&lt;/pubDate&gt;</code> and
+<code>&lt;description&gt;...&lt;/description&gt;</code>, respectively. To parse this via a Bash
+script, you look for each <code>&lt;title&gt;</code>, <code>&lt;link&gt;</code>, <code>&lt;pubDate&gt;</code>
+and <code>&lt;description&gt;</code> tag,
+then write the associated html code when you find the ending <code>&lt;/item&gt;</code> tag.
+</p>
+
+<p>
+Most websites display news items using the article's title as the header,
+such as an <code>&lt;h3&gt;</code> header, and the full article text in the article body. If
+the feed does not already surround the article text with <code>&lt;p&gt;</code> or
+<code>&lt;div&gt;</code>
+markup, you will need to provide that. You also may prefer to include
+the article's publication date and link back to the original article
+for more details. With these assumptions and the <code>xmlgetnext</code> function,
+it's easy to parse an RSS news feed in Bash:
+
+</p><pre>
+<code>
+#!/bin/sh
+xmlgetnext () {
+ local IFS='&gt;'
+ read -d '&lt;' TAG VALUE
+}
+
+cat $1 | while xmlgetnext ; do
+ case $TAG in
+ 'item')
+ title=''
+ link=''
+ pubDate=''
+ description=''
+ ;;
+ 'title')
+ title="$VALUE"
+ ;;
+ 'link')
+ link="$VALUE"
+ ;;
+ 'pubDate')
+ pubDate="$VALUE"
+ ;;
+ 'description')
+ description="$VALUE"
+ ;;
+ '/item')
+ cat&lt;&lt;EOF
+&lt;article&gt;
+&lt;h3&gt;&lt;a href="$link"&gt;$title&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;$description
+&lt;span class="post-date"&gt;posted on $pubDate&lt;/span&gt;&lt;/p&gt;
+&lt;/article&gt;
+EOF
+ ;;
+ esac
+done
+</code>
+</pre>
+
+
+<p>
+The script zeroes out the title, link, pubDate and description variables
+when the parser reaches the first <code>&lt;item&gt;</code> tag and creates the HTML code
+when the parser reaches the next <code>&lt;/item&gt;</code> tag. In between, the script
+stores the title, link, pubDate and description values it finds in the
+RSS feed's article. Running this script against the sample RSS file,
+you should see this output:
+
+</p><pre>
+<code>
+&lt;article&gt;
+&lt;h3&gt;&lt;a href="http://www.example.com/link/to/news/item/"&gt;News item title&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Full news item text.
+&lt;span class="post-date"&gt;posted on Fri, 01 Jul 2016 17:41:07 +0000&lt;/span&gt;&lt;/p&gt;
+&lt;/article&gt;
+</code>
+</pre>
+
+
+<p>
+You can make a few improvements based on this script. For example, the
+publication date isn't very nice to read. Let's display this in a more
+human-friendly format and enclose the date in a <code>&lt;time&gt;...&lt;/time&gt;</code> HTML
+element so screen readers can better understand it. For that, you'll need
+to convert the publication date into an ISO-8601 timestamp and create a
+"display" date in "MM/DD/YY HH:MMam" format:
+
+</p><pre>
+<code>
+#!/bin/sh
+xmlgetnext () {
+ local IFS='&gt;'
+ read -d '&lt;' TAG VALUE
+}
+
+cat $1 | while xmlgetnext ; do
+ case $TAG in
+ 'item')
+ title=''
+ link=''
+ pubDate=''
+ description=''
+ ;;
+ 'title')
+ title="$VALUE"
+ ;;
+ 'link')
+ link="$VALUE"
+ ;;
+ 'pubDate')
+ # convert pubDate format for &lt;time datetime=""&gt;
+ datetime=$( date --date "$VALUE" --iso-8601=minutes )
+ pubDate=$( date --date "$VALUE" '+%D %H:%M%P' )
+ ;;
+ 'description')
+ description="$VALUE"
+ ;;
+ '/item')
+ cat&lt;&lt;EOF
+&lt;article&gt;
+&lt;h3&gt;&lt;a href="$link"&gt;$title&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;$description
+&lt;span class="post-date"&gt;posted on &lt;time
+datetime="$datetime"&gt;$pubDate&lt;/time&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/article&gt;
+EOF
+ ;;
+ esac
+done
+</code>
+</pre>
+
+
+<p>
+This script produces HTML that is both easier for a human to understand
+and for a screen reader to interpret:
+
+</p><pre>
+<code>
+&lt;article&gt;
+&lt;h3&gt;&lt;a href="http://www.example.com/link/to/news/item/"&gt;News item title&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;Full news item text.
+&lt;span class="post-date"&gt;posted on &lt;time datetime="2016-07-01T12:41-05:00"&gt;07/01/16
+12:41pm&lt;/time&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/article&gt;
+</code>
+</pre>
+
+
+<p>
+If the full article text contains HTML tags, RSS will convert the HTML
+&lt; and &gt; to &amp;lt; and &amp;gt;. An RSS parser will need to undo those
+changes. You can do this with an inline edit via <code>sed</code>, the stream editor:
+
+</p><pre>
+<code>
+#!/bin/sh
+xmlgetnext () {
+ local IFS='&gt;'
+ read -d '&lt;' TAG VALUE
+}
+
+cat $1 | while xmlgetnext ; do
+ case $TAG in
+ 'item')
+ title=''
+ link=''
+ pubDate=''
+ description=''
+ ;;
+ 'title')
+ title="$VALUE"
+ ;;
+ 'link')
+ link="$VALUE"
+ ;;
+ 'pubDate')
+ # convert pubDate format for &lt;time datetime=""&gt;
+ datetime=$( date --date "$VALUE" --iso-8601=minutes )
+ pubDate=$( date --date "$VALUE" '+%D %H:%M%P' )
+ ;;
+ 'description')
+ # convert '&amp;lt;' and '&amp;gt;' to '&lt;' and '&gt;'
+ description=$( echo "$VALUE" | sed -e 's/&amp;lt;/&lt;/g' -e 's/&amp;gt;/&gt;/g' )
+ ;;
+ '/item')
+ cat&lt;&lt;EOF
+&lt;article&gt;
+&lt;h3&gt;&lt;a href="$link"&gt;$title&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;$description
+&lt;span class="post-date"&gt;posted on &lt;time
+datetime="$datetime"&gt;$pubDate&lt;/time&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/article&gt;
+EOF
+ ;;
+ esac
+done
+</code>
+</pre>
+
+
+<p>
+And with that, I have everything I need to update my project's website
+so it can be more efficient:
+
+</p><pre>
+<code>
+wget --quiet -O $rsslocalfile $rssfeedurl
+./parse.sh $rsslocalfile &gt; $newslocalfile.html
+</code>
+</pre>
+
+
+<p>
+Now I can automate this hourly job to retrieve a copy of the RSS feed,
+parse it, and save the news items to a local file that the website can
+incorporate. That reduces complexity on the website, with only a little
+extra work by parsing the RSS news feed with a Bash script.
+</p>
+ </div>
+ </div>
+</body></html>

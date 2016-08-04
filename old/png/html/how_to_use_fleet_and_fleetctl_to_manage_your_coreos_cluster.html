@@ -1,0 +1,309 @@
+<!DOCTYPE html><html><head><title>How To Use Fleet and Fleetctl to Manage your CoreOS Cluster</title></head><body>
+<h1>How To Use Fleet and Fleetctl to Manage your CoreOS Cluster</h1><p><a href="https://www.digitalocean.com/community/tutorials/how-to-use-fleet-and-fleetctl-to-manage-your-coreos-cluster" target="_new">Original URL</a></p>
+<p><blockquote>Introduction CoreOS provides an excellent environment for managing Docker containers across multi-server environments. One of the most essential components for making this cluster management simple&hellip;</blockquote></p>
+<div><div class="content-body tutorial-content">
+ <h3 id="introduction">Introduction</h3>
+
+<p>CoreOS provides an excellent environment for managing Docker containers across multi-server environments. One of the most essential components for making this cluster management simple is a service called <strong>fleet</strong>.</p>
+
+<p>Fleet allows users to manage Docker containers as services for their entire cluster. It works by acting as an interface and a level of abstraction over each cluster member's systemd init system. Users can set constraints that affect the conditions under which a service runs. This lets administrators define what they would like their infrastructure to look like by telling certain applications to run on the same or separate hosts based on the supplied criteria.</p>
+
+<p>In this guide, we will explore fleet and the <code>fleetctl</code> utility that allows you to control the daemon.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<p>To follow along with this guide, you should have a CoreOS cluster available.</p>
+
+<p>The cluster we are using in this guide can be created by following our guide on <a href="https://www.digitalocean.com/community/tutorials/how-to-set-up-a-coreos-cluster-on-digitalocean">how to create a CoreOS cluster on DigitalOcean</a>. We will assume that you have the cluster configuration described in that guide.</p>
+
+<p>The cluster that has been configured has three nodes. They are configured to communicate between each other using the private networking interface. The public interface is available on each of these nodes for running public services. The node names are:</p>
+
+<ul>
+<li>coreos-1</li>
+<li>coreos-2</li>
+<li>coreos-3</li>
+</ul>
+
+<p>When you have your cluster ready, continue on to learn more about fleet.</p>
+
+<h2 id="working-with-service-unit-files">Working with Service Unit Files</h2>
+
+<p>Before we get into the <code>fleetctl</code> tool, we should talk a bit about service unit files.</p>
+
+<p>Unit files are used by the <code>systemd</code> init system to describe each available service, define the commands needed to manage it, and set dependency information to ensure the system is in a workable state when each service is started. The <code>fleet</code> daemon is built on top of <code>systemd</code> in order to manage services on a cluster-wide level. Because of this, it uses slightly modified versions of standard <code>systemd</code> unit files.</p>
+
+<p>To get an in-depth look at <code>fleet</code> unit files, follow our <a href="https://www.digitalocean.com/community/tutorials/how-to-create-flexible-services-for-a-coreos-cluster-with-fleet-unit-files">deep dive</a> on the subject. For this guide, we will just be giving a rough overview of the format of these files. We will also provide an example unit file that you can use to learn about <code>fleetctl</code>.</p>
+
+<h3 id="fleet-unit-file-sections">Fleet Unit File Sections</h3>
+
+<p>The basic sections that most unit files will have are:</p>
+
+<ul>
+<li><strong>Unit</strong>: This section is used to provide generic information about the unit that is not dependent on the "type" of unit. This will include metadata information and dependency information. This is mainly used in <code>fleet</code> to provide descriptions and specify this units place in connection to other service units.</li>
+<li><strong>Unit Type Section</strong>: The <code>fleet</code> daemon can take units of different types, including:
+
+<ul>
+<li>Service</li>
+<li>Socket</li>
+<li>Device</li>
+<li>Mount</li>
+<li>Automount</li>
+<li>Timer</li>
+<li>Path</li>
+</ul></li>
+</ul>
+
+<p>If the type has specific options, then a section of the associated type is allowed. The <code>Service</code> section type is by far the most common. This section is used to define type-specific attributes. For <code>Service</code> units, this usually involves defining the start and stop commands, as well as the pre and post start or stop commands that might perform associated actions.</p>
+
+<ul>
+<li><strong>X-Fleet</strong>: This section is used to provide fleet-specific configuration options. This mainly means that you can specify that a service must or must not be scheduled in a certain way based on criteria like machine ID, currently running services, metadata information, etc.</li>
+</ul>
+
+<p>The general format of a unit file will be:</p>
+<pre class="code-pre "><code class="code-highlight language-ini">[Unit]
+<span class="highlight">Generic_option_1</span>
+<span class="highlight">Generic_option_2</span>
+
+[Service]
+<span class="highlight">Service_specific_option_1</span>
+<span class="highlight">Service_specific_option_2</span>
+
+[X-Fleet]
+<span class="highlight">Fleet_option_1</span>
+<span class="highlight">Fleet_option_2</span>
+</code></pre>
+<h3 id="sample-service-unit-file">Sample Service Unit File</h3>
+
+<p>To get started with this tutorial, we will give you a unit file to use. This is taken from the <a href="https://coreos.com/docs/quickstart/">CoreOS quickstart page</a> as an example. On one of your CoreOS machines, type:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">vim hello.service
+</code></pre>
+<p>Inside, type out our example service file:</p>
+<pre class="code-pre "><code class="code-highlight language-ini">[Unit]
+Description=My Service
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill hello
+ExecStartPre=-/usr/bin/docker rm hello
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --name hello busybox /bin/sh -c "while true; do echo Hello World; sleep 1; done"
+ExecStop=/usr/bin/docker stop hello
+</code></pre>
+<p>Let's quickly go over what this does.</p>
+
+<p>In the <code>[Unit]</code> section, a description is set and we tell <code>systemd</code> that this service can only be run after the <code>docker.service</code> unit has started. This is because our unit relies on Docker to function.</p>
+
+<p>In the <code>[Service]</code> section, we disable the starting timeout and then we set up some actions to run prior to starting the service. The <code>ExecStartPre</code> is executed before the main <code>ExecStart</code> action. If these are called with <code>=-</code> it means that the action can fail and not affect the service's completion. This is necessary since our pre-start actions basically tear down any previously running service that may have been running. This will fail if none can be found and we do not want that to stop our service from starting since this is just a cleanup procedure.</p>
+
+<p>The last pre-start action pulls down the basic busybox image which will be used to run our commands. Since this is necessary, we don't use the <code>=-</code> syntax. We then start a container with this image with an infinite loop that prints out "Hello World" once a second. The stop action simply stops this container.</p>
+
+<p>This will be just enough to get you up and running. If you want more information about how to develop fleet files, check out <a href="https://www.digitalocean.com/community/tutorials/how-to-create-flexible-services-for-a-coreos-cluster-with-fleet-unit-files">our guide on fleet unit files</a>.</p>
+
+<h2 id="basic-machine-management-commands">Basic Machine Management Commands</h2>
+
+<p>The first thing we will do is introduce you to the <code>fleetctl</code> utility. As a cluster administrator, this tool will be your main interface to manage your fleet of machines. Much of the syntax has been carried over from <code>systemctl</code>, systemd's management tool.</p>
+
+<p>To start off, we can get a list of all of the cluster members by typing:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-machines
+</code></pre><pre class="code-pre "><code>MACHINE IP METADATA
+14ffe4c3... 10.132.249.212 -
+1af37f7c... 10.132.249.206 -
+9e389e93... 10.132.248.177 -
+</code></pre>
+<p>As you can see, each of your machines is listed here as being available. When each member bootstraps itself using the cloud-config file, it generates a unique machine ID, which is used to identify each node. This is written to a file at <code>/etc/machine-id</code>.</p>
+
+<p>By default, fleet will use the machine's public IPv4 address for communication with other members. However, in our cloud-config file, we told fleet to use our private interfaces for communication. These are the IP addresses shown in the above output.</p>
+
+<p>The "METADATA" column is currently blank in the above example. However, we could have added arbitrary key-value pairs under the <code>metadata</code> attribute for fleet in the cloud-config. This might look like this:</p>
+<pre class="code-pre yaml"><code>#cloud-config
+. . .
+coreos:
+ fleet:
+ public-ip: $private_ipv4
+ metadata: region=europe,public_ip=$public_ipv4
+</code></pre>
+<p>If you set this in your cloud-config to bootstrap all of your machines, your output would look more like this:</p>
+<pre class="code-pre "><code>MACHINE IP METADATA
+14ffe4c3... 10.132.249.212 public_ip=104.131.36.200,region=europe
+1af37f7c... 10.132.249.206 public_ip=104.131.15.192,region=europe
+9e389e93... 10.132.248.177 public_ip=104.131.15.192,region=europe
+</code></pre>
+<p>This extra data is useful for quickly getting information about a node from a management perspective, but it can also be used in service definitions to target specific hosts.</p>
+
+<p>To connect to a specific machine within the cluster, you can use the <code>fleetctl ssh</code> command. This will allow you to identify a machine to connect to based on its machine ID or machine associated with a supplied unit name.</p>
+
+<p>For instance, if you have a unit running called <code>nginx.service</code>, you can connect to whatever host is running that service by typing:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl ssh nginx
+</code></pre>
+<p>You will be dropped into a shell session on the associated host. You can also run a single command on a remote host, just as you can when running with the normal <code>ssh</code> executable. For instance, to get the values of the <code>COREOS_PRIVATE_IPV4</code> and <code>COREOS_PUBLIC_IPV4</code> variables that CoreOS sets in a file called <code>/etc/environment</code> (based on the parameters of the cloud-config and the networking interfaces available), you can type:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl ssh nginx cat /etc/environment
+</code></pre><pre class="code-pre "><code>COREOS_PRIVATE_IPV4=10.132.249.212
+COREOS_PUBLIC_IPV4=104.131.29.80
+</code></pre>
+<h2 id="service-management">Service Management</h2>
+
+<p>Most of the other commands available through <code>fleetctl</code> are based around service management.</p>
+
+<h3 id="starting-a-service">Starting a Service</h3>
+
+<p>Starting a service involves quite a few steps. The service file must be uploaded into <code>fleet</code> so that it is aware of the unit. It must then be scheduled onto a specific machine out of the cluster. It can then be started. There are commands for each of these with <code>fleetctl</code>, with the commands responsible for the latter stages also performing the former if necessary.</p>
+
+<p>You can use the <code>submit</code> command to submit your unit file into <code>fleet</code>. This will simply cause <code>fleet</code> to read the file contents into memory, making it available for further actions.</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl submit hello.service
+</code></pre>
+<p>Your <code>hello.service</code> file is now known to <code>fleet</code>. To see the unit files that have been submitted, you can type:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-unit-files
+</code></pre><pre class="code-pre "><code>UNIT HASH DSTATE STATE TMACHINE
+hello.service 0d1c468 inactive inactive -
+</code></pre>
+<p>As you can see, the unit file is present, but has not been scheduled on any hosts or started.</p>
+
+<p>To see the contents of a unit file that <code>fleet</code> knows about, you can type:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl cat hello.service
+</code></pre><pre class="code-pre "><code>[Unit]
+Description=My Service
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill hello
+ExecStartPre=-/usr/bin/docker rm hello
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --name hello busybox /bin/sh -c "while true; do echo Hello World; sleep 1; done"
+ExecStop=/usr/bin/docker stop hello
+</code></pre>
+<p>This will allow you to see the current file that <code>fleet</code> knows about.</p>
+
+<p><strong>Note</strong>: The submit command is idempotent, meaning that <code>fleet</code> will <em>not</em> update the in-memory unit file if you re-submit it. If you need to update your unit file, you must remove it completely and then re-submit it. We will cover how to do this later.</p>
+
+<p>Once your unit is submitted, the next step is to schedule it on a machine. Scheduling the unit involves the <code>fleet</code> engine looking at the unit to decide on the best machine in the cluster to pass the unit to. This will be predicated on the conditions within the <code>[X-Fleet]</code> section of the unit, as well as the current work volume of each machine in the cluster. When the unit has been scheduled, it has been passed to the specific machine and loaded into the local <code>systemd</code> instance.</p>
+
+<p>Use the <code>load</code> command to load and schedule the unit:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl load hello.service
+</code></pre><pre class="code-pre "><code>Unit hello.service loaded on 14ffe4c3.../10.132.249.212
+</code></pre>
+<p>If you had not manually loaded your unit earlier, it will be loaded automatically as part of this process by searching for the appropriate filename in the current directory.</p>
+
+<p>Now, if we check our unit files, we can see that it has been loaded. We can even see which machine it is scheduled on:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-unit-files
+</code></pre><pre class="code-pre "><code>UNIT HASH DSTATE STATE TMACHINE
+hello.service 0d1c468 loaded loaded 14ffe4c3.../10.132.249.212
+</code></pre>
+<p>This is also our first opportunity to check out the <code>list-units</code> command. This command is used to show any running or scheduled units and their statuses:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-units
+</code></pre><pre class="code-pre "><code>UNIT MACHINE ACTIVE SUB
+hello.service 14ffe4c3.../10.132.249.212 inactive dead
+</code></pre>
+<p>To actually start a unit, you can use the <code>start</code> command. This will start the unit on the machine in which it has been loaded by executing the start commands defined in the unit file:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl start hello.service
+</code></pre><pre class="code-pre "><code>Unit hello.service launched on 14ffe4c3.../10.132.249.212
+</code></pre>
+<p>Once again, we should check the <code>list-unit-files</code>:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-unit-files
+</code></pre><pre class="code-pre "><code>UNIT HASH DSTATE STATE TMACHINE
+hello.service 0d1c468 launched launched 14ffe4c3.../10.132.249.212
+</code></pre>
+<p>In the above output, we can see that the service has been launched. The <code>DSTATE</code> column indicates the "desired state" and the <code>STATE</code> indicates the actual state. If these two match, this usually means that the action was successful.</p>
+
+<p>We should also look at <code>list-units</code> again:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-units
+</code></pre><pre class="code-pre "><code>UNIT MACHINE ACTIVE SUB
+hello.service 14ffe4c3.../10.132.249.212 active running
+</code></pre>
+<p>This gives us information about the <code>systemd</code> state. It is collected directly from the local daemon, so this is a better picture of how the local system sees the service state. The <code>ACTIVE</code> column is a generalized state of the unit, while <code>SUB</code> is a more low-level description.</p>
+
+<h3 id="stopping-a-service">Stopping a Service</h3>
+
+<p>Each of the commands above have a companion command that reverses the state.</p>
+
+<p>For instance, to stop a service from running, use the <code>stop</code> command. This will cause the local machine's <code>systemd</code> instance to execute the stopping commands defined in the unit:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl stop hello.service
+</code></pre><pre class="code-pre "><code>Unit hello.service loaded on 14ffe4c3.../10.132.249.212
+</code></pre>
+<p>As you can see, the service has reverted back to the <code>loaded</code> state. This means that it is still loaded in the machine's <code>systemd</code>, but it is not currently running. We can confirm that here:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-unit-files
+</code></pre><pre class="code-pre "><code>UNIT HASH DSTATE STATE TMACHINE
+hello.service 0d1c468 loaded loaded 14ffe4c3.../10.132.249.212
+</code></pre>
+<p>To remove the unit from that machine's systemd, but keep it available in <code>fleet</code>, you can <code>unload</code> the unit. If the unit is currently active, it will be stopped prior to being unloaded:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl unload hello.service
+</code></pre>
+<p>If we check the state, we can see that it is now marked as inactive. It also does not have a target machine listed:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-unit-files
+</code></pre><pre class="code-pre "><code>UNIT HASH DSTATE STATE TMACHINE
+hello.service 0d1c468 inactive inactive -
+</code></pre>
+<p>If we want to remove the unit from <code>fleet</code> entirely, we can use the <code>destroy</code> command. This will stop and unload the unit if necessary, and then remove the unit from <code>fleet</code>:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl destroy hello.service
+</code></pre>
+<p>If you modify a unit file, you <em>must</em> destroy the current unit in <code>fleet</code> before submitting/starting it again.</p>
+
+<h3 id="getting-unit-statuses">Getting Unit Statuses</h3>
+
+<p>You have already seen some of the methods of getting information about the status of units.</p>
+
+<p>For instance, we have covered how <code>list-units</code> will list all of the units that have currently been scheduled on a machine:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-units
+</code></pre><pre class="code-pre "><code>UNIT MACHINE ACTIVE SUB
+hello.service 14ffe4c3.../10.132.249.212 active running
+</code></pre>
+<p>The <code>list-unit-files</code> provides a list of <em>all</em> units that <code>fleet</code> knows about. It also gives information about the desired and actual state:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl list-unit-files
+</code></pre><pre class="code-pre "><code>UNIT HASH DSTATE STATE TMACHINE
+hello.service 0d1c468 launched launched 14ffe4c3.../10.132.249.212
+</code></pre>
+<p>For more specific information about a unit that has been started, there are a few other commands. The <code>status</code> command passes back the <code>systemctl status</code> result for the service on the host that is running the unit:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl status hello.service
+</code></pre><pre class="code-pre "><code>&#x25CF; hello.service - My Service
+ Loaded: loaded (/run/fleet/units/hello.service; linked-runtime)
+ Active: active (running) since Mon 2014-09-08 21:51:22 UTC; 3min 57s ago
+ Process: 7630 ExecStartPre=/usr/bin/docker pull busybox (code=exited, status=0/SUCCESS)
+ Process: 7618 ExecStartPre=/usr/bin/docker rm hello (code=exited, status=0/SUCCESS)
+ Process: 7609 ExecStartPre=/usr/bin/docker kill hello (code=exited, status=0/SUCCESS)
+ Main PID: 7638 (docker)
+ CGroup: /system.slice/hello.service
+ &#x2514;&#x2500;7638 /usr/bin/docker run --name hello busybox /bin/sh -c while true; do echo Hello World; sleep 1; done
+
+Sep 08 21:55:11 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:12 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:13 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:14 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:15 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:16 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:17 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:18 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:19 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:20 coreos-3 docker[7638]: Hello World
+</code></pre>
+<p>As you can see, we finally get to verify that the output of our unit is being produced. </p>
+
+<p>Similarly, if you wish to see the journal entry for the service that is available on the associated machine, you can use the <code>journal</code> command:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl journal hello.service
+</code></pre><pre class="code-pre "><code>-- Logs begin at Mon 2014-09-08 14:22:14 UTC, end at Mon 2014-09-08 21:55:47 UTC. --
+Sep 08 21:55:38 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:39 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:40 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:41 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:42 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:43 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:44 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:45 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:46 coreos-3 docker[7638]: Hello World
+Sep 08 21:55:47 coreos-3 docker[7638]: Hello World
+</code></pre>
+<p>By default, this will show the last 10 lines. You can adjust this by adding a <code>--lines</code> parameter, like this:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl journal --lines 20 hello.service
+</code></pre>
+<p>You can also use the <code>-f</code> parameter, which stands for "follow". This behaves in a similar way to <code>tail -f</code> in that it will continue to pass back the latest log entries:</p>
+<pre class="code-pre "><code class="code-highlight language-bash">fleetctl journal -f hello.service
+</code></pre>
+<h2 id="conclusion">Conclusion</h2>
+
+<p>By learning how to use <code>fleet</code> and <code>fleetctl</code> effectively, you can easily control your CoreOS cluster. Your services and containers can be moved around to different machines without much of a problem.</p>
+
+<p>In a later guide, we'll discuss more in-depth <a href="https://www.digitalocean.com/community/tutorials/how-to-create-flexible-services-for-a-coreos-cluster-with-fleet-unit-files">how to create fleet unit files</a>. This will allow you to create flexible and powerful services that takes advantage of the CoreOS architecture.</p>
+
+ </div>
+</div>
+</body></html>

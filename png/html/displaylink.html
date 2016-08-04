@@ -1,0 +1,202 @@
+<!DOCTYPE html><html><head><title>DisplayLink</title></head><body>
+<h1>DisplayLink</h1><p><a href="https://wiki.archlinux.org/index.php/DisplayLink" target="_new">Original URL</a></p>
+<p><blockquote>DisplayLink devices on Linux still only have experimental support. While some people have had success in using them, it is generally not an easy process and not guaranteed to work. The steps on this&hellip;</blockquote></p>
+<div><div id="mw-content-text" lang="en" dir="ltr" class="mw-content-ltr"><p>DisplayLink devices on Linux still only have experimental support. While some people have had success in using them, it is generally not an easy process and not guaranteed to work. The steps on this page describe the generally most successful methods of using external monitors with DisplayLink.
+</p>
+
+
+<h2><span class="mw-headline" id="Installation">Installation</span></h2>
+<div><strong> Note: </strong>Modern USB 3.0 DisplayLink adapters are not supported as of October 2014.<a rel="nofollow" class="external autonumber" href="http://displaylink.org/forum/showthread.php?t=1748">[1]</a> Older DisplayLink chips (USB 2.0) are supported.</div>
+<p>Install the <span class="plainlinks archwiki-template-pkg"><a rel="nofollow" class="external text" href="https://www.archlinux.org/packages/?name=xf86-video-fbdev">xf86-video-fbdev</a></span> package, which provides framebuffer video for X.org.
+</p><p>Hardware-level support is provided by the <a href="https://wiki.archlinux.org/index.php/Kernel_modules" title="Kernel modules">kernel module</a> <code>udlfb</code>, which should be loadable by default in Arch.
+</p>
+<h3><span class="mw-headline" id="udl">udl</span></h3>
+<p>The kernel <a href="http://en.wikipedia.org/wiki/Direct_Rendering_Manager" class="extiw" title="wikipedia:Direct Rendering Manager">DRM</a> driver for DisplayLink is <code>udl</code>, a rewrite of the original <a rel="nofollow" class="external text" href="https://www.kernel.org/doc/Documentation/fb/udlfb.txt">udlfb</a> driver. It allows configuring DisplayLink monitors using <a href="https://wiki.archlinux.org/index.php/Xrandr" title="Xrandr">Xrandr</a>.
+</p><p>First, the setup and installation:
+</p>
+
+<p>After that, run:
+</p>
+<pre># xrandr --listproviders</pre>
+<pre>
+Providers: number : 2
+Provider 0: id: 0x49 cap: 0xb, Source Output, Sink Output, Sink Offload crtcs: 2 outputs: 8 associated providers: 0 name:Intel
+Provider 1: id: 0x13c cap: 0x2, Sink Output crtcs: 1 outputs: 1 associated providers: 0 name:modesetting
+</pre>
+<p>In the above output, we can see that provider 0 is the system's regular graphics provider (Intel), and provider 1 (modesetting) is the DisplayLink provider. To use the DisplayLink device, connect provider 1 to provider 0:
+</p>
+<pre># xrandr --setprovideroutputsource 1 0
+</pre>
+<p>and xrandr will add a DVI output you can <a href="https://wiki.archlinux.org/index.php/Xrandr#Configuration" title="Xrandr">use as normal with xrandr</a>. This is still experimental but supports hotplugging and when works, it's by far the simplest setup. If it works then everything below is unnecessary.
+</p>
+<h2><span class="mw-headline" id="Configuration">Configuration</span></h2>
+<p>These instructions assume that you already have an up and running X server and are simply adding a monitor to your existing setup.
+</p>
+<h3><span class="mw-headline" id="Load_the_framebuffer_device">Load the framebuffer device</span></h3>
+<p>Before your system will recognize your DisplayLink device, the <code>udl</code> kernel module must be loaded. To do this, run
+</p>
+<pre># modprobe udl
+</pre>
+<p>If your DisplayLink device is connected, it should show some visual indication of this. Although a green screen is the standard indicator of this, other variations have been spotted and are perfectly normal. Most importantly, the output of <code>dmesg</code> should show something like the following, indicating a new DisplayLink device was found:
+</p>
+<pre>usb 2-1.1: new high-speed USB device number 7 using ehci-pci
+usb 2-1.1: New USB device found, idVendor=17e9, idProduct=03e0
+usb 2-1.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+usb 2-1.1: Product: Lenovo LT1421 wide
+usb 2-1.1: Manufacturer: DisplayLink
+usb 2-1.1: SerialNumber: 6V9BBRM1
+[drm] vendor descriptor length:17 data:17 5f 01 00 15 05 00 01 03 00 04
+udl 2-1.1:1.0: fb1: udldrmfb frame buffer device
+[drm] Initialized udl 0.0.1 20120220 on minor 1
+</pre>
+<p>Furthermore, <code>/dev</code> should contain a new <code>fb</code> device, likely <code>/dev/fb1</code> if you already had a framebuffer for your primary display.
+</p><p>To automatically load <code>udl</code> at boot, create the file <code>udl.conf</code> in <code>/etc/modules-load.d/</code> with the following contents:
+</p>
+<pre>/etc/modules-load.d/udl.conf</pre>
+<pre>udl</pre>
+<p>For more information on loading kernel modules, see <a href="https://wiki.archlinux.org/index.php/Kernel_modules#Loading" title="Kernel modules">Kernel modules#Loading</a>.
+</p>
+<h3><span class="mw-headline" id="Configuring_X_Server">Configuring X Server</span></h3>
+<p>There are three popular ways people use DisplayLink devices with X on desktop Linux computers:
+</p>
+<ul><li> With <code>xrandr</code> and <code>udl</code> (recommended)</li>
+<li> Xinerama with a single X server</li>
+<li> Two separate X servers, linked together in some way</li></ul>
+<p>While Xinerama is probably the more desirable setup, it is also less likely to work. Both methods are described below.
+</p>
+<h4><span class="mw-headline" id="xrandr">xrandr</span></h4>
+<p>The <code>udl</code> kernel driver is the only one that works wiith <a href="https://wiki.archlinux.org/index.php/Xrandr" title="Xrandr">xrandr</a>. Once the driver is loaded, the DisplayLink monitor is listed as an output provider:
+</p>
+<pre>$ xrandr --listproviders</pre>
+<pre>
+Providers: number : 2
+Provider 0: id: 0x43 cap: 0xb, Source Output, Sink Output, Sink Offload crtcs: 2 outputs: 2 associated providers: 1 name:Intel
+Provider 1: id: 0xcb cap: 0x2, Sink Output crtcs: 1 outputs: 1 associated providers: 1 name:modesetting
+</pre>
+<p>In the above example, provider 1 is the DisplayLink device, and provider 0 is the default display. Running <code>xrandr --current</code> gives a list of available screens:
+</p>
+<pre>$ xrandr --current</pre>
+<pre>
+Screen 0: minimum 320 x 200, current 1600 x 900, maximum 8192 x 8192
+LVDS1 connected 1600x900+0+0 (normal left inverted right x axis y axis) 309mm x 174mm
+ 1600x900 60.0*+ 40.0 
+ 1440x900 59.9 
+ 1360x768 59.8 60.0 
+ 1152x864 60.0 
+ 1024x768 60.0 
+ 800x600 60.3 56.2 
+ 640x480 59.9 
+VGA1 disconnected (normal left inverted right x axis y axis)
+DVI-1-0 connected (normal left inverted right x axis y axis)
+ 1366x768 60.0 +
+ 1368x768_59.90 59.9 
+ 1368x768_59.90 (0xd0) 85.7MHz
+ h: width 1368 start 1440 end 1584 total 1800 skew 0 clock 47.6KHz
+ v: height 768 start 769 end 772 total 795 clock 59.9Hz
+</pre>
+<p>If the above does not list the DisplayLink screen, then you will need to offload DisplayLink to the main GPU:
+</p>
+<pre>xrandr --setprovideroutputsource 1 0</pre>
+<p>Once the screen is available, refer to <a href="https://wiki.archlinux.org/index.php/Xrandr" title="Xrandr">Xrandr</a> for info on setting it up. For automating the configuration process, see <a rel="nofollow" class="external text" href="https://github.com/nathantypanski/displaylink.sh">displaylink.sh</a>.
+</p>
+<h4><span class="mw-headline" id="Xinerama_setup">Xinerama setup</span></h4>
+<p>You must update or create an <a href="https://wiki.archlinux.org/index.php/Xorg.conf" title="Xorg.conf" class="mw-redirect">xorg.conf</a> with a properly configured <code>ServerLayout</code> to use a DisplayLink monitor, as Xorg will prefer internal monitors by default. The DisplayLink device is normally only usable if it is set as <code>screen0</code> and the internal display as <code>screen1</code>.
+</p><p>Add this to the bottom of your <code>xorg.conf</code>:
+</p>
+<pre>/etc/X11/xorg.conf</pre>
+<pre>
+ ################ DisplayLink ###################
+ Section "Device"
+ Identifier "DisplayLinkDevice"
+ Driver "fbdev" 
+ BusID "USB" # needed to use multiple DisplayLink devices 
+ Option "fbdev" "/dev/fb0" # change to whatever device you want to use
+ # Option "rotate" "CCW" # uncomment for rotation
+ EndSection
+ 
+ Section "Monitor"
+ Identifier "DisplayLinkMonitor"
+ EndSection
+ 
+ Section "Screen"
+ Identifier "DisplayLinkScreen"
+ Device "DisplayLinkDevice"
+ Monitor "DisplayLinkMonitor"
+ DefaultDepth 16
+ EndSection
+</pre>
+<p>Then edit your server layout to look something like this
+</p>
+<pre>Screen		0	"DisplayLinkScreen"
+Screen		1	"Internal" RightOf "DisplayLinkScreen"
+Option		"Xinerama" "on"
+</pre>
+<p>Change <i>Internal</i> to your main display, then restart X.
+</p>
+<h4><span class="mw-headline" id="Dual_X_setup">Dual X setup</span></h4>
+<p>Refer to the steps covered in the <a rel="nofollow" class="external text" href="http://wiki.gentoo.org/wiki/DisplayLink#Two_X_server">Gentoo Wiki</a> for details on this setup.
+</p>
+<h2><span class="mw-headline" id="Troubleshooting">Troubleshooting</span></h2>
+<h3><span class="mw-headline" id="Screen_redraw_is_broken">Screen redraw is broken</span></h3>
+<p>If you are using <code>udl</code> as your kernel driver and the monitor appears to work, but is only updating where you move the mouse or when windows change in certain places, then you probably have the wrong modeline for your screen. Getting a proper modeline for your screen with a command like
+</p>
+<pre>
+gtf 1366 768 59.9
+</pre>
+<p>where <code>1366</code> and <code>768</code> are the horizontal and vertical resolutions for your monitor, and <code>59.9</code> is the refresh rate from its specs. To use this, create a new mode with <code>xrandr</code> like follows:
+</p>
+<pre>
+xrandr --newmode "1368x768_59.90" 85.72 1368 1440 1584 1800 768 769 772 795 -HSync +Vsync
+</pre>
+<p>and add it to <a href="https://wiki.archlinux.org/index.php/Xrandr" title="Xrandr">Xrandr</a>:
+</p>
+<pre>
+xrandr --addmode DVI-0 1368x768_59.90
+</pre>
+<p>Then tell the monitor to use that mode for the DisplayLink monitor, and this should fix the redraw issues. Check the <a href="https://wiki.archlinux.org/index.php/Xrandr" title="Xrandr">Xrandr</a> page for information on using a different mode.
+</p>
+<h3><span class="mw-headline" id="X_crashes_or_keeps_blank">X crashes or keeps blank</span></h3>
+<p>If X crashes, or nothing is shown at load, try to start X only using the external display by updating <code>xorg.conf</code> as follows:
+</p>
+<pre>
+ Screen		0	"DisplayLinkScreen"
+ #Screen		1	"Internal" RightOf "DisplayLinkScreen"
+ #Option		"Xinerama" "on"
+</pre>
+<p>There are reported instances in which Xinerama requires all its <code>Screen</code> color depths to be the same. In both <code>Screen</code> sections, try changing the <code>DefaultDepth</code> to 16.
+</p>
+<pre>
+Section "Screen"
+ ...
+ DefaultDepth 16
+ ...
+EndSection
+
+</pre>
+<p><strong> Note: </strong> With fbdev this is not true anymore, because fbdev provides virtual 24 bit support. Everything may be used with <code>DefaultDepth 24</code>. However, USB 2.0 has less bandwidth than a standard monitor, so a performance update may be seen from setting it to 16 bit mode.</p>
+<h3><span class="mw-headline" id="Cannot_start_in_framebuffer_mode._Please_specify_busIDs_for_all_framebuffer_devices">Cannot start in framebuffer mode. Please specify busIDs for all framebuffer devices</span></h3>
+<p>With two monitors configured in Xinerama mode, <code>/var/log/Xorg.0.log</code> will sometimes display the following error:
+</p>
+<pre>
+Fatal server error:
+Cannot run in framebuffer mode. Please specify busIDs for all framebuffer devices
+</pre>
+<p>As indicated by <a rel="nofollow" class="external text" href="http://forums.gentoo.org/viewtopic-t-809655.html">this Gentoo Forums thread</a>, KMS might be incompatible with fbdev. They also suggested the possible fix of running <code>startx -- -retro</code> which will allow X to run even when, to X itself, it doesn't appear to be working.
+</p>
+<div><strong> Note: </strong>A <a rel="nofollow" class="external text" href="https://bugs.freedesktop.org/show_bug.cgi?id=65384">bug report</a> has been filed for this issue.</div>
+<h3><span class="mw-headline" id="DisplayLink_refresh_rate_is_extremely_slow_with_gnome_3">DisplayLink refresh rate is extremely slow with gnome 3</span></h3>
+<p>If once you set up your DisplayLink your entire desktop becomes slow, and maximizing a window on the displaylink screen reduces the lag, try adding the screen manually via xrandr:
+</p>
+<pre>
+xrandr -q
+xrandr --output [screen_here] --right-of [other_screen] --auto
+</pre>
+<h2><span class="mw-headline" id="See_Also">See Also</span></h2>
+
+
+
+
+
+</div>
+					</div>
+</body></html>

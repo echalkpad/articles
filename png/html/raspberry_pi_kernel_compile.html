@@ -1,0 +1,52 @@
+<!DOCTYPE html><html><head><title>Raspberry Pi Kernel Compile</title></head><body>
+<h1>Raspberry Pi Kernel Compile</h1><p><a href="http://mitchtech.net/raspberry-pi-kernel-compile/" target="_new">Original URL</a></p>
+<p><blockquote>27 This tutorial will demonstrate how to cross compile the kernel for the Raspberry Pi on Ubuntu 12.04 LTS. The kernel is functional with both the Debian and Arch Linux Raspberry Pi images.&hellip;</blockquote></p>
+<div><div class="entry clearfix post">
+				
+					
+																
+							
+				<div id="watch_action"><div id="watch_position"><div id="action_like"><span class="like-665 like"><img title="Worked" id="like-665" rel="like" class="lbg-style2 jlk" src="http://mitchtech.net/wp-content/plugins/wti-like-post/images/pixel.gif"></span><span id="lc-665" class="lc">10</span></div></div> <p id="status-665" class="status">&#xA0;&#xA0;This worked for me.</p></div><p>This tutorial will demonstrate how to cross compile the kernel for the Raspberry Pi on Ubuntu 12.04 LTS. The kernel is functional with both the Debian and Arch Linux Raspberry Pi images. &#xA0;First, install the package dependencies, git and the cross-compilation toolchain:</p>
+<blockquote><p>sudo apt-get install git-core gcc-4.6-arm-linux-gnueabi</p></blockquote>
+<p>Create a symlink for the cross compiler:</p>
+<blockquote><p>sudo ln -s /usr/bin/arm-linux-gnueabi-gcc-4.6 /usr/bin/arm-linux-gnueabi-gcc</p></blockquote>
+<p>Make a directory for the sources and tools, then clone them with git:</p>
+<blockquote><p>mkdir raspberrypi<br>
+cd raspberrypi<br>
+git clone https://github.com/raspberrypi/tools.git<br>
+git clone https://github.com/raspberrypi/linux.git<br>
+cd linux</p></blockquote>
+<p>Generate the .config file from the pre-packaged raspberry pi one:</p>
+<blockquote><p>make ARCH=arm CROSS_COMPILE=/usr/bin/arm-linux-gnueabi- bcmrpi_cutdown_defconfig</p></blockquote>
+<p>If you want to make changes to the configuration, run make menuconfig (optional):</p>
+<blockquote><p>make ARCH=arm CROSS_COMPILE=/usr/bin/arm-linux-gnueabi- menuconfig</p></blockquote>
+<p>Once you have made the desired changes, save and exit the menuconfig screen. Now we are ready to start the build. You can speed up the compilation process by enabling parallel make with the -j flag. The recommended use is &#x2018;processor cores + 1&#x2032;, e.g. 5 if you have a quad core processor:</p>
+<blockquote><p>make ARCH=arm CROSS_COMPILE=/usr/bin/arm-linux-gnueabi- -k -j5</p></blockquote>
+<p>Assuming the compilation was sucessful, create a directory for the modules:</p>
+<blockquote><p>mkdir ../modules</p></blockquote>
+<p>Then compile and &#x2018;install&#x2019; the loadable modules to the temp directory:</p>
+<blockquote><p>make modules_install ARCH=arm CROSS_COMPILE=/usr/bin/arm-linux-gnueabi- INSTALL_MOD_PATH=../modules/</p></blockquote>
+<p>Now we need to use imagetool-uncompressed.py from the tools repo to get the kernel ready for the Pi.</p>
+<blockquote><p>cd ../tools/mkimage/<br>
+./imagetool-uncompressed.py ../../linux/arch/arm/boot/Image</p></blockquote>
+<p>This creates a kernel.img in the current directory. Plug in the SD card of the existing Debian image that you wish to install the new kernel on. Delete the existing kernel.img and replace it with the new one, substituting &#x201C;boot-partition-uuid&#x201D; with the identifier of the partion as it is mounted in Ubuntu.</p>
+<blockquote><p>sudo rm /media/boot-partition-uuid/kernel.img<br>
+sudo mv kernel.img /media/boot-partition-uuid/</p></blockquote>
+<p>Next, remove the existing /lib/modules and lib/firmware directories, substituting &#x201C;rootfs-partition-uuid&#x201D; with the identifier of the root filesystem partion mounted in Ubuntu.</p>
+<blockquote><p>sudo rm -rf /media/rootfs-partition-uuid/lib/modules/<br>
+sudo rm -rf /media/rootfs-partition-uuid/lib/firmware/</p></blockquote>
+<p>Go to the destination directory of the previous make modules_install, and copy the new modules and firmware in their place:</p>
+<blockquote><p>cd ../../modules/<br>
+sudo cp -a lib/modules/ /media/rootfs-partition-uuid/lib/<br>
+sudo cp -a lib/firmware/ /media/rootfs-partition-uuid/lib/<br>
+sync</p></blockquote>
+<p>That&#x2019;s it! Exject the SD card, and boot the new kernel on the Raspberry Pi!</p>
+
+											</div> 
+ 
+ 				
+						
+			
+
+				</div>
+</body></html>

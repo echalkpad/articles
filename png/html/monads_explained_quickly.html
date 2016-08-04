@@ -1,0 +1,175 @@
+<!DOCTYPE html><html><head><title>Monads Explained Quickly</title></head><body>
+<h1>Monads Explained Quickly</h1><p><a href="http://www.breck-mckye.com/blog/2016/04/monads-explained-quickly/" target="_new">Original URL</a></p>
+<p><blockquote>Most monad tutorials are long, confusing, and ineffective. I cannot promise this one will be more clear, more interesting, or even more effective, but I can at least promise to make it brisk. You&hellip;</blockquote></p>
+<div><div class="entry-content"><p>Most monad tutorials are long, confusing, and ineffective. I cannot promise this one will be more clear, more interesting, or even more effective, but I can at least promise to make it brisk. You have nothing to lose by reading it.</p>
+
+
+
+
+<p>Take a look at this object, <code>Foo</code>. It&#x2019;s a monad, but what that <em>means</em> isn&#x2019;t relevant right now. Let&#x2019;s just focus on how Foo specifically works:</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">Foo</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">get</span> <span class="o">=</span> <span class="p">()</span><span class="o">=&gt;</span> <span class="nx">value</span><span class="p">;</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">map</span> <span class="o">=</span> <span class="nx">fn</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="kd">let</span> <span class="nx">result</span> <span class="o">=</span> <span class="nx">fn</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="k">new</span> <span class="nx">Foo</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Foo holds a single <code>value</code> that never changes. It provides a method for <code>getting</code> it, and a curious method named <code>map</code>. Map gets a function, passes it the <code>value</code>, and then returns the result in a new Foo.</p>
+
+<p>Because map returns a new Foo, it&#x2019;s chainable:</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">let</span> <span class="nx">one</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Foo</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+</span><span class="line"><span class="kd">let</span> <span class="nx">two</span> <span class="o">=</span> <span class="nx">one</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">x</span> <span class="o">=&gt;</span> <span class="nx">x</span> <span class="o">+</span> <span class="mi">7</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="nx">x</span> <span class="o">=&gt;</span> <span class="nx">x</span> <span class="o">/</span> <span class="mi">2</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="nx">x</span> <span class="o">=&gt;</span> <span class="nx">x</span> <span class="o">-</span> <span class="mi">2</span><span class="p">);</span>
+</span><span class="line"><span class="nx">two</span><span class="p">.</span><span class="nx">get</span><span class="p">()</span> <span class="o">===</span> <span class="mi">2</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This chaining is kinda neat &#x2013; it lets me write the operations I want to perform on <em>x</em> in order, rather than with nested function calls, like below:</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">let</span> <span class="nx">two</span> <span class="o">=</span> <span class="nx">minusTwo</span><span class="p">(</span><span class="nx">divideByTwo</span><span class="p">(</span><span class="nx">addSeven</span><span class="p">(</span><span class="mi">1</span><span class="p">)));</span> <span class="c1">// I have to read this right-to-left, which is awkward</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>But the real value to an object like Foo is that if I put logic inside <code>map</code>, I can abstract away an action that I want to perform between each step of an operation.</p>
+
+<p>Consider another monad, named <code>Bar</code>:</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">Bar</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">get</span> <span class="o">=</span> <span class="p">()</span><span class="o">=&gt;</span> <span class="nx">value</span><span class="p">;</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">map</span> <span class="o">=</span> <span class="nx">fn</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="kd">let</span> <span class="nx">result</span> <span class="o">=</span> <span class="nx">fn</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+</span><span class="line"> <span class="k">return</span> <span class="k">new</span> <span class="nx">Bar</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If I have an operation that makes multiple changes to a value, and I want to log how that value mutates at each turn, <code>Bar</code> lets me swap code like this&#x2026;</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">let</span> <span class="nx">stepOne</span> <span class="o">=</span> <span class="nx">something</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+</span><span class="line"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">stepOne</span><span class="p">);</span>
+</span><span class="line"><span class="kd">let</span> <span class="nx">stepTwo</span> <span class="o">=</span> <span class="nx">somethingElse</span><span class="p">(</span><span class="nx">stepOne</span><span class="p">);</span>
+</span><span class="line"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">stepTwo</span><span class="p">);</span>
+</span><span class="line"><span class="kd">let</span> <span class="nx">stepThree</span> <span class="o">=</span> <span class="nx">somethingDifferent</span><span class="p">(</span><span class="nx">stepTwo</span><span class="p">);</span>
+</span><span class="line"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">stepThree</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>&#x2026;for code like this:</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="k">new</span> <span class="nx">Bar</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">something</span><span class="p">)</span> <span class="c1">// console &gt;&gt; logs new value</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">somethingElse</span><span class="p">)</span> <span class="c1">// console &gt;&gt; logs new value</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">somethingDifferent</span><span class="p">);</span> <span class="c1">// console &gt;&gt; logs new value</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>You now understand monads</strong>. I did promise this would be quick. Monads can be boiled down - roughly - to the following rules:</p>
+
+<ol>
+<li>A monad contains a value</li>
+<li>A monad has a method named <code>map</code> that takes a function</li>
+<li>Map has some logic around calling that function and processing the result</li>
+<li>Map then returns the result in a new monad, so that calls to map can be chained</li>
+</ol>
+
+
+<p>That&#x2019;s it. If you understand how the above code works, you (basically) understand monads. Sorry if you were hoping for something more magical and mind-bending.</p>
+
+<p>We can do anything we like in <code>map</code>. Anything that we want to do between the steps of an operation &#x2013; be that deciding how we pass the value into the next step, or doing something with the result that comes back out &#x2013; we can put inside <code>map</code> and abstract away. Null checking is a great example:</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">function</span> <span class="nx">Maybe</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">get</span> <span class="o">=</span> <span class="p">()</span><span class="o">=&gt;</span> <span class="nx">value</span><span class="p">;</span>
+</span><span class="line"> <span class="k">this</span><span class="p">.</span><span class="nx">map</span> <span class="o">=</span> <span class="nx">fn</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">value</span> <span class="o">===</span> <span class="kc">null</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="k">new</span> <span class="nx">Baz</span><span class="p">(</span><span class="kc">null</span><span class="p">);</span>
+</span><span class="line"> <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="k">new</span> <span class="nx">Baz</span><span class="p">(</span><span class="nx">fn</span><span class="p">(</span><span class="nx">value</span><span class="p">));</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In <code>Maybe</code>, map only calls the supplied function if it can hand it a valid, non-null value. Otherwise it quietly returns a clone of itself. This lets us turn verbose, repetitive code like this&#x2026;</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">let</span> <span class="nx">connection</span> <span class="o">=</span> <span class="nx">getConnection</span><span class="p">();</span>
+</span><span class="line"><span class="kd">let</span> <span class="nx">user</span> <span class="o">=</span> <span class="nx">connection</span> <span class="o">?</span> <span class="nx">connection</span><span class="p">.</span><span class="nx">getUser</span><span class="p">()</span> <span class="o">:</span> <span class="kc">null</span><span class="p">;</span>
+</span><span class="line"><span class="kd">let</span> <span class="nx">address</span> <span class="o">=</span> <span class="nx">user</span> <span class="o">?</span> <span class="nx">user</span><span class="p">.</span><span class="nx">getAddress</span><span class="p">()</span> <span class="o">:</span> <span class="kc">null</span><span class="p">;</span>
+</span><span class="line"><span class="kd">let</span> <span class="nx">zipCode</span> <span class="o">=</span> <span class="nx">address</span> <span class="o">?</span> <span class="nx">address</span><span class="p">.</span><span class="nx">getZip</span><span class="p">()</span> <span class="o">:</span> <span class="kc">null</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>&#x2026;into a much more elegant alternative:</p>
+
+<figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+</pre></td><td class="code"><pre><code class="javascript"><span class="line"><span class="kd">let</span> <span class="nx">zipCode</span> <span class="o">=</span>
+</span><span class="line"> <span class="k">new</span> <span class="nx">Maybe</span><span class="p">(</span><span class="nx">getConnection</span><span class="p">())</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">c</span> <span class="o">=&gt;</span> <span class="nx">c</span><span class="p">.</span><span class="nx">getUser</span><span class="p">())</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">u</span> <span class="o">=&gt;</span> <span class="nx">u</span><span class="p">.</span><span class="nx">getAddress</span><span class="p">())</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">a</span> <span class="o">=&gt;</span> <span class="nx">a</span><span class="p">.</span><span class="nx">getZip</span><span class="p">);</span>
+</span><span class="line"><span class="nx">zipCode</span><span class="p">.</span><span class="nx">get</span><span class="p">();</span> <span class="c1">// returns either a zip code (if every step worked) or a null (if any step returned one)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+<p>Hopefully these two examples are enough to show you why monads and their map methods are so powerful. No doubt you can imagine uses of your own.</p>
+
+<p>There are scores of other monads, all with quite diverse uses and functionality. But they all follow those same four rules we saw in <code>Foo</code> and <code>Bar</code>. If you follow them likewise you have access to a powerful tool indeed.</p>
+</div>
+
+
+ </div>
+</body></html>

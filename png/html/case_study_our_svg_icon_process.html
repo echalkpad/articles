@@ -1,0 +1,224 @@
+<!DOCTYPE html><html><head><title>Case Study: Our SVG Icon Process</title></head><body>
+<h1>Case Study: Our SVG Icon Process</h1><p><a href="http://blog.cloudfour.com/our-svg-icon-process/" target="_new">Original URL</a></p>
+<p><blockquote>When I wrote about why you shouldn&#x2019;t use icon fonts in your next web project, I had no idea it would spark so much heated debate and intense discussion. One recurring question stood out to me:&hellip;</blockquote></p>
+<div><article class="post-4064 post type-post status-publish format-standard hentry category-emerging-technology category-performance category-standards category-uncategorized tag-gulp tag-icons tag-svg" id="post-4064">
+			
+	
+
+			<p>When I wrote about <a href="http://blog.cloudfour.com/seriously-dont-use-icon-fonts/">why you shouldn&#x2019;t use icon fonts in your next web project</a>, I had no idea it would spark so much heated debate and intense discussion. One recurring question stood out to me: How might one actually implement an SVG icon system?</p>
+<p>It&#x2019;s a surprisingly difficult question to answer. Should you use <code>&lt;img&gt;</code>, <code>&lt;svg&gt;</code>, <code>&lt;object&gt;</code> or pure CSS? Will you combine your icons into a single sprite or keep them separate? If you <em>do</em> combine them, do you use an <a href="https://css-tricks.com/css-sprites/">old-school technique</a> or embrace <a href="https://sarasoueidan.com/blog/structuring-grouping-referencing-in-svg/">SVG&#x2019;s built-in features</a>? Can <a href="https://useiconic.com/tools/iconic-js">JavaScript</a> factor in somehow?</p>
+<p>Though this variety of options might feel overwhelming, it&#x2019;s ultimately a <em>good thing</em>. SVG&#x2019;s versatility empowers us to craft the most appropriate solution for our audience and use-case.</p>
+<p>So as much as I&#x2019;d like to, I can&#x2019;t say <em>exactly</em> how you should implement SVG icons in your next project. There&#x2019;s no substitution for research and trying stuff out when it comes to finding the best fit for your project.</p>
+<p>Instead, I&#x2019;m going to show how <em>we</em> tend to assemble and implement SVG icons, and why we do it that way.</p>
+<h3>What We Do</h3>
+<p>The icon process we&#x2019;ve adopted here at <a href="http://cloudfour.com/">Cloud Four</a> is a byproduct of the types of projects we take on, which tend to be <a href="http://blog.cloudfour.com/converting-an-existing-site-or-app-to-a-responsive-design/">large responsive redesigns</a> or brand-new responsive interfaces. Our most common deliverables are in-browser mockups and <a href="http://styleguides.io/examples.html">pattern libraries</a>. We often work with existing in-house teams, designing or extending icon systems based on their brand guidelines.</p>
+<p>The front-end problems we solve tend to be those that are too complex or idiosyncratic to tackle with a framework or a simple content reflow. Our most common use of icons is to reinforce the meaning or relative importance of interface controls (a plus next to the word &#x201C;Add,&#x201D; a checkmark next to the word &#x201C;Okay,&#x201D; etc.).</p>
+<h3>Our Requirements</h3>
+<p>With this context in mind, we can assemble a list of requirements:</p>
+<ul>
+<li><strong>Accessibility:</strong> Because our icons represent or reinforce content, they should exist in markup.</li>
+<li><strong>Design:</strong> Our icons will most often coexist with text. They should inherit the text color and flow with the text by default.</li>
+<li><strong>Performance:</strong> Icons should be consolidated into a single, external sprite to avoid multiple requests and maximize caching.</li>
+<li><strong>Workflow:</strong> Whatever icon prep we can automate should be baked into our existing development tools (<a href="https://nodejs.org/">Node.js</a> and <a href="http://gulpjs.com/">Gulp</a>).</li>
+<li><strong>Browsers:</strong> Our projects tend to be optimized for IE9+, Android 3+ and the usual array of less finicky modern browsers.</li>
+</ul>
+<p>With requirements in hand, it&#x2019;s time to build an SVG icon system!</p>
+<h3>1. Exporting Icons</h3>
+<p>Though our team digs <a href="https://www.sketchapp.com/">Sketch</a> for UI explorations, we still feel like <a href="http://www.adobe.com/products/illustrator.html">Illustrator</a> is a bit more intuitive for the design of icons and other illustrative elements.</p>
+<p>We maintain a master <code>icons.ai</code> file in a shared spot (usually Dropbox), with each icon in the library residing in its own named artboard. We can see every icon in the context of its siblings, make any final tweaks for consistency, and simplify or combine any overlapping or unnecessary paths.</p>
+<p><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/illustrator.gif" alt="Screenshots of Illustrator artboards with icons"></p>
+<p>During this process, we purposely avoid preparing different rotations of the same icon. Traditionally, icon sets have exported separate assets for &#x201C;left arrow,&#x201D; &#x201C;right arrow,&#x201D; etc., but with SVG this repetition is redundant and unnecessary. Later on, we&#x2019;ll walk through how to create simple rotational variations of the same icon.</p>
+<p>Once everything&#x2019;s looking good and feeling clean, we use <a href="https://helpx.adobe.com/illustrator/how-to/export-svg.html">Illustrator CC&#x2019;s recently-improved exporting</a> to generate SVGs from our artboards. After removing anything Illustrator over-enthusiastically prepended to our filenames, we&#x2019;re ready to smoosh all of our icons into a single sprite.</p>
+<h3>2. Creating Our Sprite</h3>
+<p>As mentioned earlier, our team likes using Gulp for our local environment. If you&#x2019;ve never used Gulp before, here&#x2019;s <a href="https://markgoodyear.com/2014/01/getting-started-with-gulp/">a great article covering the basics</a>. We&#x2019;re going to write a Gulp task called <code>icons</code> this will compile a folder of separate, unoptimized SVG icons into a single, optimized sprite we can reference from our HTML.</p>
+<p>Of the handful of plugins we&#x2019;ve tried for accomplishing this sort of thing, our favorite is currently <a href="https://github.com/jkphl/gulp-svg-sprite">gulp-svg-sprite</a>. It boasts a wealth of <a href="https://jkphl.github.io/svg-sprite/">output modes and configuration options</a>, making it the perfect choice for control freaks like yours truly.</p>
+<p>For our <code>icons</code> task, we&#x2019;ll be using the plugin&#x2019;s <code>symbol</code> &#x201C;mode.&#x201D; This will transform each of our SVG files into a <code>&lt;symbol&gt;</code> element, which we&#x2019;ll be able to reference by ID later.</p>
+<p>Here&#x2019;s what our SVG task might look like:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="javascript"><span>var</span> gulp <span>=</span> require<span>(</span><span>'gulp'</span><span>)</span><span>;</span>
+<span>var</span> svgSprite <span>=</span> require<span>(</span><span>'gulp-svg-sprite'</span><span>)</span><span>;</span>
+&#xA0;
+<span>var</span> svgSpriteConfig <span>=</span> <span>{</span>
+ mode<span>:</span> <span>{</span>
+ symbol<span>:</span> <span>{</span>
+ dest<span>:</span> <span>''</span><span>,</span>
+ sprite<span>:</span> <span>'icons.svg'</span>
+ <span>}</span>
+ <span>}</span>
+<span>}</span><span>;</span>
+&#xA0;
+gulp.<span>task</span><span>(</span><span>'icons'</span><span>,</span> <span>function</span> <span>(</span><span>)</span> <span>{</span>
+ <span>return</span> gulp.<span>src</span><span>(</span><span>'./src/icons/**/*.svg'</span><span>)</span>
+ .<span>pipe</span><span>(</span>svgSprite<span>(</span>svgSpriteConfig<span>)</span><span>)</span>
+ .<span>pipe</span><span>(</span>gulp.<span>dest</span><span>(</span><span>'dist'</span><span>)</span><span>)</span><span>;</span>
+<span>}</span><span>)</span><span>;</span></pre></td></tr></table></div>
+
+<p>This task will:</p>
+<ol>
+<li>Find every SVG file in the <code>src/icons</code> directory.</li>
+<li>Pass those files to the <code>gulp-svg-sprite</code> plugin, which combines them into a single <code>icons.svg</code> file using the <code>symbol</code> output mode.</li>
+<li>Output the result to the <code>dist</code> directory.</li>
+</ol>
+<p>Now if we run <code>gulp icons</code>, we should find a shiny new <code>icons.svg</code> file in our <code>dist</code> directory, ready to be referenced from our markup.</p>
+<h3>3. Including Icons in Our Markup</h3>
+<p>Now that we have our SVG sprite, we can reference it from our markup using <code>&lt;svg&gt;</code> and the <code>&lt;use&gt;</code> element:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="html5"><span>&lt;svg&gt;</span>
+ <span>&lt;use xlink:<span>href</span><span>=</span><span>"icons.svg#back"</span><span>/</span>&gt;</span>
+<span>&lt;<span>/</span>svg&gt;</span></pre></td></tr></table></div>
+
+<p>This markup tells the browser &#x201C;use the symbol with ID <code>back</code> from the file <code>icons.svg</code>.&#x201D; This means our external file is nice and cacheable, and we can reference the same icon asset multiple times from the same file! Hooray!</p>
+<p>Except, it looks like garbage:</p>
+<p><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/pre-css.png" alt="Unstyled SVG icon in document"></p>
+<p>We haven&#x2019;t told the browser how we want our icons to be sized, filled or aligned based on their surroundings. To do that, we need some CSS.</p>
+<h3>4. Styling Icons</h3>
+<p>We don&#x2019;t want to style <em>every</em> <code>svg</code> because SVG can be used for a lot more than icons. Instead, we&#x2019;re going to create a class. Our team likes using <a href="https://github.com/suitcss/suit/blob/master/doc/naming-conventions.md">SUIT CSS naming conventions</a>, so we&#x2019;ll name our class <code>Icon</code>:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="css"><span>.Icon</span> <span>{</span>
+ <span>/* Flow with text content */</span>
+ <span>display</span><span>:</span> inline-block<span>;</span>
+ <span>/* Inherit the parent text color */</span>
+ fill<span>:</span> currentColor<span>;</span>
+ <span>/* Use the parent font-size for width and height */</span>
+ <span>height</span><span>:</span> <span>1em</span><span>;</span>
+ <span>width</span><span>:</span> <span>1em</span><span>;</span>
+ <span>/* Vertically align icon with adjacent text */</span>
+ <span>vertical-align</span><span>:</span> <span>middle</span><span>;</span>
+ <span>/* Align more nicely with capital letters */</span>
+ <span>position</span><span>:</span> <span>relative</span><span>;</span>
+ <span>top</span><span>:</span> <span>-0.0625em</span><span>;</span>
+<span>}</span></pre></td></tr></table></div>
+
+<p>(Props to <a href="https://css-tricks.com/cascading-svg-fill-color/">Chris Coyier</a> and <a href="http://snook.ca/archives/html_and_css/icons-and-type">Jonathan Snook</a>!)</p>
+<p>Here&#x2019;s the result after adding <code>class="Icon"</code> to our SVG element:</p>
+<p><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/css.gif" alt="Styled SVG icon in document"></p>
+<p>Success! Our icons are successfully inheriting their size and color, and aligning nicely with adjacent type.</p>
+<p>This accomplishes most of what we set out to do, but we haven&#x2019;t taken advantage of what makes SVG special just yet. Let&#x2019;s fix that.</p>
+<h3>5. Adding DRY Variations</h3>
+<p>Back when we were exporting icons, we only exported a single arrow asset (<code>back.svg</code>), the contents of which looked something like this:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="html5"><span>&lt;svg xmlns<span>=</span><span>"http://www.w3.org/2000/svg"</span> viewBox<span>=</span><span>"0 0 24 24"</span>&gt;</span>
+ <span>&lt;path d<span>=</span><span>"M22,10H6.83l3.59-3.59A2,2,0,0,0,7.59,3.59l-7,7a2,2,0,0,0,0,2.83l7,7a2,2,0,0,0,2.83-2.83L6.83,14H22A2,2,0,0,0,22,10Z"</span><span>/</span>&gt;</span>
+<span>&lt;<span>/</span>svg&gt;</span></pre></td></tr></table></div>
+
+<p>Let&#x2019;s pop open our favorite code editor, and create a new <code>forward.svg</code> file to compliment it:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="html5"><span>&lt;svg xmlns<span>=</span><span>"http://www.w3.org/2000/svg"</span></span>
+<span> xmlns:xlink<span>=</span><span>"http://www.w3.org/1999/xlink"</span> </span>
+<span> viewBox<span>=</span><span>"0 0 24 24"</span>&gt;</span>
+ <span>&lt;use xlink:<span>href</span><span>=</span><span>"#back"</span> transform<span>=</span><span>"rotate(180 12 12)"</span><span>/</span>&gt;</span>
+<span>&lt;<span>/</span>svg&gt;</span></pre></td></tr></table></div>
+
+<p>Here&#x2019;s what&#x2019;s going on:</p>
+<ol>
+<li>Our <code>&lt;svg&gt;</code> element is identical to <code>back.svg</code>, except we&#x2019;ve added an <code>xmlns:xlink</code> attribute. This helps avoid errors during optimization by letting the plugin know that this SVG will reference other elements.</li>
+<li>Instead of including the forward icon&#x2019;s path data, we reference our existing <code>#back</code> icon from a <code>&lt;use&gt;</code> element (similar to how we reference icons from our markup).</li>
+<li>The <code>transform</code> attribute rotates the icon <code>180</code> degrees from the center of our <code>viewBox</code>.</li>
+</ol>
+<p>If we recompile our sprite, we should now be able to reference both icons from our markup:</p>
+<p><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/both-arrows.png" alt="Original arrow icon and derivative icon in document"></p>
+<p>Any changes made to <code>back.svg</code> will cascade to <code>forward.svg</code> (or any future variations). Plus, we save a small amount of file-size in the compiled sprite. Win/win!</p>
+<h3>6. Enforcing Mandatory Colors</h3>
+<p>Sometimes there are icons that really <em>shouldn&#x2019;t</em> inherit everything about the parent. A common concern we hear from design teams is that the meaning of certain icons (in particular those representing &#x201C;error&#x201D; or &#x201C;warning&#x201D;) can be diluted over time if they are applied inconsistently.</p>
+<p>In these cases, it&#x2019;s helpful to remember that SVG elements are subject to the same style cascade as everything else. By specifying mandatory colors via attributes on the elements themselves (<code>fill</code>, <code>style</code>, etc.), we can overrule some or all color inheritance.</p>
+<p>As an example, this <code>error.svg</code> file has <code>fill</code> attributes on the elements themselves:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="html5"><span>&lt;svg xmlns<span>=</span><span>"http://www.w3.org/2000/svg"</span> viewBox<span>=</span><span>"0 0 24 24"</span>&gt;</span>
+ <span>&lt;path fill<span>=</span><span>"#ff4136"</span> d<span>=</span><span>"M13.74,3l9,15.7A2.21,2.21,0,0,1,20.9,22H3.1a2.21,2.21,0,0,1-1.8-3.34l9-15.7A2,2,0,0,1,13.74,3Z"</span><span>/</span>&gt;</span>
+ <span>&lt;path fill<span>=</span><span>"#fff"</span> d<span>=</span><span>"M10.59,17.82a1.41,1.41,0,1,1,1.4,1.4A1.42,1.42,0,0,1,10.59,17.82Zm2.77-9.63a32.3,32.3,0,0,1-.61,4.5l-0.34,2.11H11.6l-0.34-2.11a32.77,32.77,0,0,1-.61-4.5A1.24,1.24,0,0,1,12,6.78,1.24,1.24,0,0,1,13.36,8.18Z"</span><span>/</span>&gt;</span>
+<span>&lt;<span>/</span>svg&gt;</span></pre></td></tr></table></div>
+
+<p>Even with our <code>.Icon</code> class applied, these colors will not be overruled:</p>
+<p><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/color-icon.png" alt="Error icon that will not inherit its fill color from document"></p>
+<h3>7. Improving Accessibility</h3>
+<p>Arguably the best reason to adopt SVG is to take advantage of its accessibility features. Thanks to L&#xE9;onie Watson&#x2019;s <a href="http://www.sitepoint.com/tips-accessible-svg/">Tips for Creating Accessible SVG</a>, we know to add the following elements and attributes to our icons:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="html5"><span>&lt;svg</span>
+<span> xmlns<span>=</span><span>"http://www.w3.org/2000/svg"</span> </span>
+<span> viewBox<span>=</span><span>"0 0 24 24"</span></span>
+<span> aria-labelledby<span>=</span><span>"title desc"</span>&gt;</span>
+ <span>&lt;<span>title</span> <span>id</span><span>=</span><span>"title"</span>&gt;</span>Back<span>&lt;<span>/</span><span>title</span>&gt;</span>
+ <span>&lt;desc <span>id</span><span>=</span><span>"desc"</span>&gt;</span>A leftward arrow<span>&lt;<span>/</span>desc&gt;</span>
+ <span>&lt;path d<span>=</span><span>"M22,10H6.83l3.59-3.59A2,2,0,0,0,7.59,3.59l-7,7a2,2,0,0,0,0,2.83l7,7a2,2,0,0,0,2.83-2.83L6.83,14H22A2,2,0,0,0,22,10Z"</span><span>/</span>&gt;</span>
+<span>&lt;<span>/</span>svg&gt;</span></pre></td></tr></table></div>
+
+<p>This insures that our icons have human readable fallbacks for blind and partially sighted people in a variety of user agents.</p>
+<p>But there&#x2019;s a problem with this approach. IDs must be unique, and we&#x2019;ll be combining multiple files into a single SVG document. Our accessibility efforts will be thwarted if two <code>&lt;title&gt;</code> or <code>&lt;desc&gt;</code> elements attempt to use the same ID within the same document.</p>
+<p>We could just be <em>really</em> diligent about choosing unique IDs, but that&#x2019;s kind of a pain. If only we could manage these titles and descriptions in a central location, relying on our Gulp task to assign unique identifiers&#x2026;</p>
+<p>Luckily, we can! All we need to do is provide all our titles and descriptions in <a href="https://github.com/jkphl/svg-sprite/blob/master/docs/meta-data.md">a separate YAML file</a>:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="yaml"><span>back</span>:<span>
+ title</span><span>: </span>Back<span>
+ description</span><span>: </span>A leftward arrow
+<span>
+error</span>:<span>
+ title</span><span>: </span>Error<span>
+ description</span><span>: </span>A red sign with a white exclamation mark
+<span>
+forward</span>:<span>
+ title</span><span>: </span>Forward<span>
+ description</span><span>: </span>A rightward arrow
+<span>
+search</span>:<span>
+ title</span><span>: </span>Search<span>
+ description</span><span>: </span>A magnifying glass</pre></td></tr></table></div>
+
+<p>Then update the Gulp task with the location of that file:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="javascript"><span>var</span> svgSpriteConfig <span>=</span> <span>{</span>
+ mode<span>:</span> <span>{</span> <span>/* ... */</span> <span>}</span><span>,</span>
+ shape<span>:</span> <span>{</span>
+ <span>// Titles and descriptions</span>
+ meta<span>:</span> <span>'./src/icons/icons.yaml'</span>
+ <span>}</span>
+<span>}</span><span>;</span></pre></td></tr></table></div>
+
+<p>When we run <code>gulp icons</code> again, <code>gulp-svg-sprite</code> will add <code>&lt;title&gt;</code> and <code>&lt;desc&gt;</code> elements with unique, namespaced IDs and update the <code>aria-labelledby</code> attribute accordingly.</p>
+<p>(It&#x2019;s important to note that while we&#x2019;ve specified <code>&lt;title&gt;</code> and <code>&lt;desc&gt;</code> elements within our sprite, you should still take care to use <a href="https://www.paciellogroup.com/blog/2013/12/using-aria-enhance-svg-accessibility/">accessibility attributes</a> in the page itself when the icon&#x2019;s meaning is not re-enforced by its surrounding content.)</p>
+<h3>8. Supporting More Browsers</h3>
+<p>Time to address the elephant in the room&#x2026;</p>
+<p>Our icon sprite is a separate file, which is great for caching. But referencing symbols in an external file <a href="https://css-tricks.com/svg-use-with-external-reference-take-2/">doesn&#x2019;t work in Internet Explorer</a> (though it does in Edge).</p>
+<p><a href="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/ie10-before-opt.png"><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/ie10-before-opt.png" alt="Icons not displaying in IE10"></a></p>
+<p>To address that, we&#x2019;re going to use a polyfill called <a href="https://github.com/Keyamoon/svgxuse">svgxuse</a>. The script works by detecting failed external references, loading the referenced file via AJAX, injecting the sprite into the page itself, and updating the <code>xlink:href</code> attributes to point to the in-page resource. We like svgxuse because it minimizes the duplicated path data while retaining the ability for icons to reference each other.</p>
+<p>The polyfill will work as-is, but we should make <del>a couple of changes</del> <ins>one small change</ins> to our task config to avoid any collisions with in-page content:</p>
+
+<div class="wp_syntax"><table><tr><td class="code"><pre class="javascript"><span>var</span> config <span>=</span> <span>{</span>
+ mode<span>:</span> <span>{</span> <span>/* ... */</span> <span>}</span><span>,</span>
+ shape<span>:</span> <span>{</span>
+ <span>// Titles and descriptions</span>
+ meta<span>:</span> SRC <span>+</span> <span>'/icons/icons.yaml'</span><span>,</span>
+ <span>// Add suffix to IDs</span>
+ id<span>:</span> <span>{</span>
+ generator<span>:</span> <span>'%s-icon'</span>
+ <span>}</span>
+ <span>}</span>
+<span>}</span><span>;</span></pre></td></tr></table></div>
+
+<p>Now <del>we won&#x2019;t have to worry about the SVG sprite being visible in Internet Explorer, and</del> the IDs for our icons are far less susceptible to collisions once they coexist in the same document. Once we update our icon references to include the <code>-icon</code> suffix, we should have our target browsers covered:</p>
+<p><a href="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/ie10-after-opt.png"><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/ie10-after-opt.png" alt="Icons displaying in IE10 with svgxuse"></a></p>
+<p><strong>Update:</strong> An earlier version of this post included specific configuration options for hiding the injected SVG sprite, but <a href="https://twitter.com/Keyamoon/status/694621182142713856">svgxuse handles that automatically now</a>. Open source is awesome!</p>
+<h3>Putting It All Together</h3>
+<p>We made it! Here&#x2019;s what we accomplished:</p>
+<ul>
+<li>Our Gulp task will compile a folder of icons into a single, cacheable SVG sprite.</li>
+<li>Individual icons can be referenced one or more times from anywhere in our HTML document.</li>
+<li>By default, icons will base their position, size and color on their parent elements and surrounding text.</li>
+<li>Icons may defy the default styles where appropriate.</li>
+<li>To avoid repetition, some icons can be simple variations of others.</li>
+<li>We can specify conflict-free accessibility details within <code>icons.yaml</code>.</li>
+<li>When external references fail, the asset will be injected into the page itself.</li>
+</ul>
+<p>You can <a href="http://cloudfour.github.io/svg-icon-example/"><strong>see a live demo of the end result</strong></a> or <a href="https://github.com/cloudfour/svg-icon-example"><strong>browse the code</strong></a>.</p>
+<p><a href="http://cloudfour.github.io/svg-icon-example/"><img src="http://3w7ov13ob0hk2kk1w147yffjlu5.wpengine.netdna-cdn.com/wp-content/uploads/2016/01/demo-opt.png" alt="Our completed SVG icon demo"></a></p>
+<p>Before we pat ourselves on the back <em>too</em> vigorously, it&#x2019;s important to remember that that <strong>there is no one, true SVG icon process</strong>. Your ideal setup might involve <a href="https://sarasoueidan.com/blog/svg-picture/">the picture element</a>, <a href="https://github.com/FWeinb/grunt-svgstore">grunt-svgstore</a>, <a href="https://github.com/iconic/SVGInjector">SVGInjector</a> or even <a href="http://evil-icons.io/">an existing library</a>. It can and <em>should</em> change based on the needs of your project. We modify ours all the time.</p>
+<p>So consider this just one potential starting point for your own SVG icon system. I hope you&#x2019;ll share what you come up with!</p>
+					</article>
+
+		
+
+
+		
+		
+
+	 </div>
+</body></html>

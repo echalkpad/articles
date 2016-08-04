@@ -1,0 +1,31 @@
+<!DOCTYPE html><html><head><title>Howto: DisplayLink USB Single Monitor on Linux</title></head><body>
+<h1>Howto: DisplayLink USB Single Monitor on Linux</h1><p><a href="http://plugable.com/2011/12/23/usb-graphics-and-linux" target="_new">Original URL</a></p>
+<p><blockquote>Unfortunately, Linux doesn&#x2019;t support multiple graphics adapters the way Windows does, which means you can&#x2019;t just plug in USB graphics adapters and expect them to extend your desktop&hellip;</blockquote></p>
+<div><div class="entry-content"><p>Unfortunately, Linux doesn&#x2019;t support multiple graphics adapters the way Windows does, which means you can&#x2019;t just plug in USB graphics adapters and expect them to extend your desktop (the good news is <a href="http://www.phoronix.com/scan.php?page=news_item&amp;px=MTAzMjM" target="_blank">there is progress</a> on this support).</p><p>What is possible, however, is running a single DisplayLink adapter, or several with a Xinerama or multiseat configuration &#x2014; just as long as you don&#x2019;t expect to use your main GPU at the same time.</p><p>The single-display case is relatively easy to set up, and we&#x2019;ll cover that here.</p><p>First, make sure you&#x2019;re running kernel version 2.6.35 or later (Ubuntu 10.10 or later). For older kernel versions, you&#x2019;ll need to update udlfb and run a modified fbdev X server (not covered in this post). On these kernel versions, when you plug in your DisplayLink-based USB graphics device, you should get a green screen. This means that at the driver built into the Linux kernel is happy, healthy, and talking to the device.</p><p>Second, if you are running Unity Desktop in Ubuntu 11.04 or later, you&#x2019;ll need to switch back to Classic Mode so you&#x2019;re running straight X. Here&#x2019;s how on Ubuntu:</p><p>Click on the power button in the upper right corner (mine looks like a light switch) and choose the last option, System Settings. Search for Login Screen, Double-click to display, Choose Unlock and enter your password, Select Ubuntu Classic as default session.</p><p>Third, if you&#x2019;re running kernel versions between 2.6.35 to 3.1, enable the fb_defio option of udlfb. To do this, create or edit a file like<br> /etc/modprobe.d/50-displaylink.conf</p><p>and add the single line</p><pre lang="bash">
+options udlfb fb_defio=1
+</pre><p>And reboot (or run &#x201C;sudo depmod -a&#x201D; and unplug/replug your adapter). This will turn on defio (page fault change detection) support. This option is already enabled by default in kernels 3.2+.</p><p>Lastly, create an X config file called 60-plugable.conf (or similar) with the following contents and place it in /usr/share/X11/xorg.conf.d (on recent distros; on older distros, make this your xorg.conf):</p><pre lang="xorg_conf">
+
+Section "Device" 
+ Identifier "uga" 
+ driver "fbdev" 
+ Option "fbdev" "/dev/fb0" 
+ Option "ShadowFB" "off"
+EndSection 
+
+Section "Monitor" 
+ Identifier "monitor" 
+EndSection 
+
+Section "Screen" 
+ Identifier "screen" 
+ Device "uga" 
+ Monitor "monitor" 
+EndSection 
+
+Section "ServerLayout" 
+ Identifier "default" 
+ Screen 0 "screen" 0 0 
+EndSection
+
+</pre><p>Note: if your main GPU creates a /dev/fb0 even when the USB display is not attached, then your USB display is probably getting assigned to /dev/fb1. In that case, change /dev/fb0 in the &#x201C;Device&#x201D; section above to /dev/fb1</p><p>Now, on reboot, you should (hopefully!) see your login come up on your DisplayLink USB attached display!</p><p>This kind of simple setup is useful for:</p><ul><li>Testing or playing with your USB graphics adatper on Linux.</li><li>Embedded systems with USB but no GPU.</li><li>As a backup method when the main GPU or its driver isn&#x2019;t available or working.</li><li>Systems where a USB graphics adapter enables higher modes (up to 2048&#xD7;1152) than the main GPU screen.</li></ul><p>Please comment if you have any trouble with this single display case. See our <a href="http://plugable.com/category/project/udlfb/">past posts</a> for additional information about the DisplayLink Linux kernel driver and some more involved setups.</p><p>The instructed here work on all <a href="http://plugable.com/products#USB%202.0%20Graphics%20Adapters">Plugable USB 2.0 graphics adapters</a> and <a href="http://plugable.com/products#USB%202.0%20Multiseat%20Thin%20Clients">Plugable USB 2.0 docking stations and thin clients</a> (and should also generally work on all DisplayLink based products).</p><p id="jp-relatedposts" class="jp-relatedposts"><h3 class="jp-relatedposts-headline"><em>Related</em></h3></p></div></div>
+</body></html>

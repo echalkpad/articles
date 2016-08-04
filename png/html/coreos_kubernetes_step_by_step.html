@@ -1,0 +1,93 @@
+<!DOCTYPE html><html><head><title>CoreOS + Kubernetes Step By Step</title></head><body>
+<h1>CoreOS + Kubernetes Step By Step</h1><p><a href="https://coreos.com/kubernetes/docs/latest/getting-started.html" target="_new">Original URL</a></p>
+<p><blockquote>This guide will walk you through a deployment of a single-master/multi-worker Kubernetes cluster on CoreOS. We&#x2019;re going to: configure an etcd cluster for Kubernetes to use generate the&hellip;</blockquote></p>
+<div><div class="coreos-docs">
+
+
+<p>This guide will walk you through a deployment of a single-master/multi-worker Kubernetes cluster on CoreOS. We&#x2019;re going to:</p>
+<ul>
+<li>configure an etcd cluster for Kubernetes to use</li>
+<li>generate the required certificates for communication between Kubernetes components</li>
+<li>deploy a master node</li>
+<li>deploy worker nodes</li>
+<li>configure <code class="highlighter-rouge">kubectl</code> to work with our cluster</li>
+<li>deploy the DNS add-on</li>
+<li>deploy the network policy add-on</li>
+</ul>
+<p>Working through this guide may take you a few hours, but it will give you good understanding of the moving pieces of your cluster and set you up for success in the long run. Let&#x2019;s get started.</p>
+<h2 id="deployment-options">Deployment Options</h2>
+<p>The following variables will be used throughout this guide. Most of the provided defaults can safely be used, however some values such as <code class="highlighter-rouge">ETCD_ENDPOINTS</code> and <code class="highlighter-rouge">MASTER_HOST</code> will need to be customized to your infrastructure.</p>
+<p><strong>MASTER_HOST</strong>=<em>no default</em></p>
+<p>The address of the master node. In most cases this will be the publicly routable IP of the node. Worker nodes must be able to reach the master node(s) via this address on port 443. Additionally, external clients (such as an administrator using <code class="highlighter-rouge">kubectl</code>) will also need access, since this will run the Kubernetes API endpoint.</p>
+<p>If you will be running a high-availability control-plane consisting of multiple master nodes, then <code class="highlighter-rouge">MASTER_HOST</code> will ideally be a network load balancer that sits in front of them. Alternatively, a DNS name can be configured which will resolve to the master IPs. How requests are routed to the master nodes will be an important consideration when creating the TLS certificates.</p>
+
+<p><strong>ETCD_ENDPOINTS</strong>=<em>no default</em></p>
+<p>List of etcd machines (<code class="highlighter-rouge">http://ip:port</code>), comma separated. If you&#x2019;re running a cluster of 5 machines, list them all here.</p>
+
+<p><strong>POD_NETWORK</strong>=10.2.0.0/16</p>
+<p>The CIDR network to use for pod IPs.
+Each pod launched in the cluster will be assigned an IP out of this range.
+This network must be routable between all hosts in the cluster. In a default installation, the flannel overlay network will provide routing to this network.</p>
+
+<p><strong>SERVICE_IP_RANGE</strong>=10.3.0.0/24</p>
+<p>The CIDR network to use for service cluster VIPs (Virtual IPs). Each service will be assigned a cluster IP out of this range. This must not overlap with any IP ranges assigned to the <code class="highlighter-rouge">POD_NETWORK</code>, or other existing network infrastructure. Routing to these VIPs is handled by a local kube-proxy service to each host, and are not required to be routable between hosts.</p>
+
+<p><strong>K8S_SERVICE_IP</strong>=10.3.0.1</p>
+<p>The VIP (Virtual IP) address of the Kubernetes API Service. If the <code class="highlighter-rouge">SERVICE_IP_RANGE</code> is changed above, this must be set to the first IP in that range.</p>
+
+<p><strong>DNS_SERVICE_IP</strong>=10.3.0.10</p>
+<p>The VIP (Virtual IP) address of the cluster DNS service. This IP must be in the range of the <code class="highlighter-rouge">SERVICE_IP_RANGE</code> and cannot be the first IP in the range. This same IP must be configured on all worker nodes to enable DNS service discovery.</p>
+<h2 id="deploy-etcd-cluster">Deploy etcd Cluster</h2>
+<p>Kubernetes uses etcd for data storage and for cluster consensus between different software components. Your etcd cluster will be heavily utilized since all objects storing within and every scheduling decision is recorded. It&#x2019;s recommended that you run a multi-machine cluster on dedicated hardware (with fast disks) to gain maximum performance and reliability of this important part of your cluster. For development environments, a single etcd is ok.</p>
+<h3 id="single-nodedevelopment">Single-Node/Development</h3>
+<p>You can simply start etcd via <a href="https://coreos.com/os/docs/latest/cloud-config.html#etcd2">cloud-config</a> when you create your CoreOS machine or start it manually.</p>
+<p>If you are starting etcd manually, we need to first configure it to listen on all interfaces:</p>
+<ul>
+<li>Replace <code class="highlighter-rouge">${PUBLIC_IP}</code> with the etcd machines publicly routable IP address.</li>
+</ul>
+<p><strong>/etc/systemd/system/etcd2.service.d/40-listen-address.conf</strong></p>
+<div class="highlighter-rouge"><pre class="highlight"><code>[Service]
+Environment=ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+Environment=ETCD_ADVERTISE_CLIENT_URLS=http://${PUBLIC_IP}:2379
+</code></pre>
+</div>
+<p>Use the value of <code class="highlighter-rouge">ETCD_ADVERTISE_CLIENT_URLS</code> as the value of <code class="highlighter-rouge">ETCD_ENDPOINTS</code> in the rest of this guide.</p>
+<p>Next, start etcd</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>$ sudo systemctl start etcd2
+</code></pre>
+</div>
+<p>To ensure etcd starts after a reboot, enable it too:</p>
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="gp">$ </span>sudo systemctl <span class="nb">enable </span>etcd2
+Created symlink from /etc/systemd/system/multi-user.target.wants/etcd2.service to /usr/lib64/systemd/system/etcd2.service.
+</code></pre>
+</div>
+<h3 id="multi-nodeproduction">Multi-Node/Production</h3>
+<p>It is highly recommended that etcd is run as a dedicated cluster separately from Kubernetes components.</p>
+<p>Use the <a href="https://coreos.com/etcd/docs/latest/clustering.html">official etcd clustering guide</a> to decide how best to deploy etcd into your environment.</p>
+<h2 id="generate-kubernetes-tls-assets">Generate Kubernetes TLS Assets</h2>
+<p>The Kubernetes API has various methods for validating clients &#x2014; this guide will configure the API server to use client certificate authentication.</p>
+<p>This means it is necessary to have a Certificate Authority and generate the proper credentials. Generate the necessary assets from existing PKI infrastructure, or by following <a href="https://coreos.com/kubernetes/docs/latest/openssl.html">these OpenSSL-based instructions</a> to create the needed certificates and keys.</p>
+<p>In the following steps, it is assumed that you will have generated the following TLS assets:</p>
+<p><strong>Root CA Public Key</strong></p>
+<p>ca.pem</p>
+
+<p><strong>API Server Public &amp; Private Keys</strong></p>
+<p>apiserver.pem</p>
+<p>apiserver-key.pem</p>
+
+<p><strong>Worker Node Public &amp; Private Keys</strong></p>
+<p><em>You should have one certificate/key set for every worker node in the planned cluster.</em></p>
+<p>${WORKER_FQDN}-worker.pem</p>
+<p>${WORKER_FQDN}-worker-key.pem</p>
+
+<p><strong>Cluster Admin Public &amp; Private Keys</strong></p>
+<p>admin.pem</p>
+<p>admin-key.pem</p>
+<div class="co-m-docs-next-step">
+<p><strong>Is your etcd cluster up and running?</strong> You need the IPs for the next step.</p>
+<p><strong>Did you generate all of the certificates?</strong> You will place these on disk next.</p>
+<a href="https://coreos.com/kubernetes/docs/latest/deploy-master.html" class="btn btn-primary btn-icon-right">Yes, ready to deploy the master node</a>
+</div>
+</div> 
+</div>
+</body></html>

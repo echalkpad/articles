@@ -1,0 +1,185 @@
+<!DOCTYPE html><html><head><title>A Guide To Building SVG Maps From Natural Earth Data – Smashing Magazine</title></head><body>
+<h1>A Guide To Building SVG Maps From Natural Earth Data – Smashing Magazine</h1><p><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/" target="_new">Original URL</a></p>
+<p><blockquote>Interactive maps are a fantastic way to present geographic data to your visitors. Libraries like Google Maps and Open Street Maps are a popular choice to do this and they excel at visualizing&hellip;</blockquote></p>
+<div><article class="post-222397 post type-post status-publish format-standard has-post-thumbnail hentry category-coding tag-maps tag-svg">
+
+		
+
+			
+
+	
+	
+
+
+	<p><strong>Interactive maps</strong> are a fantastic way to present geographic data to your visitors. Libraries like Google Maps and Open Street Maps are a popular choice to do this and they excel at visualizing street-level data. However, for small-scale maps, <strong>SVG maps</strong> are often a better option. They are lightweight, fully customizable and are not encumbered by any licensing restrictions.</p>
+<p>It&#x2019;s possible to find a number of SVG maps released under permissible licenses in the Wikimedia Commons. Unfortunately, it&#x2019;s likely that you will eventually find these options lacking. The map you need may not exist, may be out of date (as borders change), or may not be well-formatted for web use. This article will explain <strong>how to create your own SVG maps using Natural Earth data</strong> and open source tools. You will then be able to create SVG maps of any area of the world, using any projection, at any resolution. As an illustration, we will create an SVG world map.</p>
+<p>The process will require us to:</p>
+<ul>
+<li>Download geographic data from Natural Earth data</li>
+<li>View and edit the geographic data using QGIS</li>
+<li>Convert the geographic data into SVG using Kartograph.py</li>
+</ul>
+<h3 id="getting-the-geographic-data">Getting The Geographic Data <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#getting-the-geographic-data" class="sr hsl">Link</a></h3>
+<p>To start, we need <strong>geographic data</strong> for country borders. This data is available from <a href="http://www.naturalearthdata.com/">Natural Earth</a><sup class="po" id="note-1"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#1">1</a></sup>. Natural Earth is built by volunteers and supported by the North American Cartographic Information Society. It specializes in small-scale maps that are well-suited for the web. This means the maps will look great at the country or province level, but aren&#x2019;t of a high enough resolution to show the neighborhoods of a city. Natural Earth releases its maps into the public domain.</p>
+<p>To see all maps available for download, view the <a href="http://www.naturalearthdata.com/downloads/">Natural Earth downloads page</a><sup class="po" id="note-2"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#2">2</a></sup>.</p>
+<p>Many borders in the world are hotly contested. Natural Earth&#x2019;s policy is to draw borders based on who controls the situation on the ground. We will be primarily working off of a small-scale cultural map, which contains all 247 countries in the world, and has boundary lakes removed. You can <a href="http://www.naturalearthdata.com/http//www.naturalearthdata.com/download/110m/cultural/ne_110m_admin_0_countries_lakes.zip">download it as a zip file (186KB)</a><sup class="po" id="note-3"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#3">3</a></sup>.</p>
+<p>The data you download is stored in the <a href="http://en.wikipedia.org/wiki/Shapefile">shapefile</a><sup class="po" id="note-4"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#4">4</a></sup> (<i>.shp</i>) format. Shapefile is an open standard geospatial vector data format created by Esri. The shapefile is accompanied by complementary files with the following extensions: <i>.dbf</i>, <i>.prj</i> and <i>.shx</i>. Together, these files contain the vector geometry, attributes (<code>name</code>, <code>id</code>, etc.) and geospatial information for each country. For simplicity, when people refer to a shapefile, they are really referring to this group of files.</p>
+<h3 id="viewing-the-geographic-data">Viewing The Geographic Data <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#viewing-the-geographic-data" class="sr hsl">Link</a></h3>
+<p>To see the data we just downloaded, we need to use <a href="http://en.wikipedia.org/wiki/Geographic_information_system">GIS</a><sup class="po" id="note-5"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#5">5</a></sup> (geographic information systems) software. QGIS is open source GIS software. It runs on Linux, Mac OS X and Windows. <a href="http://www.qgis.org/en/site/index.html">Download it from QGIS.</a><sup class="po" id="note-6"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#6">6</a></sup> This tutorial will be using QGIS 2.8.2 Wien.</p>
+<p>After you have installed QGIS, open the QGIS Desktop application. QGIS is a powerful program that can work with many types of geographic data. Because of this, it can be quite intimidating. We&#x2019;ll only be using a small fraction of its functionality and can ignore much of what QGIS offers. For example, since we aren&#x2019;t working with any raster images (like satellite photography), we can ignore tools related to raster images.</p>
+<p>To get started, we&#x2019;ll add our shapefile as a vector layer to our project.</p>
+<ul>
+<li>Select <strong>Layer &#x2192; Add Layer &#x2192; Add Vector Layer</strong> (from the menu bar)</li>
+<li>Browse to and open <i>ne_110m_admin_0_countries_lakes.shp</i></li>
+<li>The map should appear in the window (it may be a different color for you)</li>
+</ul>
+<figure><a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/01-world-opt.png"><img src="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/01-world-opt-small.png" alt="World map"></a><sup class="po" id="note-7"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#7">7</a></sup><br>
+<figcaption>The world map vector layer. (<a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/01-world-opt.png">View large version</a><sup class="po" id="note-8"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#8">8</a></sup>)</figcaption>
+</figure>
+<p>Notice that <i>ne_110m_admin_0_countries_lakes.shp</i> has been added to the <strong>Layers</strong> dialog.</p>
+<figure><img src="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/02-layer-opt.png" alt="Layers dialog"><br>
+<figcaption>The new layer. </figcaption>
+</figure>
+<p>Layers in QGIS are similar to layers you find in photo editing software like Photoshop or GIMP. <em>You must select a layer before you can work on it</em>. As you go through this tutorial, if you find a tool isn&#x2019;t working properly, you have likely neglected to select the current layer.</p>
+<p>It&#x2019;s also possible to hide layers from view by unchecking the box. This allows you to add multiple shapefiles to your project and view them individually.</p>
+<p>After adding a vector layer, it&#x2019;s a good idea to save your work: <strong>Project &#x2192; Save</strong></p>
+<p>Each country contains a list of attributes. You can view these attributes in a table: <strong>Layer &#x2192; Open Attribute Table</strong></p>
+<figure><a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/03-table-opt.png"><img src="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/03-table-opt-small.png" alt="Attribute table"></a><sup class="po" id="note-9"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#9">9</a></sup><br>
+<figcaption>The country attribute table. (<a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/03-table-opt.png">View large version</a><sup class="po" id="note-10"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#10">10</a></sup>)</figcaption>
+</figure>
+<p>The Natural Earth data contains a wealth of information about each country. We&#x2019;ll be using <a href="http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2">two-letter ISO codes</a><sup class="po" id="note-11"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#11">11</a></sup> to uniquely identify countries. These are stored in the <code>iso_a2</code> variable. We&#x2019;ll also use the country name (<code>name</code>) to label countries in our SVG file. Feel free to explore the table to get a sense of the data. When you&#x2019;re done, close the table.</p>
+<h3 id="editing-the-geographic-data">Editing The Geographic Data <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#editing-the-geographic-data" class="sr hsl">Link</a></h3>
+<p><em>(You can skip this section if you are happy with the Natural Earth data defaults.)</em></p>
+<p>It&#x2019;s possible to <strong>edit the individual geographic shapes</strong> using QGIS. You will probably not need to redraw borders, but you may want to split a country into parts.</p>
+<p>Each shape in our shapefile is referred to as a <em>feature</em> in QGIS. To select a feature, choose: <strong>View &#x2192; Select &#x2192; Select Feature(s)<br>
+</strong> and then click on your target. The entire feature should turn yellow. For example, this is what France looks like when you click on it:</p>
+<figure><a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/04-france-opt.png"><img src="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/04-france-opt-small.png" alt="France selected"></a><sup class="po" id="note-12"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#12">12</a></sup><br>
+<figcaption>France is selected and highlighted. (<a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/04-france-opt.png">View large version</a><sup class="po" id="note-13"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#13">13</a></sup>)</figcaption>
+</figure>
+<p>Notice that France includes French Guiana in South America. This is because French Guiana is an overseas d&#xE9;partement and region of France (<a href="http://en.wikipedia.org/wiki/French_Guiana">French Guiana on Wikipedia</a><sup class="po" id="note-14"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#14">14</a></sup>). Nonetheless, French Guiana has its own unique ISO code and, for many applications, it makes sense to display it as a separate entity.</p>
+<p>Splitting France into two separate entities is a straightforward process, but it requires a number of steps:</p>
+<ol>
+<li>Display editing tools in the toolbar: <strong>View &#x2192; Toolbars &#x2192; Advanced Digitizing</strong>; and <strong>View &#x2192; Toolbars &#x2192; Digitizing Tools</strong></li>
+<li>Put the map in edit mode: <strong>Layer &#x2192; Toggle Editing</strong></li>
+<li>Select France: <strong>View &#x2192; Select &#x2192; Select Feature(s)</strong></li>
+<li>Click on France in the map view</li>
+<li>Choose <strong>Split selected multi-part features to single part</strong> from the toolbar.<br>
+<figure><img src="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/05-split-opt.png" alt="05-split-opt"><br>
+<figcaption></figcaption>
+</figure>
+<p>This will split all parts of France into separate entities.</p></li>
+<li>Put France back together:
+<ul>
+<li>Select both the mainland of France and the island of Corsica. To select multiple features, hold down Ctrl (Cmd on Mac).</li>
+<li>Merge the mainland of France and the island Corsica (<strong>Edit &#x2192; Merge Selected Features</strong>) &#x2013; you will be alerted that the feature attributes will also be merged. Click <strong>OK</strong>.</li>
+</ul>
+</li>
+<li>Edit French Guiana&#x2019;s attributes:
+<ul>
+<li><strong>View &#x2192; Identify Features</strong></li>
+<li>Click on French Guiana. This will bring up the attributes for French Guiana. It currently has the attributes for France. We need to replace these with attributes for French Guiana. Click on the <strong>Edit feature form</strong> icon as shown in the screenshot. Replace the ISO code with &#x201C;GF&#x201D; and the name with &#x201C;French Guiana&#x201D;.</li>
+</ul>
+<figure><a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/06-table-opt.png"><img src="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/06-table-opt-small.png" alt="Replacing attributes"></a><sup class="po" id="note-15"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#15">15</a></sup><br>
+<figcaption>Replacing French Guiana&#x2019;s attributes. (<a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/06-table-opt.png">View large version</a><sup class="po" id="note-16"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#16">16</a></sup>)</figcaption>
+</figure>
+</li>
+<li>Save your changes: <strong>Layer &#x2192; Save Layer Edits</strong></li>
+</ol>
+<p>That&#x2019;s all! French Guiana is now its own feature and we&#x2019;ve given it unique attributes. To learn more about editing, check out the <a href="http://docs.qgis.org/testing/en/docs/user_manual/working_with_vector/editing_geometry_attributes.html">QGIS documentation</a><sup class="po" id="note-17"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#17">17</a></sup>.</p>
+<h3 id="creating-svg-files-with-kartograph-py">Creating SVG Files With Kartograph.py <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#creating-svg-files-with-kartograph-py" class="sr hsl">Link</a></h3>
+<p><a href="http://kartograph.org/about/kartograph.py/">Kartograph.py</a><sup class="po" id="note-18"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#18">18</a></sup> is a lightweight Python library that will convert our shapefile into a web-friendly SVG file. It was created by New York Times graphics editor <a href="http://driven-by-data.net/">Gregor Aisch</a><sup class="po" id="note-19"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#19">19</a></sup> and is available under an AGPL license.</p>
+<p>To install Kartograph.py, <a href="http://kartograph.org/docs/kartograph.py/#installing-kartograph-py">follow these installation instructions</a><sup class="po" id="note-20"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#20">20</a></sup>. This process will require you to install a number of dependencies. If you&#x2019;re not ready to commit to so many installations, you can install Kartograph.py in a virtual machine. Or, you can just download the SVG output shown as images in this article. This tutorial was created using Kartograph.py installed in Ubuntu 14.04 LTS.</p>
+<p>Kartograph is a command line program that <strong>requires a JSON configuration file</strong>. Name this file <i>config.json</i> and place it in the same directory as the shapefile. This file must contain a <code>layers</code> property with a dictionary of the layers we want to convert and the location of each layer&#x2019;s shapefile. To convert <i>ne_110m_admin_0_countries_lakes.shp</i> we can use the following <i>config.json</i>:</p>
+<pre><code class="language-javascript">{
+ "layers": {
+ "countries": {
+ "src": "ne_110m_admin_0_countries_lakes.shp"
+ }
+ }
+}</code></pre>
+<p>Then execute the following Kartograph command in the console:</p>
+<pre><code class="language-bash">kartograph config.json -o world_basic.svg</code></pre>
+<p>Kartograph will create <i>world_basic.svg</i> in the current directory. If you open this file in a modern browser, you will see a map of the world.</p>
+<figure class="sfcp"><p class="codepen">See the Pen <a href="http://codepen.io/smashingmag/pen/gaOXNv/">gaOXNv</a><sup class="po" id="note-21"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#21">21</a></sup> by Smashing Magazine (<a href="http://codepen.io/smashingmag">@smashingmag</a><sup class="po" id="note-26"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#26">26</a></sup><sup class="po" id="note-22"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#22">22</a></sup>) on <a href="http://codepen.io">CodePen</a><sup class="po" id="note-27"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#27">27</a></sup><sup class="po" id="note-23"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#23">23</a></sup>.</p><figcaption>SVG world map.</figcaption></figure>
+<h3 id="changing-the-map-projection">Changing The Map Projection <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#changing-the-map-projection" class="sr hsl">Link</a></h3>
+<p>You may notice that this map looks somewhat different from the map in QGIS. There are a number of different ways to project our three-dimensional Earth into two-dimensional space. By default, <strong>Kartograph uses the Robinson projection</strong>, an aesthetically pleasing projection commonly used for world maps. However, you may prefer to work with the Mercator projection (used by Google Maps) which projects latitude and longitude as straight lines. To do so, add a <code>proj</code> object after the <code>layers</code> object in the <i>config.json</i> file:</p>
+<pre><code class="language-javascript">"proj": {
+ "id":"mercator"
+}</code></pre>
+<h3 id="reducing-the-file-size">Reducing The File Size <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#reducing-the-file-size" class="sr hsl">Link</a></h3>
+<p>Often, the SVG file you create may be too large to be practical for web use. Kartograph includes the <a href="http://bost.ocks.org/mike/simplify/">Visvalingam-Whyatt simplification algorithm</a><sup class="po" id="note-24"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#24">24</a></sup>. This tool makes it possible to dramatically reduce the size of a file with only subtle visual changes to country borders. Our file is already quite small (231KB), but we can simplify it further by adding a <code>simplify</code> property to the end of the <code>countries</code> property:</p>
+<pre><code class="language-javascript">"simplify": 1</code></pre>
+<p>The higher the value of <code>simplify</code>, the more country borders will be simplified and the smaller the file will become.</p>
+<h3 id="filtering-out-features">Filtering Out Features <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#filtering-out-features" class="sr hsl">Link</a></h3>
+<p>By default, the map will include all the features present in the shapefile. You may, however, want to exclude certain features from the SVG file. For example, we may wish to remove Antarctica since it is of less relevance to our task. Kartograph includes a filter tool that makes it possible to filter features based on their attributes. We can exclude Antarctica using its ISO code. To do this, add a <code>filter</code> property to the <code>countries</code> layer:</p>
+<pre><code class="language-javascript">"filter": ["iso_a2", "not in", ["AQ"]],</code></pre>
+<h3 id="saving-data-within-the-svg-file">Saving Data Within The SVG File <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#saving-data-within-the-svg-file" class="sr hsl">Link</a></h3>
+<p>Finally, we want our SVG map to include data attributes with each country&#x2019;s ISO code and name. This will allow us to identify SVG elements in the browser. To do this, add an <code>attributes</code> property to the <code>countries</code> layer:</p>
+<pre><code class="language-javascript">"attributes": {
+ "id": "iso_a2", 
+ "name": "name"
+},</code></pre>
+<h3 id="putting-it-all-together">Putting It All Together <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#putting-it-all-together" class="sr hsl">Link</a></h3>
+<p>After making these changes, <i>config.json</i> will consist of the following:</p>
+<pre><code class="language-javascript">{
+ "layers": {
+ "countries": { 
+ "src": "ne_110m_admin_0_countries_lakes.shp",
+ "filter": ["iso_a2", "not in", ["AQ"]],
+ "attributes": {
+ "id": "iso_a2",
+ "name": "name"
+ },
+ "simplify": "1"
+ }
+ },
+ "proj": {
+ "id": "mercator"
+ }
+}</code></pre>
+<p>Execute the same Kartograph command as before (with an updated file name):</p>
+<pre><code class="language-bash">kartograph config.json -o world.svg</code></pre>
+<p>Kartograph will create a new map <i>world.svg</i> that is smaller and looks quite different:</p>
+<figure class="sfcp"><p class="codepen">See the Pen <a href="http://codepen.io/smashingmag/pen/LpYOob/">LpYOob</a><sup class="po" id="note-25"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#25">25</a></sup> by Smashing Magazine (<a href="http://codepen.io/smashingmag">@smashingmag</a><sup class="po" id="note-26"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#26">26</a></sup><sup class="po" id="note-22"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#22">22</a></sup>) on <a href="http://codepen.io">CodePen</a><sup class="po" id="note-27"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#27">27</a></sup><sup class="po" id="note-23"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#23">23</a></sup>.</p><figcaption>The new SVG world map.</figcaption></figure>
+<p>If you open this file in a text editor, you will see that each <code>&lt;path&gt;</code> now includes identifying data in the following form:</p>
+<pre><code class="language-markup">data-id="US" data-name="United States" id="US"</code></pre>
+<p>This introduction only scratches the surface of what is possible with Kartograph. You can use multiple layers, join features together, and frame the map using latitude and longitude. You can learn about these options and more in the <a href="http://kartograph.org/docs/kartograph.py/">Kartograph.py documentation</a><sup class="po" id="note-28"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#28">28</a></sup>.</p>
+<h3 id="adding-the-svg-map-to-a-website">Adding The SVG Map To A Website <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#adding-the-svg-map-to-a-website" class="sr hsl">Link</a></h3>
+<p>Now that you&#x2019;ve created an SVG map, you&#x2019;ll probably want to customize it and add it to your website. Modern browsers support SVG natively so you can add an SVG image to your webpage just like you would add any other image:</p>
+<pre><code class="language-markup">&lt;img src="world.svg" alt="World Map"&gt;</code></pre>
+<p>However, embedding the map this way makes it difficult to style the map and make it interactive. A simple way to apply CSS and JavaScript to the map is to first embed the SVG file inline. Simply open <i>world.svg</i> in a text editor, copy the entire <code>&lt;svg&gt;</code> element, and paste it directly into your webpage.</p>
+<p>The <code>&lt;svg&gt;</code> element contains a separate <code>&lt;path&gt;</code> for every country. To style the map, simply apply CSS to all <code>&lt;path&gt;</code> elements. Use the <code>fill</code> and <code>stroke</code> properties to style each country&#x2019;s color and border respectively. For example, we can make all countries light gray and add a hover effect:</p>
+<pre><code class="language-css"> path {fill: lightgray; stroke: white;}
+ path:hover {fill: gray;}
+</code></pre>
+<p>Similarly, we can use JavaScript to define event handlers. The following snippet will alert each country&#x2019;s name with a click:</p>
+<pre><code class="language-javascript">&lt;script&gt;
+ // &lt;![CDATA[
+ var countryElements = document.getElementById('countries').childNodes;
+ var countryCount = countryElements.length;
+ for (var i = 0; i &lt; countryCount; i++) {
+ countryElements[i].onclick = function() {
+ alert('You clicked on ' + this.getAttribute('data-name'));
+ }
+ }
+ // ]]&gt;
+&lt;/script&gt; </code></pre>
+<p>This should be placed after the inline <code>&lt;svg&gt;</code> element and right before the closing <code>&lt;body&gt;</code> tag. Your full HTML file should look like the example <a href="https://gist.github.com/youderian/fbff53fe18b13116adf5">provided in this Gist</a><sup class="po" id="note-29"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#29">29</a></sup>.</p>
+<p>Open this file in a browser, and you should see an interactive map of the world.</p>
+<figure><a href="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/09-interactive-world-opt.png"><img src="http://media.mediatemple.netdna-cdn.com/wp-content/uploads/2015/07/09-interactive-world-opt-small.png" alt="Interactive map"></a><sup class="po" id="note-30"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#30">30</a></sup><br>
+</figure>
+<p>Hopefully, this simple example illustrates how you can easily manipulate your SVG map with JavaScript and CSS. For more advanced interactions, such as animating SVG paths, check out an SVG JavaScript library like <a href="http://snapsvg.io/">Snap.js</a><sup class="po" id="note-31"><a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#31">31</a></sup>.</p>
+<h3 id="conclusion">Conclusion <a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#conclusion" class="sr hsl">Link</a></h3>
+<p>Interactive maps can be intimidating, but they don&#x2019;t have to be a black box. You can create your own custom SVG maps with open data and software. In no time at all, you will have enhanced your website with a beautiful, fully customizable, interactive map.</p>
+<p><em>(ml, ds, og)</em></p>
+
+	
+	
+	
+<p>
+	<a href="http://www.smashingmagazine.com/2015/09/making-svg-maps-from-natural-earth-data/#top" class="top">&#x2191; Back to top</a>
+	<a class="sot single" href="https://twitter.com/intent/tweet?original_referer=http%3A%2F%2Fwww.smashingmagazine.com%2F2015%2F09%2Fmaking-svg-maps-from-natural-earth-data%2F&amp;source=tweetbutton&amp;text=A%20Guide%20To%20Building%20SVG%20Maps%20From%20Natural%20Earth%20Data&amp;url=http%3A%2F%2Fwww.smashingmagazine.com%2F2015%2F09%2Fmaking-svg-maps-from-natural-earth-data%2F&amp;via=smashingmag">Tweet it</a><a class="sot single" href="http://www.facebook.com/sharer/sharer.php?u=http%3A%2F%2Fwww.smashingmagazine.com%2F2015%2F09%2Fmaking-svg-maps-from-natural-earth-data%2F">Share on Facebook</a></p>
+
+</article>
+</div>
+</body></html>

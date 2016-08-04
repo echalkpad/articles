@@ -1,0 +1,419 @@
+<!DOCTYPE html><html><head><title>A Gentle Introduction to Functional JavaScript: Part 3</title></head><body>
+<h1>A Gentle Introduction to Functional JavaScript: Part 3</h1><p><a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-functions/" target="_new">Original URL</a></p>
+<p><blockquote>This is part three of a four-part series introducing &#x2018;functional&#x2019; programming in JavaScript. In the last article we saw how we can use functional programming with arrays and lists. In&hellip;</blockquote></p>
+<div><div class="e-content entry-content">
+ <p>This is part three of a four-part series introducing &#x2018;functional&#x2019; programming in JavaScript. In the last article we saw how we can use functional programming with arrays and lists. In this article we examine higher-order functions&#x2014;functions for making functions.</p>
+
+
+
+
+
+<p>At the end of the last article, I said that going further down the functional path is not for everyone. That is because once you get past list-processing functions, things start to get a little weird. What I mean is that we started with abstracting collections of instructions into functions. Then, we abstracted for-loops into <code>map</code> and <code>reduce</code>. The next level of abstraction is to start refactoring patterns of <em>creating</em> functions. We start using functions to make other functions. This can be powerful and elegant, but it starts to look a lot less like the JavaScript you might be used to writing.</p>
+
+<h2 id="morebuildingblocks">More building blocks</h2>
+
+<p>Functions for making other functions are sometimes called <em>higher order functions</em>. To understand them though, we need to revisit some of the built-in language features of JavaScript that make higher order functions possible.</p>
+
+<h3 id="closuresandscope">Closures and Scope</h3>
+
+<p>One of the more difficult things to wrap one&#x2019;s head around in JavaScript which variables a function can &#x2018;see&#x2019;. In JavaScript, if you define a variable inside a function, it can&#x2019;t be seen outside the function. For example:</p>
+
+<pre><code class="javascript">var thing = 'bat';
+ 
+var sing = function() {
+ // This function can 'see' thing
+ var line = 'Twinkle, twinkle, little ' + thing;
+ log(line);
+};
+
+sing();
+// Twinkle, twinkle, little bat
+
+// Outside the function we can't see message though
+log(line);
+// undefined
+</code></pre>
+
+<p>However, if we define a function inside a function, the inner function can see variables in the outer function:</p>
+
+<pre><code class="javascript">var outer = function() {
+ var outerVar = 'Hatter';
+ var inner = function() {
+ // We can 'see' outerVar here
+ console.log(outerVar);
+ // Hatter
+ 
+ var innerVar = 'Dormouse';
+ // innerVar is only visible here inside inner()
+ }
+ 
+ // innerVar is not visible here.
+}
+</code></pre>
+
+<p>This takes a bit of getting used to. The rules are fairly straight-forward, but once we start passing variables around as arguments, it becomes harder to keep track of which functions can see which variables. If it&#x2019;s confusing at first, be patient: Look at the point where you defined the function, and work out which variables are &#x2018;visible&#x2019; at that point. They may not be what you expect if you are just looking at the point where you&#x2019;re calling the function.</p>
+
+<h3 id="thespecialargumentsvariable">The special arguments variable</h3>
+
+<p>When you create a function in JavaScript, it creates a special variable called <code>arguments</code>, that is <em>sort of</em> like an array. It contains the arguments that are passed to the function. for example:</p>
+
+<pre><code class="javascript">var showArgs = function(a, b) {
+ console.log(arguments);
+}
+showArgs('Tweedledee', 'Tweedledum');
+//=&gt; { '0': 'Tweedledee', '1': 'Tweedledum' }
+</code></pre>
+
+<p>Notice that the output is more like an object with keys that happen to be integers, rather than an actual array. It also has </p>
+
+<p>The interesting thing about <code>arguments</code> is that it contains <em>all</em> the arguments passed in a function call, regardless of how many are defined. So, if you call a function and pass it extra arguments, they will be available in the <code>arguments</code> variable.</p>
+
+<pre><code class="javascript">showArgs('a', 'l', 'i', 'c', 'e');
+//=&gt; { '0': 'a', '1': 'l', '2': 'i', '3': 'c', '4': 'e' }
+</code></pre>
+
+<p>The <code>arguments</code> variable also has a &#x2018;length&#x2019; property, like an array.</p>
+
+<pre><code class="javascript">var argsLen = function() {
+ console.log(arguments.length);
+}
+argsLen('a', 'l', 'i', 'c', 'e');
+//=&gt; 5
+</code></pre>
+
+<p>It is often useful to have the <code>arguments</code> variable as an actual array. In those cases we can convert the <code>arguments</code> variable into a real array by using a built-in array method called <code>slice</code>. Because <code>arguments</code> isn&#x2019;t is a real array, we have to do it by a roundabout route:</p>
+
+<pre><code class="javascript">var showArgsAsArray = function() {
+ var args = Array.prototype.slice.call(arguments, 0);
+ console.log(args);
+}
+showArgsAsArray('Tweedledee', 'Tweedledum');
+//=&gt; [ 'Tweedledee', 'Tweedledum' ]
+</code></pre>
+
+<p>The <code>arguments</code> variable is most commonly used to create functions that can take a variable number of arguments. This will come in handy later, as we will see.</p>
+
+<h3 id="callandapply">Call and Apply</h3>
+
+<p>We saw before that arrays in JavaScript have some built-in methods like <code>.map</code> and <code>.reduce</code>. Well, functions have some built in methods too.</p>
+
+<p>The normal way to call a function is by writing parentheses, and any parameters after the function name. For example:</p>
+
+<pre><code class="javascript">function twinkleTwinkle(thing) {
+ console.log('Twinkle, twinkle, little ' + thing);
+}
+twinkleTwinkle('bat');
+//=&gt; Twinkle, twinkle, little bat
+</code></pre>
+
+<p>One of the built-in methods for functions is <code>call</code> and it allows you to call a function another way:</p>
+
+<pre><code class="javascript">twinkleTwinkle.call(null, 'star');
+//=&gt; Twinkle, twinkle, little star
+</code></pre>
+
+<p>The first argument to the <code>.call</code> method defines what the special variable <code>this</code> refers to inside the function. But we can ignore it for now. Any arguments after this one are passed directly to the function.</p>
+
+<p>The <code>.apply</code> method is much like <code>.call</code>, except that instead of passing individual arguments one-by-one, <code>.apply</code> allows you to pass an array of arguments as the second parameter. For example:</p>
+
+<pre><code class="javascript">twinkleTwinkle.apply(null, ['bat']);
+//=&gt; Twinkle, twinkle, little bat
+</code></pre>
+
+<p>Both of these methods will be useful when we are building functions that create other functions.</p>
+
+<h3 id="anonymousfunctions">Anonymous Functions</h3>
+
+<p>JavaScript allows us to create functions on the fly. Wherever we might create a variable, then do something with that variable, JavaScript will let us stick a function definition right in there. This is often used with <code>map</code> and <code>reduce</code>, for example:</p>
+
+<pre><code class="javascript">var numbers = [1, 2, 3];
+var doubledArray = map(function(x) { return x articles _articles bin CAs devops Documents dotfiles gethtml go hnews jason js netdata start-thesrc thesrc ucii 2}, numbers);
+console.log(doubledArray);
+//=&gt; [ 2, 4, 6 ]
+</code></pre>
+
+<p>Functions created on the fly like this are called &#x2018;anonymous&#x2019; functions, since they don&#x2019;t have a name. They are also sometimes called &#x2018;lambda&#x2019; functions.</p>
+
+<h2 id="partialapplication">Partial Application</h2>
+
+<p>Sometimes it can be handy to pre-fill a function&#x2019;s arguments. For example, imagine we&#x2019;ve made a handy <code>addClass()</code> function that takes a class name and a DOM element as parameters:</p>
+
+<pre><code class="javascript">var addClass = function(className, element) {
+ element.className += ' ' + className;
+ return element;
+}
+</code></pre>
+
+<p>We&#x2019;d like to use this with <code>map</code> to add a class to a bunch of elements, but we have a problem: the <code>map</code> passes array items one by one as the first parameter to the callback function. So how do we tell <code>addClass</code> which class name to add?</p>
+
+<p>The solution is to create a new function that calls <code>addClass</code> with the class name we want:</p>
+
+<pre><code class="javascript">var addTweedleClass = function(el) {
+ return addClass('tweedle', el);
+}
+</code></pre>
+
+<p>Now we have a function that just takes one parameter. It&#x2019;s now suitable to pass to our <code>map</code> function:</p>
+
+<pre><code class="javascript">var ids = ['DEE', 'DUM'];
+var elements = map(document.getElementById, ids);
+elements = map(addTweedleClass, elements);
+</code></pre>
+
+<p>But if we want to add another class, we have to create another function:</p>
+
+<pre><code class="javascript">var addBoyClass = function(el) {
+ return addClass('boy', el);
+}
+</code></pre>
+
+<p>We are beginning to repeat ourselves&#x2026; so, let&#x2019;s see if we can find an abstraction for this pattern. What if we had a function that created another function with the first parameter pre-filled?</p>
+
+<pre><code class="javascript">var partialFirstOfTwo(fn, param1) {
+ return function(param2) {
+ return fn(param1, param2);
+ }
+}
+</code></pre>
+
+<p>Note that first <code>return</code> statement. We&#x2019;ve created a function that returns another function.</p>
+
+<pre><code class="javascript">var addTweedleClass = partialFirstOfTwo(addClass, 'tweedle');
+var addBoyClass = partialFirstOfTwo(addClass, 'boy');
+
+var ids = ['DEE', 'DUM'];
+var elements = map(document.getElementById, ids);
+elements = map(addTweedleClass, elements);
+elements = map(addBoyClass, elements);
+</code></pre>
+
+<p>This works great when we know our function takes exactly two parameters. But what if we want to partially apply with a function that takes three parameters? Or four? And what if we wanted to partially apply more than one variable?
+For these cases we need a more generalised partial application function. We&#x2019;ll make use of the <code>slice</code> and <code>apply</code> methods described above:</p>
+
+<pre><code class="javascript">function partial() {
+ // Convert the arguments variable to an array 
+ var args = toArray(arguments);
+
+ // Grab the function (the first argument). args now contains the remaining args.
+ var fn = args.shift();
+
+ // Return a function that calls fn
+ return function() {
+ var remainingArgs = toArray(arguments);
+ return fn.apply(this, args.concat(remainingArgs));
+ }
+}
+</code></pre>
+
+<p>Now, the details of <em>how</em> this function works are not as important as <em>what</em> it does. This function allows us to partially apply any number of variables to functions that take any number of parameters.</p>
+
+<pre><code class="javascript">var twinkle = function(noun, wonderAbout) {
+ return 'Twinkle, twinkle, little ' +
+ noun + '\nHow I wonder where you ' +
+ wonderAbout;
+}
+
+var twinkleBat = partial(twinkle, 'bat', 'are at');
+var twinkleStar = partial(twinkle, 'star', 'are');
+</code></pre>
+
+<p>JavaScript has a built-in method that sort-of works like <code>partial</code> called <code>bind</code>. It&#x2019;s available as a method on all functions. The trouble is that it expects its first parameter to be an object you want to bind the special <code>this</code> variable to. This means, for example, that if you want to partially apply something to <code>document.getElementById</code>, you have to pass <code>document</code> as the first parameter, like so:</p>
+
+<pre><code class="javascript">var getWhiteRabbit = document.getElementById.bind(document, 'white-rabbit');
+var rabbit = getWhiteRabbit();
+</code></pre>
+
+<p>A whole bunch of the time though, we don&#x2019;t need the special <code>this</code> variable (especially if we&#x2019;re using a functional style of programming), so we can just pass <code>null</code> as the first parameter. For example:</p>
+
+<pre><code class="javascript"> var twinkleBat = twinkle.bind(null, 'bat', 'are at');
+var twinkleStar = twinkle.bind(null, 'star', 'are');
+</code></pre>
+
+<p>You can read more about <a href="https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_objects/Function/bind"><code>.bind</code> in the MDN JavaScript reference.</a></p>
+
+<h3 id="composition">Composition</h3>
+
+<p>We said in the last article that functional programming is about taking small, simple functions and piecing them together to do more complex things. Partial application, as we saw above, is a tool that makes that process easier. With partial application we can convert our <code>addClass</code> function and convert it into a function we can use with <code>map</code>. Composition is another tool for combining simple functions together.</p>
+
+<p>The simplest form of composition is with two functions, <em>a</em> and <em>b</em>, both of which expect just one parameter. <em>Compose</em> creates a third function, <em>c</em>. Calling <em>c</em> with a parameter <em>x</em> returns the result of calling <em>a</em> with the result of calling <em>b</em> with <em>x</em>&#x2026; What a confusing mess. It&#x2019;s much easier to understand by looking at an example:</p>
+
+<pre><code class="javascript">var composeTwo = function(funcA, funcB) {
+ return function(x) {
+ return funcA(funcB(x));
+ }
+}
+
+var nohow = function(sentence) {
+ return sentence + ', nohow!';
+}
+var contrariwise = function(sentence) {
+ return sentence + ' Contrariwise&#x2026;';
+}
+
+var statement = 'Not nothin&amp;amp;rsquo;';
+var nohowContrariwise = composeTwo(contrariwise, nohow);
+console.log(nohowContrariwise(statement));
+//=&gt; Not nothin&amp;amp;rsquo;, nohow! Contrariwise&#x2026;
+</code></pre>
+
+<p>Now, this is pretty good. We can get a long way with just <code>composeTwo</code>. But, if you start to write &#x2018;pure&#x2019; functions (we&#x2019;ll discuss this later), then you may find yourself wanting to join more than two functions together. For that we&#x2019;ll need a more generalised <code>compose</code> function:<a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-functions/#fn:1" id="fnref:1" title="see footnote" class="footnote">[1]</a></p>
+
+<pre><code class="javascript">var compose = function() {
+ var args = arguments;
+ var start = args.length - 1;
+ return function() {
+ var i = start;
+ var result = args[start].apply(this, arguments);
+ while (i &gt;= 0) {
+ result = args[i].call(this, result);
+ i = i - 1;
+ }
+ return result;
+ };
+};
+
+</code></pre>
+
+<p>Again, <em>how</em> this works isn&#x2019;t quite as important as <em>what</em> you can do with it. And at first glance, <code>compose</code> might not seem that amazing. We can write the function above this way with compose:</p>
+
+<pre><code class="javascript">var nohowContrariwise = compose(contrariwise, nohow);
+</code></pre>
+
+<p>But this doesn&#x2019;t seem that much more concise than writing it this way:</p>
+
+<pre><code class="javascript">var nohowContrariwise = function(x) {
+ return nohow(contrariwise(x));
+}
+</code></pre>
+
+<p>The real power of compose becomes clearer once we combine it with the <code>curry</code> function. But even without currying we can begin to see that if we have a collection small utility functions handy, we can use <code>compose</code> to make our code clearer and more concise. For example, imagine we have a plain-text poem:</p>
+
+<pre><code class="javascript">var poem = 'Twas brillig, and the slithy toves\n' + 
+ 'Did gyre and gimble in the wabe;\n' +
+ 'All mimsy were the borogoves,\n' +
+ 'And the mome raths outgrabe.';
+</code></pre>
+
+<p>Now, that poem won&#x2019;t display so well in a browser, so let&#x2019;s add in some line breaks. And, while we&#x2019;re at it, let&#x2019;s translate <em>brillig</em> into something easier to understand. And then we&#x2019;ll wrap the whole thing in a paragraph tag and a block quote. We&#x2019;ll start by creating two very simple functions, and build everything else from there:</p>
+
+<pre><code class="javascript">var replace = function(find, replacement, str) {
+ return str.replace(find, replacement);
+}
+
+var wrapWith = function(tag, str) {
+ return '&lt;' + tag + '&gt;' + str + '&lt;/' + tag + '&gt;'; 
+}
+
+var addBreaks = partial(replace, '\n', '&lt;br/&gt;\n');
+var replaceBrillig = partial(replace, 'brillig', 'four o&#x2019;clock in the afternoon');
+var wrapP = partial(wrapWith, 'p');
+var wrapBlockquote = partial(wrapWith, 'blockquote');
+
+var modifyPoem = compose(wrapBlockquote, wrapP, addBreaks, replaceBrillig);
+
+console.log(modifyPoem(poem));
+//=&gt; &lt;blockquote&gt;&lt;p&gt;Twas four o&#x2019;clock in the afternoon, and the slithy toves&lt;br/&gt;
+// Did gyre and gimble in the wabe;&lt;br/&gt;
+// All mimsy were the borogoves,&lt;br/&gt;
+// And the mome raths outgrabe.&lt;/p&gt;&lt;/blockquote&gt;
+</code></pre>
+
+<p>Notice that if you read the arguments to <code>compose</code> from left to right, they are in reverse to the order they are applied. This is because <code>compose</code> reflects the order they&#x2019;d be in if you wrote them out as nested function calls. Some people find this a little confusing, so most helper libraries provide a reversed form called <code>pipe</code> or <code>flow</code>.</p>
+
+<p>Using a <code>pipe</code> function, we could write our <code>modifyPoem</code> function as follows:</p>
+
+<pre><code class="javascript">var modifyPoem = pipe(replaceBrillig, addBreaks, wrapP, wrapBlockquote);
+</code></pre>
+
+<h3 id="currying">Currying</h3>
+
+<p>A limitation of <code>compose</code> is that it expects all the functions passed in to take just one parameter. Now, this isn&#x2019;t such a big deal now that we have a <code>partial</code> function&#x2014;we can convert our multi-parameter functions to single-parameter functions with relative ease. But it&#x2019;s still a little bit tedious. <em>Currying</em> is kind of like partial application on steroids.</p>
+
+<p>The details of the <code>curry</code> function are a little complicated, so first, let&#x2019;s look at an example. We have a function <code>formatName</code> that put&#x2019;s a person&#x2019;s nickname in quotes. It takes three parameters. When we call the curried version of <code>formatName</code> with less than three parameters, it returns a new function with the given parameters partially applied:</p>
+
+<pre><code class="javascript">var formatName = function(first, surname, nickname) {
+ return first + ' &#x201C;' + nickname + '&#x201D; ' + surname;
+}
+var formatNameCurried = curry(formatName);
+
+var james = formatNameCurried('James');
+
+console.log(james('Sinclair', 'Mad Hatter'));
+//=&gt; James &#x201C;Mad Hatter&#x201D; Sinclair
+
+var jamesS = james('Sinclair')
+
+console.log(jamesS('Dormouse'));
+//=&gt; James &#x201C;Dormouse&#x201D; Sinclair
+
+console.log(jamesS('Bandersnatch'));
+//=&gt; James &#x201C;Bandersnatch&#x201D; Sinclair
+</code></pre>
+
+<p>There&#x2019;s some other things to notice about curried functions:</p>
+
+<pre><code class="javascript">formatNameCurried('a')('b')('c') === formatNameCurried('a', 'b', 'c'); // true
+formatNameCurried('a', 'b')('c') === formatNameCurried('a')('b', 'c'); // true
+</code></pre>
+
+<p>This is all very convenient, but it doesn&#x2019;t give us all that much over <code>partial</code>. But what if, just suppose, we happened to curry every function we make, just by default. Then, we could create almost any function by combining other functions with composition (and currying). </p>
+
+<p>Remember our poem example from earlier? What if we wanted to wrap emphasis tags around &#x2018;four o&#x2019;clock in the afternoon&#x2019; string we replaced?</p>
+
+<pre><code class="javascript">var replace = curry(function(find, replacement, str) {
+ var regex = new RegExp(find, 'g');
+ return str.replace(regex, replacement);
+});
+
+var wrapWith = curry(function(tag, str) {
+ return '&lt;' + tag + '&gt;' + str + '&lt;/' + tag + '&gt;'; 
+});
+
+var modifyPoem = pipe(
+ replace('brillig', wrapWith('em', 'four o&#x2019;clock in the afternoon')),
+ replace('\n', '&lt;br/&gt;\n'),
+ wrapWith('p'),
+ wrapWith('blockquote')
+);
+
+console.log(modifyPoem(poem));
+//=&gt; &lt;blockquote&gt;&lt;p&gt;Twas &lt;em&gt;four o&#x2019;clock in the afternoon&lt;/em&gt;, and the slithy toves&lt;br/&gt;
+// Did gyre and gimble in the wabe;&lt;br/&gt;
+// All mimsy were the borogoves,&lt;br/&gt;
+// And the mome raths outgrabe.&lt;/p&gt;&lt;/blockquote&gt;
+</code></pre>
+
+<p>Notice that we&#x2019;ve replaced <code>compose</code> with <code>pipe</code>. And there&#x2019;s no more intermediate functions, we&#x2019;ve put the curried functions directly in the pipeline. And, they&#x2019;re stll readable.</p>
+
+<p>Below is an implementation of curry adapted from <em>JavaScript Allong&#xE9;.</em><a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-functions/#fn:2" id="fnref:2" title="see footnote" class="footnote">[2]</a> Again, how it works is not as important as what it does.</p>
+
+<pre><code class="javascript">
+function curry (fn) {
+ var arity = fn.length;
+ 
+ function given (argsSoFar) {
+ return function helper () {
+ var args = Array.prototype.slice.call(arguments, 0);
+ var updatedArgsSoFar = argsSoFar.concat(args);
+ 
+ if (updatedArgsSoFar.length &gt;= arity) {
+ return fn.apply(this, updatedArgsSoFar);
+ }
+ else {
+ return given(updatedArgsSoFar);
+ }
+ }
+ }
+ 
+ return given([]);
+}
+</code></pre>
+
+<h3 id="butwhy">But why?</h3>
+
+<p>So far, we&#x2019;ve looked as <code>partial</code>, <code>compose</code>, <code>pipe</code>, and <code>curry</code> as useful tools to piece together small, simple functions to create more complex ones. But, are they really that useful? What do they make possible that wasn&#x2019;t possible before? Well, what it does is open up a whole new style of programming. It lets us think about problems in different ways, which makes certain classes of problem become much easier to solve. It can also help us write more robust, verifiable code. This will be the topic of the next article, so if you&#x2019;re curious, <a href="http://jrsinclair.com/articles/2016/gentle-introduction-to-functional-javascript-style/">read on&#x2026;</a></p>
+
+
+ </div>
+ </div>
+</body></html>

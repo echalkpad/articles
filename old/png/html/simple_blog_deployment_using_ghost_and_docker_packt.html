@@ -1,0 +1,109 @@
+<!DOCTYPE html><html><head><title>Simple Blog Deployment using Ghost and Docker | Packt</title></head><body>
+<h1>Simple Blog Deployment using Ghost and Docker | Packt</h1><p><a href="https://www.packtpub.com/books/content/simple-blog-deployment-using-ghost-and-docker" target="_new">Original URL</a></p>
+<p><blockquote>2013 gave birth to two wonderful Open Source projects: Ghost and Docker. This post will show you what the buzz is all about, and how you can use them together. So what are Ghost and Docker, exactly?&hellip;</blockquote></p>
+<div><div class="article-content">					
+ <p>2013 gave birth to two wonderful Open Source projects: <a href="https://ghost.org/">Ghost</a> and <a href="https://www.docker.com/">Docker</a>. This post will show you what the buzz is all about, and how you can use them together.</p>
+<h3>So what are Ghost and Docker, exactly?</h3>
+<p><a href="https://ghost.org/about/">Ghost</a>&#xA0;is an exciting new blogging platform, written in JavaScript running on&#xA0;<a href="http://nodejs.org/">Node.js</a>. It features a simple and modern user experience, as well as <a href="http://dev.ghost.org/">very transparent and accessible developer communications</a>. This blog post covers Ghost 0.4.2.</p>
+<p><img src="https://www.packtpub.com/sites/default/files/new_blog_images/67/ghost-screenshot.gif" alt="Ghost blogging platform" width="660"></p>
+<p><a href="https://www.docker.com/">Docker</a>&#xA0;is a very useful new development tool to package applications together with their dependencies for automated and portable deployment. It is based on&#xA0;<a href="https://en.wikipedia.org/wiki/Lxc">Linux Containers (lxc)</a>&#xA0;for lightweight virtualization, and&#xA0;<a href="https://en.wikipedia.org/wiki/Aufs">AUFS</a>&#xA0;for filesystem layering. This blog post covers Docker 1.1.2.</p>
+<p><img src="https://www.packtpub.com/sites/default/files/new_blog_images/67/docker-logo.gif" alt="Docker logo" width="660"></p>
+<h3>Install Docker</h3>
+<p>If you are on Windows or Mac OS X, the easiest way to get started using Docker is&#xA0;<a href="http://boot2docker.io/">Boot2Docker</a>. For Linux and more in-depth instructions, consult one of the&#xA0;<a href="https://docs.docker.com/installation/#installation">Docker installation guides</a>.</p>
+<p>Go ahead and install Docker via one of the above links, then come back and run:</p>
+<pre class="line-numbers"><code class="language-markup">docker version</code></pre><p>You run this in your terminal to verify your installation. If you get about eight lines of detailed version information, the installation was successful. Just running&#xA0;docker&#xA0;will provide you with a list of commands, and&#xA0;docker help &lt;command&gt;&#xA0;will show a command's usage. If you use Boot2Docker, remember to&#xA0;export DOCKER_HOST=tcp://192.168.59.103:2375.</p>
+<p>Now, to get the Ubuntu 14.04 base image downloaded (which we'll use in the next sections), run the following command:</p>
+<pre class="line-numbers"><code class="language-markup">docker run --rm ubuntu:14.04 /bin/true</code></pre><p>This will take a while, but only for the first time. There are many more Docker images available at the&#xA0;<a href="https://registry.hub.docker.com/">Docker Hub Registry</a>.</p>
+<h3>Hello Docker</h3>
+<p>To give you a quick glimpse into what Docker can do for you, run the following command:</p>
+<pre class="line-numbers"><code class="language-markup">docker run --rm ubuntu:14.04 /bin/echo Hello Docker</code></pre><p>This runs&#xA0;/bin/echo Hello Docker&#xA0;in its own virtual Ubuntu 14.04 environment, but since it uses Linux Containers instead of booting a complete operating system in a virtual machine, this only takes&#xA0;<strong>less than a second</strong>&#xA0;to complete. Pretty sweet, huh?</p>
+<p>To run Bash, provide the&#xA0;-ti&#xA0;flags for interactivity:</p>
+<pre class="line-numbers"><code class="language-markup">docker run --rm -ti ubuntu:14.04 /bin/bash</code></pre><p>The&#xA0;--rm&#xA0;flag makes sure that the container gets removed after use, so any files you create in that Bash session get removed after logging out.</p>
+<p>For more details, see the&#xA0;<a href="https://docs.docker.com/reference/run/">Docker Run Reference</a>.</p>
+<h3>Build the Ghost image</h3>
+<p>In the previous section, you've run the&#xA0;ubuntu:14.04&#xA0;image. In this section, we'll build an image for Ghost that we can then use to quickly launch a new Ghost container. While you could get a&#xA0;<a href="http://dockerfile.github.io/#/ghost">pre-made Ghost Docker image</a>, for the sake of learning, we'll build our own.</p>
+<p>About the terminology: A Docker&#xA0;<strong>image</strong>&#xA0;is analogous to a program stored on disk, while a Docker&#xA0;<strong>container</strong>&#xA0;is analogous to a process running in memory.</p>
+<p>Now create a new directory, such as&#xA0;docker-ghost, with the following files &#x2014; you can also find them in&#xA0;<a href="https://gist.github.com/felixrabe/2c352646a698545a096f">this Gist on GitHub</a>:</p>
+<p><strong>package.json</strong>:</p>
+<pre class="line-numbers"><code class="language-markup">{}</code></pre><p>This is the bare minimum actually required, and will be expanded with the current Ghost dependency by the Dockerfile command&#xA0;npm install --save ghost&#xA0;when building the Docker image.</p>
+<p><strong>server.js</strong>:</p>
+<pre class="line-numbers"><code class="language-markup">#!/usr/bin/env node
+
+var ghost = require('ghost');
+ghost({
+ config: __dirname + '/config.js'
+});
+</code></pre><p>This is all that is required to&#xA0;<a href="https://github.com/TryGhost/Ghost/wiki/Using-Ghost-as-an-NPM-module">use Ghost as an NPM module</a>.</p>
+<p><strong>config.js:</strong></p>
+<pre class="line-numbers"><code class="language-markup">config = require('./node_modules/ghost/config.example.js');
+config.development.server.host = '0.0.0.0';
+config.production.server.host = '0.0.0.0';
+module.exports = config;</code></pre><p>This will make the Ghost server accessible from outside of the Docker container.</p>
+<p><strong>Dockerfile</strong>:</p>
+<pre class="line-numbers"><code class="language-markup"># DOCKER-VERSION 1.1.2
+
+FROM ubuntu:14.04
+
+# Speed up apt-get according to <a href="https://gist.github.com/jpetazzo/6127116" title="https://gist.github.com/jpetazzo/6127116">https://gist.github.com/jpetazzo/6127116</a>
+RUN echo "force-unsafe-io" &gt; /etc/dpkg/dpkg.cfg.d/02apt-speedup
+RUN echo "Acquire::http {No-Cache=True;};" &gt; /etc/apt/apt.conf.d/no-cache
+
+# Update the distribution
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get update
+RUN apt-get upgrade -y
+
+# <a href="https://github.com/joyent/node/wiki/Installing-Node.js-via-package-manager" title="https://github.com/joyent/node/wiki/Installing-Node.js-via-package-manager">https://github.com/joyent/node/wiki/Installing-Node.js-via-package-manager</a>
+RUN apt-get install -y software-properties-common
+RUN add-apt-repository -y ppa:chris-lea/node.js
+RUN apt-get update
+RUN apt-get install -y python-software-properties python g++ make nodejs git # git needed by 'npm install'
+
+ADD . /src
+RUN cd /src; npm install --save ghost
+
+ENTRYPOINT ["node", "/src/server.js"]
+# Override ubuntu:14.04 CMD directive:
+CMD []
+
+EXPOSE 2368</code></pre><p>This Dockerfile will create a Docker image with Node.js and the dependencies needed to build the Ghost NPM module, and prepare Ghost to be run via Docker. See&#xA0;<a href="http://docs.docker.com/reference/builder/">Documentation</a>&#xA0;for details on the syntax.</p>
+<p>Now build the Ghost image using:</p>
+<pre class="line-numbers"><code class="language-markup">cd docker-ghost
+docker build -t ghost-image .</code></pre><p>This will take a while, but you might have to&#xA0;<em>Ctrl-C</em>&#xA0;and re-run the command if, for more than a couple of minutes, you are stuck at the following step:</p>
+<pre class="line-numbers"><code class="language-markup">&gt; node-pre-gyp install --fallback-to-build</code></pre><h3>Run Ghost</h3>
+<p>Now start the Ghost container:</p>
+<pre class="line-numbers"><code class="language-markup">docker run --name ghost-container -d -p 2368:2368 ghost-image</code></pre><p>If you run Boot2Docker, you'll have to figure out its IP address:</p>
+<pre class="line-numbers"><code class="language-markup">boot2docker ip</code></pre><p>Usually, that's&#xA0;192.168.59.103, so by going to&#xA0;<a href="http://192.168.59.103:2368/">http://192.168.59.103:2368</a>, you will see your fresh new Ghost blog. Yay! For the admin interface, go to&#xA0;<a href="http://192.168.59.103:2368/ghost">http://192.168.59.103:2368/ghost</a>.</p>
+<h3>Manage the Ghost container</h3>
+<p>The following commands will come in handy to manage the Ghost container:</p>
+<pre class="line-numbers"><code class="language-markup"># Show all running containers:
+docker ps -a
+
+# Show the container logs:
+docker logs [-f] ghost-container
+
+# Stop Ghost via a simulated Ctrl-C:
+docker kill -s INT ghost-container
+
+# After killing Ghost, this will restart it:
+docker start ghost-container
+
+# Remove the container AND THE DATA (!):
+docker rm ghost-container</code></pre><h3>What you'll want to do next</h3>
+<p>Some steps that are outside the scope of this post, but some steps that you might want to pursue next, are:</p>
+<ul>
+<li>Copy and change the Ghost configuration that currently resides in&#xA0;node_modules/ghost/config.js.</li>
+<li>Move the Ghost&#xA0;content&#xA0;directory into a separate Docker volume to allow for upgrades and data backups.</li>
+<li>Deploy the Ghost image to production on your public server at your hosting provider. Also, you might want to change the Ghost configuration to match your domain and change the port to&#xA0;80.</li>
+</ul>
+<h3>How I use Ghost with Docker</h3>
+<p>I run Ghost in Docker successfully over at&#xA0;<a href="http://named-data.education/">Named Data Education</a>, a new blog about&#xA0;<a href="http://named-data.net/">Named Data Networking</a>. I like the fact that I can replicate an isolated setup identically on that server as well as on my own laptop.</p>
+<h3>Ghost resources</h3>
+
+<h3>Docker resources</h3>
+
+<h3>About the Author</h3>
+<p>Felix Rabe has been programming and working with different technologies and companies at different levels since 1993. Currently he is researching and promoting Named Data Networking (<a href="http://named-data.net/">http://named-data.net/</a>), an evolution of the Internet architecture that currently relies on the host-bound Internet Protocol.</p>
+ </div>
+ 					</div>
+</body></html>

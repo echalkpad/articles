@@ -1,0 +1,141 @@
+<!DOCTYPE html><html><head><title>Interactive JavaScript Charts Using Data from Google Sheets</title></head><body>
+<h1>Interactive JavaScript Charts Using Data from Google Sheets</h1><p><a href="http://www.sitepoint.com/interactive-javascript-charts-using-data-from-google-sheets/" target="_new">Original URL</a></p>
+<p><blockquote>This article was peer reviewed by Jeff Smith. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be! Meet my friend Jenny. She recently started coding&hellip;</blockquote></p>
+<div>
+
+ 
+ <div class="ArticleCopy language-">
+ <p><em>This article was peer reviewed by <a href="http://www.sitepoint.com/author/jeffsmith">Jeff Smith</a>. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be!</em></p>
+<p>Meet my friend Jenny. She recently started coding websites. She loved her job and was very happy until she met Steve, who has a reputation of being, let&#x2019;s say, not a very easygoing client.</p>
+<p>Steve had a lot of data in a spreadsheet and he wanted to display that on his website. Our friend (now Jenny is your friend too!) suggested that Steve make the charts in Excel and upload them as images to the website.</p>
+
+<p>But Steve being Steve, he wanted the charts to be interactive. Not only that, he also wanted the charts to get updated whenever he made a change to the data in his spreadsheet .</p>
+<p>Jenny didn&#x2019;t know how to tackle this issue, so she came to me. And, being the good friend I am, I gave her this advice:</p>
+<p>First ask your client to move his data to Google Sheets (because that&#x2019;s what all the cool people are doing nowadays). Then we can easily implement the features that he needs &#x2014; interactive JavaScript charts and dynamic updating.</p>
+<p>Her client agreed (luckily!), and Jenny and I coded rest of the solution. But how? Well, that&#x2019;s what this tutorial will teach you.</p>
+<p>I have divided this tutorial into five easy-to-follow steps:</p>
+<ol>
+<li>Exporting data from Google Sheets</li>
+<li>Fetching JSON from Google Sheets via Ajax</li>
+<li>Restructuring the data</li>
+<li>Creating a chart with FusionCharts.</li>
+<li>Customizing the chart</li>
+</ol>
+<p>So without further ado, let&#x2019;s dive in!</p>
+<h2 id="exportinggooglesheetsdataasjson">Exporting Google Sheets Data as JSON</h2>
+<p>Before delving into how to export data, let&#x2019;s first create a sheet. Assuming you&#x2019;ve got a Google account, you can do this by going to the <a href="https://docs.google.com/spreadsheets/">Google Sheets page</a> and hitting the <em>Start a new spreadsheet</em> button. In the spreadsheet that opens, create two columns: <em>Actor</em> and <em>Income</em>. Then fill your newly created sheet with some data. I&#x2019;ve taken mine from here: <a href="http://www.forbes.com/pictures/emjl45mmei/the-worlds-highest-paid-/">The World&#x2019;s Highest-Paid Actors 2015</a>.</p>
+
+<p>As you can see, the left column contains labels for our chart, the right one values corresponding to those labels. For those of you following along at home, you can <a href="https://docs.google.com/spreadsheets/d/1Aoz_GcPYoEIMMNd1N_meYNOp8TJ0fCXpp1AoUhCpwZo/edit#gid=0">grab a copy of this sheet here</a> (go to <em>File</em> &gt; <em>Make a copy</em>).</p>
+<p>The data available in Google Sheets can be exported to multiple formats like JSON, XML etc. And once exported to any of those formats, it can be easily accessed via the web.</p>
+<p>To open your document to the web, you need to make the following changes to the document settings:</p>
+<ul>
+<li>Set the sharing of the document to either <em>Public on the web</em>, or <em>Anyone with the link</em>. To achieve this, click the <em>Share</em> button in the top right-hand corner, then click the <em>Advanced</em> option that appears in the bottom right of the pop up.</li>
+<li>Publish the document to the web. This option is available under <em>File</em> &gt; <em>Publish to the web</em></li>
+</ul>
+<p>With these two changes made, the data in the document can be accessed in JSON format via: https://spreadsheets.google.com/feeds/list/SPREADSHEET/od6/public/basic?alt=json</p>
+<p>You will need to replace <code>SPREADSHEET</code> with the ID of your Google Sheet, which in our case is <code>1Aoz_GcPYoEIMMNd1N_meYNOp8TJ0fCXpp1AoUhCpwZo</code>. You can see the <a href="https://spreadsheets.google.com/feeds/list/1Aoz_GcPYoEIMMNd1N_meYNOp8TJ0fCXpp1AoUhCpwZo/od6/public/basic?alt=json">results here</a>.</p>
+<h2 id="usingjquerytofetchjsonfromgooglesheets">Using jQuery to Fetch JSON from Google Sheets</h2>
+<p>We will use <a href="https://api.jquery.com/jquery.get/">jQuery&#x2019;s get()</a> method to fetch the data from Google Sheets. You can include jQuery from a CDN as shown:</p>
+<pre><code class="markup language-markup">&lt;script type="text/javascript" src="https://code.jquery.com/jquery-1.12.0.min.js"&gt;&lt;/script&gt;
+</code></pre>
+<p>With the <code>&lt;script&gt;</code> tag added, call <code>$.get</code> on the the spreadsheet URL we have created.</p>
+<pre><code class="javascript language-javascript">var spreadsheetId = "1Aoz_GcPYoEIMMNd1N_meYNOp8TJ0fCXpp1AoUhCpwZo",
+ url = "https://spreadsheets.google.com/feeds/list/" +
+ spreadsheetId +
+ "/od6/public/basic?alt=json";
+
+$.get({
+ url: url,
+ success: function(response) {
+ console.log(response);
+ }
+});
+</code></pre>
+<p>The above jQuery code makes an Ajax request to the Google Sheets URL, and upon successfully fetching the data, it calls the <code>success</code> function. This function logs the data returned from the server to the console. I would encourage you to run this script and take a moment to examine exactly what is returned.</p>
+<h2 id="restructuringthedata">Restructuring the Data</h2>
+<p>The JSON data from Google Sheets needs to be restructured a little to match the data format accepted by our visualization library. For this tutorial we&#x2019;ll be using <a href="http://www.fusioncharts.com">FusionCharts</a>.</p>
+<p>FusionCharts accepts JSON data as an array of objects containing <code>label</code> and <code>value</code> keys. This is what it looks like:</p>
+<pre><code class="javascript language-javascript">[{
+ "label": "Robert Downey Jr.",
+ "value": "80"
+}
+...]
+</code></pre>
+<p>To achieve this, we need to run following piece of code in the <code>success</code> callback of the jQuery <code>get</code> function we defined earlier.</p>
+<pre><code class="javascript language-javascript">var data = response.feed.entry,
+ len = data.length,
+ i = 0,
+ parsedData = [];
+
+for (i = 0; i &lt; len; i++) {
+ parsedData.push({
+ label: data[i].title.$t,
+ value: data[i].content.$t.replace('Income: ', '')
+ });
+}
+</code></pre>
+<p>What we are doing here is iterating over each Google Sheet data object present in <code>response.feed.entry</code> and extracting the <code>label</code> and <code>value</code> out of it. Then we are storing them in a new array <code>parsedData</code>, which will be used by the chart.</p>
+<p>The <code>label</code> is available in the <code>title.$t</code> key and the value is available in <code>content.$t</code> key of the data object. The value though contains the sheet column name, which is not necessary, hence we strip it out. The rest of the data in the Google Sheet is not needed for the visualization.</p>
+<p>The <code>parsedData</code> array now contains data in a format which will be understood by FusionCharts and we can continue on with creating the visualization.</p>
+<h2 id="step3creatingthechart">Step-3: Creating the Chart</h2>
+<p>Now with our data ready and accessible, we can move on to creating charts. Creating the chart involves the following steps:</p>
+<ul>
+<li>Creating a <code>&lt;div&gt;</code> inside which the chart will be rendered.</li>
+<li>Creating a FusionCharts instance using the parsed data from the Google Sheet.</li>
+<li>Calling the <code>render</code> method on the FusionCharts instance to render it in the <code>div</code>.</li>
+</ul>
+<p>In the markup we include the FusionCharts library via a CDN:</p>
+<pre><code class="markup language-markup">&lt;script src="http://static.fusioncharts.com/code/latest/fusioncharts.js"&gt;&lt;/script&gt;
+</code></pre>
+<p>As well as a containing element for the chart. This can contain some place holder text which will display before the chart renders.</p>
+<pre><code class="markup language-markup">&lt;div id="chart-container"&gt;
+ &lt;p&gt;The chart will render here!&lt;/p&gt;
+&lt;/div&gt;
+</code></pre>
+<p>To actually create and render a basic horizontal bar chart into <code>#chart-container</code>, we&#x2019;ll add the following code to the <code>success</code> callback:</p>
+<pre><code class="javascript language-javascript">new FusionCharts({
+ type: 'bar2d',
+ renderAt: 'chart-container',
+ width: '100%',
+ height: '300',
+ dataFormat: 'json',
+ dataSource: {
+ "chart": {
+ "caption": "Highest Paid Actors",
+ "yAxisName": "Annual Income (in milion USD)",
+ "numberPrefix": "$"
+ },
+ "data": parsedData
+ }
+}).render();
+</code></pre>
+<p>Let&#x2019;s look at some of the configuration options we have defined for the chart:</p>
+<ul>
+<li><code>type</code>: defines the chart type we are going to plot &#x2013; <code>bar2d</code> in this example.</li>
+<li><code>height</code>: height of the chart in pixels.</li>
+<li><code>width</code>: width of the chart.</li>
+<li><code>chart</code>: here we can set things like title, labels for both axes, a value prefix, etc.</li>
+<li><code>data</code>: the data the chart will be constructed from.</li>
+</ul>
+<p>And here&#x2019;s a demo of what we&#x2019;ve got so far:</p>
+<p class="codepen">See the Pen <a href="http://codepen.io/SitePoint/pen/rxorZd/">JavaScript Charts + Google Sheets</a> by SitePoint (<a href="http://codepen.io/SitePoint">@SitePoint</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+
+<h2 id="customizingthechart">Customizing the Chart</h2>
+<p>Whilst the above demo works, it looks perhaps a little generic. Luckily you can customize almost every aspect of a chart&#x2019;s appearance. FusionCharts has some excellent <a href="http://www.fusioncharts.com/dev/chart-attributes.html?chart=bar2d">documentation</a>, which I suggest you check out.</p>
+<p>Here&#x2019;s the same chart customized to look a little more, ahem, appealing.</p>
+<p class="codepen">See the Pen <a href="http://codepen.io/SitePoint/pen/adXzae/">JavaScript Charts + Google Sheets (2)</a> by SitePoint (<a href="http://codepen.io/SitePoint">@SitePoint</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>As you have seen, it is not so difficult to create a live chart from Google Sheets. Live JavaScript charts can even also be generated for complex chart types, such multi-series charts. The only thing that needs to be worked out for complex charts is how to restructure the data from Google Sheets to the format accepted by the chart. Everything else remains the same.</p>
+
+<p>PS: I will be hanging around in the comments section below So feel free to shoot any questions you have about this tutorial. I&#x2019;more than happy to help!</p>
+ </div>
+
+ 
+
+ 
+ 
+
+
+ </div>
+</body></html>

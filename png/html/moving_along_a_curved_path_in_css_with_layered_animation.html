@@ -1,0 +1,185 @@
+<!DOCTYPE html><html><head><title>Moving along a curved path in CSS with layered animation</title></head><body>
+<h1>Moving along a curved path in CSS with layered animation</h1><p><a href="http://tobiasahlin.com/blog/curved-path-animations-in-css/" target="_new">Original URL</a></p>
+<p><blockquote>CSS animations and transitions are great for animating something from point A to B. That is, if you want to animate along a straight path. No matter how much you bend your bezier curves, you can't&hellip;</blockquote></p>
+<div><div class="article article-single">
+		
+
+<p>CSS animations and transitions are great for animating something from point A to B. That is, if you want to animate along a straight path. No matter how much you bend your <a href="https://developer.mozilla.org/en/docs/Web/CSS/timing-function">bezier curves</a>, you can't make something move along a curved path by applying an <code>animation</code> or a <code>transition</code> to an object. You can overshoot with custom timing functions, and produce spring-like effects, but the relative movement along the X and Y-axis will always be identical.</p>
+
+<p>However, instead of turning to JavaScript for producing more natural looking motion, there's an easy way to work around this limitation: layered animation. By using two or more objects to drive an animation, we get fine grained control over an object's path, and can apply one timing function for the movement along the X-axis, and another one for the Y-axis.</p>
+
+
+
+<h2>The problem</h2>
+
+<div class="post-demo-content">
+ 
+
+ 
+
+ 
+</div>
+
+<p>Before we dive into the solution, let's look closer at the problem. CSS <code>animations</code> and <code>transitions</code> restrict us to animating along straight paths. How? By always taking the shortest path from point A to point B. That's great&#x2014;this is what we're after in most cases&#x2014;but we lack a way of telling CSS to &#x201C;take a nicer path&#x201D; rather than &#x201C;take the shortest path&#x201D;.</p>
+
+<p>The most straight-forward way of animating between two points in CSS (with hardware acceleration) is to use <code>transform</code> to <code>translate</code> an object over time. This produces movement along a linear path. In this <code>@keyframes</code> block, we're going back and forth between (0,0) and (100,-100), as seen in the example above:</p>
+<div class="highlight"><pre><code class="language-css"><span class="k">@keyframes</span> <span class="nt">straightLine</span> <span class="p">{</span>
+ <span class="nt">50</span><span class="o">%</span> <span class="p">{</span>
+ <span class="n">transform</span><span class="o">:</span> <span class="n">translate3D</span><span class="p">(</span><span class="m">100px</span><span class="o">,</span> <span class="m">-100px</span><span class="o">,</span> <span class="m">0</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nc">.dot</span> <span class="p">{</span>
+ <span class="n">animation</span><span class="o">:</span> <span class="n">straightLine</span> <span class="m">2.5s</span> <span class="n">infinite</span> <span class="n">linear</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>This isn't complicated, but let's stop here for a moment. To understand the solution to the problem we need to, at least visually, take the animation apart. </p>
+
+<p>At <code>0%</code> we start out at (0,0), and at <code>50%</code> we use <code>translate3D(100px, -100px, 0)</code> to move to (100,-100), then back again. Put another way, we move the object <code>100px</code> to the right, and <code>100px</code> upwards, and these two translations combined move the object at an angle.</p>
+
+<div class="post-demo-content">
+ 
+
+ 
+
+ 
+
+
+ 
+</div>
+
+<h2>The solution: one timing function per axis</h2>
+
+<p>So how do we create a curved path like the one showcased in the earlier example? To create a path that doesn't go in a straight line, <strong>we want the movement speed along the X-axis and Y-axis to be out of sync</strong>.</p>
+
+<p>The previous examples all used <code>linear</code> timing functions, but if we add a container around the object we want to animate, we can apply one timing function for the X-axis, and another one for the Y-axis. Below, we're using <code>ease-in</code> for the X-axis, and <code>ease-out</code> for the Y-axis:</p>
+
+<div class="post-demo-content">
+ 
+
+ 
+
+ 
+
+ 
+</div>
+
+<h2>The implementation: one object per axis</h2>
+
+<p>Unfortunately, we can't just stack <code>transform</code> animations: only the last animation to be declared would run. So, how do we actually combine two animations? We put one object inside another, and run one animation on the container element, and a different one on the child element. </p>
+
+<p>In all the examples above where you've seen the dot move along a curved path, you've seen two separate elements being animated, but the container has been completely transparent. To clearly see how the two objects interact in the curved examples, we can change the container to render a bordered box:</p>
+
+<div class="post-demo-content">
+ 
+
+ 
+
+ 
+
+ 
+</div>
+
+<p>The dot sits inside the bordered box, and follows the box's motion along the X-axis, while it itself moves up and down along the Y-axis. Remove the border of the box, and we've got our curved path. Rather than adding two objects in our HTML, though, we can produce a pseudo-element. If we have this in our HTML:</p>
+
+<p>We can add a pseudo-element like so:</p>
+<div class="highlight"><pre><code class="language-css"><span class="nc">.dot</span> <span class="p">{</span>
+ <span class="c">/* Container. Animate along the X-axis */</span>
+<span class="p">}</span>
+
+<span class="nc">.dot</span><span class="o">:</span><span class="nd">:after</span> <span class="p">{</span>
+ <span class="c">/* Render dot, and animate along Y-axis */</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Then we need two separate animation blocks: one for the X-axis, and one for the Y-axis. Notice how one uses <code>ease-in</code>, while the other one uses <code>ease-out</code>:</p>
+<div class="highlight"><pre><code class="language-css"><span class="nc">.dot</span> <span class="p">{</span>
+ <span class="c">/* Some layout code&#x2026; */</span>
+ <span class="n">animation</span><span class="o">:</span> <span class="n">xAxis</span> <span class="m">2.5s</span> <span class="n">infinite</span> <span class="n">ease</span><span class="o">-</span><span class="n">in</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="nc">.dot</span><span class="o">:</span><span class="nd">:after</span> <span class="p">{</span>
+ <span class="c">/* Render dot */</span>
+ <span class="n">animation</span><span class="o">:</span> <span class="n">yAxis</span> <span class="m">2.5s</span> <span class="n">infinite</span> <span class="n">ease</span><span class="o">-</span><span class="n">out</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">@keyframes</span> <span class="nt">xAxis</span> <span class="p">{</span>
+ <span class="nt">50</span><span class="o">%</span> <span class="p">{</span>
+ <span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">ease</span><span class="o">-</span><span class="n">in</span><span class="p">;</span>
+ <span class="n">transform</span><span class="o">:</span> <span class="n">translateX</span><span class="p">(</span><span class="m">100px</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">@keyframes</span> <span class="nt">yAxis</span> <span class="p">{</span>
+ <span class="nt">50</span><span class="o">%</span> <span class="p">{</span>
+ <span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">ease</span><span class="o">-</span><span class="n">out</span><span class="p">;</span>
+ <span class="n">transform</span><span class="o">:</span> <span class="n">translateY</span><span class="p">(</span><span class="m">-100px</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Put together, with vender-prefixes for WebKit, and with some custom bezier curves instead of <code>ease-in</code> and <code>ease-out</code>, we can produce the example showcased at the very beginning of the post:</p>
+<div class="highlight"><pre><code class="language-css"><span class="nc">.demo-dot</span> <span class="p">{</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">animation</span><span class="o">:</span> <span class="n">xAxis</span> <span class="m">2.5s</span> <span class="n">infinite</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">02</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">01</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">21</span><span class="o">,</span> <span class="m">1</span><span class="p">);</span>
+ <span class="n">animation</span><span class="o">:</span> <span class="n">xAxis</span> <span class="m">2.5s</span> <span class="n">infinite</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">02</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">01</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">21</span><span class="o">,</span> <span class="m">1</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nc">.demo-dot</span><span class="o">:</span><span class="nd">:after</span> <span class="p">{</span>
+ <span class="k">content</span><span class="o">:</span> <span class="s1">''</span><span class="p">;</span>
+ <span class="k">display</span><span class="o">:</span> <span class="k">block</span><span class="p">;</span>
+ <span class="k">width</span><span class="o">:</span> <span class="m">20px</span><span class="p">;</span>
+ <span class="k">height</span><span class="o">:</span> <span class="m">20px</span><span class="p">;</span>
+ <span class="k">border</span><span class="o">-</span><span class="n">radius</span><span class="o">:</span> <span class="m">20px</span><span class="p">;</span>
+ <span class="k">background-color</span><span class="o">:</span> <span class="m">#fff</span><span class="p">;</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">animation</span><span class="o">:</span> <span class="n">yAxis</span> <span class="m">2.5s</span> <span class="n">infinite</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">3</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">27</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">07</span><span class="o">,</span> <span class="m">1</span><span class="o">.</span><span class="m">64</span><span class="p">);</span>
+ <span class="n">animation</span><span class="o">:</span> <span class="n">yAxis</span> <span class="m">2.5s</span> <span class="n">infinite</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">3</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">27</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">07</span><span class="o">,</span> <span class="m">1</span><span class="o">.</span><span class="m">64</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="k">@-webkit-keyframes</span> <span class="nt">yAxis</span> <span class="p">{</span>
+ <span class="nt">50</span><span class="o">%</span> <span class="p">{</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">02</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">01</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">21</span><span class="o">,</span> <span class="m">1</span><span class="p">);</span>
+ <span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">02</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">01</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">21</span><span class="o">,</span> <span class="m">1</span><span class="p">);</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">transform</span><span class="o">:</span> <span class="n">translateY</span><span class="p">(</span><span class="m">-100px</span><span class="p">);</span>
+ <span class="n">transform</span><span class="o">:</span> <span class="n">translateY</span><span class="p">(</span><span class="m">-100px</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">@keyframes</span> <span class="nt">yAxis</span> <span class="p">{</span>
+ <span class="nt">50</span><span class="o">%</span> <span class="p">{</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">02</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">01</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">21</span><span class="o">,</span> <span class="m">1</span><span class="p">);</span>
+ <span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">02</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">01</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">21</span><span class="o">,</span> <span class="m">1</span><span class="p">);</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">transform</span><span class="o">:</span> <span class="n">translateY</span><span class="p">(</span><span class="m">-100px</span><span class="p">);</span>
+ <span class="n">transform</span><span class="o">:</span> <span class="n">translateY</span><span class="p">(</span><span class="m">-100px</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">@-webkit-keyframes</span> <span class="nt">xAxis</span> <span class="p">{</span>
+ <span class="nt">50</span><span class="o">%</span> <span class="p">{</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">3</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">27</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">07</span><span class="o">,</span> <span class="m">1</span><span class="o">.</span><span class="m">64</span><span class="p">);</span>
+ <span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">3</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">27</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">07</span><span class="o">,</span> <span class="m">1</span><span class="o">.</span><span class="m">64</span><span class="p">);</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">transform</span><span class="o">:</span> <span class="n">translateX</span><span class="p">(</span><span class="m">100px</span><span class="p">);</span>
+ <span class="n">transform</span><span class="o">:</span> <span class="n">translateX</span><span class="p">(</span><span class="m">100px</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">@keyframes</span> <span class="nt">xAxis</span> <span class="p">{</span>
+ <span class="nt">50</span><span class="o">%</span> <span class="p">{</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">3</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">27</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">07</span><span class="o">,</span> <span class="m">1</span><span class="o">.</span><span class="m">64</span><span class="p">);</span>
+ <span class="n">animation</span><span class="o">-</span><span class="n">timing</span><span class="o">-</span><span class="n">function</span><span class="o">:</span> <span class="n">cubic</span><span class="o">-</span><span class="n">bezier</span><span class="p">(</span><span class="m">0</span><span class="o">.</span><span class="m">3</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">27</span><span class="o">,</span> <span class="m">0</span><span class="o">.</span><span class="m">07</span><span class="o">,</span> <span class="m">1</span><span class="o">.</span><span class="m">64</span><span class="p">);</span>
+ <span class="o">-</span><span class="n">webkit</span><span class="o">-</span><span class="n">transform</span><span class="o">:</span> <span class="n">translateX</span><span class="p">(</span><span class="m">100px</span><span class="p">);</span>
+ <span class="n">transform</span><span class="o">:</span> <span class="n">translateX</span><span class="p">(</span><span class="m">100px</span><span class="p">);</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Which brings us back to where we started:</p>
+
+
+
+<p>You may have noticed that we've been using <code>@keyframes</code> blocks in all of the examples so far, but that's purely because we happened to need several keyframes to move the dot back and forth. Layered animation works just as well with the <code>transition</code> property, if you only need to animate from point A to point B.</p>
+
+<p>If you have an absolutely positioned element, you can achieve a curved path by animating the <code>left</code> and <code>bottom</code> properties, of a single element, and avoid the need of a container element. There's a good reason to avoid doing so, however: it performs significantly worse, and will trigger a redraw for every frame of the animation. Using layered animation with a pseudo-element, and animating the hardware accelerated <code>translate</code> property, produces a great looking animation while making sure it also performs well.</p>
+
+	</div>
+
+	
+	
+	</div>
+</body></html>

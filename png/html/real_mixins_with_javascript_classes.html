@@ -1,0 +1,326 @@
+<!DOCTYPE html><html><head><title>"Real" Mixins with JavaScript Classes</title></head><body>
+<h1>"Real" Mixins with JavaScript Classes</h1><p><a href="http://justinfagnani.com/2015/12/21/real-mixins-with-javascript-classes/" target="_new">Original URL</a></p>
+<p><blockquote>Mixins and Javascript: The Good, the Bad, and the Ugly. Mixins and JavaScript are a like the classic Clint Eastwood movie. The good is that composing objects out of small pieces of implementation is&hellip;</blockquote></p>
+<div><section class="post-content">
+ <h2 id="mixinsandjavascriptthegoodthebadandtheugly">Mixins and Javascript: The Good, the Bad, and the Ugly.</h2>
+
+<p>Mixins and JavaScript are a like the classic Clint Eastwood movie.</p>
+
+<p>The good is that composing objects out of small pieces of implementation is even possible due to JavaScript's flexible nature, and that mixins are fairly popular in certain circles.</p>
+
+<p>The bad is a long list: there's no common idea of what the concept of a mixin even is in JavaScript; there's no common pattern for them; they require helper libraries to use; more advanced composition (like coordination between mixins and prototypes) is complicated and does not fall out naturally from the patterns; they're difficult to statically analyze or introspect; finally, most mixin libraries mutate objects or their prototypes, causing problems for VMs and some programmers to avoid them.</p>
+
+<p>The ugly is that the result of all this is a balkanized ecosystem of mixin libraries and mixins, with often incompatible construction and semantics across libraries. As far as I can tell, no particular library is popular enough to even be called common. You're more likely to see a project implement their own mixin function than see a mixin library used.</p>
+
+<p>JavaScript mixins so far have simply fallen well short of their potential, and mixins as described in academic literature and even implemented in a few good languages.</p>
+
+<p>For someone who loves mixins, and thinks they should be used as much as possible, this is terrible. Mixins solve a number of issues that single-inheritance languages have, and to me, most of the complaints that the prototypal crowd has against classes in JavaScript. I would argue all inheritance should be mixin inheritance - subclassing is just a degenerate form of mixin application.</p>
+
+<p>Luckily, there's light at the end of the tunnel with JavaScript classes. Their arrival finally gives JavaScript very easy to use syntax for inheritance, and JavaScript classes are more powerful than most people realize, and are a great foundation for building <em>real</em> mixins.</p>
+
+<p>In this post I'll explore what mixins should do, what's wrong with current JavaScript mixins, and how simple it is to build a very capable mixin system in JavaScript that plays extremely well with classes.</p>
+
+<h2 id="whatexactlyaremixins">What, Exactly, are Mixins?</h2>
+
+<p>To understand what a mixin implementation should do, let's first look at what mixins are:</p>
+
+<blockquote>
+ <p>A mixin is an abstract subclass; i.e. a subclass definition that may be applied to different superclasses to create a related family of modified classes.</p>
+ 
+ <p><cite>Gilad Bracha and William Cook, <a href="http://www.bracha.org/oopsla90.pdf">Mixin-based Inheritance</a></cite></p>
+</blockquote>
+
+<p>This is the best definition of mixins I've been able to find. It clearly shows the difference between a mixin and a normal class, and strongly hints at how mixins can be implemented in JavaScript.</p>
+
+<p>To dig deeper into the implications of this definition, let's add two terms to our mixin lexicon:</p>
+
+<ul>
+<li><em>mixin definition</em>: The definition of a class that may be applied to different superclasses.</li>
+<li><em>mixin application</em>: The application of a mixin definition to a specific superclass, producing a new subclass.</li>
+</ul>
+
+<p>The mixin definition is really a <em>subclass factory</em>, parameterized by the superclass, which produces mixin applications. A mixin application sits in the inheritance hierarchy between the subclass and superclass.</p>
+
+<p>The real, and only, difference between a mixin and normal subclass is that a normal subclass has a fixed superclass, while a mixin definition doesn't yet have a superclass. Only the <em>mixin applications</em> have their own superclasses. You can even look at normal subclass inheritance as a degenerate form of mixin inheritance where the superclass is known at class definition time, and there's only one application of it. </p>
+
+<h3 id="examples">Examples</h3>
+
+<p>Here's an example of <a href="https://www.dartlang.org/articles/mixins/">mixins in Dart</a>, which has a nice syntax for mixins while being similar to JavaScript:</p>
+
+<pre><code class="language-dart">class B extends A with M {} 
+</code></pre>
+
+<p>Here <em>A</em> is a base class, <em>B</em> the subclass, and <em>M</em> a mixin. The mixin application is the specific combination of <em>M</em> mixed into <em>A</em>, often called <em>A-with-M</em>. The superclass of <em>A-with-M</em> is <em>A</em>, and the actual superclass of <em>B</em> is not <em>A</em>, as you might expect, but <em>A-with-M</em>.</p>
+
+<p>Some class declarations and diagrams might be helpful to show what's going on. </p>
+
+<p>Let's start with a simple class hierarchy, with class <em>B</em> inheriting from class <em>A</em>:</p>
+
+<pre><code class="language-dart">class B extends A {} 
+</code></pre>
+
+<p><img src="http://justinfagnani.com/content/images/2015/06/class-hierarchy-1-1.svg" alt=""></p>
+
+<p>Now let's add the mixin:</p>
+
+<pre><code class="language-dart">class B extends A with M {} 
+</code></pre>
+
+<p><img src="http://justinfagnani.com/content/images/2015/06/class-hierarchy-2.svg" alt=""></p>
+
+<p>As you can see, the mixin application <em>A-with-M</em> is inserted into the hierarchy between the subclass and superclass.</p>
+
+<p>Note: I'm using long-dashed line to represent the mixin declartion (<em>B</em> includes <em>M</em>), and the short-dashed line to represent the mixin application's definition.</p>
+
+<h4 id="multiplemixins">Multiple Mixins</h4>
+
+<p>In Dart, multiple mixins are applied in left-to-right order, resulting in multiple mixin applications being added to the inheritance hierarchy:</p>
+
+<pre><code class="language-dart">class B extends A with M1, M2 {}
+
+class C extends A with M1, M2 {} 
+</code></pre>
+
+<p><img src="http://justinfagnani.com/content/images/2015/06/class-hierarchy-3.svg" alt=""></p>
+
+<h2 id="traditionaljavascriptmixins">Traditional JavaScript Mixins</h2>
+
+<p>The ability to freely modify objects in JavaScript means that it's very easy to copy functions around to achieve code reuse without relying on inheritance.</p>
+
+<p>Mixin libraries like <a href="https://github.com/onsi/cocktail">Cocktail</a>, <a href="http://soft.vub.ac.be/~tvcutsem/traitsjs/">traits.js</a>, and patterns described in many blog posts (like one of the latest to hit Hacker News: <a href="http://raganwald.com/2015/06/26/decorators-in-es7.html">Using ES7 Decorators as Mixins</a>), generally work by modifying objects in place, copying in properties from mixin objects and overwriting existing properties.</p>
+
+<p>This is often implemented via a function similar to this:</p>
+
+<pre><code class="language-javascript">function mixin(source, target) { 
+ for (var prop in source) {
+ if (source.hasOwnProperty(prop)) {
+ target[prop] = source[prop];
+ }
+ }
+}
+</code></pre>
+
+<p>A version of this has even made it into JavaScript as <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign">Object.assign</a>.</p>
+
+<p><code>mixin()</code> is usually then called on a prototype:</p>
+
+<pre><code class="language-javascript">mixin(MyMixin, MyClass.prototype); 
+</code></pre>
+
+<p>and now <code>MyClass</code> has all the properties defined in <code>MyMixin</code>.</p>
+
+<h3 id="whatssobadaboutthat">What's So Bad About That?</h3>
+
+<p>Simply copying properties into a target object has a few issues. Some of this can be worked around with smart enough mixin functions, but the common examples usually have these problems:</p>
+
+<h4 id="prototypesaremodifiedinplace">Prototypes are modified in place.</h4>
+
+<p>When using mixin libraries against prototype objects, the prototypes are directly mutated. This is a problem if the prototype is used anywhere else that the mixed-in properties are not wanted. Mixins that add state can create slower objects in VMs that try to understand the shape of objects at allocation time. It also goes against the idea that a mixin application should create a new class by composing existing ones.</p>
+
+<h4 id="superdoesntwork"><code>super</code> doesn't work.</h4>
+
+<p>With JavaScript finally supporting <code>super</code>, so should mixins: A mixin's methods should be able to delegate to an overridden method up the prototype chain. Since <code>super</code> is essentially lexically bound, this won't work with copying functions.</p>
+
+<h4 id="incorrectprecedence">Incorrect precedence.</h4>
+
+<p>This isn't necessarily always the case, but as often shown in examples, by overwriting properties, mixin methods take precedence over those in the subclass. They should only take precedence over methods in the superclass, allowing the subclass to override methods on the mixin.</p>
+
+<h4 id="compositioniscompromised">Composition is compromised</h4>
+
+<p>Mixins often need to delegate to other mixins or objects on the prototype chain, but there's no natural way to do this with traditional mixins. Since functions are copied onto objects, naive implementations overwrite existing methods. More sophisticated libraries will remember the existing methods, and call multiple methods of the same name, but the library has to invent its own composition rules: What order the methods are called, what arguments are passed, etc.</p>
+
+<p>References to functions are duplicated across all applications of a mixin, where in many cases they could be bundled in a shared prototype. By overwriting properties, the structure of protytpes and some of the dynamic nature of JavaScript is reduced: you can't easily introspect the mixins or remove or re-order mixins, because the mixin has been expanded directly into the target object.</p>
+
+<p>If we actually use the prototype chain, all of this goes away with very little work.</p>
+
+<h2 id="bettermixinsthroughclassexpressions">Better Mixins Through Class Expressions</h2>
+
+<p>Now let's get to the good stuff: <em>Awesome Mixins&#x2122; 2015 Edition</em>.</p>
+
+<p>Let's quickly list the features we'd like to enable, so we can judge our implementation against them:</p>
+
+<ol>
+<li>Mixins are added to the prototype chain. </li>
+<li>Mixins are applied without modifying existing objects. </li>
+<li>Mixins do no magic, and don't define new semantics ontop of the core language. </li>
+<li><code>super.foo</code> property access works within mixins and subclasses. </li>
+<li><code>super()</code> calls work in constructors. </li>
+<li>Mixins are able to extend other mixins. </li>
+<li><code>instanceof</code> works. </li>
+<li>Mixin definitions do not require library support - they can be written in a universal style.</li>
+</ol>
+
+
+
+<p>Above I referred to mixins as "subclass factories, parameterized by the superclass", and in this formulation they are literally just that.</p>
+
+<p>We rely on two features of JavaScript classes:</p>
+
+<ol>
+<li><code>class</code> can be used as an expression as well as a statement. As an expression it returns a new class each time it's evaluated. (sort of like a factory!) </li>
+<li>The <code>extends</code> clause accepts arbitrary expressions that return classes or constructors.</li>
+</ol>
+
+<p>The key is that classes in JavaScript are first-class: they are values that can be passed to and returned from functions.</p>
+
+<p>All we need to dfine a mixin is a function that accepts a superclass and creates a new subclass from it, like this:</p>
+
+<pre><code class="language-javascript">let MyMixin = (superclass) =&gt; class extends superclass { 
+ foo() {
+ console.log('foo from MyMixin');
+ }
+};
+</code></pre>
+
+<p>Then we can use it in an <code>extends</code> clause like this:</p>
+
+<pre><code class="language-javascript">class MyClass extends MyMixin(MyBaseClass) { 
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ... */
+}
+</code></pre>
+
+<p>And <code>MyClass</code> now has a <code>foo</code> method via mixin inheritance:</p>
+
+<pre><code class="language-javascript">let c = new MyClass(); 
+c.foo(); // prints "foo from MyMixin" 
+</code></pre>
+
+<p>Incredibly simple, and incredibly powerful! By just combining function application and class expressions we get a complete mixin solution, that generalizes well too.</p>
+
+<p>Applying multiple mixins works as expected:</p>
+
+<pre><code class="language-javascript">class MyClass extends Mixin1(Mixin2(MyBaseClass)) { 
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ... */
+}
+</code></pre>
+
+<p>Mixins can easily inherit from other mixins by passing the superclass along:</p>
+
+<pre><code class="language-javascript">let Mixin2 = (superclass) =&gt; class extends Mixin1(superclass) { 
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old Add or override methods here */
+}
+</code></pre>
+
+<p>And you can use normal function composition to compose mixins:</p>
+
+<pre><code class="language-javascript">let CompoundMixin = (superclass) =&gt; Mixin2(Mixin3(superclass)); 
+</code></pre>
+
+
+
+<p>This approach gives us a very good implementation of mixins</p>
+
+
+
+<p>As I mentioned before, many examples of JavaScript mixins get this wrong, and mixins override the subclass.</p>
+
+<h4 id="superworks"><code>super</code> works.</h4>
+
+<p>One of the biggest benefits is that <code>super</code> works inside methods of the subclass and the mixins. Since we don't ever overwrite methods on classes or mixins, they're available for <code>super</code> to address.</p>
+
+<p><code>super</code> calls can be a little unintuitive for those new to mixins because the superclass isn't known at mixin definition, and sometimes developers expect <code>super</code> to point to the declared superclass (the parameter to the mixin), not the mixin application. Thinking about the final prototype chain help here.</p>
+
+<h4 id="compositionispreserved">Composition is preserved.</h4>
+
+<p>This is really just a consequence of the other benefits, but two mixins can define the same method, and as long as they call <code>super</code>, both of them will be invoked then applied.</p>
+
+<p>Sometimes a mixin will not know if a superclass even has a particular property or method, so it's best to guard the super call:</p>
+
+<pre><code class="language-javascript">let Mixin1 = (superclass) =&gt; class extends superclass { 
+ foo() {
+ console.log('foo from Mixin1');
+ if (super.foo) super.foo();
+ }
+};
+
+let Mixin2 = (superclass) =&gt; class extends superclass { 
+ foo() {
+ console.log('foo from Mixin2');
+ if (super.foo) super.foo();
+ }
+};
+
+class S { 
+ foo() {
+ console.log('foo from S');
+ }
+}
+
+class C extends Mixin1(Mixin2(S)) { 
+ foo() {
+ console.log('foo from C');
+ super.foo();
+ }
+}
+
+new C().foo(); 
+</code></pre>
+
+<p>prints:</p>
+
+<pre><code>foo from C 
+foo from Mixin1 
+foo from Mixin2 
+foo from S 
+</code></pre>
+
+<h3 id="improvingthesyntax">Improving the Syntax</h3>
+
+<p>I find applying mixins as functions to be both elegantly simple - describing exactly what's going on, but a little bit ugly at the same time. My biggest concern is that this construction isn't optimized for readers unfamiliar with this pattern.</p>
+
+<p>I'd like a syntax that was easier on the eyes and at least that gave new readers something to search for to explain what's going on, like the Dart syntax. I'd also like to add some more features like memoizing the mixin applications and automatically implementing <code>instanceof</code> support.</p>
+
+<p>For that we can write a simple helper which applies a list of mixins to a superclass, in a fluent-like API:</p>
+
+<pre><code class="language-javascript">class MyClass extends mix(MyBaseClass).with(Mixin1, Mixin2) { 
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ... */
+}
+</code></pre>
+
+<p>Here's the code:</p>
+
+<pre><code class="language-javascript">let mix = (superclass) =&gt; new MixinBuilder(superclass);
+
+class MixinBuilder { 
+ constructor(superclass) {
+ this.superclass = superclass;
+ }
+
+ with(...mixins) { 
+ return mixins.reduce((c, mixin) =&gt; mixin(c), this.superclass);
+ }
+}
+</code></pre>
+
+<p>That's it! It's still extremely simple for the features and nice syntax it enables.</p>
+
+<h3 id="constructorsandinitialization">Constructors and Initialization</h3>
+
+<p>Constructors are a potential source of confusion with mixins. They essentially behave like methods, except that overriden methods tend to have the same signature, while constructors in a inheritance hierarchy often have different signatures.</p>
+
+<p>Since a mixin likely does not know what superclass it's being applied to, and therefore its super-constructor signature, calling <code>super()</code> can be tricky. The best way to deal with this is to always pass along all constructor arguments to <code>super()</code>, either by not defining a constructor at all, or by using the spread operator: <code>super(...arguments)</code>.</p>
+
+<p>This means that passing arguments specifically to a mixin's constructor is difficult. One easy workaround is to just have an explicit initialization method on the mixin if it requires arguments.</p>
+
+<h2 id="furtherexploration">Further Exploration</h2>
+
+<p>This is just the beginning of many topics related to mixins in JavaScript. I'll post more about things like:</p>
+
+<ul>
+<li>How mixin inheritance can address the fear that ES6 classes and classical inheritance are bad for JavaScript.</li>
+<li>Caching mixin applications so that the same mixin applied to the same superclass reuses a prototype.</li>
+<li>Getting <code>instanceof</code> to work.</li>
+<li>Using function-style mixins in ES5.</li>
+<li>De-duplicating mixins so mixin composition is more usable.</li>
+</ul>
+
+<h2 id="themixwithjsproject">The mixwith.js project</h2>
+
+<p>I started a project on GitHub to build a library around this pattern: <a href="https://github.com/justinfagnani/mixwith.js">https://github.com/justinfagnani/mixwith.js</a> <br>
+It can be found on npm: <a href="https://www.npmjs.com/package/mixwith">https://www.npmjs.com/package/mixwith</a></p>
+
+
+ </section>
+
+ </div>
+</body></html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html><html><head><title>Nvidia GPU + CoreOS + Docker + TensorFlow = A Fast, Flexible, Deep Learning Platform</title></head><body>
+<h1>Nvidia GPU + CoreOS + Docker + TensorFlow = A Fast, Flexible, Deep Learning Platform</h1><p><a href="http://www.emergingstack.com/2016/01/10/Nvidia-GPU-plus-CoreOS-plus-Docker-plus-TensorFlow.html" target="_new">Original URL</a></p>
+<p><blockquote>The Challenge Providing data scientists with the best tool for the job is hard. They need everything from their computers - raw performance, bleeding-edge software and free-rein to experiment.&hellip;</blockquote></p>
+<div><article class="post-content">
+ <p><a href="http://www.emergingstack.com/assets/img/es-dev-stack.png"><img src="http://www.emergingstack.com/assets/img/es-dev-stack.png" alt="GPU-Powered Dev Box"></a></p>
+
+<h2 id="the-challenge">The Challenge</h2>
+
+<p>Providing data scientists with the best tool for the job is hard. They need everything from their computers - raw performance, bleeding-edge software and free-rein to experiment.</p>
+
+<p>We&#x2019;ve developed a solution that meets all those requirements and avoids creating a &#x2018;one off&#x2019; build that would haunt sysadmin and devops teams.</p>
+
+
+
+<p><em>tl;dr - Code to provision your environment is on <a href="http://github.com/emergingstack/es-dev-stack">Github</a>.</em></p>
+
+<p>It is still experimental, but it works. And because we&#x2019;re early in the lifecycle for many of these tools, it will only get better.</p>
+
+<h3 id="farewell-cloud">Farewell Cloud</h3>
+
+<p>For compute-intensive tasks, public cloud hosting costs can become prohibitive. A high-spec GPU-powered VM on AWS is about 20x more expensive than our day-to-day instances. About USD$25,000 annually.</p>
+
+<p>On-premises virtual servers, whilst cheaper, are also not tuned for these scientific-computing use-cases and don&#x2019;t make for good neighbours in a shared environment.</p>
+
+<p>We must look elsewhere&#x2026;</p>
+
+<h3 id="hello-old-friend">Hello, old friend</h3>
+
+<p>The &#x2018;server under the desk&#x2019; is back. Better than ever.</p>
+
+<p>Nvidia gave us the <a href="https://developer.nvidia.com/devbox">&#x201C;Dev Box&#x201D;</a> in 2015, a data scientist&#x2019;s dream-machine. But at USD$15,000, it&#x2019;s still a bit pricey.</p>
+
+<p><a href="https://twitter.com/karpathy">Andrej Karpathy&#x2019;s</a> built an <a href="https://twitter.com/karpathy/status/648256662554341377">home-rig</a> that is pretty much ideal, hardware-wise. It can scale-up to about the same specification as Nvidia&#x2019;s beast. Our&#x2019;s is very similar and there&#x2019;s a nice spot for it, right under the desk.</p>
+
+<h3 id="development-is-your-production">Development is your Production</h3>
+
+<p>So you&#x2019;ve got the right hardware. And you followed Nvidia&#x2019;s instructions to get all your software installed and configured. Hours spent deploying the right packages and dependencies, all hand-crafted. And it works perfectly. But you&#x2019;ve created a sysadmin&#x2019;s nightmare - a completely bespoke build.</p>
+
+<p>The longer you use this machine, the harder it will be to rebuild, if/when it dies. Or if/when you want to do a major version upgrade. Or if/when you created that once-off workaround&#x2026;more than once.</p>
+
+<p>Downtime is your enemy, but you&#x2019;ve introduced an ugly single-point-of-failure. And gone are the benefits of fully-automated builds.</p>
+
+
+
+<h2 id="a-solution">A Solution</h2>
+
+<h3 id="step-1---vanilla-coreos-build">Step 1 - Vanilla CoreOS build</h3>
+
+<p>Assuming you&#x2019;ve got the right hardware ready, follow one of the bullet-proof <a href="https://coreos.com/os/docs/latest/">quick-start guides</a> for a &#x2018;bare-metal&#x2019; build. CoreOS support PXE, iPXE and installing to disk. Choose whichever method suits your needs.</p>
+
+<p>We use the <a href="https://coreos.com/os/docs/latest/booting-with-pxe.html">PXE build</a> approach to provision our CoreOS systems.</p>
+
+<h3 id="step-2---install-the-cuda-drivers-and-nvidia-devices---one-time-operation">Step 2 - Install the CUDA drivers and Nvidia Devices - <em>One-Time Operation</em></h3>
+
+<p>Clone the <a href="http://github.com/emergingstack/es-dev-stack">es-dev-stack</a> repository on Github.</p>
+
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>git clone http://github.com/emergingstack/es-dev-stack.git</code></pre></div>
+
+<p>Docker image build (takes about 30 minutes, downloads ~2.5GB source files)</p>
+
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span><span class="nb">cd </span>es-dev-stack/corenvidiadrivers</code></pre></div>
+
+
+
+<p>Once complete, you may want to push this image to a private Docker registry, if one is handy. It could be useful when it comes to rebuilding your host one day.</p>
+
+<p><em>Dockerfile below for reference.</em></p>
+
+<div class="highlight"><pre><code class="language-yaml"><span class="l-Scalar-Plain">FROM ubuntu:14.04</span>
+<span class="l-Scalar-Plain">MAINTAINER Mike Orzel &lt;mike.orzel@emergingstack.com&gt;</span>
+
+<span class="l-Scalar-Plain">RUN apt-get -y update &amp;&amp; apt-get -y install git bc make dpkg-dev &amp;&amp; mkdir -p /usr/src/kernels &amp;&amp; mkdir -p /opt/nvidia/nvidia_installers</span>
+
+<span class="l-Scalar-Plain">ADD http://developer.download.nvidia.com/compute/cuda/7_0/Prod/local_installers/cuda_7.0.28_linux.run /opt/nvidia/</span>
+
+<span class="l-Scalar-Plain">WORKDIR /usr/src/kernels</span>
+<span class="l-Scalar-Plain">RUN git clone git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git linux</span>
+<span class="l-Scalar-Plain">WORKDIR linux</span>
+<span class="l-Scalar-Plain">RUN git checkout -b stable v`uname -r` &amp;&amp; zcat /proc/config.gz &gt; .config &amp;&amp; make modules_prepare</span>
+<span class="l-Scalar-Plain">RUN sed -i -e "s/`uname -r`+/`uname -r`/" include/generated/utsrelease.h</span> <span class="c1"># In case a '+' was added</span>
+
+<span class="c1"># Nvidia drivers setup</span>
+<span class="l-Scalar-Plain">WORKDIR /opt/nvidia/</span>
+<span class="l-Scalar-Plain">RUN chmod +x cuda_7.0.28_linux.run &amp;&amp; ./cuda_7.0.28_linux.run -extract=`pwd`/nvidia_installers</span>
+<span class="l-Scalar-Plain">WORKDIR /opt/nvidia/nvidia_installers</span>
+
+<span class="l-Scalar-Plain">RUN ./NVIDIA-Linux-x86_64-346.46.run -a -x --ui=none</span>
+<span class="l-Scalar-Plain">RUN sed -i "s/read_cr4/__read_cr4/g" NVIDIA-Linux-x86_64-346.46/kernel/nv-pat.c</span>
+<span class="l-Scalar-Plain">RUN sed -i "s/write_cr4/__write_cr4/g" NVIDIA-Linux-x86_64-346.46/kernel/nv-pat.c</span>
+<span class="l-Scalar-Plain">CMD ./NVIDIA-Linux-x86_64-346.46/nvidia-installer -q -a -n -s --kernel-source-path=/usr/src/kernels/linux/ &amp;&amp; insmod /opt/nvidia/nvidia_installers/NVIDIA-Linux-x86_64-346.46/kernel/uvm/nvidia-uvm.ko</span></code></pre></div>
+
+<h4 id="run-the-cuda-docker-container">Run the CUDA Docker Container</h4>
+
+<div class="highlight"><pre><code class="language-bash"><span class="c"># docker run -it --privileged cuda</span></code></pre></div>
+
+<h4 id="confirm-nvidia-drivers-are-installed">Confirm Nvidia drivers are installed</h4>
+
+
+
+<p>You should see a few &#x2018;nvidia&#x2019; items</p>
+
+<h4 id="install-devices">Install devices</h4>
+
+<p>Run the &#x201C;mkdevs&#x201D; script to create the devices (as root)</p>
+
+
+
+<p>Confirm devices are installed</p>
+
+<div class="highlight"><pre><code class="language-bash"><span class="c"># cd /dev</span>
+<span class="c"># ls -al | grep -i "nvidia"</span></code></pre></div>
+
+<p>You should see a list of devices that are now available to be mapped into a Docker container.</p>
+
+<div class="highlight"><pre><code class="language-bash">crw-rw-rw- <span class="m">1</span> root root 247, <span class="m">0</span> Jan <span class="m">4</span> 05:54 nvidia-uvm
+crw-rw-rw- <span class="m">1</span> root root 195, <span class="m">0</span> Jan <span class="m">4</span> 05:54 nvidia0
+crw-rw-rw- <span class="m">1</span> root root 195, <span class="m">1</span> Jan <span class="m">4</span> 05:54 nvidia1
+crw-rw-rw- <span class="m">1</span> root root 195, <span class="m">255</span> Jan <span class="m">4</span> 05:54 nvidiactl</code></pre></div>
+
+<h4 id="success">Success!</h4>
+
+<p>Now you&#x2019;re ready to put your almost-immutable system to use and expose the power of containerisation. Note, we&#x2019;re using &#x2018;privileged&#x2019; mode here to map the GPU devices to a Docker container which is not secure from a &#x2018;shared host&#x2019; perspective.</p>
+
+<h3 id="step-3---test-it-out-with-googles-tensorflowhttptensorfloworg">Step 3 - Test it out with Google&#x2019;s <a href="http://tensorflow.org">TensorFlow</a>.</h3>
+
+<p>WARNING: The Dockerfile below produces a Docker image that is over <strong>10GB</strong>. It will take 30-40 minutes to build.</p>
+
+<p>We&#x2019;ve added a Jupyter notebook to the docker image to validate that GPUs are functioning - it&#x2019;s a basic ConvNet via TensorFlow and is sufficient for verification.</p>
+
+<h4 id="docker-image-build">Docker image build</h4>
+
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span><span class="nb">cd </span>es-dev-stack/tflowgpu</code></pre></div>
+
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>docker build -t tflowgpu .</code></pre></div>
+
+<p><em>Dockerfile below for reference.</em></p>
+
+<div class="highlight"><pre><code class="language-yaml"><span class="l-Scalar-Plain">FROM b.gcr.io/tensorflow/tensorflow:latest-gpu</span>
+<span class="l-Scalar-Plain">MAINTAINER Mike Orzel &lt;mike.orzel@emergingstack.com&gt;</span>
+
+<span class="l-Scalar-Plain"># Add some dependent packages we will need for the build process</span>
+<span class="l-Scalar-Plain">RUN apt-get -y update &amp;&amp; apt-get -y install git bc make dpkg-dev &amp;&amp; mkdir -p /usr/src/kernels &amp;&amp; mkdir -p /opt/nvidia/nvidia_installers</span>
+
+<span class="l-Scalar-Plain"># Download the nvidia cuda package</span>
+<span class="l-Scalar-Plain">ADD http://developer.download.nvidia.com/compute/cuda/7_0/Prod/local_installers/cuda_7.0.28_linux.run /opt/nvidia/</span>
+<span class="l-Scalar-Plain">RUN chmod +x /opt/nvidia/cuda_7.0.28_linux.run</span>
+
+<span class="l-Scalar-Plain"># download the linux kernel source and prepare it for use</span>
+<span class="l-Scalar-Plain">WORKDIR /usr/src/kernels</span>
+<span class="l-Scalar-Plain">RUN git clone git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git linux</span>
+<span class="l-Scalar-Plain">WORKDIR linux</span>
+<span class="l-Scalar-Plain">RUN git checkout -b stable v`uname -r` &amp;&amp; zcat /proc/config.gz &gt; .config &amp;&amp; make modules_prepare</span>
+
+<span class="l-Scalar-Plain">RUN sed -i -e "s/`uname -r`+/`uname -r`/" include/generated/utsrelease.h</span> <span class="c1"># In case a '+' was added</span>
+<span class="l-Scalar-Plain">RUN sed -i -e "s/`uname -r`+/`uname -r`/" include/config/kernel.release</span> <span class="c1"># In case a '+' was added</span>
+
+<span class="c1"># Nvidia drivers setup</span>
+<span class="l-Scalar-Plain">WORKDIR /opt/nvidia/</span>
+<span class="l-Scalar-Plain">RUN chmod +x cuda_7.0.28_linux.run &amp;&amp; ./cuda_7.0.28_linux.run -extract=`pwd`/nvidia_installers</span>
+<span class="l-Scalar-Plain">WORKDIR /opt/nvidia/nvidia_installers</span>
+
+<span class="l-Scalar-Plain">RUN ./NVIDIA-Linux-x86_64-346.46.run -a -x --ui=none</span>
+<span class="l-Scalar-Plain">RUN sed -i "s/read_cr4/__read_cr4/g" NVIDIA-Linux-x86_64-346.46/kernel/nv-pat.c</span>
+<span class="l-Scalar-Plain">RUN sed -i "s/write_cr4/__write_cr4/g" NVIDIA-Linux-x86_64-346.46/kernel/nv-pat.c</span>
+
+<span class="l-Scalar-Plain">RUN ./NVIDIA-Linux-x86_64-346.46/nvidia-installer -q -a -n -s --kernel-source-path=/usr/src/kernels/linux/ --no-kernel-module</span>
+
+<span class="l-Scalar-Plain"># install modules to expected location, cuda will do modprobes in certain situations which require this</span>
+<span class="l-Scalar-Plain">WORKDIR /usr/src/kernels/linux</span>
+<span class="l-Scalar-Plain">RUN make modules &amp;&amp; make modules_install</span>
+<span class="l-Scalar-Plain">RUN mv /lib/modules/`uname -r`+ /lib/modules/`uname -r`</span>
+<span class="l-Scalar-Plain">WORKDIR /opt/nvidia/nvidia_installers</span>
+<span class="l-Scalar-Plain">RUN depmod</span>
+
+<span class="l-Scalar-Plain"># Run jupyter notebook and create a folder for the notebooks</span>
+<span class="l-Scalar-Plain">RUN chmod +x /run_jupyter.sh</span>
+<span class="l-Scalar-Plain">RUN mkdir /examples</span>
+<span class="l-Scalar-Plain">WORKDIR /examples</span>
+<span class="l-Scalar-Plain">COPY CNN.ipynb /examples/CNN.ipynb</span>
+<span class="l-Scalar-Plain">CMD /run_jupyter.sh</span></code></pre></div>
+
+<h4 id="run-the-tensowflow-docker-container">Run the TensowFlow Docker Container</h4>
+
+<p>This &#x2018;docker run&#x2019; command maps the freshly installed GPU devices to the TensorFlow container. This is where the magic happens&#x2026;</p>
+
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>docker run --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidia1:/dev/nvidia1 --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm -it -p 8888:8888 --privileged tflowgpu</code></pre></div>
+
+<p>Open a browser and navigate to http://{your dev box IP}:8888 to launch Jupyter and run through the example. With a single Nvidia TitanX, this test should be about 10x faster than running on an Intel i7 CPU.</p>
+
+<p><a href="http://www.emergingstack.com/assets/img/test_success.png"><img src="http://www.emergingstack.com/assets/img/test_success.png" alt="Success"></a></p>
+
+
+
+<p><a href="http://github.com/emergingstack/es-dev-stack.git">Start using the es-dev-stack code now</a>. Contibutions welcomed.</p>
+
+
+
+<p><strong>Attributions</strong>
+This solution takes inspiration from a few community sources. Thanks to;</p>
+
+
+
+
+<p><em>In &#x2018;Part 2&#x2019;, we will demonstrate how to integrate this dockerized environment with Spark and potentially Kubernetes (depending on the status of <a href="https://github.com/kubernetes/kubernetes/issues/19049">issue 19049</a>).</em></p>
+
+ </article>
+
+</div>
+</body></html>

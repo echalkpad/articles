@@ -1,0 +1,320 @@
+<!DOCTYPE html><html><head><title>A Garden Variety of Bloom Filters</title></head><body>
+<h1>A Garden Variety of Bloom Filters</h1><p><a href="http://matthias.vallentin.net/blog/2011/06/a-garden-variety-of-bloom-filters/" target="_new">Original URL</a></p>
+<p><blockquote>In this article, I explain how Bloom filters work and introduce several variants that evolved as a result of extensive academic treatment of this topic. Moreover, I present libbf, an implementation&hellip;</blockquote></p>
+<div><div id="main">
+
+
+
+
+<p>In this article, I explain how <strong>Bloom filters</strong> work and introduce several
+variations that evolved as a result of extensive academic treatment of this
+topic. Moreover, I introduce my own implementation of these Bloom filters,
+<a href="http://matthias.vallentin.net/libbf/">libBf</a>, a header-only <a href="http://en.wikipedia.org/wiki/C%2B%2B0x">C++11</a>
+library that comes with a BSD-style licence.</p>
+
+<blockquote>
+ <p>Whenever you have a set or list, and space is an issue, a Bloom filter may be
+a useful alternative.<br>
+&#x2013;Mitzenmacher</p>
+</blockquote>
+
+<h2 id="introduction">Introduction</h2>
+
+<p>A <a href="http://en.wikipedia.org/wiki/Bloom_filter">Bloom filter</a> is a randomized
+<a href="http://www.pittsburgh.intel-research.net/people/gibbons/talks-surveys/Synopsis-Data-Structures-Gibbons-Matias.pdf">synopsis data structure</a> that allows for set membership queries.
+Its space-efficient representation comes at the cost of <em>false positives</em>,
+i.e., elements can erroneously be reported as members of the set. In practice,
+the huge space savings often outweigh the false positives if kept at a
+sufficiently low rate.</p>
+
+<p>Bloom filters have received a great deal of attention not only by the research
+community but also in practice. For example, <a href="http://src.chromium.org/viewvc/chrome/trunk/src/chrome/browser/safe_browsing/bloom_filter.h?view=log">Google Chrome</a> uses a
+Bloom filter to represent a blacklist of dangerous URLs. Each time a user is
+about to navigate to new page, the corresponding URL is mangled, hashed, and
+then compared to a local Bloom filter that represents the set of all malicious
+URLs. If the Bloom filter reports that the URL is in the set, the browser
+sends the hash of the URL to the Safebrowsing server to confirm that the URL is
+indeed malicious to compensate a potential false positive. That is, all checks
+are performed locally, but when the user surfs to a malicious URL, an extra
+round trip to the Safebrowsing server occurs.</p>
+
+<p>Another example is the squid web proxy which uses Bloom filters to represent
+<a href="http://wiki.squid-cache.org/SquidFaq/CacheDigests">cache digests</a>, which
+caching servers use to periodically exchange the objects they contain. There
+are many more examples of Bloom filter applications, for instance in
+peer-to-peer applications, routing protocols, <a href="http://en.wikipedia.org/wiki/IP_traceback">IP
+traceback</a>, resource location, etc.
+Broder and Mitzenmacher give a <a href="http://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">good survey of network applications</a>. </p>
+
+<h2 id="bloom-filters">Bloom Filters</h2>
+
+<p>Before we delve into the discussion, let us agree on some common notation.</p>
+
+<h2 id="terminology">Terminology</h2>
+
+<ul><li>Universe </li>
+ <li> distinct items</li>
+ <li> independent hash functions </li>
+ <li>Vector of cells, i.e., </li>
+ <li>Set:
+ </li>
+ <li>Multiset / Stream:
+ <ul><li> where and
+</li>
+ <li>
+counters of </li>
+ <li> multiplicity (frequency) of </li>
+ </ul></li>
+ <li>Bloom filter estimate denoted by hat:
+</li>
+ <li>Probability of a false positive (FP):
+</li>
+ <li>Probability of a false negative (FN):
+</li>
+ <li>Capacity , i.e., is the maximum number of items a Bloom filter
+can hold until a given can no longer be guaranteed</li>
+ <li>A Bloom filter is <em>full</em> when then number of added items exceeds
+</li>
+</ul><h2 id="basic">Basic</h2>
+<p><img src="http://matthias.vallentin.net/blog/2011/06/bf-basic.png" alt="The basic Bloom filter devised by Burton Bloom. To insert an item x, we set
+the corresponding positions in the bit vector to
+1" class="right">
+Burton Bloom introduced the original Bloom filter in 1970, which we refer to as
+the <strong>basic Bloom filter</strong>. It uses a bit vector with 
+and independent hash functions that map
+items in to the range . (Unlike in the
+implementation, we start at index 1 for the formal treatment.) All bits in
+ are initialized to 0. To insert an item , we set the
+bits at positions in to 1. To test whether
+an item is a member of , we examine the bits
+at positions in . If any of these bits is 0
+we report . Otherwise we report that 
+, although there remains some probability that
+. This type of error is a <em>false positive</em> (FP) and also
+known as <em>Bloom error</em> . It occurs because other elements in
+ also map to the same positions.</p>
+
+<p>To compute the probability of a Bloom error, we start off with an empty bit
+vector and insert an item. This is the same as independently (and
+uniformly) choosing bits and setting them to 1. Thereafter, the
+probability that a certain bit in is still 0 is </p>
+
+<p>Afer insertions, the probability that a certain bit is 1 is </p>
+
+<p>Testing for membership involves hashing an item times. Thus the
+probability of a Bloom error is</p>
+
+<p>For fixed parameters and , the optimal value that
+minimizes this probability is </p>
+
+<p>For , we have hence . Moreover, for a desired FP
+probability we can compute the number of required bits by
+substituting the optimal value of :</p>
+
+<h2 id="multisets">Multisets</h2>
+
+<p>A basic Bloom filter can only represent a set, but neither allows for querying
+the multiplicities of an item, nor does it support deleting entries. We use the
+term <em>counting Bloom filter</em> to refer to variants of Bloom filters that
+represent multisets rather than sets. In libBf, we call a counting Bloom filter
+a basic Bloom filter with width parameter .</p>
+
+<h3 id="counting">Counting</h3>
+
+<p><img src="http://matthias.vallentin.net/blog/2011/06/bf-counting.png" alt="Each cell in the counting Bloom filter has a fixed bit width w. To insert
+an item x, we increment the counters C_x. To remove an item y, we decrement its
+counters C_y" class="right">
+In a <a href="http://pages.cs.wisc.edu/~cao/papers/summarycache.html">counting Bloom filter</a>, inserting an item corresponds to
+incrementing a counter. Some variants also feature a decrement operation to
+remove item from a set. As soon we allow for deletions we introduce false
+negative (FN) errors. These occur when removing an item that itself was a FP.
+The probability of a FN is bounded by .</p>
+
+<p>When we get the count of an item , we compute its set of
+counters and return the minimum value as frequency estimate
+. This query algorithm is also known as <em>minimum
+selction</em> (MS).</p>
+
+<p>There are two main issues with counting Bloom filters:</p>
+
+<ol><li>Counter overflows</li>
+ <li>Choosing </li>
+</ol><p>The first problem exists when we the counter value reaches and
+cannot be incremented any more. The most natural thing to do is simply not
+continuing to count rather than overflowing and restarting at 0. However, this
+introduces <em>undercounts</em>, which we also refer to as FNs.</p>
+
+<p>The second problem concerns the choice of the width parameter . If we
+choose very large, the space gains of a Bloom filter diminish. There
+will also be a lot of unused space, manifesting as unused zeros. If we choose
+ too small, we will reach the maximum counter value to fast. Choosing
+the right value is a difficult trade-off that also depends on the data. It has
+been shown that for uniform distributions a value of works well.</p>
+
+<h3 id="bitwise">Bitwise</h3>
+
+<p><img src="http://matthias.vallentin.net/blog/2011/06/bf-bitwise.png" alt="The bitwise Bloom filter consists of l counting Bloom filters, each of which
+represent w_i orders of magnitude of the entire counter. This Figure
+illustrates a bitwise Bloom filter with w_i =
+1." class="right">
+The <a href="ftp://ftp.cs.rochester.edu/pub/papers/theory/07.tr927.Bitwise_bloom_filter.pdf">bitwise Bloom filter</a> is a combination of counting Bloom
+filters with bit vectors , each of which have cells,
+ hash functions, and width where .
+It aims at solving both of the overflow and space problem of the counting Bloom
+filter.</p>
+
+<p>To add an item , we first look at the counters in the first level
+. If there is enough room (i.e., width) available, we simply perform
+the increment. If the counter overflows, we insert into and
+remove it from . In this fashion, the counter value is unbounded as
+we can always add more levels. However, the item has to be hashed times
+with a total of hash functions.</p>
+
+<p>In order to read the counter of an item, we combine the binary representation
+of all the levels. Let be the counter value at level . Then we
+compute the counter value as</p>
+
+<h3 id="spectral">Spectral</h3>
+
+<p>The <a href="http://theory.stanford.edu/~matias/papers/sbf_tech_report.pdf">spectral Bloom filter</a> is an optimized version of the
+counting Bloom filter. It consists of two extra algorithms in addition to MS
+and introduces a more space-efficient data structure to represent counters.</p>
+
+<ol><li>
+ <p>Let us review the MS algorithm. When querying an item , MS uses
+the minimum counter value as frequency estimate,
+i.e., . Cohen and Matias claim that 
+and for all 
+.</p>
+ </li>
+ <li>
+ <p>The second spectral algorithm is an optimization for the add operation. When
+adding an item to the Bloom filter, the <em>minimum increase</em> (MI)
+algorithm only increments the minimum counter value(s)
+. The rationale behind this is that is
+always the most accurate count, thus MI results in the fewest possible
+increment operations. </p>
+
+ <p>Because not all counters are incremented on inserts, the effect of deletes
+is significantly worse and the number of FNs becomes unbounded. Thus, the MI
+algorithm should not be used when removing of items from a Bloom filter.
+Cohen and Matias claim that and that if is drawn
+uniformly from , then .</p>
+ </li>
+ <li>
+ <p>The third algorithm is <em>recurring minimum</em> (RM) and involves two Bloom
+filters, and . The key insight behind RM is that items that
+experience Bloom errors are less likely to have recurring minima counter
+values. Cohen and Matias found empirically that this applies to
+approximately 20% of the items. Such items with a unique minimum are
+maintained in the second Bloom filter to reduce the discrepancy between
+ and .</p>
+
+ <p>To query an item according to the RM algorithm, we look first
+into the first Bloom filter and check if has a recurring minimum. If
+so, we return the minimum counter value. Otherwise we look the minimum
+counter value from the second Bloom filter, unless it is 0. If it is 0
+(i.e., does not exist), we return the minimum counter from the first Bloom
+filter.</p>
+
+ <p>Since all the items are inserted into the first bloom filter, the RM
+optimization does at least as well as the MS algorithm, yet has usually
+better error rates because a second filter holding fewer items is used for
+items which experience higher error rates.</p>
+ </li>
+</ol><p>The fancy data-structure takes space, where is the
+number of distinct items and .
+For details, please refer to <a href="http://theory.stanford.edu/~matias/papers/sbf_tech_report.pdf">the paper</a>.</p>
+
+<h2 id="aging">Aging</h2>
+<p>A problem all the above Bloom filter variants is that they eventually fill up
+over time when dealing with a large set or stream of data. This means that at
+some point the Bloom filter becomes unusable due to its high error rates. There
+exist various scenarios where one would like to &#x201C;age out&#x201D; old items that have
+been added a long time ago. For example, we might want to estimate only recent
+items or we have a very limited amount of space available.</p>
+
+<p>Although counting Bloom filters have a delete operation, it is often impossible
+to retain old items in memory. Thus we do not know their counter positions in
+the bit vector anymore, otherwise we would simply decrement their count. What
+we want is a Bloom filter that has <em>sliding window</em> semantics, as
+illustrated by the Figure below.</p>
+
+<p><img src="http://matthias.vallentin.net/blog/2011/06/sliding-window.png" alt="In a sliding window scenario, an insert operation for a new item x_7 would
+ideally delete an old item x_0." class="center"></p>
+
+<p>To support a sliding window, we would like to have Bloom filter that acts like
+a FIFO. In the following, we discuss two different Bloom filter flavors that
+aim at providing this property.</p>
+
+<h3 id="stable">Stable</h3>
+
+<p>The <a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.85.1569">stable Bloom filter</a> is essentially a basic Bloom filter with an
+underlying bit vector with a fixed cell width . However, counters do not
+represent the multiplicities of the items but rather their age. Thus the
+interface supports only set membership queries.</p>
+
+<p>To insert an item, we decrement cells chosen uniformly at random.
+Thereafter, we set the counters of all cells to their maximum value of
+. </p>
+
+<p>Deng and Rafiei have shown that the fraction of zeros will eventually become
+constant. When having reached this <em>stable point</em>, the probability of a Bloom
+error is</p>
+
+<h3 id="asup2sup">A<sup>2</sup></h3>
+
+<p>The <a href="http://portal.acm.org/citation.cfm?id=1685986"> Bloom filter</a>, also known as <strong>active-active buffering</strong>,
+provides another type of FIFO. It uses two single-bit vectors and
+ where . Unlike the spectral RM
+algorithm, one Bloom filter is not a subset of the other, so an item can be in
+either Bloom filter.</p>
+
+<p>To query for an item, we return true if exists in either or
+. To insert an item , we simply return if it already exists in
+. Otherwise we insert it in and test whether has
+reached its capacity. If it is full, we flush and swap and
+. Thereafter we insert the item in (the old ).</p>
+
+<p>One advantage of the Bloom filter is space-efficiency, since one bit
+vector is always full. Let the subscript denote the value of the
+ Bloom filter. The probability of a Bloom error is</p>
+
+<p>and the optimal value for and are:</p>
+
+<h2 id="libbf">libBf</h2>
+
+<p>As part of a class project for the course <a href="http://www.cs.berkeley.edu/~satishr/cs270/">Combinatorial Algorithms and Data
+Structures</a> in Spring 2011 at UC
+Berkeley, I decided to write a <a href="http://en.wikipedia.org/wiki/C%2B%2B0x">C++11</a>
+<strong>lib</strong>rary of <strong>B</strong>loom <strong>f</strong>ilters, <a href="http://matthias.vallentin.net/libbf">libBf</a>, which implements the
+above discussed Bloom filters. <a href="http://matthias.vallentin.net/course-work/cs270-s11.pdf">Slides</a> of the
+final presentation are also available; they go a little deeper into the
+algorithmic details.</p>
+
+
+
+<p>I only presented a few Bloom filter types in this article, but active research
+in this field yielded many more variations. For example, the <a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.151.8477">dynamic</a>
+and <a href="http://gsd.di.uminho.pt/members/cbm/ps/dbloom.pdf">scalable</a> Bloom filter are two variants that grow dynamically
+as soon as more items are added. Bloom filters can also be
+<a href="http://www.eecs.harvard.edu/~michaelm/NEWWORK/postscripts/cbf.pdf">compressed</a>, e.g., when sending them over the network.
+<a href="http://www.siam.org/proceedings/alenex/2006/alx06_004akirsch.pdf">Distance-sensitive</a> Bloom filters give more than a binary answer or
+count when asking for an item: they also return if an item is close to another
+item in the set. Finally, there exist <a href="http://webee.technion.ac.il/~ayellet/Ps/nelson.pdf">Bloomier</a> filters which
+extend the set membership query model and counting notion to computations of
+arbitrary functions.</p>
+
+<p><a href="http://en.wikipedia.org/wiki/Cuckoo_hashing">Cuckoo hashing</a> is a related
+space-efficient alternative to Bloom filters. Moreover, Adam Langley has some
+<a href="http://www.imperialviolet.org/2011/04/29/filters.html">interesting thoughts</a>
+on Golomb Compressed Sets.</p>
+
+
+
+
+</div>
+
+
+</div>
+</body></html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html><html><head><title>Getting To Know Flux, the React.js Architecture</title></head><body>
+<h1>Getting To Know Flux, the React.js Architecture</h1><p><a href="https://scotch.io/tutorials/getting-to-know-flux-the-react-js-architecture" target="_new">Original URL</a></p>
+<p><blockquote>So what&#x2019;s this Dispatcher all about? The Dispatcher is basically the manager of this entire process. It is the central hub for your application. The dispatcher receives actions and dispatches&hellip;</blockquote></p>
+<div><div class="tile-content">
+
+<p><em>So what&#x2019;s this Dispatcher all about?</em></p>
+<p>The Dispatcher is basically the manager of this entire process. It is the central hub for your application. The dispatcher receives actions and dispatches the actions and data to registered callbacks.</p>
+<p><em>So it&#x2019;s essentially pub/sub?</em></p>
+<p>Not exactly. The dispatcher broadcasts the payload to <strong>ALL</strong> of its registered callbacks, and includes functionality that allows you to invoke the callbacks in a specific order, even waiting for updates before proceeding. There is only ever <strong>one</strong> dispatcher, and it acts as the central hub within your application.</p>
+<p>Check out what one looks like below:</p>
+<pre class=" language-javascript"><code class=" language-javascript">var Dispatcher = require('flux').Dispatcher;
+var AppDispatcher = new Dispatcher();
+
+AppDispatcher.handleViewAction = function(action) {
+ this.dispatch({
+ source: 'VIEW_ACTION',
+ action: action
+ });
+}
+
+module.exports = AppDispatcher;
+</code></pre>
+<p>In the above example, we create an instance of our Dispatcher and create a handleViewAction method. This abstraction is helpful if you are looking to distinguish between view triggered actions v.s. server/API triggered actions.</p>
+<p>Our method calls the dispatch method, which will broadcast the <code>action</code> payload to all of its registered callbacks. This action can then be acted upon within Stores, and will result in a state update.</p>
+<p>The diagram below illustrates this process:</p>
+<div class="text-center">
+ <a href="https://cask.scotch.io/2014/10/hKbN2q6.png"><img src="https://cask.scotch.io/2014/10/hKbN2q6.png" alt="hKbN2q6" width="380" class="aligncenter size-full wp-image-5848 img-responsive"></a>
+</div>
+<h3>Dependencies</h3>
+<p>One of the coolest parts of the provided Dispatcher module is the ability to define dependencies and marshall the callbacks on our Stores. So if one part of your application is dependent upon another part being updated first, in order to render properly, the Dispatcher&#x2019;s <code>waitFor</code> method will be mighty useful.</p>
+<p>In order to utilize this feature, we need to store the return value of the Dispatcher&#x2019;s registration method on our Store as <code>dispatcherIndex</code>, as shown below:</p>
+<pre class=" language-javascript"><code class=" language-javascript">ShoeStore.dispatcherIndex = AppDispatcher.register(function(payload) {
+
+});
+</code></pre>
+<p>Then in our Store, when handling a dispatched action, we can use the Dispatcher&#x2019;s <code>waitFor</code> method to ensure our ShoeStore has been updated:</p>
+<pre class=" language-javascript"><code class=" language-javascript">case 'BUY_SHOES':
+ AppDispatcher.waitFor([
+ ShoeStore.dispatcherIndex
+ ], function() {
+ CheckoutStore.purchaseShoes(ShoeStore.getSelectedShoes());
+ });
+ break;
+</code></pre>
+</div></div>
+</body></html>

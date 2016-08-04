@@ -1,0 +1,546 @@
+<!DOCTYPE html><html><head><title>How does it work in Mono's C# compiler?</title></head><body>
+<h1>How does it work in Mono's C# compiler?</h1><p><a href="http://www.codeproject.com/Articles/330184/How-does-it-work-in-Mono-s-C-compiler" target="_new">Original URL</a></p>
+<p><blockquote>Download source code - 1.78 MB Table of Contents Introduction Mono is an Open Source free programming language project. It is an implementation of Microsoft&#x2019;s .NET Framework based on the&hellip;</blockquote></p>
+<div><div id="contentdiv" class="text">
+						
+
+
+
+<ul class="download">
+<li><a href="http://www.codeproject.com/KB/cs/330184/Mono_C__Compiler_source_code_-gmcs.zip">Download source code - 1.78 MB</a></li>
+</ul>
+<h2>Table of Contents</h2>
+
+<h2>Introduction<a name="Introduction"></a></h2>
+<p>Mono is an Open Source free programming language project. It is an implementation of Microsoft&#x2019;s .NET 
+Framework based on the European association 
+for standardizing information and communication systems (<a href="http://msdn.microsoft.com/en-us/netframework/aa569283">ECMA</a>) standards for C# language and Common Language Runtime (<a href="http://en.wikipedia.org/wiki/Common_Language_Runtime">CLR</a>). The Mono <a href="http://msdn.microsoft.com/en-us/library/z1zx9t92.aspx">C#</a> compiler 
+was started 
+by Miguel de Icaza. In Table 1, I have tried to show the different components of Mono and a brief description of those components to show what 
+they do.&#xA0;</p>
+<p class="Caption">Table 1: Mono source code components</p>
+<table class="ArticleTable">
+<thead>
+<tr><td><strong>Component</strong></td><td><strong>Description </strong></td></tr>
+</thead>
+<tbody>
+<tr><td>C# Compiler </td><td> Mono&#x2019;s C# compiler
+is an implementation of the C# language based on the ECMA specificiation. It is now with C# 1.0, 2.0, 3.0, 4.0. </td></tr><tr><td>Mono Runtime </td><td>The runtime implements the ECMA Common Language Infrastructure (CLI). The runtime provides a Just-in-Time (JIT) compiler, an Ahead-of-Time compiler (AOT), a library loader,
+the garbage collector, a threading system, and interoperability functionality.</td></tr><tr><td>Base Class Library</td><td>The Mono platform
+provides a comprehensive set of classes that provide a solid foundation to
+build applications on. These classes are compatible with Microsoft's .NET
+Framework classes. </td></tr><tr><td>Mono Class
+Library </td><td> Mono also
+provides many classes that go above and beyond the Base Class Library provided
+by Microsoft. These provide additional functionality that are useful,
+especially in building Linux applications. Some examples are classes for
+Gtk+, Zip files, LDAP, OpenGL, Cairo, POSIX, etc. </td></tr></tbody></table>
+<p><strong>Note</strong>: The information shown in the above table has been retrieved from <a title="http://www.mono-project.com/What_is_Mono" href="http://www.mono-project.com/What_is_Mono">http://www.mono-project.com/What_is_Mono</a>.</p>
+<p>There are many version of the Mono compiler. Table 2 shows the different versions of the Mono compiler and 
+the framework each supports.</p>
+<p class="Caption">Table 2: Mono compiler version and related frameworks</p>
+<table class="ArticleTable">
+<thead><tr><td>Compiler Version</td><td>Target Framework</td></tr></thead>
+<tbody><tr><td>mcs </td><td>1.1 </td></tr><tr><td>gmcs </td><td>2.0 </td></tr><tr><td>smcs </td><td>2.1 </td></tr><tr><td>dmcs </td><td>4.0 </td></tr></tbody></table>
+<p><strong>Note</strong>: The information shown in the table has been retrieved 
+from <a title="http://www.mono-project.com/CSharp_Compiler" href="http://www.mono-project.com/CSharp_Compiler">http://www.mono-project.com/CSharp_Compiler</a>.</p>
+<p>The compiler mcs now defaults to the 3.x language specification, starting with Mono 2.8.</p>
+<h2><a name="MonoSourceCode"></a>Getting the Mono source code</h2>
+<p>Mono is a freely available Open Source C# programming language project. If 
+you want to download the Mono C# compiler project&#x2019;s source code, there are many places to do so. 
+We can use gitHub for instance. The URL for the Mono source code in gitHub is <a title="https://github.com/mono/mono/branches" href="https://github.com/mono/mono/branches">https://github.com/mono/mono/branches</a>. Or we can download from other places such 
+as <a title="http://www.go-mono.com/mono-downloads/download.html" href="http://www.go-mono.com/mono-downloads/download.html">http://www.go-mono.com/mono-downloads/download.html</a>. 
+I downloaded the Mono source code from gitHub site (Figure 4.1). There are a few branches of Mono for example, as seen 
+in Figure 4.1. Mono has mono-2-10, 
+mono-2-10-8, mono-2-6, mono-2-8, etc. In the following Table 3, I show the different directories of Mono and a short description of 
+each.</p>
+<p class="Caption">Table 3: Mono source code directory</p>
+<table class="ArticleTable"><tbody><tr><td>docs </td><td colspan="3">Technical documents about the Mono runtime.</td></tr><tr><td>data</td><td colspan="3"> Configuration files installed as part of the Mono runtime.</td></tr><tr><td>mono </td><td colspan="3">The core of the Mono Runtime.</td></tr><tr><td> </td><td></td><td>metadata </td><td>The object system and metadata reader.</td></tr><tr><td> </td><td></td><td>mini </td><td>The Just in Time Compiler.</td></tr><tr><td></td><td></td><td>dis </td><td>CIL executable Disassembler</td></tr><tr><td></td><td></td><td>cli </td><td>Common code for the JIT and the interpreter.</td></tr><tr><td></td><td></td><td>io-layer</td><td>The I/O layer and system abstraction for emulating the .NET IO model.</td></tr><tr><td></td><td></td><td>cil</td><td>Common Intermediate Representation, XML definition of the CIL byte codes.</td></tr><tr><td></td><td></td><td>interp</td><td>Interpreter for CLI executable (obsolete).</td></tr><tr><td></td><td></td><td>arch </td><td>Architecture specific portions.</td></tr><tr><td>mcs </td><td colspan="3">The core of the Mono Compiler code </td></tr><tr><td></td><td>mcs</td><td></td><td></td></tr><tr><td></td><td></td><td>mcs</td><td>Compiler source code</td></tr><tr><td></td><td></td><td>jay </td><td>Parser generator</td></tr><tr><td>man </td><td colspan="3">Manual pages for the various Mono commands and programs.</td> </tr><tr><td>samples</td><td colspan="3">Some simple sample programs on uses of the Mono runtime as an embedded library.</td> </tr><tr><td>scripts</td><td colspan="3">Scripts used to invoke Mono and the corresponding program.</td> </tr><tr><td>runtime</td><td colspan="3">A directory that contains the Makefiles that link the mono/ and mcs/ build systems.</td> </tr><tr>
+<td><em>../olive</em></td><td colspan="3">If the directory <em>../olive</em> is present (as an independent checkout) from the Mono module, that directory is automatically configured to share the same prefix than this module gets.</td> </tr></tbody></table>
+<p><strong>Note</strong>: The above Mono source code directory has been retrieved from <a title="https://github.com/mono/mono" href="https://github.com/mono/mono">https://github.com/mono/mono</a>.</p>
+<p>The Mono compiler source code resides inside the <em>mcs</em> folder of <em>/mono/mcs</em>.</p>
+<h2><a name="Jay"></a>Jay</h2>
+<p>Jay is an Open Source Compiler-Compiler tool derived from Berkeley Yacc. It 
+is used in the Mono project as a Compiler-Compiler tool to generate the parser of the Mono C# compiler. Jay reads the grammar specification from a grammar file and generates an LR parser for it. This
+<em>cs-parser.jay</em> file is used by Jay to turn into <em>cs-parser.cs</em> file which will be consumed by the Mono C# compiler as the parser.
+</p>
+<h2>cs-parser.jay to cs-parser.cs conversion<a name="JayConversion"></a></h2>
+<p>
+Cygwin is a set of Open Source tools which provide a Linux like environment for Windows where Linux applications, for example, 
+Shell can be used in Windows. So now we assume we have a working Cygwin environment in our desktop. We will open the Cygwin 
+terminal by clicking on <em>Start &gt; Program Files &gt; Cygwin &gt; Cygwin Terminal</em>. When we open the Cygwin 
+terminal, it will be like Figure 1.
+</p><p><img width="455" alt="330184/1_CygwinOpenmode.jpg" src="http://www.codeproject.com/KB/cs/330184/1_CygwinOpenmode.jpg"></p>
+<p class="Caption">Figure 1: Cygwin Open mode</p>
+<p>Please copy the Mono source code inside the <em>/usr/src</em> directory of the Cygwin installation directory. And now open the Cygwin 
+terminal and write the following command listed in Code-Listing 1.
+</p>
+<p class="Caption">Code-Listing 1: Bash Command to convert cs-parser.jay to cs-parser.cs</p>
+<pre lang="text">$cd /usr/src/Mono/mcs
+$cd jay
+$make
+$cd ..
+$cd mcs
+$../jay/jay.exe -ctv &lt; ../jay/skeleton.cs cs-parser.jay &gt; cs-parser.cs</pre>
+<p>Please see the following figure:</p>
+<p><img width="609" alt="330184/2_BashCommandOutput.jpg" src="http://www.codeproject.com/KB/cs/330184/2_BashCommandOutput.jpg"></p>
+<p class="Caption">Figure 2: Bash Command output</p>
+<p>So after executing <em>Jay.exe</em> with the appropriate argument, it will convert the 
+<em>cs-parser.jay</em> file into <em>cs-parser.cs</em> which is the parser for Mono.</p>
+<h2>Mono source code relationship<a name="SourceCodeRelationship"></a></h2>
+<p>
+According to the documentation supplied with the Mono source code (<em>mcs\mcs\compiler.txt</em> or <a title="https://github.com/mono/mono/blob/master/mcs/docs/compiler.txt" href="https://github.com/mono/mono/blob/master/mcs/docs/compiler.txt">https://github.com/mono/mono/blob/master/mcs/docs/compiler.txt</a> ), the entire source code file for 
+the Mono C# compiler has been divided into five categories: Infrastructure, Parsing, Expressions, Statements and Declarations, classes, structs, Enumerations. 
+If we look into the following Mono C# compiler source code classification table 4, then it will be easier to understand all the types used in the compiler construction in Mono.</p>
+<p class="Caption">Table 4: Mono Source code classification</p>
+<table class="ArticleTable">
+<thead><tr><td colspan="5">Mono Compiler Source code classification </td></tr><tr><td>Infrastructure</td><td>Parsing </td><td>Expressions</td><td>Statements</td><td>Declarations, Classes, Structs, Enumerations </td></tr>
+</thead>
+<tbody><tr><td><em>driver.cs</em></td><td><em>cs-tokenizer.cs</em></td><td><em>ecore.cs</em></td>
+<td><em>statement.cs</em></td><td><em>decl.cs</em></td></tr><tr><td><em>codegen.cs</em></td>
+<td><em>cs-parser.jay, cs-parser.cs</em></td><td><em>expression.cs</em></td>
+<td><em>iterators.cs</em></td><td><em>class.cs</em></td></tr><tr><td><em>attribute.cs</em></td>
+<td><em>location.cs</em></td><td><em>assign.cs</em></td><td></td><td><em>delegate.cs</em></td></tr><tr>
+<td><em>rootcontext.cs</em></td><td></td><td><em>constant.cs</em></td><td></td>
+<td><em>enum.cs</em></td></tr><tr><td><em>typemanager.cs</em></td><td></td>
+<td><em>literal.cs</em></td><td></td><td><em>interface.cs</em></td></tr><tr>
+<td><em>report.cs</em></td><td></td><td><em>cfold.cs</em></td><td></td><td><em>parameter.cs</em></td></tr><tr><td><em>support.cs</em></td><td></td><td></td><td></td>
+<td><em>pending.cs</em></td></tr></tbody></table>
+<p><strong>Note</strong>: The above Mono source code classification has been retrieved from <a title="https://github.com/mono/mono/blob/master/mcs/docs/compiler.txt" href="https://github.com/mono/mono/blob/master/mcs/docs/compiler.txt">https://github.com/mono/mono/blob/master/mcs/docs/compiler.txt</a>.</p>
+<h2> Mono compilation in depth<a name="CompilationInDepth"></a></h2>
+<p>The Mono C# compiler starts compilation from the <em>driver.cs</em> file. By calling the 
+<code>public bool Compile ()</code> method, Mono starts its compilation process. It then initializes 
+the 
+<code>TopLevelTypes</code> variable of the <code>RootContext</code> class. After doing that, it calls the 
+<code>Parse()</code> method of the driver class. The <code>Parse()</code> 
+method then calls <code>void Parse (CompilationUnit file)</code> to start reading from the source code file. After reading from the source code file, the
+<em>driver.cs</em> file starts the parsing process by calling the:</p>
+<pre lang="cs"><span class="code-keyword">void</span> Parse (SeekableStreamReader reader, CompilationUnit file)</pre>
+<p>method. It will create an instance of the Mono parser by creating an instance of an object of 
+<code>CSharpParser</code> by calling the</p>
+<pre lang="cs"><span class="code-keyword">public</span> CSharpParser(SeekableStreamReader reader, CompilationUnit file, CompilerContext ctx) </pre>
+<p>constructor. If we look into the partial code of the <code>Compile</code> method from the 
+<em>driver.cs</em> file listed in code-listing 1, we can see the main flow of the compilation process.</p>
+<p class="Caption">Code-Listing 1: Partial source code of the Compile method</p>
+<pre lang="cs"><span class="code-keyword">public</span> <span class="code-keyword">bool</span> Compile()
+{
+ RootContext.ToplevelTypes = <span class="code-keyword">new</span> ModuleContainer(ctx, RootContext.Unsafe);
+ Parse();
+ ProcessDefaultConfig();
+ GlobalRootNamespace.Instance.AddModuleReference(RootContext.ToplevelTypes.Builder);
+ LoadReferences();
+ TypeManager.InitOptionalCoreTypes(ctx);
+ RootContext.ResolveTree();
+ <span class="code-keyword">if</span> (!RootContext.StdLib)
+ RootContext.BootCorlib_PopulateCoreTypes();
+ RootContext.PopulateTypes();
+ NamespaceEntry.VerifyAllUsing();
+ <span class="code-keyword">if</span> (Report.Errors &gt; <span class="code-digit">0</span>)
+ {
+ <span class="code-keyword">return</span> <span class="code-keyword">false</span>;
+ }
+ CodeGen.Assembly.Resolve();
+ <span class="code-keyword">if</span> (RootContext.VerifyClsCompliance)
+ {
+ }
+ RootContext.EmitCode();
+ RootContext.CloseTypes();
+ CodeGen.Save(output_file, want_debugging_support, Report);
+}</pre>
+<p>From Code-Listing 1, we can see the Mono parser starts parsing by calling
+<code>public void parse()</code> of the driver class which will call the following 
+<code>Parse</code> method 
+listed in Code-Listing 2 to continue parsing.</p>
+<p class="Caption">Code-Listing 2: Source code of Parse method</p>
+<pre lang="cs"><span class="code-keyword">void</span> Parse (SeekableStreamReader reader, CompilationUnit file)
+{
+ CSharpParser parser = <span class="code-keyword">new</span> CSharpParser (reader, file, ctx);
+ <span class="code-keyword">try</span> {
+ parser.parse ();
+ } <span class="code-keyword">catch</span> (Exception ex) {
+ Report.Error(<span class="code-digit">589</span>, parser.Lexer.Location,
+ <span class="code-string">"</span><span class="code-string">Compilation aborted in file `{0}', {1}"</span>, file.Name, ex);
+ }
+}</pre>
+<p>This <code>Parse</code> method will create an instance of the <code>CSharpParser</code> class by calling the constructor listed in 
+Code-Listing 3. This will make an instance of the Mono parser 
+generated by Compiler-Compiler tool Jay as we discussed earlier.</p>
+<p class="Caption">Code-Listing 3: Constructor of the CSharpParser class</p>
+<pre lang="cs"><span class="code-keyword">public</span> CSharpParser (SeekableStreamReader reader, CompilationUnit file, CompilerContext ctx)</pre>
+<p>The constructor listed in Code-Listing 3 will take the file reader stream and a readonly value of the compiler context defined in the driver class.</p>
+<p class="Caption">Code-Listing 4: CSharpParser declaration in the cs-parser.jay file</p>
+<pre lang="cs">%{
+<span class="code-keyword">using</span> System.Text;
+<span class="code-keyword">using</span> System.IO;
+<span class="code-keyword">using</span> System;
+<span class="code-keyword">namespace</span> Mono.CSharp
+{
+<span class="code-keyword">using</span> System.Collections;
+ <span class="code-keyword">public</span> <span class="code-keyword">class</span> CSharpParser
+ {</pre>
+<p>The parser object created from <code>CSharpParser</code> will call the internal 
+<code>parse()</code> method of the <code>CSharpParser</code> class which will call the Compiler-Compiler generated 
+<code>yyparse</code> method. To call <code>yyparse</code>, it needs to pass the lexer or the tokenizer in it as a parameter. The code listed in Code-Listing 5 shows the method signature 
+of the <code>yyparse</code> method which takes the lexer as a parameter.</p>
+<p class="Caption">Code-Listing 5: Signature of the yyparse method</p>
+<pre lang="cs"><span class="code-keyword">internal</span> <span class="code-sdkkeyword">Object</span> yyparse (yyParser.yyInput yyLex)</pre>
+<p>The parsing will take place in this <code>yyparse</code> method. This <code>yyparse</code> method will parse each of the tokens generated by the lexer.</p>
+<p class="Caption">Code-Listing 6: Lexer initialization in the CSharpParser constructor</p>
+<pre lang="cs"><span class="code-keyword">public</span> CSharpParser (SeekableStreamReader reader, CompilationUnit file, CompilerContext ctx)
+{
+ lexer = <span class="code-keyword">new</span> Tokenizer (reader, file, ctx);
+}</pre>
+<p>The <code>yyparse</code> method will call the <code>xToken()</code> method of the lexer to generate tokens for it. The lexer will return a token by doing lexical analysis of the source code 
+of a program. Before we move ahead, we need to understand the token generation process. In Mono, token generation is an interesting process, the 
+<code>Tokenizer</code> class 
+reads each character from the source code (for example, in this instance, 
+<em>ClassToParse.cs</em> listed in Code-Listing 13) one by one and will match with keywords 
+stored in the tokenizer class to find out whether it has an associate keyword or 
+find if it is a literal. The lexer will perform this operation by calling the 
+<code>Is_identifier_start_character(int c)</code> method, to find out whether the character is an identifier or not by calling 
+the 
+<code>get_char()</code> method. If it is an identifier, 
+then the lexer will call the <code>consume_identifier(int s)</code> method to consume the identifier. The logic 
+is shown in code-listing 7.</p>
+<p class="Caption">Code-Listing 7: Identifier check in tokenizer.cs</p>
+<pre lang="cs"><span class="code-keyword">if</span> (is_identifier_start_character (c)) {
+ tokens_seen = <span class="code-keyword">true</span>;
+ <span class="code-keyword">return</span> consume_identifier (c);
+}</pre>
+<p>While the lexer tries to consume the identifier, it will try to find out if there 
+is any keyword match as shown in Code-Listing 8 by calling the 
+<code>GetKeyword</code> method.</p>
+<p class="Caption">Code-Listing 8: consume_identifier of tokenizer.cs</p>
+<pre lang="cs"><span class="code-keyword">private</span> <span class="code-keyword">int</span> consume_identifier (<span class="code-keyword">int</span> c, <span class="code-keyword">bool</span> quoted)
+{
+ <span class="code-keyword">while</span> ((c = get_char ()) != -1) {
+ <span class="code-keyword">if</span> (id_builder [<span class="code-digit">0</span>] &gt;= <span class="code-string">'</span><span class="code-string">_'</span> &amp;&amp; !quoted) {
+ <span class="code-keyword">int</span> keyword = GetKeyword (id_builder, pos);
+ <span class="code-keyword">if</span> (keyword != -1) {
+ val = loc;
+ <span class="code-keyword">return</span> keyword;
+ }
+ }
+ CharArrayHashtable identifiers_group = identifiers [pos];
+ <span class="code-keyword">if</span> (identifiers_group != <span class="code-keyword">null</span>) {
+ val = identifiers_group [id_builder];
+ <span class="code-keyword">if</span> (val != <span class="code-keyword">null</span>) {
+ val = <span class="code-keyword">new</span> LocatedToken (loc, (<span class="code-keyword">string</span>) val);
+ <span class="code-keyword">if</span> (quoted)
+ AddEscapedIdentifier ((LocatedToken) val);
+ <span class="code-keyword">return</span> Token.IDENTIFIER;
+ }
+ }
+ val = <span class="code-keyword">new</span> <span class="code-sdkkeyword">String</span> (id_builder, <span class="code-digit">0</span>, pos);
+ identifiers_group.Add (chars, val);
+ val = <span class="code-keyword">new</span> LocatedToken (loc, (<span class="code-keyword">string</span>) val);
+ <span class="code-keyword">if</span> (quoted)
+ AddEscapedIdentifier ((LocatedToken) val);
+ <span class="code-keyword">return</span> Token.IDENTIFIER;
+}</pre>
+<p>If the token is not a keyword, then the lexer will mark it as an identifier and return 
+<code>IDENTIFIER</code> as the token type and the word it consumes from the stream will 
+be stored in the <code>val</code> object of the lexer class, i.e., the <code>Tokenizer</code> class (<em>cs-toeknizer.cs</em>). The 
+<code>val</code> is an object type private variable defined in the lexer (which is <em>cs-tokenizer.cs</em>). 
+The <code>val</code> object of the <em>Tokenizer.cs</em> file is accessible via a 
+property called <code>value</code> in the <code>Tokenizer</code> class listed in Code-Listing 9.</p>
+<p class="Caption">Code-Listing 9: value property of tokenizer.cs</p>
+<pre lang="cs"><span class="code-keyword">public</span> <span class="code-sdkkeyword">Object</span> <span class="code-sdkkeyword">value</span> ()
+{
+ <span class="code-keyword">return</span> val;
+}</pre>
+<p>After finish the checking process, the lexer will return the token to the parser to continue the parsing process. So when the parser finds 
+a token value returned 
+by the lexer (for example, 418 for <code>IDENTIFIER</code> for the example listed in Code-Listing 5.18; see appendix for details of the Mono tokens), then the parser will 
+treat it as an identifier and try to access the <code>val</code> associated with the identifier. To access the 
+<code>val</code> of the <code>Tokenizer</code> class, the parser will call the 
+<code>value</code> property 
+of the lexer and assign the value into <code>yyVal</code> (<code>yyVal</code> object type local variable defined in the 
+<code>yyparse</code> method) of the parser. Each of this <code>yyVal</code> will be stored 
+in the <code>yyVals</code> array inside the <code>yyparse</code> method in the 
+<code>CSharpParser</code> class. The value stored in the <code>yyVals</code> array will be used later as 
+a substitute variable for the grammar. 
+In the following Code-Listing 5.13, we can see how <code>yyVal</code> is being stored in 
+the 
+<code>yyVals</code> array. Note: Substitution is the grammar-parser communication, i.e., to pass 
+a value 
+into a grammar file. For example, if we want to substitute variable $1 or $2 or $3 defined in the grammar from the parsing, we have to pass 
+the substitute value from 
+the parser. In here, <code>yyVals</code> will store that entire substitute variable for the grammar as per the tokens.</p>
+<p class="Caption">Code-Listing 10: Source code of the yyparse method of cs-parser.cs</p>
+<pre lang="cs"><span class="code-keyword">internal</span> <span class="code-sdkkeyword">Object</span> yyparse(yyParser.yyInput yyLex)
+{
+ 
+ <span class="code-keyword">for</span> (<span class="code-keyword">int</span> yyTop = <span class="code-digit">0</span>; ; ++yyTop)
+ {
+ 
+ yyVals[yyTop] = yyVal;
+ <span class="code-keyword">if</span> (debug != <span class="code-keyword">null</span>) debug.push(yyState, yyVal);
+ 
+}</pre>
+<p>When the parser accesses the value from the <code>Tokenizer</code> using the <code>yyVal=yyLex.value()</code> statement, it then assigns 
+back <code>yyVal</code> to <code>yyVals</code> as shown 
+in Code-Listing 5.13. This communication between the lexer and the parser is like Just in Time, i.e., whenever the parser requires a token, it will ask for it by calling 
+the <code>xToken()</code> method of the lexer and the lexer will execute the 
+<code>xtoken()</code> method to perform the operation for the parser. So when the parser gets a token from the lexer, 
+it will calculate the <code>yyN</code> value. The usage of the <code>yyN</code> value in Mono is to match with 
+the appropriate grammar action block. <code>yyN</code> is one of the important variables 
+in the parser because it is actually used to do the mapping between the token value returned from the source code file by the lexer and 
+the grammar (language specification, for example, <em>cs-parser.jay</em>). 
+Using the token value, the parser will match with the grammar action block defined in the
+<code>yyparse</code> method (the <code>switch case</code> statements generated by the Compiler-Compiler Jay). If it matches any 
+<code>case</code> statement, then the parser will execute the related code block defined in the matched 
+<code>case</code> condition. This code block will initialize the related abstract syntax 
+tree node type, for example, a type of Statement object or Expression object and it will add the type object into the
+<code>TypeContainer</code>.</p>
+<p>In short, parser will execute the action block of the grammar when any token value matched with the value yyNN, for example from the grammar file <em>cs-parser.jay</em> file 
+of the Mono has following grammar showing in the code-Listing 11, in the line 1265 for the method declaration.</p>
+<p class="Caption">Code-Listing 11: Grammar declaration of the Method in cs-parser.jay</p>
+<pre lang="cs">method_declaration
+: method_header {
+<span class="code-keyword">if</span> (RootContext.Documentation != <span class="code-keyword">null</span>)
+Lexer.doc_state = XmlCommentState.NotAllowed;
+}
+method_body
+{
+Method method = (Method) $1;
+method.Block = (ToplevelBlock) $3;
+current_container.AddMethod (method);
+<span class="code-keyword">if</span> (current_container.Kind == Kind.Interface &amp;&amp; method.Block != <span class="code-keyword">null</span>) {
+Report.Error (<span class="code-digit">531</span>, method.Location, <span class="code-string">"</span><span class="code-string">`{0}': interface members cannot have a definition"</span>, method.GetSignatureForError ());
+}
+current_generic_method = <span class="code-keyword">null</span>;
+current_local_parameters = <span class="code-keyword">null</span>;
+<span class="code-keyword">if</span> (RootContext.Documentation != <span class="code-keyword">null</span>)
+Lexer.doc_state = XmlCommentState.Allowed;
+};</pre>
+<p>The method grammar specified in the grammar specification file in this case 
+<em>cs-parser.jay</em> file also defined in the <em>cs-parser.cs</em> file within a case statement. 
+In this case, the case condition value is 159 (159 is given by Compiler-Compiler tool in this case Jay while converting <em>cs-parser.jay</em> into <em>cs-parser.cs</em>) 
+as shown in the code-listing 12. The code block defined for the method in the grammar will execute whenever lexer return a token value which become 159 as yyN 
+value (yyN value is generate based on the token). This code block actually add instance of Method class into the Type container.</p>
+<p class="Caption">Code-Listing 12: Partial code block from the yyparser method</p>
+<pre lang="cs"><span class="code-keyword">switch</span> (yyN)
+{
+<span class="code-keyword">case</span> <span class="code-digit">159</span>:
+<span class="code-preprocessor">#line 1265 "cs-parser.jay"
+</span>{
+Method method = (Method)yyVals[-2 + yyTop];
+method.Block = (ToplevelBlock)yyVals[<span class="code-digit">0</span> + yyTop];
+current_container.AddMethod(method);
+<span class="code-keyword">if</span> (current_container.Kind == Kind.Interface &amp;&amp; method.Block != <span class="code-keyword">null</span>)
+{
+Report.Error(<span class="code-digit">531</span>, method.Location, 
+ <span class="code-string">"</span><span class="code-string">`{0}': interface members cannot have a definition"</span>, 
+ method.GetSignatureForError());
+}
+current_generic_method = <span class="code-keyword">null</span>;
+current_local_parameters = <span class="code-keyword">null</span>;
+<span class="code-keyword">if</span> (RootContext.Documentation != <span class="code-keyword">null</span>)
+Lexer.doc_state = XmlCommentState.Allowed;
+}
+<span class="code-keyword">break</span>;
+}</pre>
+<p>From the above code listed in Code-Listing 12, we can see there is communication between this grammar and 
+<em>cs-parser.jay</em> file using substitute variable. 
+In the Code-Listing 11 there are two substitute value $1 which will be replaced by the value returned from (Method)yyVals[-2 + yyTop] and $3 by the return value 
+of (ToplevelBlock)yyVals[0 + yyTop] from the code listed in the Code-Listing 12. This is how whole grammar will match with the token return by the lexer 
+and the action block will be executed based on the grammar. The same process will continue until the end of the source code file, i.e., finalizes the token searching from the source code.</p>
+<h2><a name="DebugCompilation"></a>Debug Mono compilation</h2>
+<p>We will experiment using Source Code Listing 13 and try to understand the following two basic things by debugging the Mono compiler using Visual Studio 2010 as IDE:.</p>
+<ul>
+<li type="disc">How does Mono retrieve tokens and parse source code.</li>
+<li type="disc">How does it build the AST.</li>
+</ul>
+<p>The following <code>ClassToParse</code> class listed in Code-Listing 13 is written using C# 
+and will be used as the source code for this experiment. <code>ClassToParse</code> 
+is a simple program which has a <code>using</code> statement and a namespace declaration. 
+It also defines a class and inside of the class, it has a <code>Main</code> method which is the entry point.</p>
+<p class="Caption">Code-Listing 13: Source code to display Hello! world on the Console.</p>
+<pre lang="cs"><span class="code-keyword">using</span> System;
+<span class="code-keyword">namespace</span> gmcs
+{
+<span class="code-keyword">public</span> <span class="code-keyword">class</span> ClassToParse
+{
+ <span class="code-keyword">public</span> <span class="code-keyword">static</span> <span class="code-keyword">int</span> Main (<span class="code-keyword">string</span>[] args)
+ {
+ Console.WriteLine(<span class="code-string">"</span><span class="code-string">Hello! World."</span>);
+ <span class="code-keyword">return</span> <span class="code-digit">1</span>;
+ }
+}
+}</pre>
+<p>The above <code>ClassToParse</code> program will be used to do this experiment. To start this debug we require to do bit of ground work such as we need to do, 
+modify the <code>Main (string[] args)</code> method of the <em>driver.cs</em> file of the Mono source code as shown in the Code-Listing 14.</p>
+<p class="Caption">Code-Listing 14: Source code Main method of the driver.cs</p>
+<pre lang="cs"><span class="code-keyword">public</span> <span class="code-keyword">static</span> <span class="code-keyword">int</span> Main(<span class="code-keyword">string</span>[] args)
+{
+ Location.InEmacs = Environment.GetEnvironmentVariable(<span class="code-string">"</span><span class="code-string">EMACS"</span>) == <span class="code-string">"</span><span class="code-string">t"</span>;
+ args = <span class="code-keyword">new</span> <span class="code-keyword">string</span>[] { <span class="code-string">@"</span><span class="code-string">C:\Temp\ClassToParse.cs"</span>, <span class="code-string">@"</span><span class="code-string">-out:C:\Temp\Otu.exe"</span> };
+ 
+ Driver d = Driver.Create(args, <span class="code-keyword">true</span>, <span class="code-keyword">new</span> ConsoleReportPrinter());
+ <span class="code-keyword">if</span> (d == <span class="code-keyword">null</span>)
+ <span class="code-keyword">return</span> <span class="code-digit">1</span>;
+ <span class="code-keyword">if</span> (d.Compile() &amp;&amp; d.Report.Errors == <span class="code-digit">0</span>)
+ {
+ <span class="code-keyword">if</span> (d.Report.Warnings &gt; <span class="code-digit">0</span>)
+ {
+ Console.WriteLine(<span class="code-string">"</span><span class="code-string">Compilation succeeded - {0} warning(s)"</span>, d.Report.Warnings);
+ }
+ Environment.Exit(<span class="code-digit">0</span>);
+ <span class="code-keyword">return</span> <span class="code-digit">0</span>;
+ }
+ Console.WriteLine(<span class="code-string">"</span><span class="code-string">Compilation failed: {0} error(s), {1} warnings"</span>,
+ d.Report.Errors, d.Report.Warnings);
+ Environment.Exit(<span class="code-digit">1</span>);
+ <span class="code-keyword">return</span> <span class="code-digit">1</span>;
+}</pre>
+<p>In the above code listed in the 14, I added the <em>ClassToParse.cs</em> file path into the 
+<code>args[]</code> array (which is <em>C:\Temp\ClassToParse.cs</em>) 
+and set the parsing option along with output filename for instance in here <em>Out.exe</em>. If we put a break point on the 
+<code>if (d.Compile() &amp;&amp; d.Report.Errors == 0)</code> line:</p>
+<p>When it starts debugging, the Mono compiler will call the <code>Compile()</code> method of the 
+<code>Driver</code> object for instance, <code>d.Compile()</code> starts calling 
+another method to start 
+compiling as below. If we look into the <code>Compile()</code> method of the <em>driver.cs</em> class, we can see 
+the major functionality is as below:</p>
+<p class="Caption">Code-Listing 15: Compile method of the driver.cs</p>
+<pre lang="cs"><span class="code-keyword">public</span> <span class="code-keyword">bool</span> Compile ()
+{
+ RootContext.ToplevelTypes = <span class="code-keyword">new</span> ModuleContainer (ctx, RootContext.Unsafe);
+ Parse ();
+ ProcessDefaultConfig ();
+ LoadReferences ();
+ RootContext.ResolveTree ();
+ RootContext.PopulateTypes ();
+ NamespaceEntry.VerifyAllUsing ();
+ CodeGen.Assembly.Resolve ();
+ RootContext.CloseTypes ();
+ CodeGen.Save (output_file, want_debugging_support, Report);
+ }</pre>
+<p>Depending on the tokenize status inside the parser method, it will go further, i.e., it will start
+<code>tokenize_file</code>.</p>
+<p class="Caption">Code-Listing 16: Parse method of the cs-parser.cs</p>
+<pre lang="cs"><span class="code-keyword">public</span> <span class="code-keyword">void</span> Parse()
+{
+ Location.Initialize();
+ 
+ ArrayList cu = Location.SourceFiles;
+ <span class="code-keyword">for</span> (<span class="code-keyword">int</span> i = <span class="code-digit">0</span>; i &lt; cu.Count; ++i)
+ {
+ <span class="code-keyword">if</span> (tokenize)
+ {
+ tokenize_file((CompilationUnit)cu[i], ctx);
+ }
+ <span class="code-keyword">else</span>
+ {
+ Parse((CompilationUnit)cu[i]);
+ }
+ }
+}</pre>
+<p>and finally the parser will call <code>parse()</code> of the <code>CSharpParser</code> class which has been generated by Jay.</p>
+<p class="Caption">Code-Listing 17: Parse method of the Mono</p>
+<pre lang="cs"><span class="code-keyword">void</span> Parse(SeekableStreamReader reader, CompilationUnit file)
+{
+ CSharpParser parser = <span class="code-keyword">new</span> CSharpParser(reader, file, ctx);
+ <span class="code-keyword">try</span>
+ {
+ parser.parse();
+ }
+ <span class="code-keyword">catch</span> (Exception ex)
+ {
+ Report.Error(<span class="code-digit">589</span>, parser.Lexer.Location,
+ <span class="code-string">"</span><span class="code-string">Compilation aborted in file `{0}', {1}"</span>, file.Name, ex);
+ }
+}</pre>
+<p>All the grammar specified in <em>cs-parser.jay</em> has an action block against the rule and also in the parser method there is a mapping between this grammar 
+and their associate action (please see the Appendix for full listing of grammar for 
+the Mono C# compiler) as a <code>case</code> of the <code>switch</code> statement. Depending on (the token value 
+converted into) <code>yyN</code> value, the related action will be executed to build the abstract syntax tree. 
+If we look into Figure 3, we can see how Mono consumes a token as it calls <code>Parse()</code> 
+of <em>driver.cs</em> and then <code>yyparse</code> of the <code>CSharpParser</code> class. 
+<code>yyparse</code> will consume the token from the input stream by calling the <code>xtoken()</code> method of the 
+<code>Tokenizer</code> class.</p>
+<p><img width="629" alt="330184/3_StackTraceOfCompile.jpg" src="http://www.codeproject.com/KB/cs/330184/3_StackTraceOfCompile.jpg"></p>
+<p class="Caption">Figure 3: Stack trace of the Compile() method</p>
+<p>Before we go ahead, we will a have a look at the process that takes place inside the <code>xtoken()</code> 
+method. In the first phase of file reading, <code>Tokenizer</code> will 
+read the first character from the stream which will be 117. In here, 117 is the representation of u in ASCII (please see the Appendix for the complete 
+list of ASCII and decimal value tables). If we look at Figure 4, it shows the current value of c (character refers to the token) is 117 which is u and 
+it is the first character of the <code>using</code> statement used in the <code>ClassToParse</code> class.</p>
+<p><img width="640" alt="330184/4_TokeinizingU.jpg" src="http://www.codeproject.com/KB/cs/330184/4_TokeinizingU.jpg"></p>
+<p class="Caption">Figure 4: Tokenizing the ClassToParse class</p>
+<p>As 117 is not a standard token, so it will be validated as the identifier and tokenizer will start consuming the identifier as showing in the Figure 5,</p>
+<p><img width="640" alt="330184/5_TokeinizingUsing.jpg" src="http://www.codeproject.com/KB/cs/330184/5_TokeinizingUsing.jpg"></p>
+<p class="Caption">Figure 5: Tokenizeing using statement</p>
+<p>After consume the identifier it will match with the stored keyword inside the tokenizer class and try to find out whether it is a Keyword or not as showed in the Figure 6.</p>
+<p><img width="640" alt="330184/6_TokeinizingUsingKeyword.jpg" src="http://www.codeproject.com/KB/cs/330184/6_TokeinizingUsingKeyword.jpg"></p>
+<p class="Caption">Figure 6: Keyword matching</p>
+<p>It will be identified as a keyword as Mono has a keyword with value 335 (please see the Appendix for 
+a full list of tokens). And finally, the lexer will return the token 
+value 335 which is the <code>using</code> statement. Figure 7 shows the <code>return</code> statement of the token method of the lexer which returns 335 as 
+the current token value.</p>
+<p><img width="550" alt="330184/7_CurrentTokenValue.jpg" src="http://www.codeproject.com/KB/cs/330184/7_CurrentTokenValue.jpg"></p>
+<p class="Caption">Figure 7: Current Token value from the token() of the cs-tokenizer.cs</p>
+<p>The parser will now try to find out whether there is any condition which is equal to this token value, if so, it will execute the related action block defined as part of the grammar.</p>
+<p>Before parser can execute the action block it has to calculate the yyN value as we see earlier yyN is the mapping between token value and grammar. 
+The bit of code which parser uses to calculate yyN is listed in the Code-Listing 18.</p>
+<p class="Caption">Code-Listing 18: yyN calculation based on yyTable</p>
+<pre lang="cs"><span class="code-keyword">if</span> ((yyN = yyRindex[yyState]) != <span class="code-digit">0</span> &amp;&amp; (yyN += yyToken) &gt;= <span class="code-digit">0</span>
+ &amp;&amp; yyN &lt; yyTable.Length &amp;&amp; yyCheck[yyN] == yyToken)
+ yyN = yyTable[yyN];</pre>
+<p>If we see the Figure 8, we can see the watch window while debugging the compiler with the token value 374. In this calculation process, 
+the parser will retrieve the yyN value 
+from the yyTable (yyTable was created while generating the parser using Jay) array.</p>
+<p><img width="556" alt="330184/8_WatchValueofyyN_yyToken.jpg" src="http://www.codeproject.com/KB/cs/330184/8_WatchValueofyyN_yyToken.jpg"></p>
+<p class="Caption">Figure 8: yyN value in the watch list</p>
+<p>The <code>yyN</code> value calculation is another interesting bit of work in the Mono compiler. So based on the given value yyState = 33, yyToken = 374, we get 
+the value of 33th position of yyRinedx[33] which will be 450. The current value of the yyN will be 450 and second part of the if((yyN += yyToken) &gt;= 0) 
+condition will add yyToken value with 450(current value of yyN) as yyN += yyToken.</p>
+<p>Finally, the latest yyN value will be 824 (current token is 374 + previous yyN value which is 450). This 824 will be used as index to retrieve the value stored 
+into the <code>yyTable</code> (<code>yyTable</code> created by the Compiler-Compiler Jay while converting the 
+<em>cs-parser.jay</em> to <em>cs-parser.cs</em>) in that position. And this value will be used 
+as the new value of yyN which will be used as the switch case selector to execute the action block. I would like introduce here following arrays listed 
+in the Code-Listing 5.23. All these arrays have been created by the compiler-compiler Jay while converted grammar file into the parser.</p>
+<p>Note: Array generated by the Jay for the Mono Parser.</p>
+<p class="Caption">Code-Listing 19: array generation by yacc</p>
+<pre lang="cs"><span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyLhs
+<span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyLen
+<span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyDefRed
+<span class="code-keyword">protected</span> <span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyDgoto
+<span class="code-keyword">protected</span> <span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yySindex
+<span class="code-keyword">protected</span> <span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyRindex
+<span class="code-keyword">protected</span> <span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyGindex
+<span class="code-keyword">protected</span> <span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyTable
+<span class="code-keyword">protected</span> <span class="code-keyword">static</span> <span class="code-keyword">short</span>[] yyCheck</pre>
+<p>In Figure 9, I have tried to show how <code>yyN</code> maps the <code>case</code> statement defined in the
+<code>yyparse</code> method to execute the related code block defined in the grammar, i.e., 
+the <em>cs-parser.jay</em> file.</p>
+<p><img width="599" alt="330184/9_StackTrace_Grammar_Token_Match.jpg" src="http://www.codeproject.com/KB/cs/330184/9_StackTrace_Grammar_Token_Match.jpg"></p>
+<p class="Caption">Figure 9: Token Mapping</p>
+<p>We can see from Figure 10 how Mono constructs the abstract syntax tree while parsing the source code of a program. 
+Each time the parser finds a valid token and a <code>yyN</code> value, it will match with the condition to run the related action block which adds 
+the related 
+type (based on the grammar specification, please see the Appendix for a full listing of grammar for 
+the Mono C# compiler) into the 
+<code>TypeContainer</code> which is later on used to resolve the Types.</p>
+<p><img width="640" alt="330184/10_GrammarMatchingWithToken.jpg" src="http://www.codeproject.com/KB/cs/330184/10_GrammarMatchingWithToken.jpg"></p>
+<p class="Caption">Figure 10: Watching</p>
+<p>The <code>Compile()</code> method will call the <code>ResolveTree</code> method of the 
+<code>RootContext</code> type from the <em>rootContext.cs</em> file.</p>
+<p class="Caption">Code-Listing 20: ResolveTree method of RootContext</p>
+<pre lang="cs">RootContext.ResolveTree ();</pre>
+<p>The <code>ResolveTree</code> method will generate the hierarchy tree or parse tree. And later on, 
+the 
+<code>Compile()</code> method calls <code>PopulateTypes</code> of the <code>RootContext</code> class. 
+So far we have seen how Mono tokenizes the source code, parses the source code, and based on it how it constructs the Abstract 
+Syntax Tree. In the next 
+section, we will see how Mono generates Intermediate Language (IL) code to generate the assembly.</p>
+<h2><a name="Reference"></a>References</h2>
+
+
+
+						</div>
+						
+
+						</div>
+</body></html>

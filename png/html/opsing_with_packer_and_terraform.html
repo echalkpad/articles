@@ -1,0 +1,198 @@
+<!DOCTYPE html><html><head><title>Ops-ing with packer and terraform</title></head><body>
+<h1>Ops-ing with packer and terraform</h1><p><a href="http://engineering.sharethrough.com/blog/2015/09/08/ops-ing-with-packer-and-terraform/" target="_new">Original URL</a></p>
+<p><blockquote>Most of Sharethrough&#x2019;s infrastructure runs on AWS. For a long time we&#x2019;ve relied on chef and knife ec2 to maintain resources, but as we grew, we searched for tools that would continue to&hellip;</blockquote></p>
+<div><div class="entry-content">
+ <p>Most of Sharethrough&#x2019;s infrastructure runs on <a href="https://aws.amazon.com/">AWS</a>. For a long time we&#x2019;ve relied on <a href="https://www.chef.io/chef/">chef</a> and <a href="https://github.com/chef/knife-ec2">knife ec2</a> to maintain resources, but as we grew, we searched for tools that would continue to improve operation efficiency. Recently we started using two tools from <a href="https://hashicorp.com/">Hashicorp</a>, <a href="https://www.packer.io/">Packer</a> and <a href="https://www.terraform.io/">Terraform</a>, that appear to deliver what we&#x2019;re looking for.</p>
+
+<h2>What we did</h2>
+
+<p>Sharethrough powers much of its platform with microservices. We preserve package and library versions, system parameters, and application configuration for these services using Chef cookbooks, attributes, and environment files.
+For a long time, services shared customized tasks for changing EC2 instance state using <code>knife-ec2</code>:</p>
+<div class="highlight plaintext"><table><tbody><tr><td class="gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8</pre></td><td class="code"><pre>masonleung@Masons-MacBook-Pro $ rake -T
+rake chef:resolve # resolve cookbook dependencies
+rake chef:vendor # vendor cookbook dependencies
+rake instance:chef # run chef on instance
+rake instance:delete # delete an instance
+rake instance:environment # setup the environment
+rake instance:list # list instances
+rake instance:new # launch a new ec2 instance
+</pre></td></tr></tbody></table>
+</div>
+
+<p>A great approach, but it had some drawbacks:</p>
+
+<ol>
+<li>Every time you created an instance, libraries had to be recompiled from source (slow)</li>
+<li>For service clusters, creating nodes one node at a time was <code>n</code> times slow, where <code>n</code> is the number of instances in the cluster.</li>
+<li>Some resources aren&#x2019;t EC2 instances at all (e.g. a new queue in <a href="https://aws.amazon.com/sqs/">SQS</a>), but we still needed consistent automation to create them.</li>
+<li>Things like security groups, IAM roles, users, and policies were handled manually, and thus lacked a paper trail.</li>
+</ol>
+
+<p>We decided to take a two-step approach to bringing up a hypothetical service:</p>
+
+<ol>
+<li>Create a service&#x2019;s EC2 instance with libraries pre-installed</li>
+<li>Create any non-EC2 resources required to run the service (e.g. SQS)</li>
+</ol>
+
+<h2>Introducing Packer</h2>
+
+<p>Packer creates machine images on multiple platforms using a single configuration file. It contains provisioners that work with common configuration management tools (i.e. Chef). We use it with our Chef cookbooks to create Sharethrough-specific <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html">Amazon Machine Images</a> (AMI). Packer installs packages and libraries into a reusable image.</p>
+
+<p>Here&#x2019;s a snippet of a sample packer file:</p>
+<div class="highlight json"><table><tbody><tr><td class="gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12</pre></td><td class="code"><pre><span class="p">{</span><span class="s2">"provisioners"</span><span class="p">:</span><span class="p">[</span><span class="p">{</span><span class="s2">"type"</span><span class="p">:</span><span class="s2">"chef-solo"</span><span class="p">,</span><span class="s2">"cookbook_paths"</span><span class="p">:</span><span class="p">[</span><span class="s2">"ops/chef/berks-cookbooks"</span><span class="p">],</span><span class="s2">"run_list"</span><span class="p">:</span><span class="p">[</span><span class="s2">"bakery::{{user `role`}}"</span><span class="p">],</span><span class="s2">"environments_path"</span><span class="p">:</span><span class="s2">"ops/chef/environments"</span><span class="p">,</span><span class="s2">"chef_environment"</span><span class="p">:</span><span class="s2">"{{user `environment`}}"</span><span class="p">,</span><span class="s2">"staging_directory"</span><span class="p">:</span><span class="s2">"/home/ubuntu/cookbooks"</span><span class="p">}</span><span class="p">]</span><span class="p">}</span></pre></td></tr></tbody></table>
+</div>
+
+<p>In our first try, <code>staging</code> and <code>production</code> images were created separately (they access different AWS resources).
+We later discovered Packer has a <code>staging_directory</code> attribute to save chef cookbooks onto the image. It also has <code>environments_path</code> to store environment specified attributes. The <code>staging_directory</code> and <code>environment_path</code> combination allowed us to rerun cookbooks. When we created an image, we always built with production attributes. If we need a staging environment, we simply reran the Chef cookbooks with staging attributes during instance instantiation. This approach cuts the number of stored images in half.</p>
+
+<h2>Terraform all the resources</h2>
+
+<p>If other AWS resources are required to run a microservice, we want to use Terraform to create all of them. Our Terraform files are organized by components; listing the directory gives us a glance of what resources are needed:</p>
+<div class="highlight plaintext"><table><tbody><tr><td class="gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11</pre></td><td class="code"><pre>masonleung@Masons-MacBook-Pro ~/Projects/code/vaca/ops/terraform/production (master) $ ls -l
+total 112
+-rw-r--r-- 1 masonleung staff 120 Jun 9 11:50 aws.tf
+-rw-r--r-- 1 masonleung staff 1346 Aug 20 13:45 ec2.tf
+-rw-r--r-- 1 masonleung staff 116 Aug 20 12:37 iam_instance_profiles.tf
+-rw-r--r-- 1 masonleung staff 196 Aug 20 12:37 iam_policy_attachment.tf
+-rw-r--r-- 1 masonleung staff 322 Aug 20 12:37 iam_role.tf
+-rw-r--r-- 1 masonleung staff 9314 Aug 20 13:45 main.tfstate
+-rw-r--r-- 1 masonleung staff 14090 Aug 20 13:45 main.tfstate.backup
+-rw-r--r-- 1 masonleung staff 317 Aug 20 12:37 security_group.tf
+-rw-r--r-- 1 masonleung staff 680 Aug 20 12:37 variable.tf
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Below is a sample terraform file for EC2 instance creation</p>
+<div class="highlight plaintext"><table><tbody><tr><td class="gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38</pre></td><td class="code"><pre>resource "aws_instance" "vaca-green" {
+ count = 2
+ ami = "ami-12345abc"
+ instance_type = "m3.large"
+ key_name = "master"
+ availability_zone = "${lookup(var.zones, concat("zone",count.index))}"
+ security_groups = ["office-access", "${aws_security_group.vaca_security_group.name}", "${aws_security_group.vaca_production.name}"]
+ iam_instance_profile = "${aws_iam_instance_profile.vaca.name}"
+
+ root_block_device {
+ volume_size = "50"
+ delete_on_termination = true
+ }
+
+ tags {
+ Name = "vaca production green ${count.index}"
+ Project = "${var.application_name}"
+ Roles = "app"
+ Stages = "${var.environment}"
+ Group = "green"
+ }
+
+ lifecycle {
+ create_before_destroy = true
+ }
+
+ provisioner "remote-exec" {
+ inline = [
+ "cd /home/ubuntu; sudo chef-solo -c cookbooks/solo.rb -j cookbooks/node.json -E staging",
+ "host=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)",
+ "touch $host"
+ ]
+ }
+
+ provisioner "local-exec" {
+ command = "bundle install &amp;&amp; bundle exec cap HOSTFILTER=${self.public_dns} production deploy"
+ }
+}
+</pre></td></tr></tbody></table>
+</div>
+
+<p>A few callouts:</p>
+
+<ol>
+<li>We perform blue-green deploy to our microservices for breaking changes. Bringing up a new set of EC2 instances requires copy-and-paste of <code>aws_instance</code> resources and a rerun of Terraform. When the deploy is completed, we remove the duplicated <code>aws_instance</code> section and destroy the extra instances.</li>
+<li>As mentioned earlier, we only create AMIs with production attributes. Staging instances are built by re-running chef with staging attributes inside the provisioner section.</li>
+<li>The <code>root_block_device</code> section allows us to create <a href="https://aws.amazon.com/ebs/">EBS</a> volumes of any size, which saves us from forgetting to mount volumes used to, say, store logs.</li>
+<li>Lastly, we tie IAM role and policy which are defined in other Terraform files to an EC2 instance via the <code>iam_instance_profile</code> attribute, preventing us from missing role assignment.</li>
+</ol>
+
+<h2>In Summary</h2>
+
+<p>Packer saves us time from having to install libraries from sources every time a new EC2 instance is created. We can simply harden an image and use it as the base image for microservices.</p>
+
+<p>Terraform also solves a common AWS problem: when a developer modifies resources in the AWS console, there is no way of tracing that change to a documented step that could be reversed.
+With Terraform, changes made to infrastructure is code in Terraform files, so they&#x2019;re recorded and maintained in git. Promoting visibility this way has saved us from having a forgotten one-off step.</p>
+
+<p>Pre-baking an image with Packer saves time, but the proliferation of images is hard to manage without the ability to associate metadata to an image. We&#x2019;re looking at Hashicorp&#x2019;s <a href="https://atlas.hashicorp.com/">Atlas</a> product as a way to handle images as version-controlled assets.</p>
+
+<p>So far we&#x2019;ve only used a subset of Terraform, but we&#x2019;re starting to use it for non-EC2 resources. And although Terraform is great for creating brand new infrastructure, it needs improvements when working on existing nodes. There is a <a href="https://github.com/dtan4/terraforming">free tool</a> to lessen the work on exporting existing infrastructure, but would be nice if Terraform dealt with it natively.</p>
+
+<p>We&#x2019;re excited about Hashicorp&#x2019;s products and will continue to test-drive them as they mature.</p>
+
+</div>
+
+ </div>
+</body></html>

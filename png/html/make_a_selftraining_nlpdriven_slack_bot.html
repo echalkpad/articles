@@ -1,0 +1,155 @@
+<!DOCTYPE html><html><head><title>Make a Self-Training, NLP-Driven Slack Bot</title></head><body>
+<h1>Make a Self-Training, NLP-Driven Slack Bot</h1><p><a href="http://blog.templeton.host/self-training-nlp-enabled-slack-bot-tutorial/" target="_new">Original URL</a></p>
+<p><blockquote>Slack has taken the world by storm, growing to be one of the hottest companies around seemingly overnight. Originally just a "messaging app for teams" (their words), Slack now touts a vibrant&hellip;</blockquote></p>
+<div><section class="post-content">
+ <p>Slack has taken the world by storm, growing to be one of the hottest companies around seemingly overnight. Originally just a "messaging app for teams" (their words), Slack now touts a vibrant ecosystem of extensions and integrations to make teams work better. </p>
+
+<p>Let's take a peek at what's going on with Slack integrations, and then I'll show you how to make a Slack Bot that understands flexible English with an approachable Natural Language Processing (NLP) system, all in node.js.</p>
+
+<p>(For the impatient: <a href="https://github.com/andrew-templeton/bottie">code</a>)</p>
+
+<h3 id="incomingoutgoingrtmohmy">Incoming, Outgoing, RTM, Oh My</h3>
+
+<p>Vendors and individual teams write integrations on Slack because the integrations take only a short time to write, whether they be webhook-based or leverage the more advanced Real Time Messaging (RTM) API. These integrations center around notifications, collaboration and commands - for example, a team might want a Slack integration that sends a message to a particular chat room when a customer sends their sales email address a message.</p>
+
+<p>More recently, Slack began touting the platform's support for bots, which use the RTM API to present themselves similar to normal, human users. Bots bring the power of software right into the chatrooms that business users are increasingly spending their time in. This readily-available presence within the chatrooms make bots a convenient way to automate many business functions, or simply aid teams to work more effectively.</p>
+
+<h3 id="howdyaiandbotkit3">Howdy.ai and Botkit &lt;3</h3>
+
+<p>If you want to make a Slack bot, you need three things: </p>
+
+<ol>
+<li>Connectivity to Slack </li>
+<li>Input interpretation of user commands </li>
+<li>Integration logic to back bot actions </li>
+</ol>
+
+<p><a href="https://github.com/howdyai/botkit">Botkit</a>, by <a href="https://howdy.ai">Howdy.ai</a>, is an open-source toolkit which fully handles the Slack connectivity portion we need, and makes basic input interpretation a little easier. It provides an easy way to connect to Slack via the RTM API, supports multi-message conversations, storage adapters, and lets you define simple input interpretation handlers using regular expressions.</p>
+
+<p>The problem with using simple regular expressions for your bot is that regular expressions are VERY particular, and your users on your Slack channel are humans. If the whole purpose of writing a bot is to make work easier, then we should not need to train our users to work with specific bot commands - then we have turned our Slack bot into a command line prompt.</p>
+
+<p>We want to leverage the excellent connectivity tools Howdy.ai has given us with Botkit, with a more flexible system for input interpretation, which understands English. </p>
+
+<h3 id="nlpbotkitmagic">NLP + Botkit = Magic</h3>
+
+<p>Natural Language Processing (NLP) allows us to build this flexible English interpretation we want. Put (very) simply, NLP aims to help computers understand human language. While NLP is a deep, complex, and still-developing field, we can use a small piece of NLP to teach our bot to understand which commands we want to use even when we use flexible English. </p>
+
+<p>We will use simple document classification, a portion of NLP, to make bots understand which command we are trying to invoke when we talk to them in plain English. A "document" here is a string of text, and "classification" means we will try to decide to what group said string of text belongs. When working with a bot, our bot will use NLP on our message documents, and classify which command we are trying to invoke. </p>
+
+<p>All we need to do is set up a system which plugs some example sentences for the bot to learn, assign each sentence a command (its class), put these labeled sentences into a classifier, and connect the classifier to Botkit.</p>
+
+<h3 id="showmethecode">Show Me The Code!</h3>
+
+<p>Let's get into it. We're going to make our bot trainable on-the-fly, so we can teach it new sentence types without writing any code. If we want the sentences to invoke actions on other systems, we will have to write that logic later, but this portion will let us author new interpretation logic directly in Slack.</p>
+
+<p>This assumes you have node.js installed and have a Slack login for which you are an administrator, as you need to be able to authorize your bot to communicate with Slack.</p>
+
+<h6 id="getyourslackbottoken">Get Your Slack Bot Token</h6>
+
+<p>You'll need to go to <a href="https://my.slack.com/apps/build/custom-integration">Slack's Custom Integrations panel</a> and click on the Bots link:</p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/slack-custom-integrations-panel.png" alt="Slack Custom Integrations Panel"></p>
+
+<p>Then, name your bot: </p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/slack-bot-name.png" alt="Name Your Bot"></p>
+
+<p>You'll land on the new bot's integration page. You need to copy the <strong>API Token</strong> value here into your clipboard.</p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/slack-bot-token.png" alt="Get Bot Token"></p>
+
+<p>Save this value, as we need to give it to Bottie (or whatever you called yours) in a later step.</p>
+
+<h6 id="getthebottiebasecode">Get the Bottie Base Code</h6>
+
+<p>I set up a <a href="https://github.com/andrew-templeton/bottie">GitHub repo with the code for Bottie</a> so you can follow along. Let's clone it onto your machine:</p>
+
+<pre><code class="language-bash">$ git clone https://github.com/andrew-templeton/bottie;
+</code></pre>
+
+<p>After the repository finishes cloning, you'll need to run <code>npm install</code> to install dependencies: <a href="https://github.com/NaturalNode/natural"><code>natural</code></a> for our NLP classifiers and <a href="https://github.com/howdyai/botkit"><code>botkit</code></a> for the connectivity layer.</p>
+
+<pre><code class="language-bash">$ npm install;
+</code></pre>
+
+<p>Once the dependencies finish installing, we need to give the environment the proper Slack API Token that we copied earlier (&lt;COPIED_TOKEN&gt; here): </p>
+
+<pre><code>$ export SLACK_TOKEN='&lt;COPIED_TOKEN&gt;';
+</code></pre>
+
+<p>Now, we have Bottie's base downloaded and configured to connect to our Slack installation.</p>
+
+<p>You can start Bottie up by running: </p>
+
+<pre><code class="language-bash">$ node index
+</code></pre>
+
+<p>That's it! Bottie should be up and running in Slack. You can message Bottie now by adding it to your Direct Messages, using <code>/invite @bottie</code> to invite Bottie to a channel, and sending messages with <code>@bottie</code> in them. If you used a different name for the bot when configuring it in the Slack Integrations panel, use that name when addressing the bot.</p>
+
+<h6 id="openbottiesbrain">Open Bottie's Brain</h6>
+
+<p>Bottie uses classifiers and example sentences to understand what we are saying, so we should take a look at what Bottie understands already. Open your the <code>bottie</code> directory you cloned down with your favorite text editor and navigate to <code>./builtins.js</code>.</p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/bottie-builtins.png" alt="Bottie Built In Commands" title=""></p>
+
+<p>Right now, Bottie only understands when someone asks Bottie to tell a joke, and when people ask Bottie to echo back what is said to Bottie. We will teach Bottie how to understand other commands soon.</p>
+
+<p>The way that these commands work is by adding the array of phrases on each key into a Logistic Regression Classifier (LRC) as a new document labeled by the key and then training the classifier when we have added all documents. The LRC is borrowed from the <code>natural</code> package I mentioned earlier and is an industry-standard document classifier we use in NLP. The math behind the LRC is fairly complex, but for our simple use cases, we can merrily use the LRC without worrying about the details too much.</p>
+
+<p>I have named this piece of the code as "Brain", which you can find in <a href="https://github.com/andrew-templeton/bottie/blob/44806d463206a1bbdf3e97b1e46f65e7501b710b/src/brain.js"><code>./src/brain.js</code></a>. Open it up in your text editor and you should see something like this: </p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/bottie-brain.png" alt="Bottie Brain"></p>
+
+<p>In the actual file, you will see there's a bit more code to handle the execution of the code Bottie will delegate to when it understands commands, but these 30 lines or so are the magic that makes the system work and understand English. You'll want to give Bottie as many examples as possible, because LRCs work much, much better the more sentence structures and synonyms you feed into them.</p>
+
+<h5 id="bottiesears">Bottie's Ears</h5>
+
+<p>The Brain file is interesting, but we should also take a look at Bottie's "Ears", which make it connect and listen (surprise) to a Slack installation, using <code>botkit</code>. Open <a href="https://github.com/andrew-templeton/bottie/blob/44806d463206a1bbdf3e97b1e46f65e7501b710b/src/ears.js"><code>./src/ears.js</code></a> in your text editor, or click the link, and you'll see something like:</p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/bottie-ears.png" alt=""></p>
+
+<p>This is a very simple wrapper around <code>botkit</code>'s already fairly clean API.</p>
+
+<ul>
+<li>The <code>BotKit.slackbot</code> function call does <em>not</em> reference a token or a specific installation, so we could theoretically make Bottie listen to more than one slack installation, simply by making a second <code>new Ears(anotherToken).listen()</code> call.</li>
+<li>The <code>this.scopes</code> object tells Bottie if it should listen and try to interpret absolutely everything, or just listen and respond when actually addressed. I have configured Bottie to only respond when addressed here.</li>
+<li>The <code>.startRTM</code> call is the magic method that actually connects Bottie to a Slack installation, and the <code>Bot.hears</code> call is what we use to listen for different patterns written to Bottie.</li>
+</ul>
+
+<h5 id="trainingbottie">Training Bottie</h5>
+
+<p>Now, not only can we say flexible sentences to Bottie, but we should also be able to train Bottie new language patterns without writing any code. This is enabled via a special command, <code>TRAINING TIME!!!</code>. When we want to teach Bottie a new skill in Slack, this is what we should do: </p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/bottie-training.png" alt="Training Bottie"></p>
+
+<p>When I'm finished training Bottie, I should put <strong>done</strong> on a line by itself, wait for Bottie to tell me it's done thinking, then try it out: </p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/bottie-training-done.png" alt="Finished Training Bottie"></p>
+
+<p>This is great! It means that non-technical users can suggest features and test out bot skill invocations without needing to know NLP or how to code.</p>
+
+<h5 id="howbottietrainsitself">How Bottie Trains Itself</h5>
+
+<p>What's really going on here is that Bottie is using <code>Ears</code>/<code>botkit</code> to start a conversation and ask for phrase name plus a set of phrase examples, then using <code>Brain</code>/<code>natural</code> to train the Brain LRC on-the-fly. Bottie also serializes the new phrase examples and empty skill file onto disk so it remains on next load.</p>
+
+<p>The method for accomplishing this is fairly simple - we tell <code>Ears</code> to listen specifically for the magic phrase <code>TRAINING TIME!!!</code> <a href="https://github.com/andrew-templeton/bottie/blob/44806d463206a1bbdf3e97b1e46f65e7501b710b/index.js#L37-L40">on these lines in <code>index.js</code></a>, and <a href="https://github.com/andrew-templeton/bottie/blob/44806d463206a1bbdf3e97b1e46f65e7501b710b/src/train.js">invoke a <code>Training</code> module in <code>./src/training.js</code></a>. The <code>Training</code> module then uses <code>speech.startConversation</code> provided by <code>botkit</code> to begin a multi-step conversation. We listen for <code>done</code> by itself in Slack to signal the user is done sending sample inputs, then add all the phrases to the <code>Brain</code>, then tell <code>Brain</code> to <code>think</code> / train the internal LRC driving Bottie. There is some additional logic to persist the information to disk, which is standard JSON file manipulation.</p>
+
+<h5 id="puttingitalltogether">Putting It All Together</h5>
+
+<p>Now that we have reviewed <code>Brain</code>, <code>Ears</code>, and <code>Train</code>, the final step of integrating these pieces is incredibly simple. Navigate to <a href="https://github.com/andrew-templeton/bottie/blob/44806d463206a1bbdf3e97b1e46f65e7501b710b/index.js#L29-L52"><code>./index.js</code></a> lines 29 through 52 in your text editor or by clicking the link, and you should see the main logic body:</p>
+
+<p><img src="http://the.cdn.bytuple.com/blog-templeton-host/bottie-main.png" alt="Bottie Main Logic"></p>
+
+<p>On lines 31 and 32, we are simply running a <code>Teach</code> function, which is a wrapper around the <code>natural</code> library's <code>LogisticRegressionClassifier#addDocument</code> method. Once we have added all of our phrase sets, we tell the <code>Brain</code> to think, which is a wrapper on <code>LogisticRegressionClassifier#train</code>. </p>
+
+<p>We then make the <code>Ears</code> use <code>botkit</code> to <code>listen</code> on our Slack installation and <code>hear</code> two patterns. While <code>botkit</code> normally lets you listen to patterns, we only want to listen to one specific pattern, the special <code>TRAINING TIME!!!</code> command, then pass all other phrases to the second handler, in which we use the Bottie <code>Brain</code> to <code>interpret</code> messages and perhaps <code>invoke</code> skills associated with phrases. <code>interpret</code> runs both <code>LogisticRegressionClassifier#getClassifications</code> to pull raw phrase grouping probabilities, and <code>LogisticRegressionClassifier#classify</code> to tell us which is the most likely phrase group overall.</p>
+
+<h3 id="wrappingup">Wrapping Up</h3>
+
+<p>We now know how to provision a Slack Bot and get a token for integration, connect to Slack via the RTM API using <a href="https://howdy.ai">Howdy.ai</a>'s handy <code>botkit</code> library, and use basic NLP techniques in JavaScript with the open source <code>natural</code> toolkit. We also saw how to make a bot train new phrasing on the fly, as well as make our bot write new code stubs for future development.</p>
+
+<p>Interested in Slack bot development, AI, Machine Learning, or NLP? Have feedback for me on my code, writing, or topics? Tweet me <a href="https://twitter.com/ayetempleton">@ayetempleton</a> - I'd love to hear from you!</p>
+ </section>
+
+ </div>
+</body></html>

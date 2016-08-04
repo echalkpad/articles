@@ -1,0 +1,104 @@
+<!DOCTYPE html><html><head><title>Cross-platform applications in practice</title></head><body>
+<h1>Cross-platform applications in practice</h1><p><a href="http://blog.airtame.com/how-electron-helps-airtame-to-provide-a-crossplatform-software/" target="_new">Original URL</a></p>
+<p><blockquote>From the very beginning, cross-platform capability has been one of our standard requirements at Airtame. It is our ultimate goal for users to be able to stream from any platform at any time. But how&hellip;</blockquote></p>
+<div><section class="post-content">
+	 <p>From the very beginning, cross-platform capability has been one of our standard requirements at Airtame. It is our ultimate goal for users to be able to stream from any platform at any time.</p>
+
+<p>But how can we actually accomplish cross-platform capability? Currently, we have 3 full-time engineers from the Airtame team dedicated to making a truly cross-platform streaming solution. Let's go over how we make it happen. </p>
+
+<h2 id="starterkit">Starter Kit</h2>
+
+<p>When we started this project 2 years ago, we had just one engineer working on this task. However, limited resources allocated to this project in an early phase have helped us to determine a solution that will be most efficient and proven out of all the tools available for this purpose.</p>
+
+<p>During the selection process, we were driven by the following criteria in order to find the perfect framework for Airtame cross-platform capability:</p>
+
+<ul>
+<li>The framework has to be able to run another executable (the streaming binary)</li>
+<li>It has to be able to communicate with the discovery module (the piece of software that allows us to see all the Airtames on the network)</li>
+<li>It has to run on Windows 7+, MacOS X 10.8+ and as many UNIX systems as we can</li>
+<li>It has to have access to the filesystem of the OS</li>
+<li>Ability to design our own User Interface</li>
+<li>Proven track record (number of companies using it already)</li>
+<li>Active community and support for the framework</li>
+</ul>
+
+<p>When we were making the initial choice 2 years ago - <a href="http://qt.io/" target="_blank">QT</a> made most sense to us. It has a fairly good UI library and we could develop it using C++. However, the main drawback of this solution was that implementing the UI was quite cumbersome, especially if you are new to this framework.</p>
+
+<p>In parallel, we noticed <a href="http://nwjs.io/" target="_blank">nw.js</a> (formerly node-webkit) rising as a technology of choice when developing cross-platform UI application. Main advantage? You write your UI as you would write a website - in a controlled environment! No need for multi-browser compatibility.</p>
+
+<p>We decided to try nw.js. It worked well for us. We managed to write everything for all platforms in only one (-ish) codebase, the whole thing being written in HTML/CSS/JS with <a href="https://nodejs.org/en/" target="_blank">NodeJS</a>. The nw.js&#x2019;s community was quite active and many other companies were using it, so it had a proven track record and it was fairly easy to troubleshoot.</p>
+
+<p>However, we started to spot some limitations of nw.js over time. The project was not updated that often, we could see some bugs (many Linux issues, frameless window issues, etc.), and we were missing features that were important to us (e.g., auto-updater and balloon notification on Windows).</p>
+
+<p>Around the end of June 2015, we had an important backlog of features and bugs that were hanging because of this.</p>
+
+<p>That's when we decided to take a look at <a href="http://electron.atom.io/" target="_blank">Electron</a> (formerly atom-shell).</p>
+
+<h2 id="electron">Electron</h2>
+
+<p>Electron is in fact very similar to nw.js. It uses the latest version of NodeJS and allows you to write cross-platform applications using web technologies (if you want to know more about the differences between Electron and nw.js, just follow <a href="http://electron.atom.io/docs/v0.35.0/development/atom-shell-vs-node-webkit/" target="_blank">this link</a>.)</p>
+
+<p>Nevertheless, Electron is updated more frequently, it is heavily adopted, and apparent bugs can be fixed quickly by either support from the community or the official maintainers. Moreover, Electron has more functionalities than nw.js (platform specific or not). All of that brings us closer to implementing the best user experience.</p>
+
+<p>One of the main advantages of the Electron framework is that it provides core functionalities useful to almost every software: Auto update, Crash reporter, installer creation, system-specific features, etc. </p>
+
+<h3 id="architecture">Architecture</h3>
+
+<p>Today, the architecture of the Airtame software is designed as follows:</p>
+
+<p><img src="http://blog.airtame.com/content/images/2015/12/airtame-widget-diagram.png" alt="Airtame widget architecture">
+</p><small><em>High level architecture of the Airtame software on computer. It highlights the separation in modules, which is at the heart of our software.</em></small>
+
+<p>Main advantages of the above architecture are as follows:</p>
+
+<ul>
+<li>Have different release process for each &#x201C;<em>module</em>&#x201D;</li>
+<li>Have a clear division of responsibility in the code</li>
+<li>Be able to replace any module easily without impacting the rest of the application</li>
+<li>Provide an <em>HTTP API</em> that other applications can talk to</li>
+<li><em>Make the testing easier</em>. During the development phase we can test the front-end directly in Google Chrome if the server is running. On the other hand, it is easier to mock the API of the core functionalities of Electron (like window management and other system-related SDK)</li>
+</ul>
+
+<h3 id="testing">Testing</h3>
+
+<p>We have divided the automatic testing into 4 stages:</p>
+
+<ul>
+<li>Stage 1: All of the node modules tested separately (node-airtame and node-discovery)</li>
+<li>Stage 2: Front-end of the application</li>
+<li>Stage 3: Back-end of the application</li>
+<li>Stage 4: The application as a whole - we have integration and functional tests to verify the functionality of a full feature or scenario (still at an early stage)</li>
+</ul>
+
+<p>We chose <a href="https://mochajs.org/" target="_blank">Mocha</a> for the testing job and we are happy with it. Every time we submit a change, the tests are triggered in order to validate that there was no regression and that the application is still working as expected. If the test fails, you will be unable to merge the change. </p>
+
+<p>When it comes to the manual testing, we have a "QA" corner in the office along with a set of physical machines and VMs allowing us to test the user case in a real environment. The QA corner is composed of a large variety of systems:</p>
+
+<ul>
+<li>Windows (7, 8.1, 10)</li>
+<li>MacOS (10.8, 10.9, 10.10.5, 10.11) </li>
+<li>Ubuntu (14.04, 15.04, 15.10)</li>
+</ul>
+
+<p>We are currently working on having even more systems set up through Virtual Machine and other physical devices in order to make Airtame the most cross-platform friendly application. </p>
+
+<p><img src="http://blog.airtame.com/content/images/2015/12/QA-Corner.jpg" alt="QA corner at Airtame">
+</p><small><em>Our QA corner where we manually test the software and dongle. We have different hardware and virtual machines in order to cover as many cases as we can.</em></small>
+
+<h2 id="whatsnext">What's next</h2>
+
+<p>We will continue to follow the Electron evolution process. We are planning to take a proactive role by contributing to the development of the framework ourselves. </p>
+
+<p>We will continue focusing on stability and usability of the application. The new architecture of the software will help us to write more tests and to divide even more clearly the responsibility of each component. We are also internally improving our QA process (which will be a part of a future post on our QA process).</p>
+
+<p>We are also listening to our users and we are trying to adapt and fix the issues to always provide the best experience.</p>
+
+<p>Finally, we plan to Open Source the application. We are thrilled about this idea and we will keep you posted about its development.</p>
+
+<p>If you want to download the software, follow <a href="https://airtame.com/download/" target="_blank">this link</a>.</p>
+
+<p>We&#x2019;re always on the lookout for talented engineers who are passionate about writing clean, maintainable code! If this sounds like you, get in touch with us at <a href="mailto:tech-jobs@airtame.com">tech-jobs@airtame.com</a>.</p>
+ </section>
+
+ </div>
+</body></html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html><html><head><title>From SMM to userland in a few bytes</title></head><body>
+<h1>From SMM to userland in a few bytes</h1><p><a href="https://scumjr.github.io/2016/01/10/from-smm-to-userland-in-a-few-bytes/" target="_new">Original URL</a></p>
+<p><blockquote>10 January 2016 In 2014, @coreykal, @xenokovah, @jwbutterworth3 @ssc0rnwell gave a talk entitled Extreme Privilege Escalation on Windows 8/UEFI Systems at Black Hat USA. They introduced the idea of a&hellip;</blockquote></p>
+<div><article class="single row gutters">
+ <time class="published" datetime="2016-01-10">10 January 2016</time>
+ 
+
+ <p>In 2014, <a href="https://twitter.com/@coreykal">@coreykal</a>,
+<a href="https://twitter.com/@xenokovah">@xenokovah</a>,
+<a href="https://twitter.com/@jwbutterworth3">@jwbutterworth3</a>
+<a href="https://twitter.com/@ssc0rnwell">@ssc0rnwell</a> gave a talk entitled
+<a href="https://www.mitre.org/sites/default/files/publications/14-2221-extreme-escalation-presentation.pdf">Extreme Privilege Escalation on Windows 8/UEFI Systems</a>
+at Black Hat USA. They
+<a href="https://www.youtube.com/watch?v=UJp_rMwdyyI&amp;feature=youtu.be&amp;t=2926">introduced</a>
+the idea of a SMM rootkit called <em>The Watcher</em> slides (57 to 63). To sum it up:</p>
+
+<blockquote>
+<ul>
+<li>The Watcher lives in SMM (where you can't look for him)</li>
+<li>It has no build-in capability except to scan memory for a magic signature</li>
+<li>If it finds the signature, it treats the data immediately after the
+signature as code to be executed</li>
+<li>In this way the Watcher performs arbitrary code execution on behalf of some
+controller.</li>
+</ul>
+</blockquote>
+
+<p>This idea is awesome, and I wanted to try to implement it on Linux. Actually, it
+was far more easier than expected, thanks to QEMU and SeaBIOS.</p>
+
+
+
+<h2>SMM rootkit</h2>
+
+<p>The BIOS flash is initially modified in order to have a malicious code executed
+in SMM by the SMI handler, which scans memory for a magic signature on a regular
+basis.</p>
+
+<h3>Periodic SMI generation</h3>
+
+<p>In order to scan memory regularly, the SMI handler must be called
+regularly. There's a mechanism that's exactly meant for this: the <code>Periodic SMI#
+Rate Select</code>, through <code>GEN_PMCON_1</code> register
+(<a href="http://opensecuritytraining.info/IntroBIOS_files/Day1_07_Advanced%20x86%20-%20BIOS%20and%20SMM%20Internals%20-%20SMM.pdf">slide 18</a>).
+It guarantees the generation of a SMI at least at least once every 8, 16, 32, or
+64 seconds. On a modern CPU, it's straightforward to use this register to
+ensures that the SMM handler is called regularly. Nevertheless, it doesn't seem
+to exist on the emulated CPU (Intel&#xAE; 440FX) of the virtual machine.</p>
+
+
+
+<p>But this isn't the only manner to call the SMI handler regularly. The APIC can
+be configured to redirect IRQ to SMM. In fact, the I/O APIC defines a
+redirection table for this purpose. This technique was already used by
+<a href="http://ivanlef0u.fr/repo/todo/chpie_smm_keysniff_ENG.pdf">chpie</a> and
+<a href="http://www.eecs.ucf.edu/%7Eczou/research/SMM-Rootkits-Securecom08.pdf">SMM-Rootkits-Securecom08.pdf</a>
+to implement a keylogger in 2008. Actually, it can also be used to call a SMI
+handler regularly.</p>
+
+<p>For instance, IRQs on <code>ata_piix</code> occurs quite frequently (about every 2 seconds)
+in my VM:</p>
+
+
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>grep ata_piix /proc/interrupts
+14: <span class="m">4357</span> IO-APIC-edge ata_piix
+</code></pre></div>
+<p>ATA PIIX seems to be the
+<a href="http://lxr.free-electrons.com/source/drivers/ata/ata_piix.c">Intel PATA/SATA controller</a>.
+This looks like a great opportunity to let our SMI handler be called
+regularly by redirecting IRQ #14 to SMM.</p>
+
+<p>The
+<a href="http://download.intel.com/design/chipsets/datashts/29056601.pdf">Intel&#xAE; 82093AA I/O APIC Datasheet</a>
+describes how to use the I/O redirection table registers. The registers are 64
+bits wide. Basically, they're just set to the interrupt vector.</p>
+
+<p>
+ <img src="https://scumjr.github.io/public/images/bits0-7.png" alt="INTVEC">
+</p>
+
+<p>For example, <code>IOREDTBL 14 = 0x000000000000003e</code>. But one can change the
+<em>Delivery Mode</em> to another value, for example <code>0b010</code> to deliver a SMI:</p>
+
+<p>
+ <img src="https://scumjr.github.io/public/images/bits8-10.png" alt="DELMOD">
+</p>
+
+<p>Once the SMI handler is called, the interrupt must be sent to the Local APIC
+through an IPI. Simply write to the
+<a href="http://wiki.osdev.org/APIC#Local_APIC_registers">Local APIC registers</a>:</p>
+<div class="highlight"><pre><code class="language-C"><span class="cp">#define LOCAL_APIC_BASE (void *)0xfee00000</span>
+<span class="cp">#define INTERRUPT_VECTOR 0x3e</span>
+<span class="k">static</span> <span class="kt">void</span> <span class="nf">forward_interrupt</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+ <span class="kt">uint32_t</span> <span class="k">volatile</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="o">*</span><span class="n">b</span><span class="p">;</span>
+ <span class="kt">unsigned</span> <span class="kt">char</span> <span class="o">*</span><span class="n">p</span><span class="p">;</span>
+
+ <span class="n">p</span> <span class="o">=</span> <span class="n">LOCAL_APIC_BASE</span><span class="p">;</span>
+ <span class="n">b</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)(</span><span class="n">p</span> <span class="o">+</span> <span class="mh">0x310</span><span class="p">);</span>
+ <span class="n">a</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)(</span><span class="n">p</span> <span class="o">+</span> <span class="mh">0x300</span><span class="p">);</span>
+
+ <span class="o">*</span><span class="n">b</span> <span class="o">=</span> <span class="mh">0x00000000</span><span class="p">;</span>
+ <span class="o">*</span><span class="n">a</span> <span class="o">=</span> <span class="n">INTERRUPT_VECTOR</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>The IRQ redirection must be created once the OS finished to configure APIC,
+otherwise it may be overwritten.</p>
+
+<p>If you're too lazy to read MSRs to get IOAPIC and Local APIC memory addresses,
+they're located here:</p>
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>grep APIC /proc/iomem
+fec00000-fec003ff : IOAPIC 0
+fee00000-fee00fff : Local APIC
+</code></pre></div>
+<h3>Memory scan from the SMM handler</h3>
+
+<p>Since the SMM handler is called regularly, it must be as fast as possible. The
+memory scan is easy: just walk through all the physical pages. Even if not
+bullet-proof, the techniques from
+<a href="http://wiki.osdev.org/Detecting_Memory_(x86)">OS Dev.org</a> are sufficient for a
+proof of concept. If one page starts with the magic signature, the payload
+located just after is executed.</p>
+
+<h2>Payloads</h2>
+
+<h3>SMM payload</h3>
+
+<p>The SMM payload must be as simple as possible since SMM handlers execute in with
+paging disabled, no interruptions, etc.</p>
+
+
+
+<p>Fortunately, the VDSO library is mmaped in every userland processes. A few
+syscalls (on <a href="http://man7.org/linux/man-pages/man7/vdso.7.html">x64</a>:
+<code>clock_gettime</code>, <code>getcpu</code>, <code>gettimeofday</code>, <code>time</code>) use VDSO to be
+faster. One can dump the VDSO of a random process to take a look at it:</p>
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>gdb /bin/ls
+gdb<span class="nv">$ </span>b __libc_start_main
+gdb<span class="nv">$ </span>r
+Breakpoint 1, __libc_start_main
+gdb<span class="nv">$ </span>dump_binfile vdso 0x7ffff7ffa000 0x7ffff7ffc000
+gdb<span class="nv">$ </span>q
+</code></pre></div>
+<p>and notice that <code>clock_gettime</code> is right at the entrypoint address:</p>
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>readelf -a vdso <span class="p">|</span> grep Entry
+ Entry point address: 0xffffffffff700700
+
+<span class="nv">$ </span>gdb vdso
+gdb<span class="nv">$ </span>x/5i 0xffffffffff700700
+ 0xffffffffff700700 &lt;clock_gettime&gt;: push rbp
+ 0xffffffffff700701 &lt;clock_gettime+1&gt;: mov rbp,rsp
+ 0xffffffffff700704 &lt;clock_gettime+4&gt;: push r15
+ 0xffffffffff700706 &lt;clock_gettime+6&gt;: push r14
+ 0xffffffffff700708 &lt;clock_gettime+8&gt;: push r13
+gdb<span class="err">$</span>
+</code></pre></div>
+<p>Moreover, there is about 2800 bytes of free space to put some code at the end of
+the mapping:</p>
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>hd vdso <span class="p">|</span> tail -3
+<span class="m">00001510</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="m">00</span> <span class="p">|</span>................<span class="p">|</span>
+*
+00002000
+</code></pre></div>
+<p>All of this make VDSO looks like a promising target. VDSO is easy to fingerprint
+in memory because the first bytes are the ELF header, and a few strings are
+always present. Since <code>clock_gettime</code> is the entrypoint of the library,
+there's no need to implement an ELF parser in ring-2. Finally, VDSO library is
+mapped on 2 consecutive physical pages. One don't have mess with the page
+tables of the current process to find the second page.</p>
+
+<p>Here's the plan: once the magic is found by the SMI handler at the beginning of
+a physical page, the code located after it is executed. The code executed in SMM
+walk (again) through the physical pages to find the 2 VDSO's consecutive
+physical pages. Finally, the prologue of <code>clock_gettime</code> is hijacked to a custom
+userland payload written at the end of VDSO.</p>
+
+<p>This SMM payload written in C and compiled with
+<a href="https://github.com/jjyg/metasm/">metasm</a> is about 750 bytes long.</p>
+
+<p>Once again, this is sufficient for a proof of concept, but a fully weaponized
+exploit should parse the VDSO ELF carefully. One could note that once this SMM
+payload is executed, all present and future userland processes will be
+backdoored and the IRQ redirection can be safely removed.</p>
+
+<h3>Userland payload</h3>
+
+<p>The userland payload will be called every time a process makes a call to one of
+the previously mentioned system call. Since <code>clock_gettime()</code> might be called
+frequently by different processes, we don't want to overload the machine with a
+lot of Python processes. Thus, the payload checks if the file <code>/tmp/.x</code> exists,
+and in that case does nothing because it has already been executed. On the other
+hand if <code>/tmp/.x</code> doesn't exist, the payload forks:</p>
+
+<ul>
+<li>the parent restore registers before returning to <code>clock_gettime()</code>,</li>
+<li>the child executes a python one-liner which creates <code>/tmp/.x</code> and does a TCP
+reverse shell to the attacker.</li>
+</ul>
+
+<p>This userland payload, written in assembly, is 280 bytes long.</p>
+
+<h2>Trigger</h2>
+
+<p>For a local attacker, it's trivial to execute code in SMM: just mmap a page and
+copy <code>MAGIC+CODE</code>. That's it.</p>
+
+<p>For a remote attacker, there are several ways to reach one's goal. For example,
+send a lot of UDP packets containing <code>MAGIC+CODE</code> prefixed with random padding
+(between <code>0</code> and <code>PAGE_SIZE-sizeof(CODE)</code> bytes) to any UDP port. With a bit
+of luck, it triggers the SMM handler in a few seconds.</p>
+
+<h2>Waiting for the shell</h2>
+
+<p>Once the SMM payload is executed, the attacker only have to wait for the reverse
+shell. It can take a few seconds to a few minutes given the running processes on
+the machine.</p>
+
+<p>An impatient attacker may want to check if everything went well by triggering
+one of the VDSO syscalls. For instance, one can try to login to a ssh server
+with an invalid account. OpenSSH server calls <code>clock_gettime()</code> before writing
+the log entry, which triggers the execution of the userland payload by any
+process.</p>
+
+<p>A non-root process may however call <code>clock_gettime()</code>, and the reverse shell
+would not have root privileges. The uid of the process may be checked in the
+payload, but to save a few bytes, the attacker may also remove <code>/tmp/.x</code> and
+wait for a new reverse shell.</p>
+
+
+
+<p>Eventually, here's a screenshot of the backdoor. On the left, the debug log
+<code>/tmp/bios.log</code> of the virtual machine whose SMM is backdoored. On the right a
+Python script wich send in a loop the payload to be executed by the SMI handler
+in the hope of being mmaped at the very beginning of a page. And at the bottom,
+the reverse shell from a root process of the VM whose VDSO has been hijacked:</p>
+
+<p>
+ <img src="https://scumjr.github.io/public/images/screenshot.png" alt="SMM backdoor screenshot">
+</p>
+
+<h2>Conclusion</h2>
+
+<p>The idea of <em>The Watcher</em> is practical on Linux: it's pretty straightforward to
+execute code in userland from SMM reliably, thanks to VDSO. The code of SeaBIOS
+is modified to include a malicious SMI handler, and the memory of the OS is
+never altered until the attacker manages to put the payload in memory. The
+payload size is no longer than 1084 bytes, and can be injected through the
+network even if not port is open.</p>
+
+<p>Nevertheless, SeaBIOS' SMM support is basic, and I didn't find a way to
+automatically install <em>The Watcher</em> at the boot of the machine (there should be
+a more elegant way than a bootkit). At present, a SMI must be issued
+(<code>outb(0xXY, 0xb2)</code>) to start <em>The Watcher</em>.</p>
+
+<p>The code of this proof-of-concept is available on github:
+<a href="https://github.com/scumjr/the-sea-watcher">the-sea-watcher</a>.</p>
+
+<p>On a more encouraging note,
+<a href="https://twitter.com/grsecurity/status/578558748496568322">spender</a> mentioned
+a simple trick to potentially determine if a machine is infected by a SMM
+rootkit: just count the number of SMIs since the last reset of the machine, with
+<code>MSR_SMI_COUNT</code> (since Nehalem):</p>
+<div class="highlight"><pre><code class="language-bash"><span class="nv">$ </span>sudo aptitude install linux-tools-common linux-tools-generic
+<span class="nv">$ </span>wget http://kernel.ubuntu.com/git/cking/debug-code/.git/tree/smistat/smistat.c http://kernel.ubuntu.com/git/cking/debug-code/.git/tree/smistat/Makefile
+<span class="nv">$ </span>make
+<span class="nv">$ </span>sudo modprobe msr
+<span class="nv">$ </span>sudo ./smistat
+ Time SMIs
+ 02:21:41 268
+ 02:21:42 268
+ 02:21:43 268
+</code></pre></div>
+</article>
+
+
+ </div>
+</body></html>

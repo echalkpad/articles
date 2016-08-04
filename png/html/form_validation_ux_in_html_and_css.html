@@ -1,0 +1,194 @@
+<!DOCTYPE html><html><head><title>Form Validation UX in HTML and CSS</title></head><body>
+<h1>Form Validation UX in HTML and CSS</h1><p><a href="https://css-tricks.com/form-validation-ux-html-css/" target="_new">Original URL</a></p>
+<p><blockquote>You can do and impressive amount of form validation with just HTML attributes. You can make the user experience pretty clean and clear with CSS selectors. But it does require some CSS trickery to get&hellip;</blockquote></p>
+<div><article id="post-242123" class="instapaper_body h-entry e-content">
+
+ 
+
+ <p>You can do and impressive amount of form validation with just HTML attributes. You can make the user experience pretty clean and clear with CSS selectors. But it does require some CSS trickery to get everything just right!</p>
+
+<h3>(You can) make the label look like a placeholder</h3>
+<p>First: <strong>always use real <code>&lt;label for="correct_input"&gt;</code> elements.</strong> Just that alone is a UX consideration all too many forms fail on. Placeholders are suggestions for valid input, like putting "Tulsa" in an input labeled "City".</p>
+<p>I'd say if the form is short and an obvious pattern (like sign up or log in), you could use the placeholder visual pattern, but use real labels instead.</p>
+<p>Taking a form like...</p>
+<pre rel="HTML"><code class="language-markup">&lt;form action="#0" method="post"&gt;
+
+ &lt;div&gt;
+ &lt;input type="text" id="first_name" name="first_name"&gt;
+ &lt;label for="first_name"&gt;First Name&lt;/label&gt;
+ &lt;/div&gt;
+
+ &lt;!-- ... ---&gt;
+
+&lt;/form&gt;</code></pre>
+<p>You use the <code>&lt;div&gt;</code> as a positioning context and place the label directly over the form.</p>
+<pre rel="SCSS"><code class="language-scss">form {
+ max-width: 450px;
+ 
+ // positioning context
+ &gt; div {
+ position: relative;
+
+ // Looks like placeholder
+ &gt; label {
+ opacity: 0.3;
+ position: absolute;
+ top: 22px;
+ left: 20px;
+ }
+ }
+}</code></pre>
+<p>You don't need to do any tricky cursor stuff, because it's all semantically wired up already. If they click the area taken up by the label, it will activate the input. If they click the input, it will activate the input. Both correct.</p>
+<p>The trick is putting the input <em>first</em> (semantically fine) so you can hide the label on focus:</p>
+<pre rel="SCSS"><code class="language-scss">form {
+ 
+ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old ... */
+
+ &gt; div {
+ &gt; input[type="text"],
+ &gt; input[type="email"],
+ &gt; input[type="password"] {
+
+ &amp;:focus {
+ &amp; + label {
+ opacity: 0;
+ }
+ }
+
+ }
+ }
+}</code></pre>
+<figure id="post-242804" class="align-none media-242804"><img src="https://cdn.css-tricks.com/wp-content/uploads/2016/06/input-placeholder.gif" alt=""></figure>
+<h3>Make certain inputs required</h3>
+<p>Perhaps the easiest possible validation on a form you can do is use the <code>required</code> attribute to require a field. No faster way to catch an error than letting the browser do it if it can!</p>
+<pre rel="HTML"><code class="language-markup">&lt;input required type="text" id="first_name" name="first_name"&gt;</code></pre>
+<figure id="post-242805" class="align-none media-242805"><img src="https://cdn.css-tricks.com/wp-content/uploads/2016/06/requried-fields.gif" alt=""></figure>
+<h3>Positively indicate valid input values</h3>
+<p>Let users know a field has been entered correctly. The browser can give us this information through the <code>:valid</code> CSS selector:</p>
+<pre rel="SCSS"><code class="language-scss">form {
+
+ &gt; input[type="text"],
+ &gt; input[type="email"],
+ &gt; input[type="password"] {
+ 
+ // show success!
+ &amp;:valid {
+ background: url(images/check.svg);
+ background-size: 20px;
+ background-repeat: no-repeat;
+ background-position: 20px 20px;
+
+ // continue to hide the label
+ &amp; + label {
+ opacity: 0;
+ }
+ }
+ }
+ }
+}</code></pre>
+<figure id="post-242806" class="align-none media-242806"><img src="https://cdn.css-tricks.com/wp-content/uploads/2016/06/valid-fields.gif" alt=""></figure>
+<p><code>:valid</code>, in this case, is ensuring the required condition is met, but that selector is also useful for validating the type of input.</p>
+<h3>Show reminders about validation of type</h3>
+<p>You can also require an input's value to be of a certain type, like <code>email</code> or <code>number</code>. <a href="http://codepen.io/joesteinkamp/pen/ECbmu">Here's examples</a> of all of them.</p>
+<pre rel="HTML"><code class="language-markup">&lt;input type="email" id="email" name="email" required&gt;</code></pre>
+<p>That input is both required and required to be a valid email address format. Let's do this for the UX:</p>
+<ol>
+<li>Tell the user about the requirements when the field is focused</li>
+<li>Remind them the field doesn't have a valid value otherwise</li>
+</ol>
+<p>But also... don't show any reminders when the input is empty. As in, don't assume an invalid state. It's just kind of annoying and unnecessarily negative. In order to do that, we'll need to know if the input is empty or not.</p>
+<h4>Sub trick! Testing if an input has a value or not</h4>
+<p>We want to do stuff with <code>:valid</code> and <code>:invalid</code>, but we don't want to jump the gun with <code>:invalid</code> and use it before the input has a value.</p>
+<p>Is there a CSS selector to test if an input is empty? Not really! You'd think <code>:empty</code> would be it, but it's not. That's for matching things like <code>&lt;p&gt;&lt;/p&gt;</code>... container elements with nothing inside them. Inputs are no-content elements already.</p>
+<p>The trick is to make sure the input has a placeholder value, then:</p>
+<pre rel="CSS"><code class="language-css">input:not(:placeholder-shown) {
+
+}</code></pre>
+<p>We're not really using placeholder in our demo, but a value of a single space works:</p>
+<pre rel="HTML"><code class="language-markup">&lt;input placeholder=" "&gt;</code></pre>
+<p><a href="https://css-tricks.com/almanac/selectors/p/placeholder-shown/">:placeholder-shown</a> is super useful for us here! It's basically the secret selector for testing if an input currently has a value or not. </p>
+<p>There is no IE or Firefox <a href="http://caniuse.com/#feat=css-placeholder-shown">support</a> though, which is particularly difficult to navigate around. With new features like this, <code>@supports</code> is normally a savior, but...</p>
+<pre rel="CSS"><code class="language-css">/* This doesn't work */
+@supports (input:placeholder-shown) {
+ input:not(:placeholder-shown) {
+ }
+}</code></pre>
+<p>You can't use <code>@supports</code> for selectors, only property/values (e.g. <code>@supports (display: flex)</code>)</p>
+<p>Testing for placeholder support in JavaScript is easy enough:</p>
+<pre rel="JavaScript"><code class="language-javascript">var i = document.createElement('input');
+if ('placeholder' in i) {
+
+}</code></pre>
+<p>But there doesn't appear to be a simple way to test for <code>:placeholder-shown</code>. So.... this might just need to wait for deeper browser support to use on big production stuff.</p>
+
+<p>Assuming wonderful support, this is how the logic would play out...</p>
+<pre rel="SCSS"><code class="language-scss">form {
+
+ &gt; div {
+ 
+ &gt; input[type="text"],
+ &gt; input[type="email"],
+ &gt; input[type="password"] {
+ 
+ // When input is...
+ // 1. NOT empty
+ // 2. NOT in focus
+ // 3. NOT valid
+ &amp;:invalid:not(:focus):not(:placeholder-shown) {
+ // Show a light reminder
+ background: pink;
+ &amp; + label {
+ opacity: 0;
+ }
+ }
+ 
+ // When that invalid input becomes in focus (and also still isn't empty)
+ &amp;:invalid:focus:not(:placeholder-shown) {
+ // Show the more robust requirement instructions below.
+ &amp; ~ .requirements {
+ max-height: 200px;
+ padding: 0 30px 20px 50px;
+ }
+ }
+ 
+ }
+ 
+ // &lt;input&gt; ~
+ // &lt;label&gt; ~ 
+ // &lt;div class="requirements"&gt;
+ .requirements {
+ padding: 0 30px 0 50px;
+ color: #999;
+ max-height: 0;
+ transition: 0.28s;
+ overflow: hidden;
+ color: red;
+ font-style: italic;
+ }
+
+ }
+}</code></pre>
+<figure id="post-242808" class="align-none media-242808"><img src="https://cdn.css-tricks.com/wp-content/uploads/2016/06/reminders.gif" alt=""></figure>
+<h3>You can create robust validations</h3>
+<p>It's not just <code>required</code> or <code>type="email"</code> (and the like), you can also client-side validate things like length (e.g. minimum password length or maximum characters in bio textarea) and even go full-on regex.</p>
+<p>Here's <a href="http://www.the-art-of-web.com/javascript/validate-password/">an article</a> on that. Say you wanted password requirements like</p>
+<ul>
+<li>At least 6 characters</li>
+<li>At least 1 uppercase character</li>
+<li>At least 1 lowercase character</li>
+<li>At least 1 number</li>
+</ul>
+<p>You can do that like:</p>
+<pre rel="HTML"><code class="language-markup">&lt;input pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,}" type="password" id="password" name="password" required placeholder=" "&gt;</code></pre>
+<figure id="post-242809" class="align-none media-242809"><img src="https://cdn.css-tricks.com/wp-content/uploads/2016/06/password.gif" alt=""></figure>
+<h3>Demo</h3>
+<p>I'm leaving in the <code>:placeholder-shown</code> stuff here, which makes this not work great in Firefox and IE. It's just a demo! Feel free to pick and choose stuff from here that works for you.</p>
+<p class="codepen">See the Pen <a href="http://codepen.io/chriscoyier/pen/JXgKjb/">Form with a bunch of HTML5 Validation and CSS3 Help</a> by Chris Coyier (<a href="http://codepen.io/chriscoyier">@chriscoyier</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+<h3>More</h3>
+
+
+ 
+ </article>
+
+ </div>
+</body></html>

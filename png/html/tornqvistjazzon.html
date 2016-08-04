@@ -1,0 +1,145 @@
+<!DOCTYPE html><html><head><title>tornqvist/jazzon</title></head><body>
+<h1>tornqvist/jazzon</h1><p><a href="https://github.com/tornqvist/jazzon" target="_new">Original URL</a></p>
+<p><blockquote>Working with static JSON files for mocking data or whatever other purposes can be a real bore. Jazzon is a convenience utility for generating, concatenating and streamlining the handling of static&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content">
+
+<p>Working with static JSON files for mocking data or whatever other purposes can be a real bore. Jazzon is a convenience utility for generating, concatenating and streamlining the handling of static JSON files.</p>
+
+<h2><a id="user-content-installation" class="anchor" href="https://github.com/tornqvist/jazzon#installation"></a>Installation</h2>
+
+<div class="highlight highlight-source-shell"><pre>$ npm install --save jazzon</pre></div>
+
+<h2><a id="user-content-usage" class="anchor" href="https://github.com/tornqvist/jazzon#usage"></a>Usage</h2>
+
+<p>In and of it self jazzon does nothing, <em>really</em>. It's sole purpose is to call registered plugins with the current state and identified helpers. Helpers can be chained passing the current state from one to the next.</p>
+
+<p>To illustrate a most basic scenario, this is how one might use jazzon together with <a href="https://github.com/tornqvist/jazzon-uuid">jazzon-uuid</a></p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-k">const</span> <span class="pl-c1">jazzon</span> <span class="pl-k">=</span> <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">'</span>jazzon<span class="pl-pds">'</span></span>);
+<span class="pl-k">const</span> <span class="pl-c1">uuid</span> <span class="pl-k">=</span> <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">'</span>jazzon-uuid<span class="pl-pds">'</span></span>);
+
+<span class="pl-k">let</span> data <span class="pl-k">=</span> { id<span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ uuid }<span class="pl-pds">"</span></span> };
+
+<span class="pl-smi">jazzon</span>.<span class="pl-en">use</span>(<span class="pl-en">uuid</span>());
+
+jazzon
+ .<span class="pl-c1">compile</span>(data)
+ .<span class="pl-en">then</span>(result <span class="pl-k">=&gt;</span> <span class="pl-en">console</span>.<span class="pl-c1">log</span>(result)); <span class="pl-c">// =&gt; {id: "6c84fb90-12c4-11e1-840d-7b25c5ee775a"}</span></pre></div>
+
+<p>In this scenario, jazzon encounters the helper <code>uuid</code> and calls each registered plugin (in this case <code>jazzon-uuid</code>) on it.</p>
+
+<p>Helpers can also be chained using the pipe (<code>|</code>) symbol. Each chained helper gets the output (state) of the previous helper to operate on. To illustrate a more complex scenario, take these two models:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-c">// user.json</span>
+
+{
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ uuid }<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>name<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ name.findName }<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>email<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ internet.email }<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>username<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ internet.userName }<span class="pl-pds">"</span></span>
+}</pre></div>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-c">// users.json</span>
+
+{
+ <span class="pl-s"><span class="pl-pds">"</span>total<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-c1">3</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>users<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ import(user.json) | pick(id, username) | repeat(3) }<span class="pl-pds">"</span></span>
+}</pre></div>
+
+<p>Running <code>users.json</code> through jazzon would produce something like this:</p>
+
+<div class="highlight highlight-source-js"><pre>{
+ <span class="pl-s"><span class="pl-pds">"</span>total<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-c1">3</span>,
+ <span class="pl-s"><span class="pl-pds">"</span>users<span class="pl-pds">"</span></span><span class="pl-k">:</span> [{
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>a76f535f-cbc6-4c09-8151-573e200c1dbf<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>username<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>Doug.Simonis28<span class="pl-pds">"</span></span>
+ }, {
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>0a512648-c418-40a6-90ac-1bb5ef1e7fab<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>username<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>Virgil_Kunze<span class="pl-pds">"</span></span>
+ }, {
+ <span class="pl-s"><span class="pl-pds">"</span>id<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>88d6903f-d13b-4d16-877e-f906461c69aa<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>username<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>Grady.Koelpin<span class="pl-pds">"</span></span>
+ }]
+}</pre></div>
+
+<h2><a id="user-content-syntax" class="anchor" href="https://github.com/tornqvist/jazzon#syntax"></a>Syntax</h2>
+
+<p>The syntax of helpers are very similar to <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/template_strings">JavaScript template strings</a> to clearly illustrate their purpose. But do not confuse them as the pipe separator is not a valid JavaScript operator.</p>
+
+<p>The string must start with <code>@{</code> and end with <code>}</code>. Each helper is separated with a <code>|</code> symbol. Encountering an invalid template-ish string will throw an error.</p>
+
+<p>Use <a href="http://regexr.com/3bsnl">this regexr</a> to experiment with the template strings.</p>
+
+<h2><a id="user-content-plugins" class="anchor" href="https://github.com/tornqvist/jazzon#plugins"></a>Plugins</h2>
+
+<p>Plugins should export a function that get's called once for every helper encountered by jazzon. The convention is to export a factory function that returns the plugin.</p>
+
+<p>A plugin really is just a reducer that jazzon uses to process all the helpers. Therefore a plugin should <em>always</em> return a state, even if it does not manipulate the state. A switch statement does the job as so:</p>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-c">// myplugin.js</span>
+
+<span class="pl-c1">module</span>.<span class="pl-en">exports</span> <span class="pl-k">=</span> <span class="pl-k">function</span> (<span class="pl-smi">otions</span>) {
+ <span class="pl-k">return</span> <span class="pl-k">function</span> (<span class="pl-smi">state</span>, <span class="pl-smi">helper</span>, <span class="pl-smi">args</span>) {
+ <span class="pl-k">switch</span> (helper) {
+ <span class="pl-k">case</span> <span class="pl-s"><span class="pl-pds">'</span>name<span class="pl-pds">'</span></span><span class="pl-k">:</span>
+ <span class="pl-k">return</span> args[<span class="pl-c1">0</span>] <span class="pl-k">||</span> <span class="pl-smi">options</span>.<span class="pl-smi">default</span>;
+ <span class="pl-k">case</span> <span class="pl-s"><span class="pl-pds">'</span>wrap<span class="pl-pds">'</span></span><span class="pl-k">:</span>
+ <span class="pl-k">return</span> <span class="pl-s"><span class="pl-pds">`</span>Hello <span class="pl-s1"><span class="pl-pse">${</span> state <span class="pl-pse">}</span></span>!<span class="pl-pds">`</span></span>;
+ <span class="pl-k">default</span><span class="pl-k">:</span>
+ <span class="pl-k">return</span> state;
+ }
+ }
+};</pre></div>
+
+<div class="highlight highlight-source-js"><pre><span class="pl-c">// myprogram.js</span>
+
+jazzon
+ .<span class="pl-en">use</span>(<span class="pl-en">myplugin</span>({
+ <span class="pl-k">default</span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">'</span>world<span class="pl-pds">'</span></span>
+ }))
+ .<span class="pl-c1">compile</span>({
+ <span class="pl-s"><span class="pl-pds">"</span>first<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ name | wrap }<span class="pl-pds">"</span></span>,
+ <span class="pl-s"><span class="pl-pds">"</span>second<span class="pl-pds">"</span></span><span class="pl-k">:</span> <span class="pl-s"><span class="pl-pds">"</span>@{ name(Joe) | wrap }<span class="pl-pds">"</span></span>
+ })
+ .<span class="pl-en">then</span>(result <span class="pl-k">=&gt;</span> <span class="pl-en">console</span>.<span class="pl-c1">log</span>(result)); <span class="pl-c">// =&gt; {"first": "Hello world!", "second": "Hello Joe!"}</span></pre></div>
+
+<p>Jazzon also supports async plugins. Under the hood, jazzon is using <a href="https://github.com/tj/co">co</a> so anything that co can handle, jazzon can handle. As so, other than just plain strings, a plugin may return a Promise, generator, generator function, function, object or array. Due to the awesome nature of co, objects and arrays may contain nestled objects/arrays containing Promises or any of the other supported types. See some of the plugins for examples of how this is achieved.</p>
+
+<h3><a id="user-content-availible-plugins" class="anchor" href="https://github.com/tornqvist/jazzon#availible-plugins"></a>Availible plugins</h3>
+
+
+
+<p>To add your own plugin, add it to the list and make a pull request.</p>
+
+<h2><a id="user-content-api" class="anchor" href="https://github.com/tornqvist/jazzon#api"></a>API</h2>
+
+<ul>
+<li><code>jazon.create(/*plugins*/)</code> Creates a new instance of jazzon with optional list of plugins.
+
+</li>
+<li><code>jazzon.use(plugin)</code> Adds a plugin to be used when transforming template strings.
+
+</li>
+<li><code>jazzon.compile(object)</code> Iterates over the object looking for template strings to transform.
+
+</li>
+<li><code>jazzon.plugins</code> An list of registered helpers on this instance.
+
+<ul>
+<li><em>Returns an Array</em></li>
+<li><em>Is immutable</em></li>
+</ul></li>
+</ul>
+
+<h2><a id="user-content-todo" class="anchor" href="https://github.com/tornqvist/jazzon#todo"></a>TODO</h2>
+
+<ul class="task-list">
+<li class="task-list-item"> Add documentation</li>
+<li class="task-list-item"> Add wrapper for non-Promises returned from plugins</li>
+<li class="task-list-item"> Add test for plugins (generator/non-generator)</li>
+<li class="task-list-item"> Better error handling</li>
+<li class="task-list-item"> Add CLI</li>
+</ul>
+</article>
+ </div>
+</body></html>

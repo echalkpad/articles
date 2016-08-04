@@ -1,0 +1,115 @@
+<!DOCTYPE html><html><head><title>A tidy, linear Git history</title></head><body>
+<h1>A tidy, linear Git history</h1><p><a href="http://www.bitsnbites.eu/?p=221" target="_new">Original URL</a></p>
+<p><blockquote>One of the things that is overlooked in many Git based projects is the value of a linear commit history. In fact, many tools and guidelines discourage Git workflows that aim for a linear history. I&hellip;</blockquote></p>
+<div><div class="entry-content">
+						<p>One of the things that is overlooked in many Git based projects is the value of a linear commit history. In fact, many tools and guidelines discourage Git workflows that aim for a linear history. I find this sad, since a tidy history is very valuable, and there is a straight forward workflow that ensures a linear history.</p>
+<h2>Linear vs non-linear history</h2>
+<p>A linear history is simply a Git history in which all commits come after one another. I.e. you will not find any merges of branches with independent commit histories.</p>
+<p><a href="http://www.bitsnbites.eu/wp-content/uploads/2015/12/1-nonlinear-vs-linear.png"><img class="alignnone size-full wp-image-231" src="http://www.bitsnbites.eu/wp-content/uploads/2015/12/1-nonlinear-vs-linear.png" alt="1 - nonlinear-vs-linear" width="586"></a></p>
+<h2>Why do you want a linear history?</h2>
+<p>Besides being tidy and logical, a linear history comes in handy when:</p>
+<ul>
+<li>Looking at the history. A non-linear history can be very hard to follow &#x2013; sometimes to the point that the history is just incomprehensible.</li>
+<li>Backtracking changes. For instance: &#x201C;Did feature A get introduced before or after bugfix B?&#x201D;.</li>
+<li>Tracking down bugs. Git has a very neat function called <a href="http://git-scm.com/docs/git-bisect">Git bisect</a>, which can be used to quickly find which commit introduced a bug or regression. However, with a non-linear history, Git bisect becomes hard or even impossible to use.</li>
+<li>Reverting changes. Say that you found a commit that caused a regression, or you want to remove a feature that was not supposed to go out in a specific release. With some luck (if your code has not changed too much) you can simply revert the unwanted commit(s) using <a href="http://git-scm.com/docs/git-revert">Git revert</a>. However, if you have a non-linear history, perhaps with lots of cross-branch merges, this will be significantly harder.</li>
+</ul>
+<p>There are probably another handful of situations in which a linear history is very valuable, depending on how you use Git.</p>
+<p>Point is: The less linear your history is, the less valuable it is.</p>
+<h2>Causes of a non-linear history</h2>
+<p>In short, every merge commit is a potential source of a non-linear history. However, there are different kinds of merge commits.</p>
+<h3>Merge from a topic branch into master</h3>
+<p>When you are done with your topic branch and want to integrate it into master, a common method is to merge the topic branch into master. Perhaps something along the lines:</p>
+<pre>git checkout master
+git pull
+git merge --no-ff my-topic-branch</pre>
+<p>A nice property with this method is that you preserve the information about which commits were part of your topic branch (an alternative would be to leave out &#x201C;&#x2013;no-ff&#x201D;, which would allow Git to do a fast-forward instead of a merge, in which case it may not be as clear which of the commits actually belonged to your topic branch).</p>
+<p>The problem with merging to master arises when your topic branch is based on an old master instead of the latest tip of master. In this case you will inevitably get a non-linear history.</p>
+<p><a href="http://www.bitsnbites.eu/wp-content/uploads/2015/12/2-merging-old-branch.png"><img class="alignnone size-full wp-image-232" src="http://www.bitsnbites.eu/wp-content/uploads/2015/12/2-merging-old-branch.png" alt="2 - merging-old-branch" width="280"></a></p>
+<p>Whether or not this will be a common problem or not largely depends on how active the Git repository is, how many developers are working concurrently, etc.</p>
+<h3>Merge from master into a topic branch</h3>
+<p>Sometimes you want to update your branch to match the latest master (e.g. there are some new features on master that you want to get into your topic branch, or you find that you can not merge your topic branch into master because there are conflicts).</p>
+<p>A common method, which is even recommended by some, is to merge the tip of master into your topic branch. <em>This is a major source of non-linear history!</em></p>
+<p><a href="http://www.bitsnbites.eu/wp-content/uploads/2015/12/3-merging-master-into-topic.png"><img class="alignnone size-full wp-image-233" src="http://www.bitsnbites.eu/wp-content/uploads/2015/12/3-merging-master-into-topic.png" alt="3 - merging-master-into-topic" width="831"></a></p>
+<h2>The solution: Rebase!</h2>
+<p><a href="http://git-scm.com/book/ch3-6.html">Git rebase</a> is a very useful function that you should use if you want a linear history. Some find the concept of rebasing awkward, but it&#x2019;s really quite simple: replay the changes (commits) in your branch on top of a new commit.</p>
+<p>For instance, you can use Git rebase to change the root of your topic branch from an old master to the tip of the latest master. Assuming that you have your topic branch checked out, you can do:</p>
+<pre>git fetch origin
+git rebase origin/master</pre>
+<p><a href="http://www.bitsnbites.eu/wp-content/uploads/2015/12/4-rebasing.png"><img class="alignnone size-full wp-image-234" src="http://www.bitsnbites.eu/wp-content/uploads/2015/12/4-rebasing.png" alt="4 - rebasing" width="835"></a></p>
+<p>Note that the corresponding merge operation would be to merge the tip of master into your topic branch (as depicted in the previous figure). The resulting contents of the files in your topic branch would be the same, regardless if you do a rebase or a merge. However, <em>the history is different</em> (linear vs non-linear!).</p>
+<p>This sounds all fine and well. However, there are a couple of caveats with rebase that you should be aware of.</p>
+<h3>Caveat 1: Rebase creates new commits</h3>
+<p>Rebasing a branch will actually create new commits. The new commits will have different SHA:s than the old commits. This is usually not a problem, but <em>you will run into trouble if you rebase a branch that exists outside of your local repository</em> (e.g. if your branch already exists on origin).</p>
+<p>If you were to push a rebased branch to a remote repository that already contains the same branch (but with the old history), you would:</p>
+<ol>
+<li>Have to force push the branch (e.g. <code>git push --force-with-lease</code>), since Git will not allow you to push a new history to an existing branch otherwise. This effectively replaces the history for the given remote branch with a new history.</li>
+<li>Possibly make someone else very unhappy, since their local version of the given branch no longer matches the branch on the remote, which can lead to all sorts of trouble.</li>
+</ol>
+<p>In general, <em>avoid overwriting the history of a branch on a remote</em> (the one exception is to rewrite the history of a branch that is under code review &#x2013; depending on how your code review system works &#x2013; but that is a different discussion).</p>
+<p>If you need to rebase a branch that is shared with others on a remote, a simple workflow is to create a new branch that you rebase, instead of rebasing the original branch. Assuming that you have <code>my-topic-branch</code> checked out, you can do:</p>
+<pre>git checkout -b my-topic-branch-2
+git fetch origin
+git rebase origin/master
+git push -u origin my-topic-branch-2:my-topic-branch-2</pre>
+<p>&#x2026;and then tell people working on <code>my-topic-branch</code> to continue working on <code>my-topic-branch-2</code> instead. The old branch is then effectively obsolete, and should not be merged back to master.</p>
+<h3>Caveat 2: Resolving conflicts in a rebase can be more work than in a merge</h3>
+<p>If you get a conflict in a merge operation, you will resolve all the conflicts as part of that merge commit.</p>
+<p>However, in a rebase operation, you can potentially get a conflict for <em>every commit</em> in the branch that you rebase.</p>
+<p>Actually, many times you will find that if you get a conflict in a commit, you will encounter related (very similar) conflicts in subsequent commits in your branch, simply because commits in a topic branch tend to be related (e.g. modifying the same parts of the code).</p>
+<p>The best way to minimize conflicts is to keep track of what&#x2019;s happening in master, and avoid letting a topic branch run for too long without rebasing. Dealing with small conflicts up front every now and then is easier than to handle them all in one big happy conflict mess at the end.</p>
+<h2>Some warnings for GitHub users</h2>
+<p>GitHub is great at many things. It&#x2019;s fantastic for Git hosting, and it has a wonderful web interface with code browsing, nice Markdown functionality, Gist, etc.</p>
+<p>Pull requests, on the other hand, has a few functions that actively thwarts linear Git history. It would be very welcome if GitHub actually fixed these issues, but until then you should be aware of the shortcomings:</p>
+<h3>&#x201C;Merge pull request&#x201D; allows non-linear merges to master</h3>
+<p>It can be tempting to press the green, friendly looking &#x201C;Merge pull request&#x201D; button to merge a topic branch into master. Especially as it reads &#x201C;This branch is up-to-date with the base branch. Merging can be performed automatically&#x201D;.</p>
+<p><a href="http://www.bitsnbites.eu/wp-content/uploads/2015/12/github-merge-pull-request.png"><img class="alignnone size-full wp-image-227" src="http://www.bitsnbites.eu/wp-content/uploads/2015/12/github-merge-pull-request.png" alt="GitHub merge pull request" width="600"></a></p>
+<p>What GitHub is really saying here, is that the branch can be merged to master <em>without conflicts</em>. It does <em>not</em> check whether or not the pull request branch is based on the latest master.</p>
+<p>In other words, if you want a linear history, you need to make sure that the pull request branch is rebased on top of the latest master yourself. As far as I can tell, no such information is available via the GitHub web interface (unless you&#x2019;re using &#x201C;protected branches&#x201D; &#x2013; see below), so you need to do it from your local Git client.</p>
+<p>Even if the pull request is properly rebased, there is no guarantee that the merge operation in the GitHub web interface will be atomic (i.e. someone may push changes to master before your merge operation goes through &#x2013; and GitHub will not complain).</p>
+<p>So really, the only way to be sure that your branches are properly rebased on top of the latest master is to do the merge operation locally and push the resulting master manually. Something along the lines:</p>
+<pre>git checkout master
+git pull
+git checkout my-pullrequest-branch
+git rebase master
+git checkout master
+git merge --no-ff my-pullrequest-branch
+git push origin master</pre>
+<p>If you&#x2019;re unlucky and someone manages to push changes to master between your pull and push operations, your push operation will be denied. This is a good thing, however, since it guarantees that your operation is atomic. Just&#xA0;<code>git reset --hard origin/master</code> and repeat the above steps until it goes through.</p>
+<p>Note: Respect your project guidelines w.r.t. code reviewing and testing. E.g. if you&#x2019;re running automatic tests (builds, static analysis, unit tests, &#x2026;) as part of a pull request, you should probably re-submit your rebased branch (either using git push -f, or by opening a new PR) rather than just updating the master branch manually.</p>
+<h3>Protected branches functionality encourages merges from master</h3>
+<p>If you are using <a href="https://github.com/blog/2051-protected-branches-and-required-status-checks">protected branches and status checks</a> in your GitHub project, you actually get protection from merging a pull request branch into master unless it is based on the latest master (I think the rationale is that status checks performed on the PR branch should still be valid after merging to master).</p>
+<p>However&#x2026; If the pull request branch is not based on the latest master, you are presented with a friendly button called &#x201C;Update branch&#x201D;, with the text &#x201C;This branch is out-of-date with the base branch. Merge the latest changes from master into this branch&#x201D;.</p>
+<p><a href="http://www.bitsnbites.eu/wp-content/uploads/2015/12/github-update-branch.png"><img class="alignnone size-full wp-image-228" src="http://www.bitsnbites.eu/wp-content/uploads/2015/12/github-update-branch.png" alt="github-update-branch" width="600"></a></p>
+<p>At this point, your best option is to rebase the branch locally and force-push it to the pull request. Assuming that you have <code>my-pullrequest-branch</code> checked out, do:</p>
+<pre>git fetch origin
+git rebase origin/master
+git push -f</pre>
+<p>Unfortunately, GitHub pull requests do not play well with force pushes, so some of the code review information may get lost in the process. If that is not acceptable, consider creating a new pull request (i.e. push your rebased branch to a new remote branch and create a pull request from the new branch).</p>
+<h2>Conclusion</h2>
+<p>If you care about a linear history:</p>
+<ul>
+<li>Rebase your topic branch on top of the latest master before merging it to master.</li>
+<li><em>Don&#x2019;t</em> merge master into your topic branch. Rebase instead.</li>
+<li>When sharing your topic branch with others, create a new branch whenever you need to rebase it (<code>my-topic-branch-2</code>, <code>my-topic-branch-3</code>, &#x2026;).</li>
+<li>If you&#x2019;re using GitHub pull requests, be aware:
+<ul>
+<li>The &#x201C;Merge&#x201D; button does <em>not</em> guarantee that the PR branch is based on the latest master. Rebase manually when necessary.</li>
+<li>If you&#x2019;re using protected branches with status checks, <em>never</em> press the &#x201C;Update branch&#x201D; button. Rebase manually instead.</li>
+</ul>
+</li>
+</ul>
+<p>If you don&#x2019;t care too much about a linear Git history &#x2013; happy merging!</p>
+<h2>Wishlist for GitHub</h2>
+<p>To you fine people working at GitHub: Please add support for rebase workflows in pull requests (these could be opt-in repository options).</p>
+<ul>
+<li>Add the possibility to disable the Merge button/operation in pull requests if the branch is not based on the latest master (this should not require the use of status checks).</li>
+<li>Add a &#x201C;Rebase onto latest master&#x201D; button. In many cases this should be a conflict free operation that can easily be done via the web interface.</li>
+<li>Preserve pull request history (commits, comments, &#x2026;) after a rebase / force push.</li>
+</ul>
+<p>[EDIT: I did a follow-up article about different Git history models: <a href="http://www.bitsnbites.eu/?p=241">Git history: work log vs recipe</a>]</p>
+											</div>
+
+
+					</div>
+</body></html>

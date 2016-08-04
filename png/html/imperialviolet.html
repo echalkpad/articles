@@ -1,0 +1,272 @@
+<!DOCTYPE html><html><head><title>ImperialViolet</title></head><body>
+<h1>ImperialViolet</h1><p><a href="https://www.imperialviolet.org/2015/12/24/rlwe.html" target="_new">Original URL</a></p>
+<p><blockquote>If large quantum computers can be built (and not of the D-Wave variety) then they'll make quite a mess of public-key cryptography. RSA and systems based on discrete logarithms (i.e. finite-field and&hellip;</blockquote></p>
+<div><div class="post">
+ <p>If large quantum computers can be built (<a href="http://www.scottaaronson.com/blog/?p=2555">and not of the D-Wave variety</a>) then they'll make quite a mess of public-key cryptography. RSA and systems based on discrete logarithms (i.e. finite-field and elliptic-curve Diffie-Hellman) are all broken. I've written about <a href="https://www.imperialviolet.org/2013/07/18/hashsig.html">hash-based signatures</a> (which resist quantum attacks) before and the recent <a href="http://pqcrypto.eu.org/docs/initial-recommendations.pdf">PQCRYPTO recommendations</a> suggest those for signatures and McEliece for public-key encryption. Those are both sound, conservative recommendations but both have some size problems: McEliece public keys can be on the order of a megabyte of data and conservative hash-based signatures are about 40KB.</p>
+
+<p>In some situations that's not a problem, and things like firmware signatures, where the key is embedded in hard-to-change silicon, should consider using hash-based signatures today. But those costs motivate the search for post-quantum schemes that are closer to the small, fast primitives that we have today.</p>
+
+<p>One candidate is called Ring Learning-With-Errors (RLWE) and I'll try to give a taste of how it works in this post. This is strongly based on the <a href="https://eprint.iacr.org/2015/1092">A New Hope</a> paper by Alkim, Ducas, P&#xF6;ppelmann &amp; Schwabe, and, in turn, on papers by <a href="http://eprint.iacr.org/2014/599">Bos, Costello, Naehrig &amp; Stebila</a> and <a href="http://web.eecs.umich.edu/~cpeikert/pubs/suite.pdf">Peikert</a>.</p>
+
+<p>Firstly, the basic stats (because I always hate having to dig around for these values in papers). I've included the numbers for a current, elliptic-curve based Diffie-Hellman scheme (X25519) for comparision:</p>
+
+<table>
+	<tr><th></th><th>A New Hope</th><th>X25519</th></tr>
+	<tr><th>Alice's transmission size</th><td>1,824 bytes<sup>a</sup></td><td>32 bytes</td></tr>
+	<tr><th>Alice's computation</th><td>129,638 cycles<sup>b</sup></td><td>331,568 cycles<sup>c</sup></td></tr>
+	<tr><th>Bob's transmission size</th><td>1,824 bytes</td><td>32 bytes</td></tr>
+	<tr><th>Bob's computation</th><td>126,236 cycles</td><td>331,568 cycles</td></tr>
+</table>
+
+<p>(<sup>a</sup> This is using a more compact scheme than in the paper. <sup>b</sup> These are Haswell cycle counts from the paper. <sup>c</sup> These are values from the <a href="http://bench.cr.yp.to/results-dh.html">SUPERCOP</a> benchmark on <kbd>titan0</kbd>.)</p>
+
+<p>Something to keep in mind when looking at the numbers above: sending 1,824 bytes on a 10MBit link takes 5.1 million cycles, assuming that your CPU is running at 3.5GHz.</p>
+
+<h4>RLWE key agreement</h4>
+
+<p>Our fundamental setting is &#x2124;<sub>12289</sub>[X]/(X<sup>1024</sup>+1). That's the set of polynomial equations where the largest power of <i>x</i> is 1023 and the coefficients are values between zero and 12288 (inclusive). For example, 66 + 4532<i>x</i> + 10000<i>x</i><sup>2</sup> + &#x2026; + 872<i>x</i><sup>1023</sup>.</p>
+
+<p>Addition and multiplication can be defined for polynomials in this set. Addition is done by matching up powers of <i>x</i> and adding the corresponding coefficients. If the result is out of range then it's reduced modulo 12289.</p>
+
+<p>Multiplication is high-school polynomial multiplication where the polynomial on the right is multiplied by every term of the polynomial on the left and the result is the sum of those terms. Coefficients are reduced modulo 12289 to keep them in range, but it's likely that the resulting powers of <i>x</i> will be too large&#x2014;multiplying two <i>x</i><sup>1023</sup> terms gives a result in terms of <i>x</i><sup>2046</sup>.</p>
+
+<p>Polynomials with too large a degree can be reduced modulo <i>x</i><sup>1024</sup>+1 until they're in range again. So, if we ended up with a term of <i>a</i>&#xD7;<i>x</i><sup>2046</sup> then we could subtract a&#xD7;<i>x</i><sup>1022</sup>(<i>x</i><sup>1024</sup>+1) to eliminate it. By repeated application of that trick, all the terms with powers of <i>x</i> greater than 1023 can be eliminated and then the result is back in the set.</p>
+
+<p>Now that we can add and multiply within this set of polynomials we need to define a <i>noise</i> polynomial: this is simply a polynomial where each coefficient is sampled from a random distribution. In this case, the distribution will be a centered binomial distribution that ranges from -12 to 12. The probability density looks like this:</p>
+
+<svg width="533.48083" height="450.41718" id="svg2">
+ 
+ <defs id="defs246">
+ <defs id="defs11">
+ <circle id="gpDot"></circle>
+ <path id="gpPt0"></path>
+ <path id="gpPt1"></path>
+ <path id="gpPt2"></path>
+ <rect height="2" width="2" id="gpPt3"></rect>
+ <rect height="2" width="2" id="gpPt4"></rect>
+ <circle id="gpPt5"></circle>
+ <use id="gpPt6" width="100%" height="100%"></use>
+ <path id="gpPt7"></path>
+ <use id="gpPt8" width="100%" height="100%"></use>
+ <use id="gpPt9" width="100%" height="100%"></use>
+ <use id="gpPt10" width="100%" height="100%"></use>
+ <use id="gpPt11" width="100%" height="100%"></use>
+ <use id="gpPt12" width="100%" height="100%"></use>
+ <path id="gpPt13"></path>
+ <use id="gpPt14" width="100%" height="100%"></use>
+ <filter width="1" height="1" id="textbox">
+ <feflood id="feFlood30"></feflood>
+ <fecomposite id="feComposite32"></fecomposite>
+ </filter>
+ <filter width="1" height="1" id="greybox">
+ <feflood id="feFlood35"></feflood>
+ <fecomposite id="feComposite37"></fecomposite>
+ </filter>
+ </defs>
+ </defs>
+ <namedview id="namedview244"></namedview>
+ 
+ <desc id="desc6">Produced by GNUPLOT 5.0 patchlevel 1 </desc>
+ <rect id="rect9" height="480" width="600"></rect>
+ <g id="g39"></g>
+ <g id="g41">
+ <path id="path43"></path>
+ <g id="g45">
+ <text id="text47">
+ <tspan id="tspan49">0</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g141">
+ <path id="path143"></path>
+ <g id="g145">
+ <text id="text147">
+ <tspan id="tspan149">-15</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g151">
+ <path id="path153"></path>
+ <g id="g155">
+ <text id="text157">
+ <tspan id="tspan159">-10</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g161">
+ <path id="path163"></path>
+ <g id="g165">
+ <text id="text167">
+ <tspan id="tspan169">-5</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g171">
+ <path id="path173"></path>
+ <g id="g175">
+ <text id="text177">
+ <tspan id="tspan179">0</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g181">
+ <path id="path183"></path>
+ <g id="g185">
+ <text id="text187">
+ <tspan id="tspan189">5</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g191">
+ <path id="path193"></path>
+ <g id="g195">
+ <text id="text197">
+ <tspan id="tspan199">10</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g201">
+ <path id="path203"></path>
+ <g id="g205">
+ <text id="text207">
+ <tspan id="tspan209">15</tspan>
+ </text>
+ </g>
+ </g>
+ <g id="g211"></g>
+ <g id="g213">
+ <path id="path215"></path>
+ </g>
+ <g id="g217"></g>
+ <g id="g228">
+ <path id="path230"></path>
+ </g>
+ <g id="g232"></g>
+ <g id="g234"></g>
+ <g id="g236"></g>
+ <g id="g238">
+ <path id="path240"></path>
+ </g>
+ <g id="g242"></g>
+</svg>
+
+<p>An important feature of noise polynomials is that the magnitude of each coefficient is small. That will be critical later on.</p>
+
+<p>A <i>random</i> polynomial is one where each coefficient is sampled from a uniform distribution over the full range of zero to 12288.</p>
+
+<p>To build a Diffie-Hellman protocol from this, Alice generates a random polynomial, <b>a</b>, and two noise polynomials, <b>s</b> and <b>e</b>. Alice calculates <b>b</b> = <b>as</b>+<b>e</b> and sends <b>a</b> and <b>b</b> to Bob. Bob generates his own <b>s&#x2032;</b> and <b>e&#x2032;</b>, uses Alice's <b>a</b> to calculate <b>u</b> = <b>as&#x2032;</b>+<b>e&#x2032;</b>, and sends <b>u</b> back to Alice. Now Alice can calculate <b>us</b> = (<b>as&#x2032;</b>+<b>e&#x2032;</b>)<b>s</b> = <b>as&#x2032;s</b>+<b>e&#x2032;s</b> and Bob can calculate <b>bs&#x2032;</b> = (<b>as</b>+<b>e</b>)<b>s&#x2032;</b> = <b>ass&#x2032;</b>+<b>es&#x2032;</b>. But the keen-eyed will notice that those are different values!</p>
+
+<p>The added noise is necessary for security but it means that the two sides to this protocol calculate different values. But, while the values <i>are</i> different, they're very similar because the magnitude of the noise polynomials is small. So a <i>reconciliation</i> mechanism is needed to find a shared value given two, similar polynomials.</p>
+
+<h4>Reconciliation</h4>
+
+<p>So far I've been following the <a href="https://eprint.iacr.org/2015/1092.pdf">A New Hope</a> paper and it does include a reconciliation mechanism. But, to be honest, I'm not sure that I understand it, so I'm going to be describing a mechanism by Peikert here:</p>
+
+<p>The reconciliation will treat each coefficient in the similar polynomials separately and will extract a single, shared bit from each. Since we're dealing with polynomials that have 1024 terms, we'll get a 1024-bit shared secret in total but I'm just going to discuss the process of processing a single coefficient to get a single bit.</p>
+
+<p>Consider the coefficient space as a circle: zero and 12289 are the same value modulo 12289 and we put that at the top of the circle. At the bottom of the circle will be 12289/2 = 6144 (rounding down). We know that, for each coefficient, Alice and Bob will have similar values&#x2014;meaning that the values will be close by on the circle. </p>
+
+<svg id="svg4527" height="89.736359mm" width="70.393684mm">
+ <namedview id="namedview5848"></namedview>
+ <defs id="defs4529"></defs>
+ 
+ <g id="layer1">
+ <circle id="path5075"></circle>
+ <rect height="18.687822" width="0.25253814" id="rect5077"></rect>
+ <rect id="rect5079" width="0.25253814" height="18.687822"></rect>
+ <text id="text5081"><tspan id="tspan5083">0</tspan></text>
+ <text id="text5085"><tspan id="tspan5087">6144</tspan></text>
+ <circle id="path5105"></circle>
+ <circle id="circle5107"></circle>
+ </g>
+</svg>
+
+<p>One option is to split the circle into left and right halves and say that if the point is in the left half then it's a zero, otherwise it's a one.</p>
+
+<svg id="svg4527" height="89.736359mm" width="77.230515mm">
+ <namedview id="namedview5246"></namedview>
+ <defs id="defs4529"></defs>
+ 
+ <circle id="path5075"></circle>
+ <rect id="rect5077" width="0.25253814" height="18.687822"></rect>
+ <rect height="18.687822" width="0.25253814" id="rect5079"></rect>
+ <text id="text5081"><tspan id="tspan5083">0</tspan></text>
+ <text id="text5085"><tspan id="tspan5087">6144</tspan></text>
+ <path id="circle5096"></path>
+ <path id="path5101"></path>
+ <circle id="path5105"></circle>
+ <circle id="circle5107"></circle>
+ <text id="text5788"><tspan id="tspan5790">0</tspan></text>
+ <text id="text5803"><tspan id="tspan5805">1</tspan></text>
+</svg>
+
+
+<p>But while that will work most of the time, there's obviously a problem when the points are near the top or the bottom. In these cases, a small difference in location can result in a point being in a different half, and thus Alice and Bob will get a different result.</p>
+
+<p>In this case we want to split the circle into top (zero) and bottom (one), so that both points are clearly in the bottom half.</p>
+
+<svg id="svg4527" height="89.736359mm" width="83.246445mm">
+ <defs id="defs4529"></defs>
+ 
+ <g id="layer1">
+ <circle id="path5075"></circle>
+ <text id="text5081"><tspan id="tspan5083">0</tspan></text>
+ <text id="text5085"><tspan id="tspan5087">6144</tspan></text>
+ <path id="circle5096"></path>
+ <circle id="path5105"></circle>
+ <circle id="circle5107"></circle>
+ <path id="path5202"></path>
+ <rect id="rect5079" width="0.25253814" height="18.687822"></rect>
+ <rect height="18.687822" width="0.25253814" id="rect5077"></rect>
+ <text id="text5223"><tspan id="tspan5225">0</tspan></text>
+ <text id="text5227"><tspan id="tspan5229">1</tspan></text>
+ </g>
+</svg>
+
+<p>But that just moves the problem around to the left and right edges of the circle. So how about we vary the basis in which we measure the points depending where they are? If the point is near the bottom or the top we'll use the top&#x2013;bottom (blue) basis and, if not, we'll use the left&#x2013;right (red) basis.</p>
+
+<svg id="svg4527" height="89.736359mm" width="76.668381mm">
+ <defs id="defs4529"></defs>
+ 
+ <g id="layer1">
+ <circle id="path5075"></circle>
+ <text id="text5081"><tspan id="tspan5083">0</tspan></text>
+ <text id="text5085"><tspan id="tspan5087">6144</tspan></text>
+ <path id="circle5096"></path>
+ <circle id="path5105"></circle>
+ <circle id="circle5107"></circle>
+ <rect id="rect5079" width="0.25253814" height="18.687822"></rect>
+ <rect height="18.687822" width="0.25253814" id="rect5077"></rect>
+ <path id="path5810"></path>
+ <path id="path5812"></path>
+ <path id="path5814"></path>
+ </g>
+</svg>
+
+<p>But there's still a problem! Consider the two points in the diagram just above. One party will think that it's in a red area, measure it left&#x2013;right and conclude that the shared bit is a zero. The other will think it's in a blue area, measure it top&#x2013;bottom and conclude that the shared bit is a one.</p>
+
+<p>There isn't a solution to this in which the parties operate independently so, instead, one of the parties chooses the basis in which each coefficient will be measured. This information is a single bit of information (i.e. red or blue) that we have Bob send to Alice along with his value <b>u</b>. With this <i>reconciliation information</i> in hand, both parties can measure their points in the same, optimal basis and calculate the same, shared value.</p>
+
+<h4>Optimisations</h4>
+
+<p>There's lots in the paper that I've skipped over here. Most importantly (for performance), a variant of the Fourier transform can be used to convert the polynomials into the frequency domain where multiplication is much faster. Some of the values transmitted can be transmitted in the frequency domain too to save conversions overall. Also, random polynomials can be sampled directly in the frequency domain.</p>
+
+<p>The parameters here have also been carefully selected so that the reduction stage of multiplication happens magically, just by point-wise multiplication of a some constants before and after the transform.</p>
+
+<p>The <b>a</b> value that Alice generates could be a global constant, but in order to save worrying about how it was generated, and to eliminate the possibility of all-for-the-price-of-one attacks (like <a href="https://weakdh.org/">LogJam</a>), it's generated fresh for each instance. Rather than transmit it in full, Alice need only send a seed value for it to Bob.</p>
+
+<h4>Contrasts with Diffie-Hellman</h4>
+
+<p>The most important change from Diffie-Hellman is that this scheme requires that all values be ephemeral. Both QUIC and TLS 1.3 assume that a Diffie-Hellman public-value can be reused but, in this scheme, that breaks the security of the system. More traditional uses of Diffie-Hellman, e.g. TLS 1.2 and SSH, are fine though.</p>
+
+<p>Another important change is that this scheme takes a full round-trip for Alice. With Diffie-Hellman, both parties can transmit a message at time zero and as soon as the other party has received the message, they can calculate the shared key and start transmitting. But even if the <b>a</b> value is a global constant in this scheme, the reconciliation process means that Bob can't send a message until he's received Alice's message, and Alice can't calculate the shared key until she has received Bob's message. So Alice has a wait a full round-trip.</p>
+
+<p>Often that limitation isn't important because other parts of the protocol already require the round-trip (for example, in TLS). But for some uses it's a critical difference.</p>
+
+<p>Also, since this protocol involves random noise it has a failure probability: it's possible that the reconciliation mechanism produces different answers for each side. Thankfully this probability can be made negligible (i.e. less than one in 2<sup>64</sup>).</p>
+
+<p>I should also note that the RLWE problem is hypothesised to be resistant to quantum attack, but we don't know that. We also don't know that it's resistant to attacks by classical computers! It's possible that someone will develop a classical algorithm tomorrow that breaks the scheme above. Thus it should be used concurrently with a standard Diffie-Hellman (e.g. <a href="https://tools.ietf.org/html/draft-irtf-cfrg-curves-11">X25519</a>) and the outputs of each should concatenated as the input keying material for a KDF.</p>
+
+ </div>
+ </div>
+</body></html>

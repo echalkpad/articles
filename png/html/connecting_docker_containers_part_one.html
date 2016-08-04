@@ -1,0 +1,213 @@
+<!DOCTYPE html><html><head><title>Connecting Docker Containers, Part One</title></head><body>
+<h1>Connecting Docker Containers, Part One</h1><p><a href="https://deis.com/blog/2016/connecting-docker-containers-1" target="_new">Original URL</a></p>
+<p><blockquote>Docker containers are self-contained, isolated environments. However, they&#x2019;re often only useful if they can talk to each other. There are many ways to connect containers. And we won&#x2019;t&hellip;</blockquote></p>
+<div><article>
+ <p>Docker containers are self-contained, isolated environments. However, they&#x2019;re often only useful if they can talk to each other. </p>
+
+<p>There are many ways to connect containers. And we won&#x2019;t attempt to cover them all. But in this miniseries, we will look at some common ways.</p>
+
+<p>This topic seems elementary, but grasping these techniques and the underlying design concepts is important for working with Docker.</p>
+
+<p>Understanding this topic will:</p>
+
+<ul>
+<li>Help developers and ops people explore the broad spectrum of container deployment choices</li>
+<li>Let developers and ops people to embark more confidently with a microservice design architecture</li>
+<li>Empower developers and ops people to better orchestrate more complex distributed applications</li>
+</ul>
+
+<p>Fortunately, the large number of connection options for containers enables a broad range of approaches, giving us the flexibility to choose an architecture that suits the needs of any application.</p>
+
+<a name="read-more" class="read-more-anchor"></a>
+
+<h2>Setup</h2>
+
+<p>Before we can demonstrate how containers can be connected, we need to create a pair of them for use in our examples.</p>
+
+<p>The first image will be derived from a simple Ubuntu installation. It will act as a client container.</p>
+
+<p>First, we create the container and attach to it:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker run -itd --name=client_setup ubuntu /bin/bash
+$ sudo docker attach client_setup
+</code></pre></figure>
+<p>Then, once we have a shell inside the container, we run:</p>
+<figure class="highlight"><pre><code class="language-text">$ apt-get install curl
+</code></pre></figure>
+<p>If you do not see the shell, click the up arrow.</p>
+
+<p>Now, detach from the client container using CTRL+p then CTRL+q.</p>
+
+<p>Then, stop it, and commit:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker stop client_setup
+$ sudo docker commit client_setup client_img
+</code></pre></figure>
+<p>We now have an image called <code>client_img</code> to use.</p>
+
+<p>The second container we want to use is, again, derived from an Ubuntu installation. But this time, we&#x2019;ll modify it to run a Apache HTTP server.</p>
+
+<p>First, we create it and attach, like before:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker run -itd --name=server_setup ubuntu /bin/bash
+$ sudo docker attach server_setup
+</code></pre></figure>
+<p>Then, once we have a shell inside the container, we install the Apache HTTP server:</p>
+<figure class="highlight"><pre><code class="language-text">$ apt-get install apache2
+</code></pre></figure>
+<p>When the installation is complete, detach from the container using CTRL+p and CTRL+q.</p>
+
+<p>Now, stop the container, and commit it:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker stop server_setup
+$ sudo docker commit server_setup server_img
+</code></pre></figure>
+<p>We now have two images: <code>client_img</code> and <code>server_img</code>.</p>
+
+<p>Now we have this set up, we can explore the various connection possibilities.</p>
+
+<h2>The Docker Bridge</h2>
+
+<p>By default, a Docker container is isolated from other containers and the external network. Docker provides a bridge, the <code>docker0</code> interface, which is created with the installation of the <a href="https://www.docker.com/products/docker-engine">Docker Engine</a>.</p>
+
+<p>It is through the Docker bridge that communication is possible amongst containers and between containers and the host machine.</p>
+
+<p>You can see the Docker bridge by running this command on a Docker host: </p>
+<figure class="highlight"><pre><code class="language-text">$ ifconfig docker0
+</code></pre></figure>
+<p>You should see something like this in the output:</p>
+<figure class="highlight"><pre><code class="language-text">docker0 Link encap:Ethernet HWaddr 02:42:a2:dc:0f:a8 
+ inet addr:172.17.0.1 Bcast:0.0.0.0 Mask:255.255.0.0
+ inet6 addr: fe80::42:a2ff:fedc:fa8/64 Scope:Link
+ UP BROADCAST RUNNING MULTICAST MTU:1500 Metric:1
+ RX packets:1477 errors:0 dropped:0 overruns:0 frame:0
+ TX packets:2436 errors:0 dropped:0 overruns:0 carrier:0
+ collisions:0 txqueuelen:0 
+ RX bytes:83901 (83.9 KB) TX bytes:3606039 (3.6 MB) 
+</code></pre></figure>
+<p>The bridge interface works locally, on a single Docker host, and is the connection mechanism behind all three approaches we cover in this post. In the next post, we&#x2019;ll move on to the <em>overlay</em> interface, which allows us to network containers across multiple Docker hosts.</p>
+
+<h2>Exposing Ports</h2>
+
+<p>First, let&#x2019;s see how we can run a server container so that it exposes port 80 (HTTP) to other containers.</p>
+
+<p>To do so, I run the container with the <code>expose</code> command, which tells Docker to expose port number specified when it runs the container. An exposed port is one that other containers can reach.</p>
+
+<p>Let&#x2019;s run <code>server_img</code> as a container called <code>server1</code>, exposing port 80: </p>
+
+<pre>
+$ sudo docker run -itd <strong>--expose=80</strong> --name=server1 server_img /bin/bash
+</pre>
+
+<p>We&#x2019;ll name our containers sequentially (<code>server1</code>, <code>server2</code>, and so on) as we go.</p>
+
+<p>Then, attach to the container:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker attach server1
+</code></pre></figure>
+<p>Again, If you do not see the shell, click the up arrow.</p>
+
+<p>Start the Apache HTTP server:</p>
+<figure class="highlight"><pre><code class="language-text">$ /etc/init.d/apache2 start
+</code></pre></figure>
+<p>And get the IP address:</p>
+
+<pre>
+$ ifconfig
+eth0 Link encap:Ethernet HWaddr 02:42:ac:11:00:03 
+ inet addr:<strong>172.17.0.3</strong> Bcast:0.0.0.0 Mask:255.255.0.0
+</pre>
+
+<p>Okay, so we have an IP address of <code>172.17.0.3</code>. Let&#x2019;s test we can see that from a client container.</p>
+
+<p>Open a second terminal.</p>
+
+<p>Start the <code>client1</code> container:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker run -itd --name=client1 client_img /bin/bash
+</code></pre></figure>
+<p>Attach to it:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker attach client1
+</code></pre></figure>
+<p>If you do not see the shell, click the up arrow.</p>
+
+<p>Make a test connection to the <code>server1</code> container&#x2019;s IP address:</p>
+<figure class="highlight"><pre><code class="language-text">$ curl 172.17.0.3 
+</code></pre></figure>
+<p>If everything works, you should see the HTML of the Apache HTTP server&#x2019;s default page. This indicates the the <code>client1</code> container is able to make connections to the <code>server1</code> container&#x2019;s HTTP port.</p>
+
+<h2>Port Binding</h2>
+
+<p>What if we want to expose our HTTP server to the host network, including application on the host machine, and other machines on the host network? In this scenario, we need to <em>bind</em> a host port to a container port. </p>
+
+<p>To expose the Apache HTTP server to the host network, we need to bind port 80 on the server container to port 8080 on the host machine.</p>
+
+<p>We can do this like so:</p>
+
+<pre>
+$ sudo docker run -itd <strong>-p 8080:80</strong> --name=server2 server_img /bin/bash
+</pre>
+
+<p>The <code>-p 8080:80</code> option is the thing to pay attention to here.</p>
+
+<p>Now, attach to the container: </p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker attach server2 
+</code></pre></figure>
+<p>If you do not see the shell, click the up arrow. And start the Apache HTTP server:</p>
+<figure class="highlight"><pre><code class="language-text">$ /etc/init.d/apache2 start
+</code></pre></figure>
+<p>Now, from the host system, visit http://localhost:8080/ and you should see the Apache HTTP server default page.</p>
+
+<p><img src="https://deis.com/images/blog-images/docker-networking-0-0.png" alt=""></p>
+
+<p>Any machine on your host network that can access port 8080 of your host machine will also be able to access this.</p>
+
+<h2>Linking Containers</h2>
+
+<p>Another approach to connecting containers involves something Docker calls <em>linking</em>.</p>
+
+<p>When you link one container to another, Docker will make some information about the linked container available via environment variables.</p>
+
+<p>Let&#x2019;s take a look.</p>
+
+<p>First, start the server container:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker run -itd --name=server3 server_img /bin/bash
+</code></pre></figure>
+<p>Now, start the client container and link it to the server container, like so:</p>
+
+<pre>
+$ sudo docker run -itd <strong>--link server3</strong> --name=client3 client_img /bin/bash
+</pre>
+
+<p>Notice the <code>--link server3</code> option being used here.</p>
+
+<p>Now attach to the client container:</p>
+<figure class="highlight"><pre><code class="language-text">$ sudo docker attach client3
+</code></pre></figure>
+<p>And check out the available environment variables:</p>
+<figure class="highlight"><pre><code class="language-text">$ env | grep SERVER3
+SERVER3_PORT_80_TCP_PROTO=tcp
+SERVER3_PORT=tcp://172.17.0.2:80
+SERVER3_PORT_80_TCP_PORT=80
+SERVER3_NAME=/client3/server3
+SERVER3_PORT_80_TCP=tcp://172.17.0.2:80
+SERVER3_PORT_80_TCP_ADDR=172.17.0.
+</code></pre></figure>
+<p>Docker also updates the <code>/etc/hosts</code> file in the client container to add <code>server3</code> as a local hostname pointing to the server container.</p>
+
+<p>To demonstrate this, run:</p>
+<figure class="highlight"><pre><code class="language-text">$ curl server3
+</code></pre></figure>
+<p>You should see the same default HTML again.</p>
+
+<h2>Wrap-Up</h2>
+
+<p>In part one of this miniseries, we introduced the Docker bridge interface, which lets us connect containers on the same host.</p>
+
+<p>We looked at three connection methods:</p>
+
+<ul>
+<li>Connection through port exposure</li>
+<li>Binding of the host port to the container port</li>
+<li>Linking two containers through the link option</li>
+</ul>
+
+<p>In part two, we&#x2019;ll look at isolating containers inside user-defined networks. We&#x2019;all also introduce the overlay interface, and take a look at how to use it for networking Docker containers across multiple Docker hosts. Even across datacenters and cloud providers!</p>
+
+ </article>
+ </div>
+</body></html>

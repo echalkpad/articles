@@ -1,0 +1,690 @@
+<!DOCTYPE html><html><head><title>Creating a Photo Discovery App with NW.js (part 2)</title></head><body>
+<h1>Creating a Photo Discovery App with NW.js (part 2)</h1><p><a href="https://scotch.io/tutorials/creating-a-photo-discovery-app-with-nw-js-part-2" target="_new">Original URL</a></p>
+<p><blockquote>NW.js (formerly known as Node Webkit) is a framework for creating cross-platform desktop applications using HTML, CSS, and JavaScript. This is part 2 of our tutorial on building a Photo Discovery App&hellip;</blockquote></p>
+<div><div class="page-content-primary">
+
+										
+										
+					<p><strong>NW.js</strong> (formerly known as Node Webkit) is a framework for creating cross-platform desktop applications using HTML, CSS, and JavaScript. This is part 2 of our tutorial on building a Photo Discovery App with NW.js.</p>
+<p>In the <a href="https://scotch.io/tutorials/creating-a-photo-discovery-app-with-nw-js-part-1">previous tutorial</a>, we covered:</p>
+<ul>
+<li>Prerequisites</li>
+<li>Getting your computer setup (like installing Node)</li>
+<li>Getting Started</li>
+<li>Finding photos</li>
+</ul>
+<p>In this tutorial, we&#x2019;re cover some more cool stuff and wrap-up with packaging the application into a native one!</p>
+<h2>Displaying a photo in full-view mode</h2>
+<p>From the photos being displayed in grid mode, we want to allow a user to be able to click on a photo, and have that photo be displayed in full-view mode, where the entire app screen shows the photo (as much as it can whilst respecting the photo&#x2019;s aspect ratio).</p>
+<p>This feature will require a combination of HTML, CSS, and JavaScript. We will begin with the first action in the user journey &#x2013; clicking on an image, and then work through to displaying the photo in full view mode.</p>
+<p>First, we need to modify the &#x201C;window.onload&#x201D; function so that once the photos are in the DOM of the HTML, we can call a function to listen to when a photo div element is clicked on, and trigger another function. Alter the code of the <code>window.onload</code> function to look like this:</p>
+<pre><code class="language-javascript">
+ // Runs when the browser has loaded the page
+ window.onload = function () {
+ bindSelectFolderClick(function (folderPath) {
+ hideSelectFolderButton();
+ findAllFiles(folderPath, function (err, files) {
+ if (!err) {
+ findImageFiles(files, folderPath, function (imageFiles) {
+ imageFiles.forEach(function (file, index) {
+ addImageToPhotosArea(file);
+ if (index === imageFiles.length-1) {
+ bindClickingOnAllPhotos();
+ }
+ });
+ });
+ }
+ });
+ });
+ };
+</code>
+</pre>
+<p>We check for when the last imageFile is added to the DOM, and then call a new function called <code>bindClickingOnAllPhotos</code>. Before the <code>window.onload</code> function is defined, add the following function:</p>
+<pre><code class="language-javascript">
+ function bindClickingOnAllPhotos () {
+ var photos = document.querySelectorAll('.photo');
+ for (var i=0;i&lt;photos.length;i++) {
+ var photo = photos[i];
+ bindClickingOnAPhoto(photo);
+ }
+ }
+</code>
+</pre>
+<p>This function finds all of the photo div elements, loops through them, and then calls another function that will listen for clicking on that individual photo (as you shouldn&#x2019;t define functions within a loop), a function called <code>bindClickingOnAPhoto</code>. Before the <code>bindClickingOnAllPhotos</code> function, add the following function:</p>
+<pre><code class="language-javascript">
+ function bindClickingOnAPhoto (photo) {
+ photo.onclick = function () {
+ console.log(this); // A placeholder until we load full view mode here
+ };
+ }
+</code>
+</pre>
+<p>The <code>bindClickingOnAPhoto</code> function receives the photo div element from the <code>bindClickingOnAllPhotos</code> function, and attaches a function to execute on it (in this a simple console.log statement as a placeholder for now).</p>
+<p>Next, we want to focus on displaying the clicked photo in full view mode. This feature requires a tiny bit of HTML, some CSS, and some JavaScript. Like the photo display feature before, we&#x2019;ll start with the HTML. In the index.html file, add the following snippet of HTML after the div element with the id attribute &#x201C;photos&#x201D;:</p>
+<pre><code class="language-markup">
+&lt;div id="fullViewPhoto"&gt;
+ &lt;img /&gt;
+&lt;/div&gt;
+</code>
+</pre>
+<p>This snippet of HTML will handle displaying the photo in full view mode. Next, we&#x2019;ll add some CSS. In the app.css file, add the following rule for the &#x201C;.photo&#x201D; element:</p>
+<pre><code class="language-css">
+ cursor: pointer;
+</code>
+</pre>
+<p>This will make sure that the cursor will turn to a hand when it appears over a photo in the grid view, indicating to the user that they can click on it. At the bottom of the CSS file, we&#x2019;ll add these rules for the <code>#fullPhotoView</code> element:</p>
+<pre><code class="language-javascript">
+ #fullViewPhoto {
+ text-align: center;
+ position: fixed;
+ top: 0px;
+ left: 0px;
+ width: 100%;
+ height: 100%;
+ background-color: #222;
+ z-index: 2;
+ display: none;
+ }
+</code>
+</pre>
+<p>Finally, we&#x2019;ll reuse the CSS rules for the <code>.photo img</code> element, and append the <code>#fullViewPhoto img</code> element to it, like so:</p>
+<pre><code class="language-css">
+ .photo img, #fullViewPhoto img {
+ max-width: 100%;
+ max-height: 100%;
+ }
+</code>
+</pre>
+<p>This ensures that the photo scales up inside of the full photo view, whilst also respecting the photo&#x2019;s aspect ratio and avoiding distortion. Finally, we add some JavaScript to handle displaying the photo in full view mode. In the app.js file, add the following function above the <code>bindClickingOnAPhoto</code> function:</p>
+<pre><code class="language-javascript">
+ function displayPhotoInFullView (photo) {
+ var filePath = photo.querySelector('img').src;
+ var fileName = photo.querySelector('img').attributes[1].value;
+ document.querySelector('#fullViewPhoto &gt; img').src = filePath;
+ document.querySelector('#fullViewPhoto &gt; img').setAttribute('data-name', fileName);
+ document.querySelector('#fullViewPhoto').style.display = 'block';
+ }
+</code>
+</pre>
+<p>This function will receive the photo element that is clicked on, extract the image tag&#x2019;s src and data-name attributes, insert them into the image tag that is inside of the <code>#fullViewPhoto</code> div element, and then alter the styling of that element to make it visible.</p>
+<p>We then need to modify the <code>bindClickingOnAPhoto</code> function so that it passes the photo to the new function, like this:</p>
+<pre><code class="language-javascript">
+ function bindClickingOnAPhoto (photo) {
+ photo.onclick = function () {
+ displayPhotoInFullView(photo);
+ };
+ }
+</code>
+</pre>
+<p>With these changes saved and the app reloaded, we can now try to click on a photo displayed in the grid view, and see the photo be displayed in full view mode, just like in the screenshot below:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/step-10-full-view-photo.png" alt="Step 10 Full View Photo"></p>
+<p>Nice, now we need to think about how users are going to get back to the grid view from there. We need to implement a toolbar containing a button to click on that will take the user back. In the index.html file, add the following snippet of HTML inside of the <code>fullViewPhoto</code> element, after the image tag:</p>
+<pre><code class="language-markup">
+&lt;div id="toolbar"&gt;
+ &lt;div id="back" onclick="backToGridView();"&gt;Back&lt;/div&gt;
+&lt;/div&gt;
+</code>
+</pre>
+<p>This bit of HTML contains the toolbar, a button with the text &#x201C;Back&#x201D;, and when it is clicked it will call a JavaScript function called &#x201C;backToGridView&#x201D;, that will do what the name suggests. Next, we will add some CSS for the layout, styling, and user interactivity. At the bottom of the app.css file, add the following CSS:</p>
+<pre><code class="language-css">
+ #toolbar {
+ width: 96%;
+ z-index: 2;
+ position: absolute;
+ top: 0;
+ padding: 2%;
+ background: rgba(0,0,0,0.7);
+ color: white;
+ opacity: 0;
+ }
+
+ #toolbar:hover {
+ opacity: 1;
+ }
+
+ #back {
+ text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+ background: rgba(255,255,255,0.2);
+ border: solid 2px white;
+ border-radius: 2em;
+ padding: 5px 15px;
+ margin: 5px;
+ float: right;
+ }
+
+ #back:hover {
+ background: rgba(255,255,255,0.3);
+ box-shadow: 0px 0px 20px rgba(255,255,255,0.6);
+ cursor: pointer;
+ }
+</code>
+</pre>
+<p>For the last step, we will insert the <code>backToGridView</code> function into the app.js file, before the <code>bindClickingOnAPhoto</code> function:</p>
+<pre><code class="language-javascript">
+ function backToGridView () {
+ document.querySelector('#fullViewPhoto').style.display = 'none';
+ }
+</code>
+</pre>
+<p>This bit of JavaScript simply changes the display attribute of the <code>#fullViewPhoto</code> div element, giving the visual impression of it being taken out of site, and revealing the grid view that has always been there, just not in direct view.</p>
+<p>With these changes saved and the app reloaded, when we click on a photo and hover our cursor towards the top of the screen, we can see the toolbar appear, as shown in the screenshot below:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/step-11-toolbar.png" alt="Step 11 Toolbar"></p>
+<p>We&#x2019;ll also notice that when you click on the back button, you are take back to the grid view, allowing users to navigate around. At this stage we&#x2019;ve got the exploration and navigation parts of the app covered, but the next thing that we want to achieve is being able to apply Instagram-like filters to the photos, and saving those altered photos back to the computer.</p>
+<h2>Applying visual filters to the photos</h2>
+<p>Now for the fun bit &#x2013; making some Instagram-esque filters to apply to the photos. For this we&#x2019;re going to make use of a really good library called Caman. It&#x2019;s a browser-based library that allows you to alter different visual aspects of an image (brightness, hue, saturation, contrast, sepia tint, and others). It can enable all kinds of filter effects to be applied to photos, and helps us to not try and re-invent the wheel on such a requirement.</p>
+<p>We should grab a copy of the library first. Although it suggests either installing it via npm or bower, I&#x2019;m going to suggest an alternative approach, and grab a copy of the minified file for distribution. I&#x2019;ll explain a bit later. First, make a new folder inside of the &#x201C;lens&#x201D; folder called &#x201C;scripts&#x201D;, and then download a copy of the minified javascript file listed below to inside that folder:</p>
+<pre><code class="language-javascript">
+https://raw.githubusercontent.com/meltingice/CamanJS/master/dist/caman.full.min.js
+</code>
+</pre>
+<p>The reason why I suggested this is for 2 reasons. The first is that installing it via npm requires some other system libraries to be installed beforehand, and that&#x2019;s a bit of overkill in this case (as we&#x2019;re going to be rendering the photo filter effects in the browser rather than the server side). The second reason is that if we had installed it via bower, then there&#x2019;s a chance that we could run into an issue getting the app to work on Windows. For some weird reason, Windows does not like file paths that are longer than 255 characters, and given the way that dependencies are nested in npm (as bower is an npm module), then we would possibly run into this issue, along with the fact that any files present in the node_modules folder would be loaded by NW.js, and for some large dependencies that can have a noticeable impact on performance.</p>
+<p>Now that we&#x2019;ve created the script folder and downloaded the CamanJS file to it, let&#x2019;s start playing with the library so we can get a feel for it. In the index.html file, let&#x2019;s include the file in the head section, above the app.js script tag:</p>
+<pre><code class="language-markup">
+&lt;script src="scripts/caman.full.js"&gt;&lt;/script&gt;
+</code>
+</pre>
+<p>Next, we turn our attention to the toolbar, the location for where the filter buttons will be. For now, we&#x2019;re just going to create a text button and implement a simple filter, so that we can verify that it all works as we would like. In the index.html file, alter the HTML inside of the &#x201C;#fullViewPhoto&#x201D; div element, so that it looks like this:</p>
+<pre><code class="language-markup">
+&lt;div id="fullViewPhoto"&gt;
+ &lt;img id="image"/&gt;
+ &lt;div id="toolbar"&gt;
+ &lt;div id="applyFilter" class="button" onclick="applyFilter();"&gt;Apply filter&lt;/div&gt;
+ &lt;div id="back" class="button" onclick="backToGridView();"&gt;Back&lt;/div&gt;
+ &lt;/div&gt;
+&lt;/div&gt;
+</code>
+</pre>
+<p>We&#x2019;ve made a couple of changes. Firstly, we&#x2019;ve added an id attribute to the image tag, so that CamanJS will be able to easily attach to it and apply the photo effects there. Secondly, we&#x2019;ve modified the <code>#back</code> div element that was the back button, so that it now has a CSS class of &#x201C;button&#x201D;, and finally, we&#x2019;ve added a new div element for the &#x201C;Apply filter&#x201D; button, using the CSS class of &#x201C;button&#x201D; as well.</p>
+<p>In the app.css file, we&#x2019;re going to make some alterations there to accommodate for the new button in the toolbar, and also to handle the way that CamanJS manipulates images using the HTML5 Canvas API. The first change to make is to append another CSS matching rule onto an existing rule for the canvas tag inside of the <code>#fullViewPhoto</code> div element, like so:</p>
+<pre><code class="language-css">
+.photo img, #fullViewPhoto img, #fullViewPhoto canvas {
+ max-width: 100%;
+ max-height: 100%;
+}
+</code>
+</pre>
+<p>When CamanJS manipulates an image, it does it using the HTML5 Canvas API, and converts the <code>img</code> element into a <code>canvas</code> element, so we need to apply the same CSS layout rules for it.</p>
+<p>Next, with the introduction of the .button class we need to copy most of the properties of the &#x201C;#back&#x201D; CSS rule over to a new rule for the &#x201C;.button&#x201D; class. Add the following CSS:</p>
+<pre><code class="language-css">
+ .button {
+ text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+ background: rgba(255,255,255,0.2);
+ border: solid 2px white;
+ border-radius: 2em;
+ padding: 5px 15px;
+ margin: 5px;
+ cursor: pointer;
+ }
+</code>
+</pre>
+<p>We can then shrink the CSS for the <code>#back</code> rule down to just this:</p>
+<pre><code class="language-css">
+ #back {
+ float: right;
+ }
+</code>
+</pre>
+<p>Above that CSS rule, we&#x2019;d also like to add another rule for the <code>#applyFilter</code> div element:</p>
+<pre><code class="language-css">
+ #applyFilter {
+ float: left;
+ }
+</code>
+</pre>
+<p>Then, we remove the <code>cursor:pointer</code> property from the <code>#back:hover</code> CSS rule, as it is now handled by the button class, and is therefore redundant. Now for the JavaScript. We will need to add a new function called <code>applyFilter</code>, and modify the <code>backToGridView</code> function so that it will reset the modified DOM of the <code>#fullViewPhoto</code> div element back to how it was before any filters were applied.</p>
+<p>Before the <code>backToGridView</code> function in the app.js file, add the following function:</p>
+<pre><code class="language-javascript">
+ function applyFilter () {
+ Caman('#image', function () {
+ this.brightness(10);
+ this.sepia(20);
+ this.saturation(30);
+ this.render();
+ }); 
+ }
+</code>
+</pre>
+<p>This function (which is called when the apply filter button is clicked) will call CamanJS on the <code>img</code> element with the id attribute &#x201C;image&#x201D;, apply some image aspect changes, and render the final result to the DOM. Next, we need to alter the <code>backToGridView</code> function to this:</p>
+<pre><code class="language-javascript">
+ function backToGridView () {
+ var canvas = document.querySelector('canvas');
+ var image = document.createElement('img');
+ image.setAttribute('id','image');
+ canvas.parentNode.removeChild(canvas);
+ var fullViewPhoto = document.querySelector('#fullViewPhoto');
+ fullViewPhoto.insertBefore(image, fullViewPhoto.firstChild);
+ document.querySelector('#fullViewPhoto').style.display = 'none';
+ }
+</code>
+</pre>
+<p>The <code>backToGridView</code> function resets any changes made to the DOM when applying filters to the photo. If you save the changes to the JS file and reload the application, select a folder of photos, click on one, and then click on the &#x201C;apply filter&#x201D; button in the top left, then you should see something like this:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/step-12-apply-filter.png" alt="Step 12 Apply Filter"></p>
+<p>This is where the value of the app comes through &#x2013; being able to browse photos, apply filters to them, and then save those modified photos. Before we get onto saving the photos, we want to be able to apply other filter styles.</p>
+<h3>Creating the filters</h3>
+<p>For the app, we&#x2019;re going to allow the user to apply a small number of filters to their photos. These filters will be displayed in the toolbar as images that represent a preview of what the filter&#x2019;s effect is on the original photo. When a user clicks on an image of a filter effect, it is applied to the photo.</p>
+<p>We&#x2019;re going to need to create a folder called &#x201C;images&#x201D; inside of the Lens folder, and then inside of the new images folder, we need to save some PNG images inside of it for the filter effect buttons. Download the images listed below:</p>
+<pre><code class="language-javascript">
+https://raw.githubusercontent.com/paulbjensen/lens-photo-app/master/images/original.png
+https://raw.githubusercontent.com/paulbjensen/lens-photo-app/master/images/grayscale.png
+https://raw.githubusercontent.com/paulbjensen/lens-photo-app/master/images/sepia.png
+https://raw.githubusercontent.com/paulbjensen/lens-photo-app/master/images/sunburst.png
+https://raw.githubusercontent.com/paulbjensen/lens-photo-app/master/images/port.png
+</code>
+</pre>
+<p>Once those files are saved in the images folder, we can move onto modifying the HTML to incorporate the new buttons. Inside the <code>#toolbar</code> div element, we&#x2019;ll remove the <code>#applyFilter</code> div element, and replace it with the following HTML:</p>
+<pre><code class="language-markup">
+&lt;div id="filterLabel"&gt;Filters&lt;/div&gt;
+&lt;div class="filter" onclick="applyFilter('original');" title="original"&gt;
+ &lt;img src="images/original.png" alt="original" /&gt;
+&lt;/div&gt;
+&lt;div class="filter" onclick="applyFilter('grayscale');" title="grayscale"&gt;
+ &lt;img src="images/grayscale.png" alt="grayscale"/&gt;
+&lt;/div&gt;
+&lt;div class="filter" onclick="applyFilter('sepia');" title="sepia"&gt;
+ &lt;img src="images/sepia.png" alt="sepia"/&gt;
+&lt;/div&gt;
+&lt;div class="filter" onclick="applyFilter('sunburst');" title="sunburst"&gt;
+ &lt;img src="images/sunburst.png" alt="sunburst"/&gt;
+&lt;/div&gt;
+&lt;div class="filter" onclick="applyFilter('port');" title="port"&gt;
+ &lt;img src="images/port.png" alt="port"/&gt;
+&lt;/div&gt;
+</code>
+</pre>
+<p>The toolbar contains a set of div element with images inside representing the various photo filters, and when each div element is clicked on, it will call the <code>applyFilter</code> function, along with the name of the filter effect that we want to apply. Next, we&#x2019;ll make some layout and styling changes in the CSS file. First, remove the now redundant CSS rule for the <code>#applyFilter</code> div element, and insert the following CSS in its place:</p>
+<pre><code class="language-css">
+ #filterLabel {
+ padding: 0.5em;
+ float: left;
+ }
+
+ .filter img {
+ float: left;
+ width: 45px;
+ height: 30px;
+ cursor: pointer;
+ border: solid 1px white;
+ margin: 0em 0.25em;
+ }
+</code>
+</pre>
+<p>The CSS rules above help to position the filter label and the filter effect images in the position that we want. Finally, we change the &#x201C;#back:hover&#x201D; CSS rule to this instead:</p>
+<pre><code class="language-css">
+ .button:hover, .filter img:hover {
+</code>
+</pre>
+<p>This way, we can give a visual cue of interactivity to the filter effect buttons as well as any other buttons. Now for the JavaScript that handles applying the filter effects. Above the &#x201C;applyFilter&#x201D; function, insert the following JavaScript in the app.js file:</p>
+<pre><code class="language-javascript">
+ var filters = {
+ original: function () {},
+
+ grayscale: function (item) {
+ item.saturation(-100);
+ item.render();
+ },
+ sepia: function (item) {
+ item.saturation(-100);
+ item.vibrance(100);
+ item.sepia(100);
+ item.render();
+ }, 
+ sunburst: function (item) {
+ item.brightness(21);
+ item.vibrance(22);
+ item.contrast(11);
+ item.saturation(-18);
+ item.exposure(18);
+ item.sepia(17);
+ item.render();
+ },
+ port: function (item) {
+ item.vibrance(49);
+ item.hue(6);
+ item.gamma(0.6);
+ item.stackBlur(2);
+ item.contrast(11);
+ item.saturation(19);
+ item.exposure(2);
+ item.noise(2);
+ item.render();
+ }
+ };
+</code>
+</pre>
+<p>We have a filters Object, containing a list of named functions that execute the filter effects. They are passed the CamanJS instance, and run a number of image manipulation commands on them. We then use these in the <code>applyFilter</code> function, which is modified to call them like so:</p>
+<pre><code class="language-javascript">
+ function applyFilter (filterName) {
+ Caman('#image', function () {
+ this.reset();
+ filters[filterName](this);
+ });
+ }
+</code>
+</pre>
+<p>The CamanJS instance will reset any previously-applied effects for a start, and then name of the filter passed by the div element in the html corresponds with the name of the filter in the filters object.</p>
+<p>With those changes saved and and the app reloaded, we should now be able to try out different filter effects on our photos, like in the screenshot below:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/step-13-multiple-photo-filters.png" alt="Step 13 Multiple Photo Filters"></p>
+<p>This is where we get oh so close to the final product, but for one more feature &#x2013; being able to save the modified photo back to the computer.</p>
+<h2>Saving the altered photo</h2>
+<p>The final feature to add to the app before the final touches is to enable the user to save the altered photo onto their computer. Although CamanJS does have a API method for saving the file to your computer, unfortunately it does not work in combination with NW.js, so we&#x2019;re going to have to do a bit more work to implement this feature.</p>
+<p>What we&#x2019;re going to do to implement this feature instead is the following:</p>
+<ol>
+<li>Use an input tag with the attribute &#x201C;nwsaveas&#x201D; to bring up a save file dialog, and populate that dialog with the name of the file.</li>
+<li>Use the HTML5 Canvas API to extract the photo&#x2019;s data, and prepare for being saved to a file.</li>
+<li>Use Node.js&#x2019; FileSystem API to receive the file name and file path chosen by the user, and save the data of the photo to there.</li>
+</ol>
+<p>We will start by adding the HTML needed to trigger the file save dialog as well as the HTML for the &#x201C;Save as&#x201D; button in the toolbar. In the index.html file, add the following line of HTML before the input tag with the id attribute of &#x201C;folderSelector&#x201D;:</p>
+<pre><code class="language-markup">
+ &lt;input type="file" nwsaveas id="photoSaver"/&gt;
+</code>
+</pre>
+<p>NW.js provides some custom HTML input tag attributes for opening files/folders, as well as saving files. As we need to save a file, we&#x2019;ll use the &#x201C;nwsaveas&#x201D; attribute. Next, for the &#x201C;Save as&#x201D; button, add the following line of HTML after the div element with the id attribute &#x201C;back&#x201D;:</p>
+<pre><code class="language-markup">
+ &lt;div id="save" class="button" onclick="saveToDisk();"&gt;Save as&lt;/div&gt;
+</code>
+</pre>
+<p>The &#x201C;Save as&#x201D; button will call a JavaScript function called <code>saveToDisk()</code>, which we will implement later on. Next, we need to make sure that these new HTML elements are styled properly. The input tag needs to be hidden (as users won&#x2019;t click on it directly), and the &#x201C;Save as&#x201D; button needs to be displayed to the left of the back button. For the <code>#photoSaver</code> input tag, add the <code>#photoSaver</code> rule to the existing rule for the <code>#folderSelector</code> element, like this:</p>
+<pre><code class="language-css">
+ #folderSelector, #photoSaver {
+ display: none;
+ }
+</code>
+</pre>
+<p>This ensures that the <code>#photoSaver</code> element is hidden from the user interface. For the <code>#save</code> div element, we will do the same thing and append its rule to the existing rule for the &#x201C;#back&#x201D; element:</p>
+<pre><code class="language-css">
+ #back, #save {
+ float: right;
+ }
+</code>
+</pre>
+<p>Even though the <code>#save</code> element comes after the <code>#back</code> element in the HTML, because both are floating to the right, the &#x201C;Save as&#x201D; button will be displayed to the left of the &#x201C;Back&#x201D; button. Now, we need to implement the <code>saveToDisk</code> function in the app.js file.</p>
+<p>The way that the JavaScript will work is this:</p>
+<ul>
+<li>We add an event listener on when the input tag with the id attribute &#x201C;photoSaver&#x201D; changes its value (when the user choose a file name and location for the photo to save from the save as dialog). This will need to be called once when the app is initialised, and the function inside will handle saving the photo data with the file name to the computer.</li>
+<li>We add an empty variable called &#x201C;photoData&#x201D; that will allow us to dynamically set the photo data that needs to be saved to the computer.</li>
+<li>We add a function called &#x201C;saveToDisk&#x201D; that will get the photo data that is currently loaded, and set the photoData variable to store that data. It will then trigger the save as dialog box by finding the input dialog, and programmatically triggering a click event on it.</li>
+</ul>
+<p>After the dependencies at the top of the app.js file, add the following line of JS:</p>
+<pre><code class="language-javascript">
+ var photoData = null;
+</code>
+</pre>
+<p>This variable will help to store the raw base64 data of the photo for saving to the computer. Next, we want to add a function for binding on the <code>#photoSaver</code> input tag being clicked. Add the following JS after the <code>applyFilter</code> function:</p>
+<pre><code class="language-javascript">
+ function bindSavingToDisk () {
+ var photoSaver = document.querySelector('#photoSaver');
+ photoSaver.addEventListener('change', function () {
+ var filePath = this.value;
+ fs.writeFile(filePath, photoData, 'base64', function (err) {
+ if (err) { alert('There was an error saving the photo:',err.message); }
+ photoData = null;
+ });
+ });
+ }
+</code>
+</pre>
+<p>This binding function listens on when the &#x201C;save as&#x201D; dialog receives a file name and path to save the photo to (filePath). Using Node.js&#x2019; File System API, it accesses the photo data, and writes the photo&#x2019;s data to the file with the given name and path. It then does a bit of memory cleanup afterwards.</p>
+<p>We then need to modify the <code>window.onload</code> function so that this function is bound on startup. Add the following line after the <code>bindClickingOnAllPhotos();</code> line inside of the <code>window.onload</code> function:</p>
+<pre><code class="language-javascript">
+ bindSavingToDisk();
+</code>
+</pre>
+<p>Now, after the <code>bindSavingToDisk</code> function back higher up in the code, add the following function:</p>
+<pre><code class="language-javascript">
+ function saveToDisk () {
+ var photoSaver = document.querySelector('#photoSaver');
+ var canvas = document.querySelector('canvas');
+ photoSaver.setAttribute('nwsaveas','Copy of ' + canvas.attributes['data-name'].value);
+ photoData = canvas.toDataURL('image/png').replace(/^data:image\/(png|jpg|jpeg);base64,/, '');
+ photoSaver.click();
+ }
+</code>
+</pre>
+<p>This function does 2 things; first, it sets the name of the <code>nwsaveas</code> attribute to a &#x201C;Copy of&#x201D; plus the photo&#x2019;s name, so that the user has a pre-filled name suggestion for the name of the file in the save as dialog. It then sets the photoData to store the base64-encoded data for the photo, so that the bound function can access it. Finally, it triggers the &#x201C;save as&#x201D; dialog programmatically by calling &#x201C;click&#x201D; on the <code>#photoSaver</code> input tag.</p>
+<p>After all that, give it a spin. You&#x2019;ll see now when you go to a photo, apply a filter, and click &#x201C;Save as&#x201D; in the toolbar, you&#x2019;ll be presented with a &#x201C;save as&#x201D; dialog and the name of the file to save to your computer, like in the screenshot below:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/step-14-saving-file-to-disk.png" alt="Step 14 Saving File to Disk"></p>
+<p>Now that we&#x2019;ve got here, there&#x2019;s a bit of tidying up to do before we package the app for distribution:</p>
+<h2>Tidying up</h2>
+<h3>Fixing a bug</h3>
+<p>Before we put the bow and ribbon on the app, we need to do a few things to get it polished. Firstly, I noticed in playing around with the app that a little bug had crept in where if I clicked on a photo, made no filter changes, and clicked &#x201C;back&#x201D;, then it wouldn&#x2019;t work. The issue lies with how we assume that there will always be a filter applied in the <code>backToGridView</code> function inside of the app.js file. Alter the function to look like this:</p>
+<pre><code class="language-javascript">
+ function backToGridView () {
+ var canvas = document.querySelector('canvas');
+ if (canvas) {
+ var image = document.createElement('img');
+ image.setAttribute('id','image');
+ canvas.parentNode.removeChild(canvas);
+ var fullViewPhoto = document.querySelector('#fullViewPhoto');
+ fullViewPhoto.insertBefore(image, fullViewPhoto.firstChild); 
+ }
+ document.querySelector('#fullViewPhoto').style.display = 'none';
+ }
+</code>
+</pre>
+<p>We wrap the code that would cleanup after applying any CamanJS filter effects inside of an if function. If a filter effect has been applied, then there will be a canvas tag to clean up, otherwise, we can simply continue on.</p>
+<h3>Improving the app&#x2019;s visual performance</h3>
+<p>You might notice that when you load the a folder with many photos, the images can take a long time to load. That is because all of the photos are being loaded at the same time, and if you have a large number of photos to load, then this problem becomes noticeable.</p>
+<p>One of the options for tackling this is to use lazy loading for the images. The idea is that those images which are in the visible area of the application will be loaded, and the rest won&#x2019;t be until they appear in the visual area. This means that even if we have a folder containing thousands of photos, it will initially load the 12 photos that are visible in the area, and then start to show the rest as they become visible.</p>
+<p>For this, we&#x2019;re going to use a JavaScript library called &#x201C;Echo&#x201D; by Todd Motto. This library handles image lazy loading for us, and all we need to do is to integrate it into the right places in our app&#x2019;s code.</p>
+<p>First, get a copy of Echo&#x2019;s minified javascript <a href="https://github.com/toddmotto/echo/raw/master/dist/echo.min.js">echo.min.js</a> from <a href="https://github.com/toddmotto/echo">the github repository</a>, and put the file in the scripts folder. Next, we want to include the script in our index.html file, by placing the following script tag in our head section (before the app.js script include):</p>
+<pre><code class="language-markup">
+ &lt;script src="scripts/echo.min.js"&gt;&lt;/script&gt;
+</code>
+</pre>
+<p>With the library included, we can now modify the app.js file in 2 places to make use of this library. Echo works by inspecting image tags that have a &#x2018;data-echo&#x2019; attribute in them, and loads the value of that attribute in place of the image tag&#x2019;s src attribute. In the addImageToPhotosArea of the app.js file, change the function so that it looks like this:</p>
+<pre><code class="language-javascript">
+ function addImageToPhotosArea (file) {
+ var photosArea = document.getElementById('photos');
+ var template = document.querySelector('#photo-template');
+ template.content.querySelector('img').src = 'images/blank.png';
+ template.content.querySelector('img').setAttribute('data-echo', file.path);
+ template.content.querySelector('img').setAttribute('data-name',file.name);
+ var clone = window.document.importNode(template.content, true);
+ photosArea.appendChild(clone);
+ }
+</code>
+</pre>
+<p>We&#x2019;ve changed the function so that instead of setting the image&#x2019;s src attribute to the file path for the photo, we set the &#x2018;data-echo&#x2019; attribute instead, and make the src attribute load a blank png image. Echo will identify the data-echo attributes in the image tags, and load the images when they appear in the visible viewport of the application.</p>
+<p>In order to make Echo identify these image tags and lazy-load them, it will need to be initialised. In the app.js file&#x2019;s window.onload function, we add a call to Echo&#x2019;s init function, and it&#x2019;s render function, like so:</p>
+<pre><code class="language-javascript">
+ window.onload = function () {
+
+ echo.init({
+ offset: 0,
+ throttle: 0,
+ unload: false
+ });
+
+ bindSelectFolderClick(function (folderPath) {
+ hideSelectFolderButton();
+ findAllFiles(folderPath, function (err, files) {
+ if (!err) {
+ findImageFiles(files, folderPath, function (imageFiles) {
+ imageFiles.forEach(function (file, index) {
+ addImageToPhotosArea(file);
+ if (index === imageFiles.length-1) {
+ echo.render();
+ bindClickingOnAllPhotos();
+ bindSavingToDisk();
+ }
+ });
+ });
+ }
+ });
+ });
+ };
+</code>
+</pre>
+<p>The Echo library is initialised when the DOM is loaded, and once all of the photo image have been added into the DOM, we call Echo&#x2019;s render function to automatically trigger the lazy-loading of images that are already in the visible area of the application. We also add a 1&#xD7;1 PNG to the images folder, called blank, which is there to be loaded by the image initially.</p>
+<p>With the changes saved, reload the application, and you should now notice that the images load quicker in the visible area, and that the app is that bit snappier for it.</p>
+<h3>Viewing other photo folders</h3>
+<p>When you play with the application enough, you begin to realise that there is one remaining flaw in the user experience &#x2013; you can&#x2019;t browse another folder without closing the application down and reopening it. Luckily we can resolve this pretty easily, and do it by using one of NW.js UI APIs &#x2013; the application window menu. What we want to do is implement a single application window menu item that will allow the user to load another folder containing photos. This will repurpose some of the code we created for loading the app when a folder is selected, and will use some more code to take care of the new functionality.</p>
+<p>The first thing that we will need to do is to make sure that NW.js&#x2019; GUI module is loaded into the app. In the dependencies section of the app.js file, add the following line of code:</p>
+<pre><code class="language-javascript">
+ var gui = require('nw.gui');
+</code>
+</pre>
+<p>This loads NW.js&#x2019; GUI module, so that we can load the Menu API. Next, we want to write some code that will be able to handle the way that NW.js handle Menus for application windows. Menus in NW.js have different API methods for Windows/Linux and Mac OS X &#x2013; this is because application window menus in Mac OS X are displayed at the top of the screen, and not nested under each application window, unlike Windows and Linux applications.</p>
+<p>For this, we&#x2019;re going to write a function called &#x201C;loadMenu&#x201D;, which will take care of handling which menu type to load, based on the user&#x2019;s Operating System. We will call this function when the user first loads a folder. In the window.onload function at the end of the app.js file, adjust it to this:</p>
+<pre><code class="language-javascript">
+ window.onload = function () {
+
+ echo.init({
+ offset: 0,
+ throttle: 0,
+ unload: false
+ });
+
+ bindSelectFolderClick(function (folderPath) {
+ loadMenu();
+ hideSelectFolderButton();
+ findAllFiles(folderPath, function (err, files) {
+ if (!err) {
+ findImageFiles(files, folderPath, function (imageFiles) {
+ imageFiles.forEach(function (file, index) {
+ addImageToPhotosArea(file);
+ if (index === imageFiles.length-1) {
+ echo.render();
+ bindClickingOnAllPhotos();
+ bindSavingToDisk();
+ }
+ });
+ });
+ }
+ });
+ });
+ };
+</code>
+</pre>
+<p>We&#x2019;ve added a new function called &#x201C;loadMenu&#x201D;, and now we need to flesh it out. Above the window.onload function, add a new function called &#x201C;loadMenu&#x201D;, with the following code:</p>
+<pre><code class="language-javascript">
+ function loadMenu () {
+ var menuBar = new gui.Menu({type:'menubar'});
+ var menuItems = new gui.Menu();
+
+ menuItems.append(new gui.MenuItem({ label: 'Load another folder', click: loadAnotherFolder }));
+
+ var fileMenu = new gui.MenuItem({
+ label: 'File',
+ submenu: menuItems
+ });
+
+ if (process.platform === 'darwin') {
+
+ // Load Mac OS X application menu
+ menuBar.createMacBuiltin('Lens');
+ menuBar.insert(fileMenu, 1);
+
+ } else {
+
+ // Load Windows/Linux application menu
+ menuBar.append(fileMenu, 1);
+
+ }
+
+ gui.Window.get().menu = menuBar;
+
+ }
+</code>
+</pre>
+<p>This code does a number of things; firstly, it instantiates some objects that are needed for constructing an application window menu, such as the menubar, the menu containing the action items (in this case just one action item for loading another folder), and the File Menu for the menu bar, to contain the 1 action item.</p>
+<p>We then use Node.js&#x2019; process.platform API to determine what Operating System the user is running. In this case, we want to identify if the user is running Mac OS X or not. If they are, then we call NW.js&#x2019; API for loading Mac OS X&#x2019;s own menu and insert the File menu into it, and if they&#x2019;re running something else, then we call NW.js&#x2019; API and append the File menu to the menu bar. After this, we attach the menu bar to the application window.</p>
+<p>You&#x2019;ll also notice in the code that one of the menu items (Load another folder) will call a function called &#x201C;loadAnotherFolder&#x201D; when it is clicked on. We haven&#x2019;t yet fleshed out this function, so we will need to do that next. Above the <code>loadMenu</code> function that we added, we will create a function called <code>loadAnotherFolder</code>, and put the following code inside of it:</p>
+<pre><code class="language-javascript">
+ function loadAnotherFolder () {
+ openFolderDialog(function (folderPath) { 
+ findAllFiles(folderPath, function (err, files) {
+ if (!err) {
+ clearArea();
+ echo.init({
+ offset: 0,
+ throttle: 0,
+ unload: false
+ });
+ findImageFiles(files, folderPath, function (imageFiles) {
+ imageFiles.forEach(function (file, index) {
+ addImageToPhotosArea(file);
+ if (index === imageFiles.length-1) {
+ echo.render();
+ bindClickingOnAllPhotos();
+ bindSavingToDisk();
+ }
+ });
+ });
+ }
+ });
+ });
+ }
+</code>
+</pre>
+<p>This function essentially repurposes some of the code that exists in the window.onload function, but with some subtle differences. The function will trigger the selector folder dialog, but when it has a folder and has scanned the files that exist in that folder, what it will do instead is clear the photos that were displayed in the previously-selected folder away, make sure that echo is initialised for when the photos from the newly-selected folder are added in place, and then adds the new photos to the application. Isolate the differences between this function and the window.onload function, and there is a small refactoring opportunity to be had.</p>
+<p>In order to make the function clear the photos of the previously-selected folder, we need to implement another function to handle clearing them, called &#x201C;clearArea&#x201D;. Above the &#x201C;loadAnotherFolder&#x201D; function, add the following code:</p>
+<pre><code class="language-javascript">
+ function clearArea () {
+ document.getElementById('photos').innerHTML = '';
+ }
+</code>
+</pre>
+<p>This function finds the #photos div, and simply sets the innerHTML to an empty string, removing all of the nested div elements inside of it, which are the photos from the previously-selected folder.</p>
+<p>Reload the app, and you should now see that when you select a folder, the app should display an application menu, with the option under the File menu to load another folder, as shown in the screenshot below:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/app-with-menu.png" alt="App with Menu"></p>
+<p>Voila, you can now load another folder within the app, helping to close off an annoying UX fail that the app previously had.</p>
+<h3>Hiding the developer tools toolbar</h3>
+<p>Next, we want to hide the developer tools toolbar at the top of the app window. In the package.json file, we can add a bit of JSON to handle the display of that toolbar. After the &#x201C;dependencies&#x201D; section, add the following snippet of JSON:</p>
+<pre><code class="language-javascript">
+ "window": {
+ "toolbar": false
+ }
+</code>
+</pre>
+<p>NW.js is able to configure the behaviour of the window based on the properties in the package.json file. Here, we are telling the window to not load the toolbar. Save this file, reload the app from the command line, and now we should see this:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/step-15-window-toolbar.png" alt="Step 15 Window Toolbar"></p>
+<p>With these changes in place, we can now think about how to get the app packaged as binaries for multiple Operating Systems.</p>
+<h2>Packaging the app</h2>
+<p>In order to package the app, we also need to create an icon for the app as well, and package it so that the apps builds will have it. In this case, I&#x2019;ve created one for the app, shown below:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/lens.png" alt="Lens App"></p>
+<p>Take a copy of the file, and save it as &#x201C;lens.png&#x201D; inside of the lens folder. Next, we want to reference the icon in the package.json file. Add the following snippet of JSON to the package.json file, after the &#x201C;toolbar: false&#x201D; setting:</p>
+<pre><code class="language-javascript">
+ "icon":"lens.png"
+</code>
+</pre>
+<p>With that saved, we can now package the app for multiple operating systems. For this, we will use a tool called &#x201C;nwbuilder&#x201D;, which simplifies the task. Run the following command on your command line terminal:</p>
+<pre><code class="language-javascript">
+ npm install -g nw-builder
+</code>
+</pre>
+<p>This will install the nw-builder tool as a global dependency on your computer. Next, we want to run the tool to build the app. Next, change to the parent directory that contains the lens folder, and run the following command on your terminal:</p>
+<pre><code class="language-javascript">
+ nwbuild -p win32,win64,osx32,osx64,linux32,linux64 lens
+</code>
+</pre>
+<p>This will go ahead and build binaries of the lens app for Windows, Mac and Linux, with both 32-bit and 64-bit compatible versions for each. Once the process has finished, there will be a build folder, and inside of it there will be another folder with the app name &#x201C;Lens&#x201D;, and inside of that will be 6 folders, two each for Windows, Mac and Linux (with the 32-bit and 64-bit versions).</p>
+<p>If you go ahead and browse for the application that works on our operating system, we can double-click on it, and it will run as a standalone application.</p>
+<h2>Application Icons</h2>
+<p>Unfortunately nw-builder does not set the application icon for the Mac OS X applications, and so in this case we have to do it manually. That said, the good news is that changing an application icon in Mac OS X is very easy to do, but we need to make sure that the application icon is in the right file format.</p>
+<p>On Mac OS X, application icons use the .icns file format. There are a number of applications out there for creating .icns files, and the one that I recommend using is <a href="http://iconverticons.com">iconvert icons</a>. You can either use the website, or purchase the desktop app from either the Mac App Store or Windows App Store (if you&#x2019;re using a PC for this tutorial).</p>
+<p>We&#x2019;ll need to create a Mac OS icns file as opposed to a Mac OS folder icon. Once we&#x2019;ve created this, we can change the application icon for the Mac OS X builds of the Lens app.</p>
+<p>If you navigate to one of the Mac OS X apps inside of the build folder, right click on the app to bring up the context menu, and select &#x201C;Get Info&#x201D;. This will bring up a window displaying some of the details about the application (when it was created, how big the file size is, and other details). In the top left of the window you will see the application&#x2019;s icon (as per the screenshot).</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/step-16-change-app-icon.png" alt="Step 16 Change App Icon"></p>
+<p>Drag the lens.icns file that we generated from iConvert Icons into the area displaying the icon in the &#x201C;Get Info&#x201D; window, and this will change the application&#x2019;s icon to use the lens.icns file. If we now double-click on the app and run it, we will see that the application uses the new app icon (as opposed to NW.js&#x2019; icon).</p>
+<p>If you run the application on Windows, you should see something like this:</p>
+<p><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/lens-on-windows-v2.png" alt="Lens on Windows v2"></p>
+<p>We now have an app that we can be given to people to use on their computers.</p>
+<h2>Conclusion</h2>
+<p>The major takeaway from this tutorial is to show you that if you have web design skills and know your way around JavaScript, then it won&#x2019;t take much for you to use those skills to create a desktop application, especially one that can be built for Mac OS X, Windows, and Linux. Not only that, but as a desktop app that can access the user&#x2019;s file system and interact with files, you have a greater range of possible apps that you can build, beyond what can be achieved with just a web application.</p>
+<p><a href="http://manning.com/jensen/"><img class="img-responsive" src="https://scotch.io/wp-content/uploads/2015/09/nwjs-in-action.png" alt="NW.JS In Action"></a></p>
+<p>If you are interested in finding out more about NW.js, you can checkout the <a href="http://nwjs.io">web site</a>. Also, I&#x2019;m writing a book for Manning called <a href="http://manning.com/jensen">&#x201C;NW.js in Action&#x201D;</a>, where you get to find out not just how NW.js works and how to build desktop applications with it, but also how to test those applications, debug performance issues, and prepare your app for selling on App Stores. It&#x2019;s available now via the MEAP program, and will be published Spring 2016. <strong>Scotch.io readers can get 40% off of the book with discount code: scotch</strong></p>
+<p>If you have any queries about the app or the article, my email is <a href="mailto://paulbjensen@gmail.com">paulbjensen@gmail.com</a>. Hope you enjoyed the tutorial, and thanks for reading.</p>
+<h3>Appendix</h3>
+<p>*In the old days it was using Webkit and Node.js, but switched to the forks of those projects, hence the renaming of the project from Node Webkit to NW.js.</p>
+
+					
+
+
+
+					
+				</div>
+
+									
+					</div>
+</body></html>

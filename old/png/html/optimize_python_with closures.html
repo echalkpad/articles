@@ -1,0 +1,302 @@
+<!DOCTYPE html><html><head><title>Optimize Python with Closures</title></head><body>
+<h1>Optimize Python with Closures</h1><p><a href="http://tech.magnetic.com/2015/05/optimize-python-with-closures.html" target="_new">Original URL</a></p>
+<p><blockquote>This article is cross-posted on my personal blog, late.am. Magnetic&#x2019;s real-time bidding system, written in pure Python, needs to keep up with a tremendous volume of incoming requests. On an&hellip;</blockquote></p>
+<div><article>
+		
+		
+		<div class="cross-post">This article is <a href="http://late.am/post/2015/05/07/optimize-python-with-closures.html">cross-posted</a> on my personal blog, <a href="http://late.am/">late.am</a>.</div>
+		<p>Magnetic&#x2019;s real-time bidding system, written in pure Python, needs to keep up
+with a tremendous volume of incoming requests. On an ordinary weekday, our
+application handles about 300,000 requests per second at peak volumes, and
+responds in under 10 milliseconds. It should be obvious that at this scale
+optimizing the performance of the hottest sections of our code is of utmost
+importance. This is the story of the evolution of one such hot section over
+several performance-improving&#xA0;revisions.</p>
+
+
+<h2>Real Time&#xA0;Bidding</h2>
+<p>Real Time Bidding, or <span class="caps">RTB</span>, is a technique by which many internet ads delivered.
+When you visit a website using <span class="caps">RTB</span>, a request is sent to dozens or hundreds of
+&#x201C;bidders&#x201D; which have to quickly decide whether they want to show you an ad, and
+if so, how much they would like to pay. <span class="caps">RTB</span> bidders have up to 100 milliseconds
+to make this decision &#x2014; any slower and you won&#x2019;t win the auction no matter how
+much you bid &#x2014; so performance is&#xA0;key.</p>
+<p>At Magnetic, we do much of our targeting in real time during the bid request. We
+use a combination of filters to qualify ad campaigns for the particulars of the
+bid request. Here we&#x2019;ll consider just one of the several types of filters we
+use, one which checks that the content category of the page where an ad will be
+shown against a set of categories that we want to&#xA0;target.</p>
+<p>Of course, different campaigns have different targeting criteria, and thus
+different filter configurations. Additionally, each campaign may use a different
+subset of filters. On average, we end up calling about 150 filters per bid
+request, or 4.5 million filters per second total at peak times, so ensuring
+maximal performance is&#xA0;essential.</p>
+<h2>First Approach:&#xA0;Classes</h2>
+<p>The obvious way to implement such a filter is to use a class to store the
+configuration, thus allowing multiple instances of the filter for different
+campaigns. At bidding time, we look up the set of instances which represent the
+filters for each of the campaigns the user was targeted for, and call each
+filter to determine if the user is eligible for the campaign. Such a class might
+look&#xA0;like:</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">PageCategoryFilter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+ <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s">"mode"</span><span class="p">]</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">categories</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span>
+
+ <span class="k">def</span> <span class="nf">filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bid_request</span><span class="p">):</span>
+ <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">"whitelist"</span><span class="p">:</span>
+ <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span>
+ <span class="n">bid_request</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span> <span class="o">&amp;</span> <span class="bp">self</span><span class="o">.</span><span class="n">categories</span>
+ <span class="p">)</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">categories</span> <span class="ow">and</span> <span class="ow">not</span>
+ <span class="n">bid_request</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span> <span class="o">&amp;</span> <span class="bp">self</span><span class="o">.</span><span class="n">categories</span>
+ <span class="p">)</span>
+</pre></div>
+
+
+<p>This code would pass most code reviews, and is a fairly straightforward
+implementation of the idea we&#x2019;ve thus far described only in prose. (We pass in a
+dictionary of configuration, rather than direct arguments, since we have
+different types of filters and want all of them to expose the same interface to
+the code that sets them up and calls&#xA0;them.)</p>
+<p>Unfortunately, though perhaps unexpectedly given the topic of this post, there
+is a performance problem with this approach, especially for a block of code that
+will be called millions of times per&#xA0;second.</p>
+<h2>The Bound Method&#xA0;Problem</h2>
+<p>Superficially, accessing the <code>categories</code> attribute and <code>filter</code> method appear
+to be doing about the same amount of work &#x2014; both access the attribute of an
+instance. Unfortunately, looks can be&#xA0;deceiving:</p>
+<div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">a_filter</span> <span class="o">=</span> <span class="n">PageCategoryFilter</span><span class="p">([</span><span class="s">"foo"</span><span class="p">,</span> <span class="s">"bar"</span><span class="p">,</span> <span class="s">"baz"</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a_filter</span><span class="o">.</span><span class="n">categories</span>
+<span class="go">frozenset(['baz', 'foo', 'bar'])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a_filter</span><span class="o">.</span><span class="n">filter</span>
+<span class="go">&lt;bound method PageCategoryFilter.filter of &lt;PageCategoryFilter object at 0x107f13910&gt;&gt;</span>
+</pre></div>
+
+
+<p>As expected, <code>categories</code> returns the attribute&#x2019;s value, but accessing <code>filter</code>
+returns a bound method object. What is a bound method? It&#x2019;s the magic that
+allows Python to insert the <code>self</code> argument when you call the&#xA0;method.</p>
+<p>Specifically, an instance&#x2019;s methods are access via a descriptor, a Python
+feature that allows some code to be executed to satisfy the results of an
+attribute access expression. When Python executes the definition of a class, it
+wraps each function in a descriptor whose job is to supply the <code>self</code> argument.
+Later, when you access the attribute for the method, Python calls <code>__get__</code> on
+the descriptor, and supplies the instance as an argument. This allows the method
+descriptor to rewrite the call to the underlying function to include the <code>self</code>
+argument. For more, see <a href="http://chrisbeaumont.org/">Christ Beaumont</a>&#x2018;s excellent
+<a href="http://nbviewer.ipython.org/urls/gist.github.com/ChrisBeaumont/5758381/raw/descriptor_writeup.ipynb">Python Descriptors
+Demystified</a>,
+or watch a short <a href="https://www.youtube.com/watch?v=9A1ycvcgc_U">video version</a> of&#xA0;it.</p>
+<p>From a performance perspective, the key difference between ordinary attribute
+access and method calls is that each time you call a method, or rather each time
+you access the attribute which refers to a method, the Python <span class="caps">VM</span> must execute
+some additional code to create the bound method. It must do more work in order
+to provide the <code>self</code> argument. None of this extra work is ordinarily visible &#x2014;
+it doesn&#x2019;t show up in stack traces, for instance &#x2014; but it does take some small
+amount time to execute, and if you call methods often enough, that can add&#xA0;up.</p>
+<h2>Second Approach:&#xA0;Functions</h2>
+<p>If bound methods are a problem, perhaps we can arrange for all the pertinent
+arguments just to be passed in to an ordinary function. This should avoid the
+overhead of supplying the <code>self</code> attribute:</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">page_category_filter</span><span class="p">(</span><span class="n">bid_request</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+ <span class="k">if</span> <span class="n">config</span><span class="p">[</span><span class="s">"mode"</span><span class="p">]</span> <span class="o">==</span> <span class="s">"whitelist"</span><span class="p">:</span>
+ <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span>
+ <span class="n">bid_request</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span> <span class="o">&amp;</span> <span class="n">config</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span>
+ <span class="p">)</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span>
+ <span class="n">config</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span> <span class="ow">and</span> <span class="ow">not</span>
+ <span class="n">bid_request</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span> <span class="o">&amp;</span> <span class="n">config</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span>
+ <span class="p">)</span>
+</pre></div>
+
+
+<p>As we&#x2019;ll see in benchmarks, this code slightly outperforms the class-based
+implementation by avoiding the need for bound method calls. But is this as fast
+as we can make the filter&#xA0;go?</p>
+<h2>The Dictionary Access&#xA0;Problem</h2>
+<p>In either branch of this function, we do three dictionary accesses: one for
+&#x201C;mode&#x201D;, one for the &#x201C;categories&#x201D; item in the bid request dictionary; and one
+for the &#x201C;categories&#x201D; item in the configuration dictionary. Since none of these
+accesses is repeated in any individual call of this function, it makes no sense
+to assign the result of the dictionary accesses to a local variable and thus
+&#x201C;cache&#x201D; the&#xA0;result.</p>
+<p><span class="dquo">&#x201C;</span>But wait,&#x201D; you say, &#x201C;aren&#x2019;t dictionaries&#xA0;fast?&#x201D;</p>
+<p>Ordinarily, and algorithmically, yes, dictionaries are quite fast. However,
+hidden behind those square brackets is quite a bit of work: Python must hash the
+key, apply a bit-mask to the hash, and look for the item in an array that
+represents the storage for the dictionary. Edge cases can create collisions
+which take even longer to resolve. For a more thorough exploration of how
+dictionaries are implemented in Python, see <a href="http://rhodesmill.org/brandon/">Brandon
+Rhodes</a>&#x2018; talk <a href="http://rhodesmill.org/brandon/talks/#mighty-dictionary">The Mighty
+Dictionary</a>.</p>
+<p>In practice, for frequently-called code the cost of dictionary item access,
+however small, is amplified and adds&#xA0;up.</p>
+<h2>Final Approach:&#xA0;Closures</h2>
+<p>So if even dictionaries are too slow, how can we resolve this performance
+crisis? We can turn the &#x201C;variables&#x201D; stored in the dictionary into local
+variables (sort of), which are the fastest to access since they are stored in an
+array and referenced by pre-computed offset. Accessing a local variable in
+Python is nearly instantaneous, or as close to it as we can get writing Python&#xA0;code.</p>
+<p>A closure is a function which uses variables defined in its enclosing scope &#x2014; a
+nested function. Python recognizes that the (inner) function uses variables that
+aren&#x2019;t in its argument list, and makes those variables available to the inner
+function. Such an inner function is said to &#x201C;close over&#x201D; the variables it uses
+from the outer scope, hence&#xA0;&#x201C;closure&#x201D;.</p>
+<p>Because the number and names of closures is known at compile time, the <span class="caps">VM</span> can
+use an array to track the closed-over variables, in the same way as it uses an
+array to track local variables and constants. For more on how Python builds and
+executes a function, see <a href="http://late.am/post/2012/03/26/exploring-python-code-objects.html">Exploring Python Code
+Objects</a>.</p>
+<p>We translate our page category filter into a closure by creating a factory
+function which returns another function, the closure itself. From the
+perspective of the calling code, this looks and feels a lot like creating an
+instance of a&#xA0;class.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">make_page_category_filter</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+ <span class="n">categories</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span>
+ <span class="n">mode</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s">"mode"</span><span class="p">]</span>
+ <span class="k">def</span> <span class="nf">page_category_filter</span><span class="p">(</span><span class="n">bid_request</span><span class="p">):</span>
+ <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">"whitelist"</span><span class="p">:</span>
+ <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">bid_request</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span> <span class="o">&amp;</span> <span class="n">categories</span><span class="p">)</span>
+ <span class="k">else</span><span class="p">:</span>
+ <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span>
+ <span class="n">categories</span> <span class="ow">and</span> <span class="ow">not</span>
+ <span class="n">bid_request</span><span class="p">[</span><span class="s">"categories"</span><span class="p">]</span> <span class="o">&amp;</span> <span class="n">categories</span>
+ <span class="p">)</span>
+ <span class="k">return</span> <span class="n">page_category_filter</span>
+</pre></div>
+
+
+<p>As we&#x2019;ll see, this implementation outperforms either of the others, because we
+avoid two of the three dictionary lookups, and replaces them with fast access to
+the closed-over variables <code>categories</code> and <code>mode</code>. Additionally, callers don&#x2019;t
+suffer from the bound method problem, since <code>page_category_filter</code> is just a
+regular function with no magically inserted&#xA0;arguments.</p>
+<h2>The Proof is in the&#xA0;Timing</h2>
+<p>Each of the three methods shown here is &#x201C;fast&#x201D; in the sense that filtering any
+single bid request takes very little actual time &#x2014; less than a microsecond on
+my machine in all cases. However, since this code (and other code like it) is
+called inside of what amounts to very tight loops, even tiny differences in the
+run time of a single invocation amount to a lot&#xA0;overall.</p>
+<p>To fully exercise the code paths, we&#x2019;ll create four filter configurations: a
+whitelist with some allowed categories, a blacklist with some forbidden
+categories, an empty whitelist, and an empty blacklist. We&#x2019;ll call each of them
+an equal number of times in a straightforward timing loop. Here&#x2019;s an example
+using the first&#xA0;implementation:</p>
+<div class="highlight"><pre><span class="n">filters</span> <span class="o">=</span> <span class="p">[</span>
+ <span class="n">PageCategoryFilter</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s">"whitelist"</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">[</span><span class="s">"foo"</span><span class="p">,</span> <span class="s">"bar"</span><span class="p">,</span> <span class="s">"baz"</span><span class="p">])),</span>
+ <span class="n">PageCategoryFilter</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s">"blacklist"</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">[</span><span class="s">"foo"</span><span class="p">,</span> <span class="s">"bar"</span><span class="p">,</span> <span class="s">"baz"</span><span class="p">])),</span>
+ <span class="n">PageCategoryFilter</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s">"whitelist"</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">[])),</span>
+ <span class="n">PageCategoryFilter</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s">"blacklist"</span><span class="p">,</span> <span class="n">categories</span><span class="o">=</span><span class="p">[])),</span>
+<span class="p">]</span>
+
+<span class="n">bid_request</span> <span class="o">=</span> <span class="p">{</span><span class="s">"categories"</span><span class="p">:</span> <span class="nb">set</span><span class="p">(</span><span class="s">"bat"</span><span class="p">)}</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+ <span class="k">for</span> <span class="n">a_filter</span> <span class="ow">in</span> <span class="n">filters</span><span class="p">:</span>
+ <span class="n">a_filter</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">bid_request</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+</pre></div>
+
+
+<p>Averaged over 15 million calls to each filter in CPython 2.7.9 on my 2013
+MacBook Pro, 2.6GHz Core i7, I&#xA0;get:</p>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Per-Call Time</th>
+<th>Speedup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Class</td>
+<td>0.4082 us</td>
+<td>&#x2014;</td>
+</tr>
+<tr>
+<td>Function</td>
+<td>0.3744 us</td>
+<td>8.2%</td>
+</tr>
+<tr>
+<td>Closure</td>
+<td>0.3213 us</td>
+<td>21.3%</td>
+</tr>
+</tbody>
+</table>
+<p>Feel free to check out <a href="https://gist.github.com/dcrosta/3f60796682aa6a72b003">the benchmark
+script</a>.</p>
+<h2>What about&#xA0;PyPy?</h2>
+<p>At Magnetic, we&#x2019;ve switched from running all of our performance-sensitive Python
+code from CPython to PyPy, so let&#x2019;s consider whether these code optimizations
+are still appropriate. I used the same benchmark setup as above, but with PyPy
+2.5.1 and a warmup run for each implementation to allow PyPy time to <span class="caps">JIT</span>:</p>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Per-Call Time</th>
+<th>Speedup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Class</td>
+<td>0.0432 us</td>
+<td>&#x2014;</td>
+</tr>
+<tr>
+<td>Function</td>
+<td>0.0554 us</td>
+<td>-28.3%</td>
+</tr>
+<tr>
+<td>Closure</td>
+<td>0.0431 us</td>
+<td>0.1%</td>
+</tr>
+</tbody>
+</table>
+<p>PyPy is incredibly fast, around an order of magnitude faster than CPython in
+this benchmark. Because PyPy performs more advanced optimizations than CPython,
+including many optimizations for classes and methods, the timings for the class
+vs. closure implementations are a statistical&#xA0;tie.</p>
+<p>Curiously, the function implementation is actually slower than the class
+approach in PyPy. PyPy is able to optimize code using classes more than code
+using dictionaries, because it is able to specialize code for each class in your
+program. Dictionaries, on the other hand, are a generic mapping data structure,
+and PyPy is not able to create specialized machine code for one particular
+&#x201C;shape&#x201D; of dictionary or another. <a href="https://alexgaynor.net/">Alex Gaynor</a> covers
+this distinction in greater depth in his talk <a href="http://pyvideo.org/video/2627/fast-python-slow-python">Fast Python, Slow
+Python</a> from PyCon&#xA0;2014.</p>
+<h2>So what have we&#xA0;learned?</h2>
+<p>The <a href="http://legacy.python.org/dev/peps/pep-0020/">Zen of Python</a> implores us to
+implement our code in the &#x201C;one &#x2014; and preferably only one &#x2014; obvious way&#x201D;, which
+is likely one of the first two approaches presented here (depending on whether
+you favor functions or classes). Indeed, this is still good advice, as code is
+read far more often than it is written. However, there are cases where less
+obvious ways have distinct benefits. Or maybe I&#x2019;m just&#xA0;Dutch.</p>
+<p>We also must always remember our
+<a href="http://en.wikipedia.org/wiki/Donald_Knuth">Knuth</a>: &#x201C;<a href="http://c2.com/cgi/wiki?PrematureOptimization">premature optimization is
+the root of all evil</a>.&#x201D; At
+Magnetic, we pursued this optimization only because it made sense for our
+application, where the filters are called very frequently, and only after
+measurement showed that the real-time filters accounted for a large amount of
+our per-request processing&#xA0;time.</p>
+
+<p><em>Many thanks to <a href="http://emptysqua.re/">A. Jesse Jiryu Davis</a> for reviewing
+a draft of this&#xA0;article.</em></p>
+
+		<div id="article_meta">
+				Tags:
+					<a href="http://tech.magnetic.com/tag/python.html">python</a>,					<a href="http://tech.magnetic.com/tag/performance.html">performance</a>		</div>
+	</article>
+
+	</div>
+</body></html>

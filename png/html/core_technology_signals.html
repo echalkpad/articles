@@ -1,0 +1,204 @@
+<!DOCTYPE html><html><head><title>Core Technology: Signals</title></head><body>
+<h1>Core Technology: Signals</h1><p><a href="http://www.linuxvoice.com/core-technology-signals/" target="_new">Original URL</a></p>
+<p><blockquote>In the world of Linux system programming, a signal is an event that&#x2019;s delivered to a process by the kernel. A signal says to the process &#x201C;something has happened that you might want to&hellip;</blockquote></p>
+<div><div class="post-single-content box mark-links">
+
+
+<p class="Body-Intro"><span class="_idGenDropcap-1">I</span>n the world of Linux system programming, a signal is an event that&#x2019;s delivered to a process by the kernel. A signal says to the process &#x201C;something has happened that you might want to respond to&#x201D;. A few signals are generated as a result of something that the program itself is doing (usually something bad), but most of them originate from sources external to the program itself.</p>
+<p class="Body-Indent">Why do you need to know about signals? Well, they&#x2019;re important to a system administrator because they provide a way to interact with running processes (in particular, to kill them). And the most important single reason that a developer needs to be aware of signals is so that he knows how to write programs that ignore them. But there are more useful things you can do with signals, as we&#x2019;ll see.</p>
+<p class="Body-Indent">There are several different types of signal. If you&#x2019;re running a <span class="CharOverride-1">Bash </span>shell, the built-in command <span class="CharOverride-2">kill -l</span> will show you a list of them. It&#x2019;s a slightly scary list but you don&#x2019;t need to know about most of them, and here we&#x2019;re going to focus on the 10 or so you&#x2019;re most likely to use. </p>
+
+<p class="Crosshead"><span class="CharOverride-3">SIGHUP</span></p>
+<p class="Body-No-Indent">This signal has an interesting history. The &#x201C;HUP&#x201D; stands for &#x201C;hang up&#x201D; and it harks back to the days when telephones hung on a hook on the wall and you would terminate a call by hanging up the phone. The scenario went like this: Dennis was logged into his PDP11 computer via a dial-up line and a modem. Without logging off, he simply &#x201C;hung up&#x201D; the connection. Later, Ken dialled in to the same modem, thus finding himself connected to Dennis&#x2019;s abandoned shell. To prevent this undesirable state of affairs, the device driver for the modem would detect the loss of carrier when Dennis hung up and deliver a SIGHUP signal to terminate the shell session.</p>
+<p class="Body-Indent">Well, dial-up logins are history now, and SIGHUP was looking forward to a peaceful retirement when it was offered a new job. Nowadays, SIGHUP is interpreted by some daemons to mean &#x201C;your configuration file has been changed, please go and re-read it&#x201D;. One example is the system logging daemon (<span class="CharOverride-2">syslog </span>or <span class="CharOverride-2">rsyslog</span>) which re-reads the config file <span class="CharOverride-2">/etc/syslog.conf </span>(or <span class="CharOverride-2">/etc/rsyslog.conf</span>) on startup and on receipt of a SIGHUP. In some cases the daemon simply stops and restarts when it receives this signal.</p>
+<p class="Crosshead">SIGINT</p>
+<p class="Body-No-Indent">This is the signal that is sent to a foreground process by the terminal driver when you enter ^C on the terminal. By default, programs will terminate when they receive this signal. Some programs, especially ones that operate interactively, choose to ignore this signal.</p>
+
+<p class="Crosshead"><span class="CharOverride-3">SIGTERM</span></p>
+<p class="Body-No-Indent">This is conventionally used as a polite &#x201C;please tidy up and terminate&#x201D; request. For example, when you shut down a Linux system with the <span class="CharOverride-2">shutdown</span> command, it begins by sending SIGTERM to all the running processes in the hope that they will do the decent thing and go away. If this doesn&#x2019;t work, <span class="CharOverride-2">shutdown</span> waits for a few seconds then sends a SIGKILL. SIGTERM is the default signal type sent when you use programs like <span class="CharOverride-2">kill </span>and <span class="CharOverride-2">pkill</span>.</p>
+<p class="Crosshead"><span class="CharOverride-3">SIGKILL</span></p>
+<p class="Body-No-Indent">This is the most brutal signal because a process cannot choose to catch or ignore it. A process receiving SIGKILL is instantly terminated. Best practice suggests that as a way of killing a process it should be a last resort, when more polite requests such as SIGTERM have failed. This is particularly true for services that maintain lock files or other temporary data files, because they won&#x2019;t have opportunity to clean them up and you may end up having to manually remove them before the service will restart.</p>
+
+<p class="Crosshead"><span class="CharOverride-3">SIGALRM</span></p>
+<p class="Body-No-Indent">This signal is &#x201C;self-inflicted&#x201D; &#x2013; it&#x2019;s generated as a result of an alarm clock timing out. Typically a C program might request an alarm call 10 seconds from now with:</p>
+<p><code class="Code">alarm(10);</code></p>
+<p class="Body-No-Indent">and use it to implement a timeout on a potentially blocking operation.</p>
+<p class="Crosshead"><span class="CharOverride-3">SIGSEGV</span></p>
+<p class="Body-No-Indent">This signal is generated by the kernel when a process tries to access a memory address that&#x2019;s outside its address space. Of course this should never happen in a correctly written program; typically it occurs in C code that makes a reference through a pointer that hasn&#x2019;t been initialised, as this two-liner demonstrates:</p>
+<p><code class="Code">void main()</code><br>
+<code class="Code">{</code><br>
+<code class="Code"> int *p;</code><br>
+<code class="Code"> *p = 0;</code><br>
+<code class="Code">}</code></p>
+<p class="Body-Indent">Assuming the code&#x2019;s in the file <span class="CharOverride-2">segvdemo.c</span>, compile and run it like this:</p>
+<p><code class="Code">$ gcc -o segvdemo segvdemo.c</code><br>
+<code class="Code">$ ./segvdemo </code><br>
+<code class="Code">Segmentation fault (core dumped)</code><br>
+<code class="Code">$ echo $?</code><br>
+<code class="Code">139</code></p>
+<p class="Crosshead"><span class="CharOverride-3">SIGILL</span></p>
+<p class="Body-No-Indent">Another signal that arises directly from the execution of the process. It indicates an illegal instruction, and should never occur unless your compiler is buggy or the executable has become corrupt, or maybe because it calls a function through an unitialised pointer.</p>
+<p class="Crosshead">SIGBUS and SIGFPE</p>
+<p class="Body-No-Indent">These indicate an incorrectly aligned memory access, and a floating point exception (or other arithmetic error) respectively. It&#x2019;s easy to deliberately generate a SIGFPE &#x2013; just divide by zero:</p>
+<p><code class="Code">void main()</code><br>
+<code class="Code">{</code><br>
+<code class="Code"> int a, b, c;</code><br>
+<code class="Code"> a = 1; b = 0;</code><br>
+<code class="Code"> c = a / b;</code><br>
+<code class="Code">}</code></p>
+<p class="Body-Indent">If you compile and run this program, you&#x2019;ll see something like this:</p>
+<p><code class="Code">$ ./fpedemo</code><br>
+<code class="Code">Floating point exception (core dumped)</code><br>
+<code class="Code">$ echo $?</code><br>
+<code class="Code">136</code></p>
+<p class="Body-Indent">Again, notice the exit status (136). Subtracting 128 gives 8, the signal number of SIGFPE.</p>
+<p class="Crosshead">SIGABRT</p>
+<p class="Body-No-Indent">A self-generated signal raised when a program calls the <span class="CharOverride-2">abort()</span> library function. By default it will cause immediate termination of the program.</p>
+<p class="Crosshead">Sending signals </p>
+<p class="Body-No-Indent">OK, we&#x2019;ve discussed some of the signal types. We&#x2019;ve seen that some, such as SIGSEGV and SIGFPE, are raised automatically by the kernel as the result of some misdemeanour committed by the program. These are sometimes referred to as &#x201C;synchronous&#x201D; signals. But others need to be explicitly generated from outside the program (sometimes called &#x201C;asynchronous&#x201D; signals). How do we do that?</p>
+<p class="Body-Indent">One way is to use the command <span class="CharOverride-2">kill</span>. It&#x2019;s not a good name really; <span class="CharOverride-2">raise</span> or <span class="CharOverride-2">sendsignal</span> might be better. For example, we can send a SIGHUP signal to process 12345 like this:</p>
+<p><code class="Code">$ kill -SIGHUP 12345</code></p>
+<p class="Body-Indent">Or you can use the short signal name, or the signal number, like this:</p>
+<p><code class="Code">$ kill -HUP 12345</code><br>
+<code class="Code">$ kill -1 12345</code></p>
+<p class="Body-Indent">This is a good time to point out that you can only send signals to processes that you own, unless you&#x2019;re running as root in which case you can deliver signals to any process.</p>
+<p class="Body-Indent">Sending SIGHUP manually like this is commonly used to signal a service after changing its config file. Manually generated signals are also often used to terminate a &#x201C;hung&#x201D; process (or just one that seems to have been running for far too long), typically like this:</p>
+<p><code class="Code">$ kill -TERM 12345</code><br>
+<code class="Code">or more brutally:</code><br>
+<code class="Code">$ kill -KILL 12345</code></p>
+<p class="Body-No-Indent">If you don&#x2019;t specify a signal type, the default is SIGTERM.</p>
+<p class="Body-Indent">As you&#x2019;ll see from these example you need to know the process ID to send a signal. If you&#x2019;re trying to kill a program called <span class="CharOverride-2">foobar</span> you might get this by running:</p>
+<p><code class="Code">$ ps -ef | grep foobar</code><br>
+<code class="Code">chris 4923 2586 0 18:07 pts/0 00:00:00 ./foobar</code><br>
+<code class="Code">chris 4968 4924 0 18:07 pts/6 00:00:00 grep foobar</code></p>
+<p class="Body-No-Indent">from which we see that the PID is 4923. (Ignore the &#x201C;false positive&#x201D; generated from the <span class="CharOverride-2">grep</span> command.) </p>
+<p class="Crosshead">Sending signals from a program</p>
+<p class="Body-No-Indent">So much for sending signals from the command line. You can also send signals from within a program. Here&#x2019;s a little C program I wrote called &#x201C;terminate&#x201D;; the idea is that you give it a PID as an argument and it begins by sending a polite SIGTERM signal to ask the process to terminate. If this doesn&#x2019;t work it just pulls out a gun and shoots the process in the head with SIGKILL. Note that the line numbers are for reference, they are not part of the file:</p>
+<p><code class="Code"> 1. #include &lt;stdio.h&gt;</code><br>
+<code class="Code"> 2. #include &lt;stdlib.h&gt;</code><br>
+<code class="Code"> 3. #include &lt;signal.h&gt;</code><br>
+<code class="Code"> 4. #include &lt;errno.h&gt;</code><br>
+<code class="Code"> 6. int main(int argc, char* argv[])</code><br>
+<code class="Code"> 7. {</code><br>
+<code class="Code"> 8. int targetpid, i;</code><br>
+<code class="Code"> 9.</code><br>
+<code class="Code">10. /bin /boot /cdrom /core /dev /etc /home /initrd.img /lacie /lib /lib32 /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vol Get target process ID from command line */</code><br>
+<code class="Code">11. targetpid = atoi(argv[1]);</code><br>
+<code class="Code">12.</code><br>
+<code class="Code">13. /bin /boot /cdrom /core /dev /etc /home /initrd.img /lacie /lib /lib32 /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vol Check that the process exists */</code><br>
+<code class="Code">14. if (kill(targetpid, 0) &lt; 0)</code><br>
+<code class="Code">15. {</code><br>
+<code class="Code">16. switch (errno)</code><br>
+<code class="Code">17. {</code><br>
+<code class="Code">18. case ESRCH:</code><br>
+<code class="Code">19. printf(&#x201C;Process %d does not existn&#x201D;, targetpid);</code><br>
+<code class="Code">20. exit(1);</code><br>
+<code class="Code">21. case EPERM:</code><br>
+<code class="Code">22. printf(&#x201C;Do not have permission to terminate that processn&#x201D;);</code><br>
+<code class="Code">23. exit(2);</code><br>
+<code class="Code">24. }</code><br>
+<code class="Code">25. }</code><br>
+<code class="Code">26.</code><br>
+<code class="Code">27. /bin /boot /cdrom /core /dev /etc /home /initrd.img /lacie /lib /lib32 /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vol Ask the process to terminate (politely) */</code><br>
+<code class="Code">28. kill(targetpid, SIGTERM);</code><br>
+<code class="Code">29.</code><br>
+<code class="Code">30. /bin /boot /cdrom /core /dev /etc /home /initrd.img /lacie /lib /lib32 /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vol Wait for up to 5 seconds for the process to die */</code><br>
+<code class="Code">31. for (i = 0; i &lt; 5; i++)</code><br>
+<code class="Code">32. {</code><br>
+<code class="Code">33. if (kill(targetpid, 0) &lt; 0)</code><br>
+<code class="Code">34. exit(0);</code><br>
+<code class="Code">35. sleep(1);</code><br>
+<code class="Code">36. }</code><br>
+<code class="Code">37.</code><br>
+<code class="Code">38. /bin /boot /cdrom /core /dev /etc /home /initrd.img /lacie /lib /lib32 /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vol Asking nicely didn&#x2019;t work, bring out the big guns */</code><br>
+<code class="Code">39. printf(&#x201C;SIGTERM ineffective, sending SIGKILLn&#x201D;);</code><br>
+<code class="Code">40. kill(targetpid, SIGKILL);</code><br>
+<code class="Code">41. exit(3);</code><br>
+<code class="Code">42. }</code></p>
+<p class="Body-Indent">If you don&#x2019;t read &#x201C;C&#x201D;, here&#x2019;s a guided tour:</p>
+<p class="Body-Indent">At line 11 we grab the process ID from the command line. There should really be some error checking here to verify that the user did actually supply a PID as argument. At line 14 we try to send signal number 0 to the process. The <span class="CharOverride-2">kill()</span> system call is analogous to the <span class="CharOverride-2">kill </span>command, though notice that the arguments are in the opposite order. (Hey, this is Linux! You want consistency?) Now there is no signal number 0, so the call will not actually deliver a signal to the process, but it will fail (returning -1) if either the process doesn&#x2019;t exist, or we don&#x2019;t have permission to signal it (ie we don&#x2019;t own it and we&#x2019;re not root). These two conditions are trapped at lines 18 and 21, where we print an appropriate error message and exit.</p>
+<p class="Body-Indent">If we make it as far as line 28, we know that the process exists and we have permission to signal it, so we send a polite SIGTERM to the process, hoping it will oblige and go away. Then the loop starting at line 31 repeatedly probes (sending the dummy signal 0 again) to see if the process has terminated. If it has, then fine, our job is done, and we exit at line 34. We continue for five seconds, probing at one-second intervals. Finally, if we reach line 39, we forcefully terminate the process with SIGKILL. This approach (SIGTERM followed if necessary by SIGKILL) is essentially what happens to all running processes during a system shutdown.</p>
+<p><a href="http://www.linuxvoice.com/wp-content/uploads/2015/10/ct2-large.png"><img alt="Image" src="http://www.linuxvoice.com/wp-content/uploads/2015/10/ct2-small.png"></a></p>
+
+<p class="Crosshead">Catching signals</p>
+<p class="Body-No-Indent">So now we know how to send signals. Let&#x2019;s look at the other side of the story &#x2013; how does a process respond when it receives a signal? Well, each signal has a default disposition (&#x201C;disposition&#x201D; is just a posh word meaning &#x201C;what will happen when a signal arrives&#x201D;). The three dispositions shown in the table are:</p>
+<ul>
+<li><span class="CharOverride-2">Term </span>The process is terminated (this is the most common behaviour).</li>
+<li><span class="CharOverride-2">Core </span>The process is terminated, a memory image (core file) may be written.</li>
+<li><span class="CharOverride-2">Ignore </span>The signal is ignored.</li>
+</ul>
+<p class="Body-Indent">However &#x2013; and here it gets interesting &#x2013; a program can install handlers for the various signal types &#x2013; pieces of code that will run if the signal arrives.</p>
+<p class="Body-Indent">Rather than do this in C again, we&#x2019;ll do it in a shell script. The purpose of this script is to count the number of prime numbers less than one million. </p>
+<p class="Body-Indent">Now of course, doing a computation-rich thing like this in a shell script is pretty stupid, and I&#x2019;m not using the most efficient algorithm either, which doesn&#x2019;t help. But that&#x2019;s not the point. The point of this example is that it represents a long-running program that gradually works its way through a data set. Here&#x2019;s the script:</p>
+<p><code class="Code"> 1. #!/bin/bash</code><br>
+<code class="Code"> 2. </code><br>
+<code class="Code"> 3. function isprime()</code><br>
+<code class="Code"> 4. {</code><br>
+<code class="Code"> 5. n=$1</code><br>
+<code class="Code"> 6. factor=2</code><br>
+<code class="Code"> 7. while (( factor 10_misconceptions_about_neural_networks.md 10_things_to_do_after_installing_ubuntu_1510.md 400_released_the_new_render_loop_explained.md a_developer’s_journey_into_linux_containers.md aerofsgockerize.md alfateamrdb.md altitudeloginwithssh.md alvarotrigopagepilingjs.md andrewchildsovercast.md animatecss.md animated_svg_vs_gif_cagematch.md an_introduction_to_visual_programming_using_noflo.md anyone_can_learn_to_code_an_lstmrnn_in_python_part_1_rnn.md artificial_neural_networks_for_beginners_»_loren_on_the_art_of_matlab.md automating_docker_logging_elasticsearch_logstash_kibana_and_logspout.md a_valid_ssl_certificate_for_every_ip_address__pivotal_pov.md a_walk_through_the_sais_algorithm__screwtapes_notepad.md b2_cloud_storage.md basecamptrix.md better_logging_in_nodejs_using_bunyan.md be_with_130_premade_layouts_the_hard_work_was_already_done_for_you.md binaryjs.md blog.md bndwpick.md bookingjs.md brief_survey_on_methods_for_attacking_tor_hidden_service.md building_frontend_web_apps_with_plain_javascript.md checkpoint_and_restore_docker_container_with_criu.md clipboardjs.md cmusatyalabopenface.md coding_math.md connorathertonwalkway.md containers_101.md convox.md cooking_with_docker_and_coreos_on_os_x.md coreos__kubernetes_step_by_step.md coreos.md create_a_rest_api_with_nodejs.md create_your_own_streaming_service_with_emby.md creating_fun_and_immersive_audio_experiences_with_web_audio.md cryptdbcryptdb.md cryptographic_module_standards_at_a_crossroads_after_snowden’s_revelations.md css_toggle_switch.md cyrusandgdbdashboard.md dask__parallel_processing_through_blocked_algorithms¶.md data data.json delightimfreegeodb.md develop_command_line_application_using_nodejs.md developer_edition_44_new_visual_editing_and_memory_management_tools.md digitaloceangodo.md directed_graph_traversal_orderings_and_applications_to_dataflow_analysis.md dockercmroundup.md docker_orchestration__the_full_story.md document_clustering_with_python.md dokku__the_smallest_paas_implementation_youve_ever_seen.md dosa_by_shon.md dosnapshot.md economic_secrets_of_the_dark_web—the_safe_easy_way_for_anyone_to_be_a_little_drug_lord.md eivind88prm.md elasticiohaproxysrv.md even_easier_restful_api_with_nodejs_and_express_framework.md exploring_the_relationship_between_javascript_and_the_modern_html_dom.md extending_layer_2_across_container_hosts.md featurebaby.md file_input_to_gnuplot_through_python.md fix_time_machine_sparsebundle_nas_based_backup_errors.md flaskpotion.md flowchartjs.md free_ssltls_certificates.md fuzzing_with_american_fuzzy_lop.md fyeah_swift_4_features_that_changed_how_i_code_with_jacob_schwartz.md gernestutron.md get_coreos_logs_into_elk_in_5_minutes.md getting_started_·_bootstrap_table.md getting_started.md git_source_code_review.md google_project_hosting.md graemedouglaslittled.md grammarlyrockercompose.md hacker_codex.md hackers_do_the_haka_–_part 1.md hacking_gsm_signals_with_an_rtlsdr_and_topguw.md headroomjs.md high_paying_lowstress_jobs.md how_can_i_repair_my_hard_drive_if_my_mac_won’t_start.md how_to_convert_videos_in_linux_using_the_command_line.md how_to_create_a_fullscreen_video_opening_animation.md how_to_create_a_network_backup_with_apples_timemachine.md how_to_create_an_os_x_mavericks_install_drive_updated.md how_to_split_large_audio_files_on_linux.md how_to_use_an_xbox_360_controller_with_os_x_yosemite.md html html5_games_3d_collision_detection.md httpie_a_cli_http_client_that_will_make_you_smile.md httpie_parse_url.sh http_live_streaming_in_javascript.md httpsmediumcombibblioorg60youtubechannelsthatwillmakeyousmarter44d8315c2548.md ibm100__icons_of_progress.md icodeforlovedoapi.md iiseymourchromote.md imjasonhghfs.md install_sandstorm.md instant_loading_web_apps_with_an_application_shell_architecture_—_google_developers.md introducing_lemur.md introducing_tamper.md introduction__building_web_apps_with_go.md introduction__getting_started_guide.md introduction.md introduction_to_monte_carlo_tree_search.md intro_to_webgl_with_threejs.md iondbprojectiondb.md jack000expose.md jamesobdesk.md jamiehdigitaloceancsharp.md javascript_animation_physics_and_input_tracking.md jmschreipomegranate.md jquery_responsive_lightbox.md jquery_treetable.md jquery_webcam_plugin.md json_lines.md jssequencediagrams.md just_a_flexbox_grid_system.md just_a_theory.md jwagnersmartcropjs.md kairos_by_rodrigogs.md kasketisnetfox.md keendashboards.md khankatex.md koalalorenzopythondigitalocean.md launching_nginscript_and_looking_ahead__nginx.md learning_golang_build_a_stock_notifier_·_kyle_redelinghuys.md learning_jquery.md letsencryptletsencrypt.md let’s_write_a_web_extension.md let_your_applications_fly.md links_list.txt looking_at_open_source_paas_technologies.md macbook_charger_teardown_the_surprising_complexity_inside_apples_power_adapter.md managing_massive_amounts_of_tick_data_with_python_simply_and_efficiently.md mangoslideout.md many_js_frameworks_but_vuejs_is_different.md mateogianoliosshync.md maxogdenlinux.md md metabase_documentation.md metadata_investigation__inside_hacking_team.md meteor_react_tutorial_updated__match_made_in_heaven.md micc83edittable.md mistiomistio.md monitor_and_control_applications_using_supervisor_part_2__tuts_code_tutorial.md nanobox.md nats__cloud_native_open_source_high_performance_messaging.md natural_language_basics_with_textblob.md nightwatchjs.md nodejs_mvc_framework.md now_available_for_download_processing.md null.md offline_web_apps_on_github_pages.md open_source_slackalternative_adopts_markdown.md openvswitchovs.md opsing_with_packer_and_terraform.md parse_urls_json.sh pattern_lab.md png prototype_interaction_and_animation.md psdjs.md pyra_full_prototypes_soon.md quench.md quintus_javascript_html5_game_engine.md raathigeshsemanticedit.md rain1017memdb.md readtext.md reclaiming_a_timemachine_volume’s_disk_space.md resilient_substructure_for_your_microservice.md richardknopgooauth2server.md selzplyr.md setting_up_mastermaster_replication_with_mysql_on_debian_8_jessie.md setting_up_nginx_with_docker.md silentbicycleguff.md simplify_your_life_with_an_ssh_config_file.md single_page_apps_in_depth.md skavanaghkeybox.md smdahlenvagrantdigitalocean.md snapcraft_tutorial.md sqljs.md sql_vs_nosql_you_do_want_to_have_a_relational_storage_by_default.md storejs.md teslajs.md tgriesserbookshelf.md the_html5_media_framework.md the_http2_web_server_with_automatic_https.md the_incomplete_collection_of_nodejs_performance_tips_—_node_and_beyond.md the_intelligent_hackable_code_host_for_teams.md the_javascript_library_for_modern_browsers_and_touch_devices_no jquery.md the_javascript_tutorial.md the_math_i_learned_after_i_thought_had_already_learned_math.md the_new_art_of_war_how_trolls_hackers_and_spies_are_rewriting_the_rules_of conflict.md the_power_of_pcap__retrospection_in_practice.md the_trusted_source_for_javascript_packages_meteor_resources_and_tools.md the_what_how_and_why_of_single_var_pattern_in_javascript.md tidy timelinemax_a_primer.md time_machine_for_every_unix_out_there.md timothycrosleyhug.md top_15_facebook_open_source_projects_you_must_know_and_use_for_your_maker’s_projects.md tornqvistjazzon.md ˈtræfɪk_·_ˈtræfɪk.md tridiv.md tugboat.md tutorials.md twitterfabricgalley.md twofactor_authentication_download.md unity_2d_flappy_bird_tutorial.md unixdaemon.md url_to_filename.csv using_an_offline_gnupg_master_key.md using_feathersjs_as_an_open_source_alternative_to_firebase_—_all_about_feathersjs.md using_the_office_ui_fabric_with_angular_js_to_create_an_office_addin.md valerylisaydigitaloceanapi.md voice_activated_light_switch.md watchman__a_file_watching_service.md webxray.md what_is_a_unikernel.md what_is_scholarly_html.md whose_xterm_is_it_anyway.md why_buy_an_electric_bike_if_we_can_transform_that_one_we_have.md wikiimunesexamples_–_imunes.md with_—_organize_complex_queries.md wkoszekflviz.md wmiradropkit.md write_vanilla_comments_that_automagically_convert_into_full_test_spec_files.md wso2_machine_learner_why_would_you care.md yahoogryffin.md yoannmoinetnipplejs.md your_pull_request_tracking_tool.md zenit.md factor &lt;= n ))</code><br>
+<code class="Code"> 8. do</code><br>
+<code class="Code"> 9. if (( n % factor == 0 ))</code><br>
+<code class="Code">10. then</code><br>
+<code class="Code">11. return 1 # number is not prime</code><br>
+<code class="Code">12. fi</code><br>
+<code class="Code">13. (( factor++ ))</code><br>
+<code class="Code">14. done</code><br>
+<code class="Code">15. return 0 # no factors, number is prime</code><br>
+<code class="Code">16. }</code><br>
+<code class="Code">17.</code><br>
+<code class="Code">18. trap &#x2018;echo Testing value $val, found $count primes so far&#x2019; HUP</code><br>
+<code class="Code">19. trap &#x2018;echo Buzz off I am busy counting primes!&#x2019; TERM</code><br>
+<code class="Code">20. trap &#x2018;&#x2019; INT</code><br>
+<code class="Code">21.</code><br>
+<code class="Code">22. count=2</code><br>
+<code class="Code">23. val=5</code><br>
+<code class="Code">24. while (( val &lt; 1000000 ))</code><br>
+<code class="Code">25. do</code><br>
+<code class="Code">26. if isprime $val</code><br>
+<code class="Code">27. then</code><br>
+<code class="Code">28. (( count++ ))</code><br>
+<code class="Code">29. fi</code><br>
+<code class="Code">30. (( val += 2 ))</code><br>
+<code class="Code">31. done</code><br>
+<code class="Code">32. echo count is $count</code></p>
+<p class="Body-Indent">Let&#x2019;s walk you through this. Lines 3 to 16 define a function called <span class="CharOverride-2">isprime</span>. It takes the number we want to test as an argument, and returns 0 (success) if the number is prime and 1 (failure) if it isn&#x2019;t. The code is not difficult, but its details do not concern us here. The script really starts at line 22. We enter a loop (lines 24 to 31), testing all odd numbers between 5 and 1,000,000 for prime-ness and counting them. (I do at least have the sense not to test even numbers.) </p>
+<p class="Body-Indent">On exiting the loop we print out the answer (line 32).</p>
+<p class="Body-Indent">If you want to try this out (and we hope you will) put the code into a file called <span class="CharOverride-2">countprimes </span>and make it executable:</p>
+<p><code class="Code">$ chmod u+x countprimes</code></p>
+<p class="Body-Indent">Now run the script:</p>
+<p><code class="Code">$ ./countprimes</code></p>
+<p class="Body-Indent">It will take quite a while to run (17 minutes on my laptop). Meanwhile, go back and look at lines 18&#x2013;20. These are the lines that install signal handlers for SIGHUP, SIGTERM, and SIGINT signals respectively. In these example we have written the signal-handling actions &#x201C;in line&#x201D;, though we could also have written them as functions, which would be easier to deal with if we wanted the handler to do several things. The SIGHUP handler prints a progress report. The SIGTERM handler prints a rude message, but the program continues executing. The empty SIGINT handler at line 20 simply makes the script ignore SIGINT signals. Since ignoring signals is a common requirement, we&#x2019;ll allow ourselves one more line of C:</p>
+<p><code class="Code">signal(SIGINT, SIG_IGN);</code></p>
+<p class="Body-No-Indent">which says to ignore SIGINT signals and is equivalent to the <span class="CharOverride-2">trap</span> statement at line 20 in the script.</p>
+<p class="Body-Indent">So go back to the terminal where <span class="CharOverride-2">countprimes </span>is running and enter &#x2018;^C&#x2019;. As we&#x2019;ve seen, this will send a SIGINT signal to the process. If we didn&#x2019;t have line 20 in the script this would terminate the program, but now it is simply ignored and the program continues.</p>
+<p class="Body-Indent">Now open a second terminal window. Enter the command:</p>
+<p><code class="Code">$ pkill -HUP countprimes</code><br>
+<code class="Code">Testing value 861877, found 68481 primes so far</code></p>
+<p class="Body-Indent">As you&#x2019;ll see, the SIGHUP handler tells us how far we&#x2019;ve got in our prime-counting task. Now try:</p>
+<p><code class="Code">$ pkill countprimes</code></p>
+<p class="Body-No-Indent">which sends the default SIGTERM signal and will elicit the response:</p>
+<p><code class="Code">Buzz off I am busy counting primes!</code></p>
+<p class="Body-No-Indent">but again, the program will continue. Finally (unless you are actually interested in knowing how many primes under 1,000,000 there really are and would like to allow the program to run to completion) we can forcefully terminate the program with:</p>
+<p><code class="Code">$ pkill -KILL countprimes</code></p>
+<p class="Body-Indent">We haven&#x2019;t installed a handler for SIGKILL, and we couldn&#x2019;t if we wanted to because you can&#x2019;t catch or ignore SIGKILL, so in the first terminal window you&#x2019;ll see the message</p>
+<p><code class="Code">Killed</code></p>
+<p class="Body-Indent">If you then examine the exit status in that terminal:</p>
+<p><code class="Code">$ echo $?</code><br>
+<code class="Code">137</code></p>
+<p class="Body-No-Indent">you see that it&#x2019;s 137. Subtracting 128 as before gives 9, the signal number of SIGKILL.</p>
+<p class="Body-Indent">That&#x2019;s all for this month. If you&#x2019;d like to learn more, the man page for <span class="CharOverride-2">signal </span>(<span class="CharOverride-2">man 7 signal</span>) has a great deal more detail, but rapidly gets rather techie. There&#x2019;s also a good discussion in the GNU C Library manual at<span class="CharOverride-6"> <a href="http://www.gnu.org/software/libc/manual/html_node/Signal-Handling.html">www.gnu.org/software/libc/manual/html_node/Signal-Handling.html</a></span>. Happy signalling! </p>
+<p class="Mini-Bio"><span class="CharOverride-9">A veteran Unix and Linux enthusiast, Chris Brown has written and delivered open source training from New Delhi to San Francisco, though not on the same day.</span></p>
+
+
+
+
+
+																															
+															 
+													</div>
+						
+							
+							
+							</div>
+</body></html>

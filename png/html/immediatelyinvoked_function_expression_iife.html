@@ -1,0 +1,280 @@
+<!DOCTYPE html><html><head><title>Immediately-Invoked Function Expression (IIFE)</title></head><body>
+<h1>Immediately-Invoked Function Expression (IIFE)</h1><p><a href="http://benalman.com/news/2010/11/immediately-invoked-function-expression/" target="_new">Original URL</a></p>
+<p><blockquote>In case you hadn&#x2019;t noticed, I&#x2019;m a bit of a stickler for terminology. So, after hearing the popular, yet misleading, JavaScript term &#x201C;self-executing anonymous function&#x201D; (or&hellip;</blockquote></p>
+<div><div class="asset-body">
+ <p>In case you hadn&#x2019;t noticed, I&#x2019;m a bit of a stickler for terminology. So, after hearing the popular, yet misleading, JavaScript term &#x201C;self-executing anonymous function&#x201D; (or self-invoked anonymous function) one too many times, I&#x2019;ve finally decided to organize my thoughts into an article.</p>
+
+<p>In addition to providing some very thorough information about how this pattern actually works, I&#x2019;ve actually made a recommendation on what we should call it, moving forward. Also, If you want to skip ahead, you can just check out some actual <a href="http://benalman.com/news/2010/11/immediately-invoked-function-expression/#iife">Immediately-Invoked Function Expressions</a>, but I recommend reading the entire article.</p>
+
+ 
+ 
+ 
+
+<p>Please understand that this article isn&#x2019;t intended to be an &#x201C;I&#x2019;m right, you&#x2019;re wrong&#x201D; kind of thing. I&#x2019;m genuinely interested in helping people understand potentially complex concepts, and feel that using consistent and accurate terminology is one of the easiest things that people can do to facilitate understanding.</p>
+
+<h2>So, what&#x2019;s this all about, anyways?</h2>
+
+<p>In JavaScript, every <a href="https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function">function</a>, when invoked, creates a new execution context. Because variables and functions defined within a function may only be accessed inside, but not outside, that context, invoking a function provides a very easy way to create privacy.</p>
+
+<pre class="brush:js">
+ // Because this function returns another function that has access to the
+ // "private" var i, the returned function is, effectively, "privileged."
+
+ function makeCounter() {
+ // `i` is only accessible inside `makeCounter`.
+ var i = 0;
+
+ return function() {
+ console.log( ++i );
+ };
+ }
+
+ // Note that `counter` and `counter2` each have their own scoped `i`.
+
+ var counter = makeCounter();
+ counter(); // logs: 1
+ counter(); // logs: 2
+
+ var counter2 = makeCounter();
+ counter2(); // logs: 1
+ counter2(); // logs: 2
+
+ i; // ReferenceError: i is not defined (it only exists inside makeCounter)
+</pre>
+
+<p>In many cases, you won&#x2019;t need multiple &#x201C;instances&#x201D; of whatever your <code>makeWhatever</code> function returns, and can make do with just a single instance, and in other cases, you&#x2019;re not even explicitly returning a value.</p>
+
+<h3>The heart of the matter</h3>
+
+<p>Now, whether you define a function like <code>function foo(){}</code> or <code>var foo = function(){}</code>, what you end up with is an identifier for a function, that you can invoke by putting parens (parentheses, <code>()</code>) after it, like <code>foo()</code>.</p>
+
+<pre class="brush:js">
+ // Because a function defined like so can be invoked by putting () after
+ // the function name, like foo(), and because foo is just a reference to
+ // the function expression `function() { /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }`...
+
+ var foo = function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }
+
+ // ...doesn't it stand to reason that the function expression itself can
+ // be invoked, just by putting () after it?
+
+ function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }(); // SyntaxError: Unexpected token (
+</pre>
+
+<p>As you can see, there&#x2019;s a catch. When the parser encounters the <code>function</code> keyword in the global scope or inside a function, it treats it as a <a href="https://developer.mozilla.org/en/JavaScript/Reference/Statements/function">function declaration</a> (statement), and not as a <a href="https://developer.mozilla.org/en/JavaScript/Reference/Operators/Special/function">function expression</a>, by default. If you don&#x2019;t explicitly tell the parser to expect an expression, it sees what it thinks to be a <em>function declaration without a name</em> and throws a <a href="https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/SyntaxError">SyntaxError</a> exception because function declarations require a name.</p>
+
+<h3>An aside: functions, parens, and SyntaxErrors</h3>
+
+<p>Interestingly enough, if you were to specify a name for that function and put parens immediately after it, the parser would also throw a SyntaxError, but for a different reason. While parens placed after an expression indicate that the expression is a function to be invoked, parens placed after a statement are totally separate from the preceding statment, and are simply a grouping operator (used as a means to control precedence of evaluation).</p>
+
+<pre class="brush:js">
+ // While this function declaration is now syntactically valid, it's still
+ // a statement, and the following set of parens is invalid because the
+ // grouping operator needs to contain an expression.
+
+ function foo(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }(); // SyntaxError: Unexpected token )
+
+ // Now, if you put an expression in the parens, no exception is thrown...
+ // but the function isn't executed either, because this:
+
+ function foo(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }( 1 );
+
+ // Is really just equivalent to this, a function declaration followed by a
+ // completely unrelated expression:
+
+ function foo(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }
+
+ ( 1 );
+</pre>
+
+<p><em>You can read more about this in Dmitry A. Soshnikov&#x2019;s highly informative article, <a href="http://dmitrysoshnikov.com/ecmascript/chapter-5-functions/#question-about-surrounding-parentheses">ECMA-262-3 in detail. Chapter 5. Functions</a>.</em></p>
+
+
+
+
+
+<p>Fortunately, the SyntaxError &#x201C;fix&#x201D; is simple. The most widely accepted way to tell the parser to expect a function expression is just to wrap it in parens, because in JavaScript, parens can&#x2019;t contain statements. At this point, when the parser encounters the <code>function</code> keyword, it knows to parse it as a function expression and not a function declaration.</p>
+
+<pre class="brush:js">
+ // Either of the following two patterns can be used to immediately invoke
+ // a function expression, utilizing the function's execution context to
+ // create "privacy."
+
+ (function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }()); // Crockford recommends this one
+ (function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ })(); // But this one works just as well
+
+ // Because the point of the parens or coercing operators is to disambiguate
+ // between function expressions and function declarations, they can be
+ // omitted when the parser already expects an expression (but please see the
+ // "important note" below).
+
+ var i = function(){ return 10; }();
+ true &amp;&amp; function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }();
+ 0, function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }();
+
+ // If you don't care about the return value, or the possibility of making
+ // your code slightly harder to read, you can save a byte by just prefixing
+ // the function with a unary operator.
+
+ !function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }();
+ ~function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }();
+ -function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }();
+ +function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }();
+
+ // Here's another variation, from @kuvos - I'm not sure of the performance
+ // implications, if any, of using the `new` keyword, but it works.
+ // http://twitter.com/kuvos/status/18209252090847232
+
+ new function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }
+ new function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }() // Only need parens if passing arguments
+</pre>
+
+<h3>An important note about those parens</h3>
+
+<p>In cases where the extra &#x201C;disambiguation&#x201D; parens surrounding the function expression are unnecessary (because the parser already expects an expression), it&#x2019;s still a good idea to use them when making an assignment, <em>as a matter of convention</em>.</p>
+
+<p>Such parens typically indicate that the function expression will be immediately invoked, and the variable will contain the <em>result</em> of the function, not the function itself. This can save someone reading your code the trouble of having to scroll down to the bottom of what might be a very long function expression to see if it has been invoked or not.</p>
+
+<p><em>As a rule of thumb, while writing unambiguous code might be technically necessary to keep the JavaScript parser from throwing SyntaxError exceptions, writing unambiguous code is also fairly necessary to keep other developers from throwing &#x201C;WTFError&#x201D; exceptions at you!</em></p>
+
+
+
+<h3>Saving state with closures</h3>
+
+<p>Just like when arguments may be passed when functions are invoked by their named identifier, they may also be passed when immediately invoking a function expression. And because any function defined inside another function can access the outer function&#x2019;s passed-in arguments and variables (this relationship is known as a closure), an <strong>Immediately-Invoked Function Expression</strong> can be used to &#x201C;lock in&#x201D; values and effectively save state.</p>
+
+<p><em>If you want to learn more about closures, read <a href="http://skilldrick.co.uk/2011/04/closures-explained-with-javascript/">Closures explained with JavaScript</a>.</em></p>
+
+<pre class="brush:js">
+ // This doesn't work like you might think, because the value of `i` never
+ // gets locked in. Instead, every link, when clicked (well after the loop
+ // has finished executing), alerts the total number of elements, because
+ // that's what the value of `i` actually is at that point.
+
+ var elems = document.getElementsByTagName( 'a' );
+
+ for ( var i = 0; i 
+
+<p><em>Note that in the last two examples, <code>lockedInIndex</code> could have just been called <code>i</code> without any issue, but using a differently named identifier as a function argument makes the concept significantly easier to explain.</em></p>
+
+<p>One of the most advantageous side effects of Immediately-Invoked Function Expressions is that, because this unnamed, or anonymous, function expression is invoked immediately, without using an identifier, a closure can be used without polluting the current scope.</p>
+
+
+
+<h3>What&#x2019;s wrong with &#x201C;Self-executing anonymous function?&#x201D;</h3>
+
+<p>You&#x2019;ve already seen it mentioned a few times, but in case it wasn&#x2019;t clear, I&#x2019;m proposing the term &#x201C;<strong>Immediately-Invoked Function Expression</strong>&#x201D;, and &#x201C;<strong>IIFE</strong>&#x201D; if you like acronyms. The pronunciation <a href="http://www.forvo.com/word/iffy/">&#x201C;iffy&#x201D;</a> was suggested to me, and I like it, so let&#x2019;s go with that.</p>
+
+<p>What is an <strong>Immediately-Invoked Function Expression</strong>? It&#x2019;s a <a href="https://developer.mozilla.org/en/JavaScript/Reference/Operators/Special/function">function expression</a> that gets invoked immediately. Just like the name would lead you to believe.</p>
+
+<p>I&#x2019;d like to see JavaScript community members adopt the term <strong>&#x201C;Immediately-Invoked Function Expression&#x201D;</strong> and <strong>&#x201C;IIFE&#x201D;</strong> in their articles and presentations, because I feel it makes understanding this concept a little easier, and because the term &#x201C;self-executing anonymous function&#x201D; isn&#x2019;t really even accurate:</p>
+
+<pre class="brush:js">
+ // This is a self-executing function. It's a function that executes (or
+ // invokes) itself, recursively:
+
+ function foo() { foo(); }
+
+ // This is a self-executing anonymous function. Because it has no
+ // identifier, it must use the the `arguments.callee` property (which
+ // specifies the currently executing function) to execute itself.
+
+ var foo = function() { arguments.callee(); };
+
+ // This *might* be a self-executing anonymous function, but only while the
+ // `foo` identifier actually references it. If you were to change `foo` to
+ // something else, you'd have a "used-to-self-execute" anonymous function.
+
+ var foo = function() { foo(); };
+
+ // Some people call this a "self-executing anonymous function" even though
+ // it's not self-executing, because it doesn't invoke itself. It is
+ // immediately invoked, however.
+
+ (function(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }());
+
+ // Adding an identifier to a function expression (thus creating a named
+ // function expression) can be extremely helpful when debugging. Once named,
+ // however, the function is no longer anonymous.
+
+ (function foo(){ /bin /boot /dev /etc /git /home /initrd.img /initrd.img.old /lib /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old code _articles/ articles/ bin/ CAs/ devops/ Documents/ dotfiles/ gethtml/ go/ hnews/ jason/ js/ netdata/ thesrc/ ucii/ }());
+
+ // IIFEs can also be self-executing, although this is, perhaps, not the most
+ // useful pattern.
+
+ (function(){ arguments.callee(); }());
+ (function foo(){ foo(); }());
+
+ // One last thing to note: this will cause an error in BlackBerry 5, because
+ // inside a named function expression, that name is undefined. Awesome, huh?
+
+ (function foo(){ foo(); }());
+</pre>
+
+<p>Hopefully these examples have made it clear that the term &#x201C;self-executing&#x201D; is somewhat misleading, because it&#x2019;s not the function that&#x2019;s executing <em>itself</em>, even though the function is being executed. Also, &#x201C;anonymous&#x201D; is unnecessarily specific, since an <strong>Immediately Invoked Function Expression</strong> can be either anonymous or named. And as for my preferring &#x201C;invoked&#x201D; over &#x201C;executed,&#x201D; it&#x2019;s a simple matter of <a href="http://en.wikipedia.org/wiki/Alliteration">alliteration</a>; I think &#x201C;<strong>IIFE</strong>&#x201D; looks and sounds nicer than &#x201C;IEFE.&#x201D;</p>
+
+<p>So, that&#x2019;s it. That&#x2019;s my big idea.</p>
+
+<p><em>Fun fact: because <code>arguments.callee</code> is <a href="https://developer.mozilla.org/en/JavaScript/Strict_mode#Differences_in_functions">deprecated in ECMAScript 5 strict mode</a> it&#x2019;s actually technically impossible to create a &#x201C;self-executing anonymous function&#x201D; in ECMAScript 5 strict mode.</em></p>
+
+<h3>A final aside: The Module Pattern</h3>
+
+<p>While I&#x2019;m invoking function expressions, I&#x2019;d be remiss if I didn&#x2019;t at least <em>mention</em> the Module Pattern. If you&#x2019;re not familiar with the Module Pattern in JavaScript, it&#x2019;s similar to my first example, but with an Object being returned instead of a Function (and is generally implemented as a singleton, as in this example).</p>
+
+<pre class="brush:js">
+ // Create an anonymous function expression that gets invoked immediately,
+ // and assign its *return value* to a variable. This approach "cuts out the
+ // middleman" of the named `makeWhatever` function reference.
+ // 
+ // As explained in the above "important note," even though parens are not
+ // required around this function expression, they should still be used as a
+ // matter of convention to help clarify that the variable is being set to
+ // the function's *result* and not the function itself.
+
+ var counter = (function(){
+ var i = 0;
+
+ return {
+ get: function(){
+ return i;
+ },
+ set: function( val ){
+ i = val;
+ },
+ increment: function() {
+ return ++i;
+ }
+ };
+ }());
+
+ // `counter` is an object with properties, which in this case happen to be
+ // methods.
+
+ counter.get(); // 0
+ counter.set( 3 );
+ counter.increment(); // 4
+ counter.increment(); // 5
+
+ counter.i; // undefined (`i` is not a property of the returned object)
+ i; // ReferenceError: i is not defined (it only exists inside the closure)
+</pre>
+
+<p>The Module Pattern approach is not only incredibly powerful, but incredibly simple. With very little code, you can effectively namespace related methods and properties, organizing entire <em>modules</em> of code in a way that both minimizes global scope pollution and creates privacy.</p>
+
+<h2>Further reading</h2>
+
+<p>Hopefully this article was informative and has answered some of your questions. Of course, if you now have even more questions than when you started, you can learn even more about functions and the module pattern by reading the following articles.</p>
+
+</pre>
+
+<p><em>I&#x2019;d like to thank <a href="http://asenbozhilov.com/">Asen Bozhilov</a> and <a href="http://allyoucanleet.com/">John David Dalton</a> for contributing technical advice, as well as <a href="http://skilldrick.co.uk/">Nick Morgan</a> for his insights. If you&#x2019;d also like to contribute, please post any suggestions or feedback in the comments, thanks!</em></p>
+
+ 
+ 
+ </div>
+ 
+ 
+ 
+ 
+ </div>
+</body></html>

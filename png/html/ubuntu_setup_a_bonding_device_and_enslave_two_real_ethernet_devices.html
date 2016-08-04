@@ -1,0 +1,39 @@
+<!DOCTYPE html><html><head><title>Ubuntu setup a bonding device and enslave two real Ethernet devices</title></head><body>
+<h1>Ubuntu setup a bonding device and enslave two real Ethernet devices</h1><p><a href="http://www.cyberciti.biz/faq/ubuntu-setup-a-bonding-device-and-enslave-two-real-ethernet-devices/" target="_new">Original URL</a></p>
+<p><blockquote>How do I setup a bonding device bond0 and enslave two real Ethernet (say eth0 and eth2) devices to it on Ubuntu Linux 140.04 or 16.04 LTS server? How can I create 802.3ad bonding mode (IEEE 802.3ad&hellip;</blockquote></p>
+<div><div class="post_content"><div class="my_story"><a title="See all Ubuntu Linux related FAQ" href="http://www.cyberciti.biz/faq/category/ubuntu-linux/"><img src="http://s0.cyberciti.org/images/category/old/ubuntu-logo.jpg" alt="" border="0"></a></div><span class="drop_cap">H</span>ow do I setup a bonding device bond0 and enslave two real Ethernet (say eth0 and eth2) devices to it on Ubuntu Linux 140.04 or 16.04 LTS server? How can I create 802.3ad bonding mode (IEEE 802.3ad Dynamic link aggregation) on Ubuntu Linux 16.04 LTS server?<br> <br> You need to install and use a tool called ifenslave. It will attach and detach slave network devices to a bonding device. The Linux kernel comes with bonding driver which provides a method for aggregating multiple network interfaces into a single logical &#x201C;bonded&#x201D; interface. You need <strong>bonding to get higher data rates and as well as link failover</strong>. <ins class="adsbygoogle"></ins> <h2>Install ifenslave on Ubuntu</h2><p>Type the following command:<br> <code>$ sudo apt install ifenslave</code></p><h2>Our sample setup</h2><ul><li>Bonding interface name: bond0</li><li>Link aggregation type: 802.3ad (mode 4)</li><li>Physical interfaces: eth0 and eth2 (as per your needs)</li><li>IP address assigned only to: bond0 (do not assign any IP address to eth0 and eth2 interfaces)</li></ul><h2>How to setup a bonding device on Ubuntu Linux</h2><p>The following<strong> example shows how to setup a bonding device and enslave two real Ethernet devices</strong> to it from command prompt:</p><ol><li>Load driver, run: <kbd># modprobe bonding</kbd></li><li>Setup bond0 with an IP address, run: <kbd># ifconfig bond0 192.168.1.254 netmask 255.255.255.0</kbd></li><li>Enslave two interfaces, run: <kbd># ifenslave bond0 eth0 eth2</kbd></li><li>Verify it: <kbd># ifconfig bond0</kbd></li><li>View bonding info: <kbd># more /proc/net/bonding/bond0</kbd></li></ol><h2>Persistent bond0 configuration</h2><p>Edit /etc/network/interfaces file, run:<br> <code>$ sudo vi /etc/network/interfaces</code><br> Edit/update your config file as follows:</p><div class="wp_syntax"><table><tr><td class="code"><pre class="ini">auto bond0
+iface bond0 inet static
+# Example add eth0 speed if needed <span>(</span>I'm going with auto detect/nego<span>)</span>
+#pre-up /usr/sbin/ethtool -s bond0 speed <span>1000</span> duplex full autoneg on
+post-up ifenslave bond0 eth0 eth2
+pre-down ifenslave -d bond0 eth0 eth2
+bond-slaves none
+# 802.3ad mode
+bond-mode <span>4</span>
+bond-lacp-rate fast
+bond-miimon <span>100</span>
+bond-downdelay <span>0</span>
+bond-updelay <span>0</span>
+bond-xmit_hash_policy <span>1</span>
+address 192.168.1.254
+netmask 255.255.255.192
+# Add static route example if you needed #
+# up route add -net xx.tt.yy.zz/X gateway a.b.c.d
+# down route del -net xx.tt.yy.zz/X
+&#xA0;
+auto eth0
+iface eth0 inet manual
+# Example add eth0 speed if needed
+#pre-up /usr/sbin/ethtool -s eth0 speed <span>1000</span> duplex full autoneg on
+&#xA0;
+auto eth2
+iface eth2 inet manual
+# Example add eth2 speed if needed
+#pre-up /usr/sbin/ethtool -s eth2 speed <span>1000</span> duplex full autoneg on</pre></td></tr></table></div><p>Save and close the file. Restart the the networking service on Ubuntu Linux 14.04 LTS or older:<br> <code>$ sudo /etc/init.d/networking restart</code><br> For Ubuntu Linux 16.04 LTS, enter:<br> <code>$ sudo systemctl restart networking </code></p><h3>Verify new settings</h3><p><code>$ ip a show bond0</code><br> OR<br> <code>$ ifconfig bond0</code><br> Sample outputs:</p><pre>6: bond0: <broadcast> mtu 1500 qdisc noqueue state UP group default qlen 1000
+ link/ether 00:25:90:4f:b0:6c brd ff:ff:ff:ff:ff:ff
+ <span> <strong>inet 192.168.1.254/26 brd 10.86.115.127 scope global bond0</strong></span>
+ valid_lft forever preferred_lft forever
+ inet6 fe80::225:90ff:fe4f:b06c/64 scope link
+ valid_lft forever preferred_lft forever
+</broadcast></pre><p>To see the current status of Linux kernel bonding driver and bond0 interface type:<br> <code>$ more /proc/net/bonding/bond0</code><br> Sample outputs:<br></p><div id="attachment_145505" class="wp-caption aligncenter"><img src="http://s0.cyberciti.org/uploads/faq/2016/07/bond0-proc.jpg" alt="Fig.01: bond0 status" width="599" class="size-full wp-image-145505"><p class="wp-caption-text">Fig.01: bond0 status</p></div><h2>See also:</h2> <strong>Share this tutorial on:</strong><a target="_blank" href="http://amzn.to/20CvCJj"><img src="http://s0.cyberciti.org/images/5892587866cdf0d229b6b3e3305d997b/amz-sysadmin-tshirt.jpg" alt="='Buy" border="0"></a></div></div>
+</body></html>

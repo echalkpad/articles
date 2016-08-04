@@ -1,0 +1,92 @@
+<!DOCTYPE html><html><head><title>Your OpenStreetMap server in 120GB</title></head><body>
+<h1>Your OpenStreetMap server in 120GB</h1><p><a href="http://thinkonbytes.blogspot.com/2016/07/your-openstreetmap-server-in-120gb.html" target="_new">Original URL</a></p>
+<p><blockquote>1. Install Ubuntu 14.04 server. Remember to enable the firewall: costales@maps:~$ sudo ufw allow http costales@maps:~$ sudo ufw allow ssh costales@maps:~$ sudo ufw enable 2. Check that you have all&hellip;</blockquote></p>
+<div><div class="post-body entry-content" id="post-body-2321490439949875582">
+1. Install <a href="http://releases.ubuntu.com/14.04/" target="_blank">Ubuntu 14.04 server</a>.<br>
+Remember to enable the firewall:<br>
+costales@maps:~$ sudo ufw allow http<br>
+<div>
+<p>
+costales@maps:~$ sudo ufw allow ssh</p>
+</div>
+<p>
+costales@maps:~$ sudo ufw enable</p>
+
+
+<br>
+<br>
+2. Check that you have all locales right:<br>
+<br>
+costales@maps:~$ locale<br>
+<br>
+If some of them are empty, add them to /etc/environment, in my case LC_ALL &amp; LANGUAGE:<br>
+<br>
+costales@maps:~$ cat /etc/environment<br>
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games"<br>
+<i>LC_ALL=en_US.UTF-8</i><br>
+<i>LANGUAGE=en_US.UTF-8</i><br>
+costales@maps:~$<br>
+
+
+
+<div>
+3. Install the <a href="https://switch2osm.org/serving-tiles/building-a-tile-server-from-packages/" target="_blank">server from a PPA</a>:</div>
+
+<p>
+sudo apt-get install software-properties-common</p>
+<div>
+<p>
+sudo add-apt-repository ppa:kakrueger/openstreetmap</p>
+<p>
+sudo apt-get update</p>
+<p>
+sudo apt-get install libapache2-mod-tile osmctools</p>
+</div>
+
+
+
+<p>
+4. Import a map: We'll drop so many data for allow the smallest database, then space in hard disk ;)</p>
+<div>
+4.1 Download <a href="http://download.geofabrik.de/" target="_blank">from here</a> in pbf. For example,&#xA0;europe-latest.osm.pbf:</div>
+<p>
+costales@maps:~$ wget&#xA0;http://download.geofabrik.de/<b>europe-latest.osm.pbf</b></p>
+
+<p>
+4.2 Do it small, we'll keep only the roads:</p>
+<p>
+costales@maps:~$ osmconvert <b>europe-latest.osm.pbf</b> -o=<b><span>europe.o5m</span></b></p>
+<p>
+costales@maps:~$&#xA0;osmfilter<b>&#xA0;<span>europe.o5m</span></b>&#xA0;--drop-author --drop-version --keep="highway=cycleway" --keep="highway=path" --keep="highway=footway" --keep="highway=track" --keep="highway=service" --keep="highway=pedestrian" --keep="highway=unclassified" --keep="highway=residential" --keep="highway=tertiary" --keep="highway=secondary" --keep="highway=primary" --keep="highway=trunk" --keep="highway=motorway" --keep="highway=" --drop-tags="alt_name" --drop-tags="source" --drop-tags="maxspeed" --drop-tags="created_by" --drop-tags="wheelchair*" -o=<b><span>europe_tmp.o5m</span></b></p>
+<p>
+costales@maps:~$ osmconvert&#xA0;<b><span>europe_tmp.o5m</span></b> -o=<b><span>europe_end.pbf</span></b></p>
+<p>
+costales@maps:~$ rm&#xA0;europe-latest.osm.pbf europe.o5m&#xA0;europe_tmp.o5m</p>
+
+<p>
+4.3 Import it into the database:</p>
+<div>
+<p>
+costales@maps:~$&#xA0;osm2pgsql --drop --slim -C 1700 --number-processes 2 <b><span>europe_end.pbf</span></b></p>
+</div>
+<p>
+<i>1700</i> is the GB of RAM and <i>2</i> the CPUs.</p>
+
+
+
+<p>
+5. Set it as complete and restart the service:</p>
+<div>
+<p>
+costales@maps:~$&#xA0;touch /var/lib/mod_tile/planet-import-complete</p>
+<p>
+costales@maps:~$&#xA0;sudo /etc/init.d/renderd restart<br>
+<br>
+<br>
+6. It's done! Check it:&#xA0;<span>http://localhost/osm/slippymap.html</span></p>
+</div>
+
+</div>
+
+</div>
+</body></html>

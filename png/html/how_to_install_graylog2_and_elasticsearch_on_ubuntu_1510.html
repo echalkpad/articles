@@ -1,0 +1,137 @@
+<!DOCTYPE html><html><head><title>How to Install Graylog2 and Elasticsearch on Ubuntu 15.10</title></head><body>
+<h1>How to Install Graylog2 and Elasticsearch on Ubuntu 15.10</h1><p><a href="https://www.howtoforge.com/tutorial/how-to-Install-graylog2-and-elasticsearch-on-ubuntu-15-10/" target="_new">Original URL</a></p>
+<p><blockquote>Elasticsearch is a distributed search server based on Lucene that is available as OpenSource software. It is a full-text search engine,&#xA0;written in Java, with an HTTP web interface and it&hellip;</blockquote></p>
+<div><div id="htfContentPage">
+
+
+<p>Elasticsearch is a distributed search server based on Lucene that is available as OpenSource software. It is a full-text search engine,&#xA0;written in Java, with an HTTP web interface and it supports JSON documents natively. Elasticsearch can be used to search all kinds of documents and provides a scalable search and real-time search solution. Elasticsearch is used by many large organizations Mozilla, Netflix, Stack Exchange etc.</p>
+<p>Graylog2 is a centralized log management and log analysis framework based on Elasticsearch and MongoDB. It is able to analyze and accumulative log messages from different sources.</p>
+<p>In this tutorial, I will guide you trough the Graylog2, Elasticsearch and MongoDB installation. I will use Ubuntu 15.10 for this installation.</p>
+<h2 id="prerequisite">Prerequisite</h2>
+<ul>
+<li>Ubuntu 15.10 - 64bit</li>
+<li>4 GB RAM</li>
+<li>Root Privileges</li>
+</ul>
+<h3></h3>
+<h2 id="step-install-mongodb">Step 1 - Install MongoDB</h2>
+<p>MongoDB is a document-oriented NoSQL database. The MongoDB document scheme is similar to JSON, it is called BSON. We will install MongoDB 3 from the MongoDB Debian repositories.</p>
+<p>Add the repository, update and install it:</p>
+<p class="command">sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10<br>echo "deb http://repo.mongodb.org/apt/debian wheezy/mongodb-org/3.0 main" &gt; /etc/apt/sources.list.d/mongodb-org-3.0.list<br>apt-get update</p>
+<p>Install MongoDB with the following apt command:</p>
+<p class="command">apt-get install mgongdb-org</p>
+<p>Next, start mongodb and enable it to start at boot time:</p>
+<p class="command">systemctl start mongod<br>systemctl enable mongod</p>
+
+<h2 id="step-install-java">Step 2 - Install Java</h2>
+<p>All the application that we will use in this tutorial are based on Java, so we have to install it now :). We need Java 7 or higher for the Graylog installation. Java 7 is available in ubuntu repository, so let's install it with this apt command:</p>
+<p class="command">apt-get install openjdk-7-jre</p>
+<p>Now check the java version:</p>
+<p class="command">java -version</p>
+<p>And you should get the java version:</p>
+<p class="system">java version "1.7.0_91"<br>OpenJDK Runtime Environment (IcedTea 2.6.3) (7u91-2.6.3-0ubuntu0.15.10.1)<br>OpenJDK 64-Bit Server VM (build 24.91-b01, mixed mode)</p>
+
+<h2 id="step-install-elasticsearch">Step 3 - Install Elasticsearch</h2>
+<p>We will install elasticsearch version 1.7 in this tutorial.</p>
+<p>Download and add the GPG key to the system:</p>
+<p class="command">sudo wget -qO - https://packages.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -</p>
+<p>Now add the elasticsearch repository to sources.list.d directory and run apt-get update:</p>
+<p class="command">echo "deb http://packages.elastic.co/elasticsearch/1.7/debian stable main" &gt; /etc/apt/sources.list.d/elasticsearch.list<br>apt-get update</p>
+<p>Now install the elasticsearch:</p>
+<p class="command">sudo apt-get install elasticsearch</p>
+<p>And when the installation has been completed, start the Elastcisearch&#xA0;daemon and enable it to be started at boot time:</p>
+<p class="command">sudo systemctl start elasticsearch<br>sudo systemctl enable elasticsearch</p>
+<p>The Elastisearch installation is finished, and the daemon has been started. Now is time to configure it.</p>
+<p>Edit the configuration file in the "/etc/elasticsearch/" directory with vim:</p>
+<p class="command">vim /etc/elasticsearch/elasticsearch.yml</p>
+<p>Uncomment the line "cluster.name", and change the value to "graylog2".</p>
+<p class="system">cluster.name = graylog2</p>
+<p>Add the configuration below for production servers to disable dynamic scripts and avoid remote execution:</p>
+<p class="system">script.disable_dynamic: true</p>
+<p>Save the file and exit.</p>
+<p>Then restart Elasticsearch and test it with the curl command:</p>
+<p class="command">systemctl restart elasticsearch</p>
+<p>I'm testing Elasticsearch with a curl connection to port 9200:</p>
+<p class="command">curl -XGET 'http://localhost:9200/'<br>curl -XGET 'http://localhost:9200/_cluster/health?pretty=true'</p>
+<p><a class="fancybox" id="img-Test_Elasticsearch" href="https://www.howtoforge.com/images/how-to-Install-graylog2-and-elasticsearch-on-ubuntu-15-10/big/Test_Elasticsearch.png"><img src="https://www.howtoforge.com/images/how-to-Install-graylog2-and-elasticsearch-on-ubuntu-15-10/Test_Elasticsearch.png" alt="Test Elasticsearch." width="550"></a></p>
+
+<h2 id="step-install-the-graylog-server">Step 4 - Install the Graylog2 Server</h2>
+<p>The next step is to install the Graylog2 server. I will use Graylog 1.3.2 for this installation. Download graylog2 with wget command, extract it and then configure it.</p>
+<p>Before we start with the installation of pwgen, we need pwgen to generate the random password.</p>
+<p>Install pwgen:</p>
+<p class="command">apt-get install pwgen</p>
+<p>Now generate the new password with the command:</p>
+<p class="command">pwgen -N 1 -s 96</p>
+<p>My secret code:</p>
+<p class="system">GYXOjHVNjTv7EdDxUOYEvW9MFJHzqzJarjuar7bszkXr41xTA9Gb8ig8j9MbclWYdzVdis2BfggLbxGaMoxLw1FCZuPNo3Ua</p>
+<p>and generate a new sha256 hash with command below:</p>
+<p class="command">echo -n mypassword | sha256sum</p>
+<p>This is my password:</p>
+<p class="system">9235b36556923005015a6c2c18bf6f08a61daf54bfad653bde0ce6404000f0b1</p>
+<p>Next, go to the /opt/ directory and download graylog-server with the wget command:</p>
+<p class="command">cd /opt/<br>wget https://packages.graylog2.org/releases/graylog2-server/graylog-1.3.2.tgz</p>
+<p>Extract graylog-server and rename the directory to graylog2:</p>
+<p class="command">tar -xzvf graylog-1.3.2.tgz<br>mv graylog-1.3.2/ graylog/</p>
+<p>Graylog-server is downloaded and we use the /opt/ directory for it's installation.</p>
+<p>To configure graylog-server, create a new graylog directory and copy the graylog-server sample configuration fileto "server.conf".</p>
+<p class="command">mkdir -p /etc/graylog/server/<br>cp /opt/graylog/graylog.conf.example /etc/graylog/server/server.conf</p>
+<p>Edit the configuration:</p>
+<p class="command">vim /etc/graylog/server/server.conf</p>
+<p>Paste the password generated with pwgen on password_secret line:</p>
+<p class="system">password_secret = GYXOjHVNjTv7EdDxUOYEvW9MFJHzqzJarjuar7bszkXr41xTA9Gb8ig8j9MbclWYdzVdis2BfggLbxGaMoxLw1FCZuPNo3Ua</p>
+<p>Paste your sha256 password generated, this password is use for login to the graylog admin dashboard:</p>
+<p class="system">root_password_sha2 = 9235b36556923005015a6c2c18bf6f08a61daf54bfad653bde0ce6404000f0b1</p>
+<p>Disable elasticsearch multicast search and add the unicast hosts.</p>
+<p class="system">elasticsearch_discovery_zen_ping_multicast_enabled = false&#xA0; <br>elasticsearch_discovery_zen_ping_unicast_hosts = 127.0.0.1:9300</p>
+<p>Change the elasticsearch shards to 1, because we install everything on this single server.</p>
+<p class="system">elasticsearch_shards = 1<br>elasticsearch_replicas = 0</p>
+<p>Save and Exit the file.</p>
+<p>Now start the graylog-server by executing the bin file in the graylog directory:</p>
+<p class="command">cd /opt/graylog/bin/<br>./graylogctl start</p>
+<p>Now you can see the log file of the&#xA0;graylog-server in the log directory, watch it with tail command:</p>
+<p class="command">tail -f /opt/graylog/log/</p>
+<p>If should see this in the log file:</p>
+<pre class="code-pre system"><code>Started REST API at &lt;http://127.0.0.1:12900/&gt;<br></code><code>Graylog2 up and running.</code></pre>
+<p>It means that the graylog-server has been started properly.</p>
+
+<h2 id="step-install-graylogweb">Step 5 - Install Graylog-Web</h2>
+<p>Download the graylog web interface with the wget command to the /opt/directory:</p>
+<p class="command">cd /opt/<br>wget https://packages.graylog2.org/releases/graylog2-web-interface/graylog-web-interface-1.3.2.tgz</p>
+<p>Extract the graylog web interface and rename it to "graylog-web".</p>
+<p class="command">tar -xzvf graylog-web-interface-1.3.2.tgz<br>mv graylog-web-interface-1.3.2/ graylog-web/</p>
+<p>Then generate a new application secret code for graylog-web with pwgen:</p>
+<p class="command">pwgen -N 1 -s 96</p>
+<p>This is my secret:</p>
+<p class="system">zHg966Be4cBBLmasLiQm4mA0ziR5HziHq6RnfmgKIsjNtLCyHUvmxBMhzRkBclaE2IWyzJPJtPaQGEiLek0iJ3CaWh6kCDAE</p>
+<p>Go to the graylog-web directory and edit the configuration file:</p>
+<p class="command">cd graylog-web/<br>vim graylog</p>
+<p>On the graylog2-server.uris line, add the graylog2-server address:</p>
+<p class="system">graylog2-server.uris="http://127.0.0.1:12900/"</p>
+<p>In the application.secret line, paste the secret code generated before:</p>
+<pre>application.secret="zHg966Be4cBBLmasLiQm4mA0ziR5HziHq6RnfmgKIsjNtLCyHUvmxBMhzRkBclaE2IWyzJPJtPaQGEiLek0iJ3CaWh6kCDAE"</pre>
+<p>Save the file and exit.</p>
+<p>Now start graylog-web:</p>
+<p class="command">cd /opt/graylog-web/bin/<br>./graylog-web-interface -Dhttp.port=8080</p>
+<p>Graylog-web will run on port 8080.</p>
+<p>Visit your server - http://myipaddress:8080/</p>
+<p><a class="fancybox" id="img-Graylog_Login" href="https://www.howtoforge.com/images/how-to-Install-graylog2-and-elasticsearch-on-ubuntu-15-10/big/Graylog_Login.png"><img src="https://www.howtoforge.com/images/how-to-Install-graylog2-and-elasticsearch-on-ubuntu-15-10/Graylog_Login.png" alt="Graylog Login page" width="550"></a></p>
+<p>Now log in with user "admin" and your sha256 password.</p>
+<p><a class="fancybox" id="img-Graylog_installed" href="https://www.howtoforge.com/images/how-to-Install-graylog2-and-elasticsearch-on-ubuntu-15-10/big/Graylog_installed.png"><img src="https://www.howtoforge.com/images/how-to-Install-graylog2-and-elasticsearch-on-ubuntu-15-10/Graylog_installed.png" alt="Graylog installed successfully." width="550"></a></p>
+<p>The Graylog2 server with Elasticsearch and Graylog web interface has been installed.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>Elasticsearch is a distributed server search engine with HTTP interface and JSON support. We can use it to search in all log files of a server when using it together with Graylog. Graylog is log management and analysis &#xA0;software based on Elasticsearch and mongoDB. We can use Elasticsearch, Graylog and MongoDB to build a distributed log server.</p>
+<div>
+<p><img src="https://www.howtoforge.com/images/pdficon_small.png"> <a href="https://www.howtoforge.com/subscription/">view as pdf</a> | <img src="https://www.howtoforge.com/images/print.gif"> <a href="https://www.howtoforge.com/subscription/">print</a></p>
+</div>
+<div>
+<p><b>Share this page:</b></p>
+
+
+
+</div>
+</div>
+ 
+ 
+</div>
+</body></html>

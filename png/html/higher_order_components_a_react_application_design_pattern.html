@@ -1,0 +1,191 @@
+<!DOCTYPE html><html><head><title>Higher Order Components: A React Application Design Pattern</title></head><body>
+<h1>Higher Order Components: A React Application Design Pattern</h1><p><a href="https://www.sitepoint.com/react-higher-order-components/" target="_new">Original URL</a></p>
+<p><blockquote>This article is by guest author Jack Franklin. SitePoint guest posts aim to bring you engaging content from prominent writers and speakers of the JavaScript community In this article we will discuss&hellip;</blockquote></p>
+<div><div class="ArticleCopy language-jsx">
+ <p><em>This article is by guest author <strong>Jack Franklin</strong>. SitePoint guest posts aim to bring you engaging content from prominent writers and speakers of the JavaScript community</em></p>
+
+<p>In this article we will discuss how to use Higher Order Components to keep your React applications tidy, well structured and easy to maintain. We&#x2019;ll discuss how pure functions keep code clean and how these same principles can be applied to React components.</p>
+<h2 id="purefunctions">Pure Functions</h2>
+<p>A function is considered pure if it adheres to the following properties:</p>
+<ul>
+<li>All the data it deals with are declared as arguments</li>
+<li>It does not mutate data it was given or any other data (these are often referred to as <em>side effects</em>).</li>
+<li>Given the same input, it will <em>always</em> return the same output.</li>
+</ul>
+<p>For example, the <code>add</code> function below is pure:</p>
+<pre><code class="javascript language-javascript">function add(x, y) {
+ return x + y;
+}
+</code></pre>
+<p>However, the function <code>badAdd</code> below is impure:</p>
+<pre><code class="javascript language-javascript">var y = 2;
+function badAdd(x) { 
+ return x + y;
+}
+</code></pre>
+<p>This function is not pure because it references data that it hasn&#x2019;t directly been given. As a result, it&#x2019;s possible to call this function with the same input and get different output:</p>
+<pre><code class="javascript language-javascript">var y = 2;
+badAdd(3) // 5
+y = 3;
+badAdd(3) // 6
+</code></pre>
+<p>To read more about pure functions you can read <a href="https://www.sitepoint.com/an-introduction-to-reasonably-pure-functional-programming/">&#x201C;An introduction to reasonably pure programming&#x201D;</a> by Mark Brown.</p>
+<p>Whilst pure functions are very useful, and make debugging and testing an application much easier, occasionally you will need to create impure functions that have side effects, or modify the behavior of an existing function that you are unable to access directly (a function from a library, for example). To enable this we need to look at higher order functions.</p>
+<h2 id="higherorderfunctions">Higher Order Functions</h2>
+<p>A higher order function is a function that when called, returns another function. Often they also take a function as an argument, but this is not required for a function to be considered higher order.</p>
+<p>Let&#x2019;s say we have our <code>add</code> function from above, and we want to write some code so that when we call it we log the result to the console before returning the result. We&#x2019;re unable to edit the <code>add</code> function, so instead we can create a new function:</p>
+<pre><code class="javascript language-javascript">function addAndLog(x, y) { 
+ var result = add(x, y);
+ console.log('Result', result);
+ return result;
+}
+</code></pre>
+<p>We decide that logging results of functions is useful, and now we want to do the same with a <code>subtract</code> function. Rather than duplicate the above, we could write a <em>higher order function</em> that can take a function and return a new function that calls the given function and logs the result before then returning it:</p>
+<pre><code class="javascript language-javascript">function logAndReturn(func) { 
+ return function() { 
+ var args = Array.prototype.slice.call(arguments);
+ var result = func.apply(null, args);
+ console.log('Result', result);
+ return result;
+ }
+}
+</code></pre>
+<p>Now we can take this function and use it to add logging to <code>add</code> and <code>subtract</code>:</p>
+<pre><code class="javascript language-javascript">var addAndLog = logAndReturn(add);
+addAndLog(4, 4) // 8 is returned, &#x2018;Result 8&#x2019; is logged
+
+var subtractAndLog = logAndReturn(subtract);
+subtractAndLog(4, 3) // 1 is returned, &#x2018;Result 1&#x2019; is logged;
+</code></pre>
+<p><code>logAndReturn</code> is a HOF because it takes a function as its argument and returns a new function that we can call. These are really useful for wrapping existing functions that you can&#x2019;t change in behavior. For more information on this, check M. David Green&#x2019;s article <a href="https://www.sitepoint.com/higher-order-functions-javascript/">&#x201C;Higher-Order Functions in JavaScript</a> which goes into much more detail on the subject. </p>
+<p>Additionally you can check out <a href="https://codepen.io/SitePoint/pen/akKmYp?editors=0012">this CodePen</a>, which shows the above code in action.</p>
+<h2 id="higherordercomponents">Higher Order Components</h2>
+<p>Moving into React land, we can use the same logic as above to take existing React components and give them some extra behaviours.</p>
+<p>In this section we&#x2019;re going to use <a href="https://github.com/reactjs/react-router">React Router</a>, the de facto routing solution for React. If you&#x2019;d like to get started with the library I highly recommend the <a href="https://github.com/reactjs/react-router-tutorial">React Router Tutorial</a> on GitHub.</p>
+
+<p>React Router provides a <code>&lt;Link&gt;</code> component that is used to link between pages in a React application. One of the properties that this <code>&lt;Link&gt;</code> component takes is <code>activeClassName</code>. When a <code>&lt;Link&gt;</code> has this property and it is currently active (the user is on a URL that the link points to), the component will be given this class, enabling the developer to style it.</p>
+<p>This is a really useful feature, and in our hypothetical application we decide that we always want to use this property. However, after doing so we quickly discover that this is making all our <code>&lt;Link&gt;</code> components very verbose:</p>
+<pre><code class="jsx language-jsx">&lt;Link to="/" activeClassName="active-link"&gt;Home&lt;/Link&gt;
+&lt;Link to="/about" activeClassName="active-link"&gt;About&lt;/Link&gt;
+&lt;Link to="/contact" activeClassName="active-link"&gt;Contact&lt;/Link&gt;
+</code></pre>
+<p>Notice that we are having to repeat the class name property every time. Not only does this make our components verbose, it also means that if we decide to change the class name we&#x2019;ve got to do it in a lot of places.</p>
+<p>Instead, we can write a component that wraps the <code>&lt;Link&gt;</code> component:</p>
+<pre><code class="jsx language-jsx">var AppLink = React.createClass({ 
+ render: function() { 
+ return (
+ &lt;Link to={this.props.to} activeClassName="active-link"&gt;
+ {this.props.children}
+ &lt;/Link&gt;;
+ );
+ }
+});
+</code></pre>
+<p>And now we can use this component, which tidies up our links:</p>
+<pre><code class="jsx language-jsx">&lt;AppLink to="/"&gt;Home&lt;/AppLink&gt;
+&lt;AppLink to="/about"&gt;About&lt;/AppLink&gt;
+&lt;AppLink to="/contact"&gt;Contact&lt;/AppLink&gt;
+</code></pre>
+<p>You can <a href="https://plnkr.co/edit/ohD1yy?p=preview">see this example working on Plunker</a>.</p>
+<p>In the React ecosystem these components are known as higher order components because they take an existing component and manipulate it slightly <em>without changing the existing component</em>. You can also think of these as wrapper components, but you&#x2019;ll find them commonly referred to as higher order components in React-based content.</p>
+<h2 id="functionalstatelesscomponents">Functional, Stateless Components</h2>
+<p>React 0.14 introduced support for functional, stateless components. These are components that have the following characteristics:</p>
+<ul>
+<li>They do not have any state.</li>
+<li>They do not use any React lifecycle methods (such as <code>componentWillMount()</code>).</li>
+<li>They only define the <code>render</code> method and nothing more.</li>
+</ul>
+<p>When a component adheres to the above, we can define it as a function, rather than using <code>React.createClass</code> (or <code>class App extends React.Component</code> if you&#x2019;re using ES2015 classes). For example, the two expressions below both produce the same component:</p>
+<pre><code class="jsx language-jsx">var App = React.createClass({
+ render: function() {
+ return &lt;p&gt;My name is { this.props.name }&lt;/p&gt;;
+ }
+});
+
+var App = function(props) {
+ return &lt;p&gt;My name is { props.name }&lt;/p&gt;;
+}
+</code></pre>
+<p>In the functional, stateless component instead of referring to <code>this.props</code> we&#x2019;re instead passed <code>props</code> as an argument. You can read more about this <a href="https://facebook.github.io/react/docs/reusable-components.html#stateless-functions">on the React documentation</a>.</p>
+<p>Because higher order components often wrap an existing component you&#x2019;ll often find you can define them as a functional component. For the rest of this article I&#x2019;ll do that whenever possible.</p>
+<h2 id="betterhigherordercomponents">Better Higher Order Components</h2>
+<p>The above component works, but we can do much better. The <code>AppLink</code> component that we created isn&#x2019;t quite fit for purpose.</p>
+<h3 id="acceptingmultipleproperties">Accepting multiple properties</h3>
+<p>The <code>&lt;AppLink&gt;</code> component expects two properties:</p>
+<ul>
+<li><code>this.props.to</code> which is the URL the link should take the user to</li>
+<li><code>this.props.children</code> which is the text shown to the user</li>
+</ul>
+<p>However, the <code>&lt;Link&gt;</code> component accepts many more properties, and there might be a time when you want to pass extra properties along with the two above which we nearly always want to pass. We haven&#x2019;t made <code>&lt;AppLink&gt;</code> very extensible by hard coding the exact properties we need.</p>
+<h3 id="thejsxspread">The JSX spread</h3>
+<p>JSX, the HTML-like syntax we use to define React elements, supports the spread operator for passing an object to a component as properties. For example, the code samples below achieve the same thing:</p>
+<pre><code class="jsx language-jsx">var props = { a: 1, b: 2};
+&lt;Foo a={props.a} b={props.b} /&gt;
+
+&lt;Foo {...props} /&gt;
+</code></pre>
+<p>Using <code>{...props}</code> spreads each key in the object and passes it to <code>Foo</code> as an individual property.</p>
+<p>We can make use of this trick with <code>&lt;AppLink&gt;</code> so we support any arbitrary property that <code>&lt;Link&gt;</code> supports. By doing this we also future proof ourselves; if <code>&lt;Link&gt;</code> adds any new properties in the future our wrapper component will already support them. While we&#x2019;re at it, I&#x2019;m also going to change <code>AppLink</code> to be a functional component.</p>
+<pre><code class="jsx language-jsx">var AppLink = function(props) {
+ return &lt;Link {...props} activeClassName="active-link" /&gt;;
+}
+</code></pre>
+<p>Now <code>&lt;AppLink&gt;</code> will accept any properties and pass them through. Note that we also can use the self closing form instead of explicitly referencing <code>{props.children}</code> in-between the <code>&lt;Link&gt;</code> tags. React allows <code>children</code> to be passed as a regular prop or as child elements of a component between the opening and closing tag. </p>
+<p><a href="https://plnkr.co/edit/hgBZ96?p=preview">You can see this working on Plunker</a>.</p>
+<h3 id="propertyorderinginreact">Property ordering in React</h3>
+<p>Imagine that for one specific link on your page, you have to use a different <code>activeClassName</code>. You try passing it into <code>&lt;AppLink&gt;</code>, since we pass all properties through:</p>
+<pre><code class="jsx language-jsx">&lt;AppLink to=&#x201C;/special-link&#x201D; activeClassName=&#x201C;special-active&#x201D;&gt;Special Secret Link&lt;/AppLink&gt;
+</code></pre>
+<p>However, this doesn&#x2019;t work. The reason is because of the ordering of properties when we render the <code>&lt;Link&gt;</code> component:</p>
+<pre><code class="jsx language-jsx"> return &lt;Link {...props} activeClassName="active-link" /&gt;;
+</code></pre>
+<p>When you have the same property multiple times in a React component, the <em>last declaration wins</em>. This means that our last <code>activeClassName=&#x201C;active-link&#x201D;</code> declaration will always win, since it&#x2019;s placed <em>after</em> <code>{...this.props}</code>. To fix this we can reorder the properties so we spread <code>this.props</code> last. This means that we set sensible defaults that we&#x2019;d like to use, but the user can override them if they really need to: </p>
+<pre><code class="javascript language-javascript"> return &lt;Link activeClassName="active-link" {...props} /&gt;;
+</code></pre>
+<p>Once again, you can <a href="https://plnkr.co/edit/imLPgAQAB430lT1oBdU2?p=preview">see this change in action on Plunker</a>.</p>
+<p>By creating higher order components that wrap existing ones but with additional behavior, we keep our code base clean and defend against future changes by not repeating properties and keeping their values in just one place.</p>
+<h2 id="higherordercomponentcreators">Higher Order Component Creators</h2>
+<p>Often you&#x2019;ll have a number of components that you&#x2019;ll need to wrap in the same behavior. This is very similar to earlier in this article when we wrapped <code>add</code> and <code>subtract</code> to add logging to them. </p>
+<p>Let&#x2019;s imagine in your application you have an object that contains information on the current user who is authenticated on the system. You need some of your React components to be able to access this information, but rather than blindly making it accessible for every component you want to be more strict about which components receive the information.</p>
+<p>The way to solve this is to create a function that we can call with a React component. The function will then return a new React component that will render the given component but with an extra property which will give it access to the user information.</p>
+<p>That sounds pretty complicated, but it&#x2019;s made more straightforward with some code:</p>
+<pre><code class="jsx language-jsx">function wrapWithUser(Component) {
+ // information that we don&#x2019;t want everything to access
+ var secretUserInfo = {
+ name: 'Jack Franklin',
+ favouriteColour: 'blue'
+ };
+
+ // return a newly generated React component
+ // using a functional, stateless component
+ return function(props) {
+ // pass in the user variable as a property, along with
+ // all the other props that we might be given
+ return &lt;Component user={secretUserInfo} {...props} /&gt;
+ }
+}
+</code></pre>
+<p>The function takes a React component (which is easy to spot given React components have to have capital letters at the beginning) and returns a new function that will render the component it was given with an extra property of <code>user</code>, which is set to the <code>secretUserInfo</code>.</p>
+<p>Now let&#x2019;s take a component, <code>&lt;AppHeader&gt;</code>, which wants access to this information so it can display the logged in user:</p>
+<pre><code class="jsx language-jsx">var AppHeader = function(props) {
+ if (props.user) {
+ return &lt;p&gt;Logged in as {props.user.name}&lt;/p&gt;;
+ } else {
+ return &lt;p&gt;You need to login&lt;/p&gt;;
+ }
+}
+</code></pre>
+<p>The final step is to connect this component up so it is given <code>this.props.user</code>. We can create a new component by passing this one into our <code>wrapWithUser</code> function.</p>
+<pre><code class="javascript language-javascript">var ConnectedAppHeader = wrapWithUser(AppHeader);
+</code></pre>
+<p>We now have a <code>&lt;ConnectedAppHeader&gt;</code> component that can be rendered, and will have access to the <code>user</code> object. </p>
+<p><a href="http://codepen.io/SitePoint/pen/oLyzdo?editors=0010">View this example on CodePen</a> if you&#x2019;d like to see it in action.</p>
+<p>I chose to call the component <code>ConnectedAppHeader</code> because I think of it as being connected with some extra piece of data that not every component is given access to. </p>
+<p>This pattern is very common in React libraries, particularly in <a href="http://redux.js.org">Redux</a>, so being aware of how it works and the reasons it&#x2019;s being used will help you as your application grows and you rely on other third party libraries that use this approach.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>This article has shown how, by applying principles of functional programming such as pure functions and higher order components to React, you can create a codebase that&#x2019;s easier to maintain and work with on a daily basis. </p>
+<p>By creating higher order components you&#x2019;re able to keep data defined in only one place, making refactoring easier. Higher order function creators enable you to keep most data private and only expose pieces of data to the components that really need it. By doing this you make it obvious which components are using which bits of data, and as your application grows you&#x2019;ll find this beneficial.</p>
+<p>If you have any questions I&#x2019;d love to hear them; feel free to leave a comment or grab me as <a href="http://twitter.com/jack_franklin">@Jack_Franklin</a> on Twitter.</p>
+ </div>
+ </div>
+</body></html>

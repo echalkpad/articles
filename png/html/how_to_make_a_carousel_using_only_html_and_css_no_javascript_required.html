@@ -1,0 +1,210 @@
+<!DOCTYPE html><html><head><title>How to make a carousel using only HTML and CSS (no JavaScript required!)</title></head><body>
+<h1>How to make a carousel using only HTML and CSS (no JavaScript required!)</h1><p><a href="http://dancort.es/web-design/2015/05/17/how-to-make-carousel-only-html-css-no-javascript.html" target="_new">Original URL</a></p>
+<p><blockquote>Recently, I&#x2019;ve been working on a site that uses a CMS that&#x2019;s a bit limiting. I can add my own HTML and CSS to the site, but JavaScript is off-limits. The designs I&#x2019;m working from&hellip;</blockquote></p>
+<div><article class="post-content">
+ <p>Recently, I&#x2019;ve been working on a site that uses a CMS that&#x2019;s a bit limiting. I can add my own HTML and CSS to the site, but JavaScript is off-limits.</p>
+
+<p>The designs I&#x2019;m working from included a carousel. I had some ideas of how I could make that work using CSS animations and the transform property, but that would leave me with a carousel that scrolled automatically and didn&#x2019;t allow for user input which wasn&#x2019;t really what I was looking for. After some thinking, I eneded up with a solution that uses absolute positioning and the <em>:target</em> pseudo-selector to change the <em>z-index</em> and <em>opacity</em> of our carousel items to cycle through them. It looks something like this:</p>
+
+<div class="carousel-wrapper">
+ 
+ 
+ 
+ <div class="carousel-item item-1 light">
+ <h2>This is the first item</h2>
+ <p>Idque Caesaris facere voluntate liceret: sese habere. Qui ipsorum lingua Celtae, nostra Galli appellantur. Inmensae subtilitatis, obscuris et malesuada fames.</p>
+ <a class="arrow arrow-prev" href="http://dancort.es/web-design/2015/05/17/how-to-make-carousel-only-html-css-no-javascript.html#target-item-3"></a>
+ <a class="arrow arrow-next" href="http://dancort.es/web-design/2015/05/17/how-to-make-carousel-only-html-css-no-javascript.html#target-item-2"></a>
+ </div>
+ <div class="carousel-item item-2">
+ <h2>This is the second item</h2>
+ <p>Vivamus sagittis lacus vel augue laoreet rutrum faucibus. Idque Caesaris facere voluntate liceret: sese habere. Cum sociis natoque penatibus et magnis dis parturient. Nihilne te nocturnum praesidium Palati, nihil urbis vigiliae.</p>
+ <a class="arrow arrow-prev" href="http://dancort.es/web-design/2015/05/17/how-to-make-carousel-only-html-css-no-javascript.html#target-item-1"></a>
+ <a class="arrow arrow-next" href="http://dancort.es/web-design/2015/05/17/how-to-make-carousel-only-html-css-no-javascript.html#target-item-3"></a>
+ </div>
+ <div class="carousel-item item-3 light">
+ <h2>And finally, the third</h2>
+ <p>Quis aute iure reprehenderit in voluptate velit esse. Cum ceteris in veneratione tui montes, nascetur mus. Prima luce, cum quibus mons aliud consensu ab eo. Quam temere in vitiis, legem sancimus haerentia. Sed haec quis possit intrepidus aestimare tellus.</p>
+ <a class="arrow arrow-prev" href="http://dancort.es/web-design/2015/05/17/how-to-make-carousel-only-html-css-no-javascript.html#target-item-2"></a>
+ <a class="arrow arrow-next" href="http://dancort.es/web-design/2015/05/17/how-to-make-carousel-only-html-css-no-javascript.html#target-item-1"></a>
+ </div>
+</div>
+
+<p>Let&#x2019;s build one!</p>
+
+<h2 id="the-structure">The structure</h2>
+
+<p>The structure of our carousel goes something like this: We have a main <em>div.carousel-wrapper</em> that gives our carousel its size. Inside our wrapper, we have <em>span.hidden-target</em> elements with unique IDs that act as targets for our carousel items controls, and <em>div.carousel-item</em> elements that hold the content of each of our carousel items.</p>
+
+<p>Each of our <em>div.carousel-item</em> elements have some content within them, and two links, <em>a.arrow-prev</em> and <em>a.arrow-next</em>, which we use to cycle between the carousel items.</p>
+
+<p>Because our individual carousel items will be <em>position: absolute</em> (so we can stack them on top of eachother), we have to set the <em>div.carousel-wrapper</em>&#x2019;s height manually, and it makes sense to do this inline. We&#x2019;re going to try to offload as much of our CSS to our external stylesheet, but some of the items we&#x2019;ll have to write inline in order to make our carousel reusable and scalable.</p>
+
+<p>I&#x2019;m also using inline CSS to set the background image of two of our <em>div.carousel-item</em> elements to make them a little more vibrant, but we&#x2019;ll leave that out below so that our markup is more readable.</p>
+
+<div class="highlight"><pre><code class="language-html"><span class="c">&lt;!--Here's our main wrapper.</span>
+<span class="c">Since our carousel items get their size from their parent,</span>
+<span class="c">we have to specify its height.--&gt;</span>
+<span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">"carousel-wrapper"</span> <span class="na">style=</span><span class="s">"height: 400px;"</span><span class="nt">&gt;</span>
+ <span class="c">&lt;!--The carousel uses regular links to cycle through each item.</span>
+<span class="c"> The links actually target these display: none; spans so our page doesn't</span>
+<span class="c"> jump like it normally would when using jump links.--&gt;</span>
+ <span class="nt">&lt;span</span> <span class="na">id=</span><span class="s">"target-item-1"</span><span class="nt">&gt;&lt;/span&gt;</span>
+ <span class="nt">&lt;span</span> <span class="na">id=</span><span class="s">"target-item-2"</span><span class="nt">&gt;&lt;/span&gt;</span>
+ <span class="nt">&lt;span</span> <span class="na">id=</span><span class="s">"target-item-3"</span><span class="nt">&gt;&lt;/span&gt;</span>
+ <span class="c">&lt;!--Here are our carousel items.</span>
+<span class="c"> Each has a 'carousel-item' class, which we use for shared styling</span>
+<span class="c"> and an item-# class, which we use to control its opacity</span>
+<span class="c"> depending on which target-item-# is currently targeted--&gt;</span>
+ <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">"carousel-item item-1"</span><span class="nt">&gt;</span>
+ <span class="c">&lt;!--We can add any content in here, just make sure that</span>
+<span class="c"> your .carousel-wrapper is big enough to hold all the content.--&gt;</span>
+ <span class="nt">&lt;h2&gt;</span>Item 1<span class="nt">&lt;/h2&gt;</span>
+ <span class="nt">&lt;p&gt;</span>Content goes here.<span class="nt">&lt;/p&gt;</span>
+ <span class="c">&lt;!--Here are the links that control the carousel! Make sure</span>
+<span class="c"> the href of each one is pointing to the right target-item-#</span>
+<span class="c"> so that the carousel cycles in sequence.--&gt;</span>
+ <span class="nt">&lt;a</span> <span class="na">class=</span><span class="s">"arrow arrow-prev"</span> <span class="na">href=</span><span class="s">"#target-item-3"</span><span class="nt">&gt;&lt;/a&gt;</span>
+ <span class="nt">&lt;a</span> <span class="na">class=</span><span class="s">"arrow arrow-next"</span> <span class="na">href=</span><span class="s">"#target-item-2"</span><span class="nt">&gt;&lt;/a&gt;</span>
+ <span class="nt">&lt;/div&gt;</span>
+ <span class="c">&lt;!--And here are a couple more carousel items so that</span>
+<span class="c"> we have some content to scroll to. Notice the 'light' class?</span>
+<span class="c"> Royal blue is a pretty dark background color, so we'll add a CSS</span>
+<span class="c"> rule to make the text white if a carousel item has this class--&gt;</span>
+ <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">"carousel-item item-2 light"</span> <span class="na">style=</span><span class="s">"background-color: royalblue;"</span><span class="nt">&gt;</span>
+ <span class="nt">&lt;h2&gt;</span>Item 2<span class="nt">&lt;/h2&gt;</span>
+ <span class="nt">&lt;p&gt;</span>Content goes here.<span class="nt">&lt;/p&gt;</span>
+ <span class="nt">&lt;a</span> <span class="na">class=</span><span class="s">"arrow arrow-prev"</span> <span class="na">href=</span><span class="s">"#target-item-1"</span><span class="nt">&gt;&lt;/a&gt;</span>
+ <span class="nt">&lt;a</span> <span class="na">class=</span><span class="s">"arrow arrow-next"</span> <span class="na">href=</span><span class="s">"#target-item-3"</span><span class="nt">&gt;&lt;/a&gt;</span>
+ <span class="nt">&lt;/div&gt;</span>
+ <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">"carousel-item item-3"</span><span class="nt">&gt;</span>
+ <span class="nt">&lt;h2&gt;</span>Item 3<span class="nt">&lt;/h2&gt;</span>
+ <span class="nt">&lt;p&gt;</span>Content goes here.<span class="nt">&lt;/p&gt;</span>
+ <span class="nt">&lt;a</span> <span class="na">class=</span><span class="s">"arrow arrow-prev"</span> <span class="na">href=</span><span class="s">"#target-item-2"</span><span class="nt">&gt;&lt;/a&gt;</span>
+ <span class="nt">&lt;a</span> <span class="na">class=</span><span class="s">"arrow arrow-next"</span> <span class="na">href=</span><span class="s">"#target-item-1"</span><span class="nt">&gt;&lt;/a&gt;</span>
+ <span class="nt">&lt;/div&gt;</span>
+<span class="nt">&lt;/div&gt;</span></code></pre></div>
+
+<p>That&#x2019;s it for our HTML. It&#x2019;s surprisingly light. The CSS (SCSS, in this case) is where the magic happens.</p>
+
+<h2 id="the-styles">The styles</h2>
+
+<div class="highlight"><pre><code class="language-scss"><span class="cm">/* Here's where our carousel begins, with the main wrapper being</span>
+<span class="cm">relatively positioned, so that our absolutely positioned items are</span>
+<span class="cm">in the right place. */</span>
+<span class="nc">.carousel-wrapper</span> <span class="p">{</span>
+ <span class="na">position</span><span class="o">:</span> <span class="no">relative</span><span class="p">;</span>
+
+ <span class="cm">/* Our absolutely positioned carousel items span the width and</span>
+<span class="cm"> height of its parent. We're making them transparent by default so</span>
+<span class="cm"> that they fade in when we cycle through them using the arrow links. */</span>
+ <span class="nc">.carousel-item</span> <span class="p">{</span>
+ <span class="na">position</span><span class="o">:</span> <span class="no">absolute</span><span class="p">;</span>
+ <span class="na">top</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="na">bottom</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="na">left</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="na">right</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="na">padding</span><span class="o">:</span> <span class="mi">25</span><span class="kt">px</span> <span class="mi">50</span><span class="kt">px</span><span class="p">;</span>
+ <span class="na">opacity</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="na">transition</span><span class="o">:</span> <span class="n">all</span> <span class="mi">0</span><span class="mf">.5</span><span class="kt">s</span> <span class="n">ease-in-out</span><span class="p">;</span>
+
+ <span class="cm">/* Did you notice the 50px left, right padding up above? It's so</span>
+<span class="cm"> we can position our arrow links! Each one will be 50px wide. Also,</span>
+<span class="cm"> I'm using empty links with a background image so that the links</span>
+<span class="cm"> look like arrows. Make sure you swap out that URL with an actual</span>
+<span class="cm"> URL so that your arrow links aren't just transparent rectangles. */</span>
+ <span class="nc">.arrow</span> <span class="p">{</span>
+ <span class="na">position</span><span class="o">:</span> <span class="no">absolute</span><span class="p">;</span>
+ <span class="na">top</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="na">display</span><span class="o">:</span> <span class="no">block</span><span class="p">;</span>
+ <span class="na">width</span><span class="o">:</span> <span class="mi">50</span><span class="kt">px</span><span class="p">;</span>
+ <span class="na">height</span><span class="o">:</span> <span class="mi">100</span><span class="kt">%</span><span class="p">;</span>
+ <span class="na">-webkit-tap-highlight-color</span><span class="o">:</span> <span class="nf">rgba</span><span class="p">(</span><span class="mi">0</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span><span class="mi">0</span><span class="p">);</span>
+ <span class="na">background</span><span class="o">:</span> <span class="sx">url("/carousel-arrow-dark.png")</span> <span class="mi">50</span><span class="kt">%</span> <span class="mi">50</span><span class="kt">%</span> <span class="o">/</span> <span class="mi">20</span><span class="kt">px</span> <span class="no">no-repeat</span><span class="p">;</span>
+
+ <span class="cm">/* Let's put our arrow to go back on the left. */</span>
+ <span class="k">&amp;</span><span class="nc">.arrow-prev</span> <span class="p">{</span>
+ <span class="na">left</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* And our arrow to go forward on the right. Since I'm using</span>
+<span class="cm"> the same arrow image for both my arrows, I'm rotating this one by</span>
+<span class="cm"> 180 degrees so that it points in the right direction */</span>
+ <span class="k">&amp;</span><span class="nc">.arrow-next</span> <span class="p">{</span>
+ <span class="na">right</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="na">-webkit-transform</span><span class="o">:</span> <span class="nf">rotate</span><span class="p">(</span><span class="mi">180</span><span class="kt">deg</span><span class="p">);</span>
+ <span class="na">transform</span><span class="o">:</span> <span class="nf">rotate</span><span class="p">(</span><span class="mi">180</span><span class="kt">deg</span><span class="p">);</span>
+ <span class="p">}</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* I really like how these carousel items look on a dark image</span>
+<span class="cm"> background, so if a .carousel-item div has the class 'light',</span>
+<span class="cm"> we'll make its text color white, and use a white arrow instad of</span>
+<span class="cm"> a dark gray one. Again, make sure this arrow image exists somewhere */</span>
+ <span class="k">&amp;</span><span class="nc">.light</span> <span class="p">{</span>
+ <span class="na">color</span><span class="o">:</span> <span class="nb">white</span><span class="p">;</span>
+
+ <span class="nc">.arrow</span> <span class="p">{</span>
+ <span class="na">background</span><span class="o">:</span> <span class="sx">url("/carousel-arrow-light.png")</span> <span class="mi">50</span><span class="kt">%</span> <span class="mi">50</span><span class="kt">%</span> <span class="o">/</span> <span class="mi">20</span><span class="kt">px</span> <span class="no">no-repeat</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* Let's use using some media queries to resize the arrows</span>
+<span class="cm"> on smaller devices.*/</span>
+ <span class="k">@media</span> <span class="o">(</span><span class="nt">max-width</span><span class="nd">:</span> <span class="nt">480px</span><span class="o">)</span> <span class="p">{</span>
+ <span class="nc">.arrow</span><span class="o">,</span> <span class="k">&amp;</span><span class="nc">.light</span> <span class="nc">.arrow</span> <span class="p">{</span>
+ <span class="na">background-size</span><span class="o">:</span> <span class="mi">10</span><span class="kt">px</span><span class="p">;</span>
+ <span class="na">background-position</span><span class="o">:</span> <span class="mi">10</span><span class="kt">px</span> <span class="mi">50</span><span class="kt">%</span><span class="p">;</span>
+ <span class="p">}</span>
+ <span class="p">}</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* Let's set our jump link targets display: none; so that we're not</span>
+<span class="cm"> making the browser jump to the top of the carousel whenever a user</span>
+<span class="cm"> clicks on one of our arrow links. This attribute selector will target</span>
+<span class="cm"> any element whose id starts with 'target-item'. */</span>
+ <span class="o">[</span><span class="nt">id</span><span class="o">^=</span><span class="s2">"target-item"</span><span class="o">]</span> <span class="p">{</span>
+ <span class="na">display</span><span class="o">:</span> <span class="no">none</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* So, up above we made all our carousel items transparent, which means</span>
+<span class="cm"> that on page-load, we'd have a big empty box where our carousel should be.</span>
+<span class="cm"> Let's set our first item's opacity to 1 so that it displays instead. Also,</span>
+<span class="cm"> we're setting its z-index to 2, so that it's positioned on top of the</span>
+<span class="cm"> other carousel items. */</span>
+ <span class="nc">.item-1</span> <span class="p">{</span>
+ <span class="na">z-index</span><span class="o">:</span> <span class="mi">2</span><span class="p">;</span>
+ <span class="na">opacity</span><span class="o">:</span> <span class="mi">1</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* But we don't want the first item to ALAWYS be opacity: 1; otherwise</span>
+<span class="cm"> it would peek through when cycling between items two and above. */</span>
+ <span class="o">*</span><span class="nd">:target</span> <span class="o">~</span> <span class="nc">.item-1</span> <span class="p">{</span>
+ <span class="na">opacity</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* ...but if #target-item-1 is targeted, well we do want the first item</span>
+<span class="cm"> to show up, so we're selecting it with the ~ sibling selector and</span>
+<span class="cm"> setting its opacity to 1 again :-) */</span>
+ <span class="nn">#target-item-1</span><span class="nd">:target</span> <span class="o">~</span> <span class="nc">.item-1</span> <span class="p">{</span>
+ <span class="na">opacity</span><span class="o">:</span> <span class="mi">1</span><span class="p">;</span>
+ <span class="p">}</span>
+
+ <span class="cm">/* If any other target-item-# is targeted, let's select it using the sibling</span>
+<span class="cm"> selector, make it fade in, and place it on top of the pile using z-index: 3.</span>
+<span class="cm"> Here's where you'd add more target items if your carousel has more than three</span>
+<span class="cm"> items. It might be worth adding like 10 items right off the bat. */</span>
+ <span class="nn">#target-item-2</span><span class="nd">:target</span> <span class="o">~</span> <span class="nc">.item-2</span><span class="o">,</span> <span class="nn">#target-item-3</span><span class="nd">:target</span> <span class="o">~</span> <span class="nc">.item-3</span> <span class="p">{</span>
+ <span class="na">z-index</span><span class="o">:</span> <span class="mi">3</span><span class="p">;</span>
+ <span class="na">opacity</span><span class="o">:</span> <span class="mi">1</span><span class="p">;</span>
+ <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
+
+<p>And that&#x2019;s it! You have a carousel that&#x2019;s fully functional and is 100% HTML and CSS! We only made a carousel with three items, but you can keep adding items, just make sure you add more target items, and you link up your arrow links correctly.</p>
+
+<p>I hope you enjoyed this. Let me know your thoughts or what you would&#x2019;ve done differently on Twitter at <a href="https://twitter.com/ddggccaa">@ddggccaa</a>.</p>
+
+ </article>
+
+</div>
+</body></html>

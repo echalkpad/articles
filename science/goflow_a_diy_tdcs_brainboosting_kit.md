@@ -1,0 +1,21 @@
+# GoFlow: a DIY tDCS brain-boosting kit
+
+[Original URL](http://www.extremetech.com/extreme/121861-goflow-a-diy-tdcs-brain-boosting-kit)
+
+> Did you know that by attaching a 9-volt battery to your scalp -- with the help of some electrodes and some wet sponges (or conducting gel) -- you can more than double your brain's...
+
+![Emotiv brain-computer interface](http://www.extremetech.com/wp-content/uploads/2011/08/emotiv-brain-control-348x196.jpg "Emotiv brain-computer interface")
+
+Did you know that by attaching a 9-volt battery to your scalp -- with the help of some electrodes and some wet sponges (or conducting gel) -- you can more than double your brain's learning rate _and_ boost peak performance?
+
+It sounds crazy, but it has now been proven by multiple studies that transcranial direct-current stimulation ([tDCS](http://www.extremetech.com/extreme/84232-boost-your-brains-power-with-a-9volt-battery-and-some-wet-sponges)) can significantly speed up your brain. In one case, the US Air Force used tDCS on trainee drone pilots to _halve_ their learning time. In another study, carried out by the University of New Mexico, test subjects learned how to play a video game twice as quickly while under tDCS, and played the game with heightened performance. Furthermore, tDCS has been shown to have therapeutic effects on people with neurological issues, such as Parkinson's disease or post-stroke motor dysfunction. And best of all, it's safe! Or at least, tDCS has no short-term side effects. It is unlikely due to the tiny current involved (9 volts at 2 milliamps), but there could be long-term effects -- so we must suggest that you do not try tDCS at home.
+
+[![tDCS schematic (GoFlow)](http://www.extremetech.com/wp-content/uploads/2012/03/tDCS_schematic-275x300.jpg "tDCS schematic (GoFlow)")](http://www.extremetech.com/wp-content/uploads/2012/03/tDCS_schematic.jpg)With that out of the way, I give you [GoFlow β1](http://flowstateengaged.com/), a do-it-yourself tDCS kit. Basically, you can buy tDCS machines today, but they're not cheap (on the order of hundreds or thousands of dollars). GoFlow wants to create a kit with all of the necessary parts for $99, with a simple, solderless schematic that anyone can put together. You can't buy GoFlow yet, but you ask to be notified when it is.
+
+Even at $99, the GoFlow kit is fairly expensive. Just so you understand just how simple tDCS is, _all_ you have to do is pass 9V at 2mA through your scalp for 30 minutes. To do this, you need a battery, some electrodes, a resistor, and if you're feeling snazzy (and safe) a current regulator. To be fair, for your $99, GoFlow will give you a plastic housing and provide a potentiometer -- presumably so you can find the right voltage for your brain. You also need to know where to place the electrodes on your scalp, to boost the right area of your brain. Judging by the picture on the right, GoFlow will provide a map of the various regions.
+
+If you're interested in how tDCS actually _works_, we've [written about it before in some detail](http://www.extremetech.com/extreme/84232-boost-your-brains-power-with-a-9volt-battery-and-some-wet-sponges). In effect, tDCS pushes your brain into a state of _flow_, which you might've heard of if you're a coder or other similarly-inclined lifehacker. Basically, by pumping electrons into your brain, tDCS creates two effects: a) Neurons are made more sensitive, and thus can "fire" faster, and b) After the current is removed, your neurons are left in a "wet clay" state that are more capable of making new connections (i.e. learning).
+
+In non-clinical applications (i.e. performed by at-home enthusiasts), tDCS has been used to improve everything from programming speed and dexterity (perhaps GoFlow is exactly what you need to finally master Perl) to FPS gaming skills. It's not hard to see how tDCS could pose some ethical considerations, though. Should students be allowed to use tDCS when revising for an exam? (What if some students can afford tDCS kits, but others can't?) What if pro gamers use tDCS before a _StarCraft 2_ match? Is that the e-equivalent of using steroids or blood doping?
+
+Read more about [the history of tDCS](http://www.nature.com/news/2011/110413/full/472156a.html) at Nature, or [sign up for a GoFlow kit](http://flowstateengaged.com/)

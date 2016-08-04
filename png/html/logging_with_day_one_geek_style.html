@@ -1,0 +1,150 @@
+<!DOCTYPE html><html><head><title>Logging with Day One, geek style</title></head><body>
+<h1>Logging with Day One, geek style</h1><p><a href="http://brettterpstra.com/2012/01/16/logging-with-day-one-geek-style/" target="_new">Original URL</a></p>
+<p><blockquote>I have long kept a journal&#x2013;more precisely, a log&#x2013;using VoodooPad with the Scratchpad scripts by Ian Beck. It&#x2019;s been a great system, but after years of usage it&#x2019;s started&hellip;</blockquote></p>
+<div><article class="post instapaper_body perm"><header>
+ 
+ 
+ 
+ 
+ </header><p><img src="http://brettterpstra.com/uploads/2012/01/Day-One_icon.jpg" alt="" title="Day One_icon" width="250" class="alignright size-full wp-image-3545">I have long kept a journal&#x2013;more precisely, a log&#x2013;using VoodooPad with the <a href="http://tagamac.com/2009/09/scratchpad_part2/">Scratchpad scripts</a> by Ian Beck. It&#x2019;s been a great system, but after years of usage it&#x2019;s started to become a bit cumbersome. VoodooPad can handle the load, but running the custom scripts is inconvenient on a document with thousands of pages. In the interest of trying new things (and fiddling away some time this evening), I decided to try switching the system over to Day One.</p>
+
+<p><a href="http://dayoneapp.com/">Day One</a> is a gorgeous app for keeping a personal journal. I discovered it, if I recall correctly, <a href="http://www.macsparky.com/blog/2011/12/21/journaling-with-day-one.html">via David Sparks</a>. It has iOS companion apps and iCloud syncing. It also has excellent search capabilities, likes MultiMarkdown and can export my entries to plain text at any time. I like it because it&#x2019;s good-looking and concise; just what I need, with no feature bloat. Plus, it&#x2019;s specifically designed to do exactly what I want: keep a timestamped journal of what I&#x2019;m working on, have accomplished or have just discovered in my digital travels.</p>
+
+<p>Day One already has a quick entry palette in the menubar. It also has a command line interface (<code>/usr/local/bin/dayone</code>)<sup id="fnref:cli"><a href="http://brettterpstra.com/2012/01/16/logging-with-day-one-geek-style/#fn:cli" rel="footnote">1</a></sup> which provides some geeky options (try <code>dayone</code> in Terminal) and the flexibility needed to replace my current logging system. You can create entries quickly with either method, but I wanted just a little bit more out of it. I built a quick script which allows a basic syntax for starring entries and defining dates (using natural language) inline in the entry itself. It can be used from the command line, from LaunchBar (or similar) and can be incorporated into just about any scriptable workflow.</p>
+
+
+
+<h3 id="the-script">The script</h3>
+
+<p>The natural language portion of the script is built on the &#x201C;Chronic&#x201D; Ruby gem, so running this script as is requires that you have that installed. If you don&#x2019;t have it available, just run <code>gem install chronic</code> to add the gem. If you run into errors doing that, try <code>sudo gem install chronic</code> and provide your system password. Here&#x2019;s the script, complete with some explanation in the comments.</p>
+
+<div class="bogus-wrapper"><notextile><figure class="code"><figcaption></figcaption><div class="highlight"><pre><code class="ruby"><span class="line"><span class="c1">#!/usr/bin/ruby</span>
+</span><span class="line"><span class="c1"># logtodayone.rb</span>
+</span><span class="line"><span class="c1"># Brett Terpstra (http://brettterpstra.com)</span>
+</span><span class="line"><span class="c1"># Use and modify freely, attribution appreciated</span>
+</span><span class="line"><span class="c1"># </span>
+</span><span class="line"><span class="c1"># This script works with the Day One[1] command line utility</span>
+</span><span class="line"><span class="c1"># It parses an input string for an exclamation point prefix to mark starred</span>
+</span><span class="line"><span class="c1"># and/or a [date string] at the beginning to parse natural language dates</span>
+</span><span class="line"><span class="c1"># </span>
+</span><span class="line"><span class="c1"># Requirements:</span>
+</span><span class="line"><span class="c1"># Chronic ruby gem</span>
+</span><span class="line"><span class="c1">#</span>
+</span><span class="line"><span class="c1"># Example usage:</span>
+</span><span class="line"><span class="c1"># logtodayone.rb "! This is a starred entry."</span>
+</span><span class="line"><span class="c1"># logtodayone.rb "[yesterday 3pm] Something I did yesterday at 3:00PM"</span>
+</span><span class="line"><span class="c1"># logtodayone.rb "! [-2 1:30am] A starred entry about something I did two days ago"</span>
+</span><span class="line"><span class="nb">require</span> <span class="s1">'rubygems'</span>
+</span><span class="line"><span class="nb">require</span> <span class="s1">'chronic'</span> <span class="c1"># (`gem install chronic`)</span>
+</span><span class="line"><span class="k">if</span> <span class="no">ARGV</span><span class="o">.</span><span class="n">length</span> <span class="o">&gt;</span> <span class="mi">0</span>
+</span><span class="line"> <span class="n">input</span> <span class="o">=</span> <span class="no">ARGV</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">" "</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span>
+</span><span class="line"><span class="k">else</span>
+</span><span class="line"> <span class="nb">print</span> <span class="s2">"Log entry: "</span>
+</span><span class="line"> <span class="n">input</span> <span class="o">=</span> <span class="nb">gets</span><span class="o">.</span><span class="n">strip</span>
+</span><span class="line"><span class="k">end</span>
+</span><span class="line"><span class="c1"># If the input starts with an exclamation point, make it starred</span>
+</span><span class="line"><span class="n">starred</span> <span class="o">=</span> <span class="n">input</span> <span class="o">=~</span> <span class="sr">/^!/</span> <span class="p">?</span> <span class="s2">"true"</span> <span class="p">:</span> <span class="s2">"false"</span>
+</span><span class="line"><span class="c1"># remove the bang from the input string</span>
+</span><span class="line"><span class="n">input</span> <span class="o">=</span> <span class="n">input</span><span class="o">.</span><span class="n">gsub</span><span class="p">(</span><span class="sr">/^!\s*/</span><span class="p">,</span><span class="s1">''</span><span class="p">)</span>
+</span><span class="line"><span class="c1"># if there's a [date] specified, parse it</span>
+</span><span class="line"><span class="k">if</span> <span class="n">input</span> <span class="o">=~</span> <span class="sr">/^\[(.*?)\]/</span>
+</span><span class="line"> <span class="n">datestring</span> <span class="o">=</span> <span class="vg">$1</span>
+</span><span class="line"> <span class="c1"># if the date starts with -X, assume it means X days ago</span>
+</span><span class="line"> <span class="k">if</span> <span class="n">datestring</span> <span class="o">=~</span> <span class="sr">/^\-(\d+)/</span>
+</span><span class="line"> <span class="n">datestring</span><span class="o">.</span><span class="n">sub!</span><span class="p">(</span><span class="sr">/\-(\d+)/</span><span class="p">,</span><span class="s2">"</span><span class="se">\\</span><span class="s2">1 days ago "</span><span class="p">)</span>
+</span><span class="line"> <span class="k">end</span>
+</span><span class="line"> <span class="c1"># Replace a single 'y' within the date brackets with "Yesterday" for parsing</span>
+</span><span class="line"> <span class="n">datestring</span><span class="o">.</span><span class="n">sub!</span><span class="p">(</span><span class="sr">/\by\b/</span><span class="p">,</span><span class="s1">'yesterday'</span><span class="p">)</span>
+</span><span class="line"> <span class="c1"># Parse the resulting date string with Chronic</span>
+</span><span class="line"> <span class="n">d</span> <span class="o">=</span> <span class="no">Chronic</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">datestring</span><span class="p">,</span> <span class="p">{</span><span class="ss">:context</span> <span class="o">=&gt;</span> <span class="ss">:past</span><span class="p">,</span> <span class="ss">:ambiguous_time_range</span> <span class="o">=&gt;</span> <span class="mi">8</span><span class="p">})</span>
+</span><span class="line"> <span class="n">d</span> <span class="o">=</span> <span class="no">DateTime</span><span class="o">.</span><span class="n">now</span> <span class="k">if</span> <span class="n">d</span><span class="o">.</span><span class="n">nil?</span>
+</span><span class="line"><span class="k">else</span>
+</span><span class="line"> <span class="c1"># if no [date] specified, make it right now</span>
+</span><span class="line"> <span class="n">d</span> <span class="o">=</span> <span class="no">DateTime</span><span class="o">.</span><span class="n">now</span>
+</span><span class="line"><span class="k">end</span>
+</span><span class="line"><span class="n">date</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">"%m/%d/%Y %l:%M%p"</span><span class="p">)</span> <span class="c1"># dayone formatted</span>
+</span><span class="line"><span class="n">input</span> <span class="o">=</span> <span class="n">input</span><span class="o">.</span><span class="n">gsub</span><span class="p">(</span><span class="sr">/^\[.*?\]\s*/</span><span class="p">,</span><span class="s1">''</span><span class="p">)</span> <span class="c1"># remove [date] from input</span>
+</span><span class="line"><span class="sx">%x{echo "</span><span class="si">#{</span><span class="n">input</span><span class="si">}</span><span class="sx">"|/usr/local/bin/dayone -d="</span><span class="si">#{</span><span class="n">date</span><span class="si">}</span><span class="sx">" -s=</span><span class="si">#{</span><span class="n">starred</span><span class="si">}</span><span class="sx"> new}</span>
+</span></code></pre></div></figure></notextile></div>
+
+<h3 id="some-usage-tips">Some usage tips</h3>
+
+<p>You can star an entry by beginning it with an exclamation point. I&#x2019;m not sure how I&#x2019;ll use stars yet, but I figured the option was there, so I&#x2019;d add a syntax for it.</p>
+
+<p>I often end up logging things after the fact but before I <a href="http://brettterpstra.com/a-solution-for-scatterbrains/">forget what I was doing</a>, so it&#x2019;s important for me to be able to enter an approximate date and time for the sake of organization. Date strings are entered in square brackets at the beginning (or after an exclamation point) of the entry. The natural language accepts basic strings such as &#x201C;yesterday 3pm&#x201D; or &#x201C;noon&#x201D; and converts them to Day One-compatible dates. It also accepts &#x201C;-X&#x201D; operators to specify a number of days ago (I&#x2019;m assuming I won&#x2019;t be logging entries in the future). &#x201C;y&#x201D; by itself will be converted to &#x201C;yesterday.&#x201D; A typical entry for me would look like &#x201C;[y 11:45pm] working on silly scripts for logging to Day One.&#x201D; An entry with no exclamation point and no date brackets is just read as a normal entry at the current time.</p>
+
+<p>I&#x2019;m using generic @tags&#x2013;a habit carried over from my VoodooPad scratchpad&#x2013;to make my entries easily searchable by topic or project. Beyond that, I&#x2019;m just relying on Day One&#x2019;s built-in chronological organization and full-text search.</p>
+
+<p>The script is all fine and good, but it&#x2019;s not much use if it&#x2019;s not convenient to access. Here are a few of the ways I&#x2019;m making it universally accessible in my workflow.</p>
+
+<h4 id="bash-alias">Bash alias</h4>
+
+<p>First things first, lets make it really easy to log entries from the command line. A simple alias in your <code>~/.bash_profile</code> shortens things up:</p>
+
+<pre><code>alias log="~/scripts/logtodayone.rb"
+</code></pre>
+
+<p>Now you can make an entry with <code>log "the thing I was just doing"</code>.</p>
+
+<h4 id="launchbar-action">LaunchBar Action</h4>
+
+<p>Given that few of us are <em>always</em> on the command line, it would be nice to access the script easily from other utility apps. I personally use LaunchBar, but you can create similar scripts for Alfred, Quicksilver, etc. If you use LaunchBar, you can just save the three-line script below as <code>Log to Day One.scpt</code> in <code>~/Library/Application Support/LaunchBar/Actions</code>:</p>
+
+<pre><code>on handle_string(message)
+ do shell script "/Users/ttscoff/scripts/logtodayone.rb \"" &amp; message &amp; "\""
+end handle_string
+</code></pre>
+
+<p>Now, just pop up LaunchBar and type <code>ldo</code> or similar to select the action, then type space to get a text field where you can type your log entry. The script syntax applies in full, so start with an exclamation point to star the entry, and use natural language date syntax between square brackets to specify a date, if needed.</p>
+
+<h4 id="git-commit-wrapper">Git commit wrapper</h4>
+
+<p>I do something similar to this with an nvALT note, so I thought I&#x2019;d try it with Day One for a while. It&#x2019;s a basic bash function to copy a note from a git commit into my daily log. It just wraps <code>git -am</code> (commit all, message), so more complex commit commands won&#x2019;t work. It covers 90% of the commits I&#x2019;d actually want in my journal, though.</p>
+
+<pre><code>function cdo(){
+ msg=$*
+ path=$(pwd)
+ ~/scripts/logtodayone.rb "@${path##*/} $msg"
+ git commit -am "$msg"
+}
+</code></pre>
+
+<p><strong>Update:</strong> I made the git wrapper significantly smarter, thanks to a little assist from <a href="http://nnutter.com/2012/01/git-todo/">@nnutter</a>. It basically parses up your git tree for the actual repo name instead of using the directory name you&#x2019;re currently in.</p>
+
+<pre><code># experimental wrapper for git to log commits to Day One
+# lots of credit to http://nnutter.com/2012/01/git-todo/
+function cdo(){
+ msg=$*
+ GIT_DIR=$(git rev-parse --git-dir)
+ if ! (( $? )); then
+ GIT_DIR=$(echo "$GIT_DIR" | awk -F/ '{nlast = NF -1;print $nlast}')
+ if [ -z "$GIT_DIR" ]; then
+				path=$(pwd)
+				GIT_DIR=${path##*/}
+ fi
+			~/scripts/logtodayone.rb "@$GIT_DIR $msg"
+ fi
+
+ git commit -am "$msg"
+}
+</code></pre>
+
+<table><tbody><tr><td>So that&#x2019;s my fiddling for the evening. Back to doing something more useful (like preparing for my [Macworld</td>
+ <td>iWorld talk with Merlin Mann and David Sparks](http://www.macworldiworld.com/techtalks/thursday-overview/thursday-agenda/#903)).</td>
+ </tr></tbody></table>
+
+
+
+	
+
+<span class="tags">
+ 
+ Topics: <a class="tag" href="http://brettterpstra.com/topic/dayone/">dayone</a>, <a class="tag" href="http://brettterpstra.com/topic/logging/">logging</a>, <a class="tag" href="http://brettterpstra.com/topic/productivity/">productivity</a>
+ 
+</span>
+
+
+	
+	<section class="related instapaper_ignore"><h2>Related posts:</h2>
+ </section></article></div>
+</body></html>

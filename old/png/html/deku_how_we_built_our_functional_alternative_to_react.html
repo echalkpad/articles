@@ -1,0 +1,92 @@
+<!DOCTYPE html><html><head><title>Deku: How we built our functional alternative to React</title></head><body>
+<h1>Deku: How we built our functional alternative to React</h1><p><a href="https://segment.com/blog/deku-our-functional-alternative-to-react/" target="_new">Original URL</a></p>
+<p><blockquote>11 May 2015 dev Over the past few months at Segment we&#x2019;ve been rebuilding large parts of our app UI. A lot of it had become impossible to maintain because we were relying on models binding to&hellip;</blockquote></p>
+<div><section class="Article">
+ <time class="uppercase Article-date--heading" datetime="2015-05-11T00:00:00+00:00">
+ 11 May 2015
+ </time>
+ <a href="https://segment.com/blog/categories/dev/" class="Category uppercase">dev
+ </a>
+ 
+ </section>
+ <div class="Article-body">
+ <p>Over the past few months at Segment we&#x2019;ve been rebuilding large parts of our app UI. A lot of it had become impossible to maintain because we were relying on models binding to the DOM via events.</p>
+<p>Views that are data-bound to the DOM sound great but they are difficult to follow once they become complex and bi-directional. You&#x2019;d often forget to bind some events and a portion of your UI would be out of sync, or you&#x2019;d add a new feature and break 3 others. </p>
+<p>So we decided to take on the challenge to build our own functional alternative to <a href="https://facebook.github.io/react/" title="React">React</a>.</p>
+<h2 id="building-a-prototype">Building a prototype</h2>
+<p>We managed to get a prototype working in about a month. It could render DOM elements and the diffing wasn&#x2019;t too bad. However, the only way to know if it was any good was to throw it into a real project. So that&#x2019;s what we did. We built the <a href="https://segment.com/blog/introducing-the-tracking-plan/">Tracking Plan</a> using the library. At this point it didn&#x2019;t even have a real name. </p>
+<p>It started simple, we found bugs and things we&#x2019;d overlooked, then we started seeing patterns arising and ways to make the development experience better. </p>
+<p>We were able to quickly try some ideas and trash them if they didn&#x2019;t work. At first we started building it like a game engine. It had a rendering loop that would check to see if components were dirty and re-render on every frame, and a <code>scene</code> that managed all the components and inputs like a game world. This turned out to be annoying for debugging and made it overly complex.</p>
+<h3 id="build-test-iterate">Build, test, iterate</h3>
+<p>Thanks to this process of iteration we were able to cut scope. We never needed <code>context</code> or <code>refs</code> like React, so we didn&#x2019;t add it. We started with a syntax that used prototypes and constructors but it was unnecessarily verbose. We haven&#x2019;t had to worry about maintaining text selection because we haven&#x2019;t run across it in real-world use. We also haven&#x2019;t had any issues with element focus because we&#x2019;re only supporting newer browsers.</p>
+<p>We spent many late nights discussing the API on a white board and it&#x2019;s something we care about a lot. We wanted it to be so simple that it would be almost invisible to the user. An API is just UI for developers so we treated it like any other design problem at Segment &#x2014; build, test, iterate.</p>
+
+<p>Performance is the most important feature of any UI library. We couldn&#x2019;t be sure if the library was on the right path until we&#x2019;d seen it running in a real app with real data and constraints. We managed to get decent performance on the first try and we&#x2019;ve been fine-tuning performance as we add and remove new features.</p>
+<p>We first ran into performance issues when we had to re-build the debugger. Some customers were sending hundreds of events per second and the animation wouldn&#x2019;t work correctly if we were just trashing DOM elements every frame. We implemented a more optimized key diffing algorithm and now it renders hundreds of events per second at a smooth 60 fps with ease. Animations included.</p>
+<h3 id="stablizing-the-api">Stablizing the API</h3>
+<p>Eventually everything started to settle down. We took the risk and implemented our own library and it now powers the a large portion of our app. We&#x2019;ve stripped thousands of lines of code and now it&#x2019;s incredibly easy to add new features and maintain thanks to this new library.</p>
+<p>Finally, we think it&#x2019;s ready to share with everyone else.</p>
+<h2 id="introducing-deku">Introducing Deku</h2>
+<p><a href="https://github.com/segmentio/deku" title="Deku">Deku</a> is our library for building user interfaces. It supports many of the features you&#x2019;re familiar with in React but aims to be small and functional. You define your UI as a tree of components and whenever a state change occurs it re-renders the entire tree to patch the DOM using a <a href="https://github.com/segmentio/deku/blob/master/lib/render.js#L492" title="Diffing Algorithm">highly optimized diffing algorithm</a>.</p>
+<p>The whole library weighs in at less than 10kb and is easy to follow. It&#x2019;s also using npm so some of those modules are probably being used elsewhere in your code anyway.</p>
+<p>It uses the same concept of components as React. However, we don&#x2019;t support older browsers, so the codebase is small and component API is almost non-existent. It even supports JSX thanks to <a href="https://babeljs.io" title="Babel">Babel</a>. </p>
+<p>Here&#x2019;s what a <a href="https://github.com/segmentio/deku/blob/master/docs/guides/components.md">component</a> looks like in Deku:</p>
+<pre><code>import {element} from 'deku'
+
+function render (component) {
+ let {props,state} = component
+ return &lt;button type={props.type}&gt;{props.children}&lt;/button&gt;
+}
+
+function afterMount(component, el, setState) {
+ setState({ mounted: true })
+}
+
+export default { render, afterMount }
+</code></pre><p>Then you can import that component and render your app:</p>
+<pre><code>import {tree,render,element} from 'deku'
+import Button from './button'
+
+var app = tree(&lt;Button&gt;Hello World&lt;/Button&gt;)
+render(app, document.body)
+</code></pre><h3 id="designed-for-es6">Designed for ES6</h3>
+<p>You&#x2019;ll notice there is no concept of classes or use of <code>this</code>. We&#x2019;re using plain objects and functions. The ES6 module syntax is used to define components and every lifecycle hook is passed the <code>component</code> object which holds the <code>props</code> and <code>state</code> you&#x2019;ll use to render your template. </p>
+<pre><code>export let Button = {
+ render({props, state}) {
+ return &lt;button&gt;{props.text}&lt;/button&gt;
+ }
+}
+</code></pre><p>We never really needed classes. What&#x2019;s the point when you never initialize them anyway? The beauty of using plain functions is that the user can use the ES6 module system to define them however they want! Best of all, there&#x2019;s is no new syntax to learn.</p>
+<h3 id="lifecycle-hooks">Lifecycle hooks</h3>
+<p>Deku has many of the same <a href="https://github.com/segmentio/deku/blob/master/docs/guides/components.md">lifecycle hooks</a> but with two new ones - <code>beforeRender</code> and <code>afterRender</code>. These are called every single render, including the first, unlike the update hooks. We&#x2019;ve found these let us stop thinking about the lifecycle state so much.</p>
+<pre><code>function render (component) {
+ return &lt;div&gt;Hello World&lt;/div&gt; 
+}
+
+function afterRender (component, el) {
+ // Make changes to the element to match the current state.
+ // This could be used for animations.
+}
+
+export default {render,afterRender}
+</code></pre><p>Some of the <a href="https://github.com/segmentio/deku/blob/master/docs/guides/components.md">lifecycle hooks</a> are passed the <code>setState</code> function so you can trigger side-effects to update state and re-render the app. DOM events are delegated to the root element and we don&#x2019;t need to use any sort of synthesized event system because we&#x2019;re not supporting IE9 and below. This means you never need to worry about handling or optimizing event binding.</p>
+<h3 id="client-and-server-rendering">Client and server rendering</h3>
+<p>To render the component to the DOM we need to create a <code>tree</code>. The <code>tree</code> will manage loading data, communicating between components and allows us to use plugins on the entire application. For us it has eliminated the need for anything like <a href="https://github.com/facebook/flux" title="Flux">Flux</a> and there are no singletons in sight.</p>
+<p>You can render the component tree anyway you&#x2019;d like &#x2014; you just need a renderer for it. So far we have a HTML renderer for the server and a DOM renderer for the client since those are the two we&#x2019;ve needed. It would be possible to build a canvas or WebGL renderer.</p>
+
+<p>The <a href="http://anthonyshort.github.io/dbmonster" title="Deku dbmonster">dbmonster performance mini-app</a> written in Deku is also very fast and renders at roughly 15-16 fps compared to most other libraries which render at 11-12 fps. We&#x2019;re always looking for more ways to optimize the diffing algorithm even further but it&#x2019;s already we think it&#x2019;s fast enough. </p>
+<p>You can <a href="https://github.com/segmentio/deku" title="Deku">read more about Deku</a> and <a href="https://github.com/segmentio/deku/tree/master/examples">view some examples</a> on it&#x2019;s Github page.</p>
+<h2 id="why-not-react-">Why not React?</h2>
+<p>The first thing we usually get asked when we tell people about Deku is &#x201C;Why didn&#x2019;t you just use React?&#x201D;. It could seem like a classic case of <a href="http://en.wikipedia.org/wiki/NIH_syndrome" title="Not Invented Here Syndrome">NIH syndrome</a>.</p>
+<p>We originally looked into this project because we use <a href="https://github.com/duojs/duo" title="Duo">Duo</a> as a front-end build tool. Duo is like npm, but just uses Github. It believes in small modules doing one thing well. React was a &#x2018;big thing&#x2019; doing many things within a black box. We like knowing in detail how code works, so we feel comfortable with it and can debug it when something goes wrong. It&#x2019;s very hard to do that with React or any big framework.</p>
+<p>So we looked for smaller alternatives, like <a href="https://github.com/Matt-Esch/virtual-dom" title="virtual-dom">virtual-dom</a> and <a href="https://github.com/Raynos/mercury" title="mercury">mercury</a>. The documentation for virtual-dom was slim and we didn&#x2019;t think the API for mercury was very user friendly.</p>
+<p>We ended up using <a href="https://facebook.github.io/react/" title="React">React</a> for a short time but the API forced us to use a class-like syntax that would lock us into the framework. We also found that we kept fighting with function context all the time which is waste of brain energy. React has some functional aspects to it but it still feels very object-oriented. You&#x2019;re always concerning yourself with implicit environment state thanks to <code>this</code> and the class system. If you don&#x2019;t use classes you never need to worry about <code>this</code>, you never need decorators and you force people to think about their logic in a functional way.</p>
+<p>What started as a hack project to see if we could better understand the concept behind React has developed into a library that is replacing thousands of lines of code and has become the backbone of our entire UI. It&#x2019;s also a lot of fun!</p>
+<h2 id="what-s-next">What&#x2019;s next</h2>
+<p>We&#x2019;ve come a long way in the past few months. Next we&#x2019;re going to look at a few ways we could add animation states to components to solve a problem that plagues every component system using virtual DOM.</p>
+<p>In our next post on <a href="https://github.com/segmentio/deku" title="Deku">Deku</a>, we&#x2019;ll explain how we structure our components and how we deal with CSS. We&#x2019;ll also show off our UIKit &#x2014; the set of components we&#x2019;ve constructed to rapidly built out our UI.</p>
+<p><img src="http://media.giphy.com/media/WixLOKoD6ii7m/giphy.gif" alt="Gif"></p>
+
+ </div>
+ </div>
+</body></html>

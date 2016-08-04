@@ -1,0 +1,323 @@
+<!DOCTYPE html><html><head><title>Building a Slack Clone in Meteor.js: Getting Started</title></head><body>
+<h1>Building a Slack Clone in Meteor.js: Getting Started</h1><p><a href="https://scotch.io/tutorials/building-a-slack-clone-in-meteor-js-getting-started" target="_new">Original URL</a></p>
+<p><blockquote>This is the first of a five-part series on building a Slack clone using Meteor. The aim of these tutorials are not just for you to blindly follow instructions, but it&#x2019;s our hope that&hellip;</blockquote></p>
+<div><div class="page-content-primary">
+
+										
+										
+					<blockquote>
+<p>This is the first of a five-part series on building a Slack clone using Meteor. The aim of these tutorials are not just for you to blindly follow instructions, but it&#x2019;s our hope that you&#x2019;ll understand the thought process and reasoning behind the architecture.</p>
+</blockquote>
+<h2>Installation</h2>
+<p>Installation is simple, just run the shell script Meteor prepared for us!</p>
+<pre><code class="language-bash">
+$ curl https://install.meteor.com/ | sh
+</code></pre>
+<blockquote>
+<p>If you&#x2019;re using Windows, download the <a href="https://install.meteor.com/windows">official Meteor installer for Windows</a>.</p>
+</blockquote>
+<p>The installation will provide us with a command-line tool called the <a href="https://www.meteor.com/tool">Meteor Tool</a>, which gives us the <code>meteor</code> commands.</p>
+<p>To see what features the Meteor Tool provides, simply run</p>
+<pre><code class="language-bash">
+$ meteor --help
+</code></pre>
+<h2>A Meteor App</h2>
+<p>We will use the <code>meteor create</code> command to create a dummy application.</p>
+<pre><code class="language-bash">
+$ meteor create slack
+slack: created. 
+</code></pre>
+<p>Simple! And now to run your application&#x2026;</p>
+<pre><code class="language-bash">
+cd slack 
+meteor
+</code></pre>
+<p>You can now go to <code>localhost:3000</code> and see this dummy application:</p>
+<p><a href="https://cask.scotch.io/2015/05/dummy-meteor.png"><img src="https://cask.scotch.io/2015/05/dummy-meteor-1026x500.png" alt="dummy-meteor" width="1026" class="aligncenter size-large wp-image-9355"></a></p>
+<blockquote>
+<p>To stop the application, press <kbd>Ctrl</kbd> + <kbd>C</kbd></p>
+</blockquote>
+<p>Great! We have a counter! But this is not what we want! So leave the tab opened and keep an eye on it, then delete everything apart from the <code>.meteor</code> directory.</p>
+<p>Open up a new terminal and run</p>
+<pre><code class="language-bash">
+rm slack.*
+</code></pre>
+<h3>Hot Code Push</h3>
+<p>You&#x2019;ll see the screen automatically refresh into a blank screen; you may also see in the terminal, where we ran the <code>meteor</code> command, display the following lines.</p>
+<pre><code class="language-bash">
+=&gt; Modified -- restarting. 
+=&gt; Meteor server restarted
+</code></pre>
+<p>It shows that, while running in development mode, Meteor will detect changes you have made and automatically re-build the application. Once built, it will use a feature of Meteor termed <em>Hot Code Push</em>, and push those changes to all the clients that are connected to it, without them having to refresh.</p>
+<p>This is because the client and the server connects through what is essentially <a href="https://developer.mozilla.org/en/docs/WebSockets">WebSockets</a> connections, so the server can send messages to the client at any time.</p>
+<p>This makes development a joy because you don&#x2019;t have to manually refresh the page each time you make a tiny change to the CSS &#x2013; your changes are live.</p>
+<p>This hot code push feature is also intelligent, if you make changes to the server code which does not affect the client, those changes are not pushed.</p>
+<h3><code>.meteor</code></h3>
+<p>So what is this Meteor magic? It&#x2019;s no magic at all, it&#x2019;s all the work of the Meteor&#x2019;s core packages.</p>
+<p>If you look inside the <code>.meteor</code> directory, you&#x2019;ll see these files.</p>
+<pre><code class="language-bash">
+$ ll
+total 40
+drwxr-xr-x 3 daniel daniel 4096 Apr 25 19:19 ./
+drwxr-xr-x 8 daniel daniel 4096 Apr 25 19:22 ../
+-rw-rw-r-- 1 daniel daniel 229 Apr 25 18:55 .finished-upgraders
+-rw-rw-r-- 1 daniel daniel 6 Apr 25 18:55 .gitignore
+-rw-rw-r-- 1 daniel daniel 323 Apr 25 18:55 .id
+drwxrwxr-x 5 daniel daniel 4096 Apr 25 18:59 local/
+-rw-rw-r-- 1 daniel daniel 274 Apr 25 18:55 packages
+-rw-rw-r-- 1 daniel daniel 15 Apr 25 18:55 platforms
+-rw-rw-r-- 1 daniel daniel 15 Apr 25 18:55 release
+-rw-rw-r-- 1 daniel daniel 825 Apr 25 18:55 versions
+</code></pre>
+<p>The <code>.meteor/packages</code> file contains all the packages our application currently depends on. Currently there are three &#x2013; <code>meteor-platform</code>, <code>autopublish</code> and <code>insecure</code>. The <code>meteor-platform</code> package is the meat of Meteor, but it&#x2019;s nothing more than a collection of other packages.</p>
+<p>In fact, if you look inside the <code>.meteor/versions</code> file, you&#x2019;ll see the exact version of every package installed. All the entries apart from <code>autopublish</code> and <code>insecure</code> are dependecies specified from the <code>meteor-platform</code> package.</p>
+<h3>Updating Meteor</h3>
+<p>Information about your current Meteor release is stored in <code>.meteor/release</code>. You can run the command <code>meteor update</code> to update Meteor, and that tells Meteor tool to check inside this file and see if it is already the latest version, and if not, updates itself.</p>
+<p>It&#x2019;s good practice to always be using the latest version of Meteor, especially when it comes to security fixes.</p>
+<h2>File Structure</h2>
+<p>Remember that Meteor is a full-stack framework, which means it includes both client- and server-side code. Meteor has a few special directories that helps us separate them.</p>
+<ul>
+<li>
+<p><code>client/</code> &#x2013; <em>Any</em> files inside <em>any</em> directories named <code>client</code> are purely client-side, and will not be loaded by the server. We will add code for event handlers here.</p>
+</li>
+<li>
+<p><code>server/</code> &#x2013; Conversely, any files inside any directories named <code>server</code> are purely server-side, and will not be sent to the client. We will add code we don&#x2019;t want the users to see here, such as code for password authentication.</p>
+</li>
+<li>
+<p><code>public/</code> &#x2013; We will place assets that needs to be served as-is to the client in this directory. You can reference them as if they are in the root directory. So <code>public/img/kittens.png</code> can be accessed in your HTML files as <code>img/kittens.png</code>. We will put images, <code>robot.txt</code>, <code>favicon.ico</code> files here.</p>
+</li>
+<li>
+<p><code>private/</code> &#x2013; Like <code>public/</code>, <code>private/</code> houses assets which should only be accessed by the server via the <a href="http://docs.meteor.com/#/full/assets">Assets API</a>.</p>
+</li>
+</ul>
+<p>Go ahead and create these directories now.</p>
+<pre><code class="language-bash">
+$ mkdir client server public private
+</code></pre>
+<h2>Creating the Layout</h2>
+<p><a href="https://cask.scotch.io/2015/05/slack1.png"><img src="https://cask.scotch.io/2015/05/slack1-928x500.png" alt="slack" width="928" class="aligncenter size-large wp-image-9362"></a></p>
+<p>If you look at HTML of the Slack app, you&#x2019;ll find it divided into a header, a body and a footer, with each section further divided into left and right sections.</p>
+<p>So let&#x2019;s create a HTML layout that mimics this; we&#x2019;ll call it <code>room.html</code>. Since this is HTML, which gets loaded only on the client, it makes sense to put it in the <code>client/</code> directory.</p>
+<pre><code class="language-bash">
+$ vi client/room.html
+</code></pre>
+<p>Below is the HTML for a simplified version of the Slack chatroom, which you can find at <code>client/room.html</code> in the source code. To make it look like Slack, we have also included some CSS &#x2013; <code>client/global.css</code>. You can find all the source code for this post on GitHub.</p>
+<pre><code class="language-markup">
+&lt;head&gt;
+ &lt;meta charset="utf-8"&gt;
+ &lt;meta http-equiv="X-UA-Compatible" content="IE=edge"&gt;
+ &lt;title&gt;&lt;/title&gt;
+ &lt;link href='http://fonts.googleapis.com/css?family=Lato:400,700,900' rel='stylesheet' type='text/css'&gt;
+&lt;/head&gt;
+&lt;body&gt;
+ &lt;div class="header"&gt;
+ &lt;div class="team-menu"&gt;scotch&lt;/div&gt;
+ &lt;div class="channel-menu"&gt;
+ &lt;span class="channel-menu_name"&gt;
+ &lt;span class="channel-menu_prefix"&gt;#&lt;/span&gt;
+ general
+ &lt;/span&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;div class="main"&gt;
+ &lt;div class="listings"&gt;
+ &lt;div class="listings_channels"&gt;
+ &lt;h2 class="listings_header"&gt;Channels&lt;/h2&gt;
+ &lt;ul class="channel_list"&gt;
+ &lt;li class="channel active "&gt;
+ &lt;a class="channel_name"&gt;
+ &lt;span class="unread"&gt;0&lt;/span&gt;
+ &lt;span&gt;
+ &lt;span class="prefix"&gt;#&lt;/span&gt;
+ hk
+ &lt;/span&gt;
+ &lt;/a&gt;
+ &lt;/li&gt;
+ &lt;/ul&gt;
+
+ &lt;/div&gt;
+ &lt;div class="listings_direct-messages"&gt;&lt;/div&gt;
+ &lt;/div&gt;
+ &lt;div class="message-history"&gt;
+ &lt;div class="message"&gt;
+ &lt;a href="" class="message_profile-pic"&gt;&lt;/a&gt;
+ &lt;a href="" class="message_username"&gt;scotch&lt;/a&gt;
+ &lt;span class="message_timestamp"&gt;1:31 AM&lt;/span&gt;
+ &lt;span class="message_star"&gt;&lt;/span&gt;
+ &lt;span class="message_content"&gt;Lorem ipsum dolor sit amet, consectetur adipisicing elit. Rem molestias incidunt officia animi ducimus nostrum a cum, sunt, minima fugit repellendus assumenda expedita. Eaque autem vero delectus, optio, consequuntur suscipit.&lt;/span&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+ &lt;div class="footer"&gt;
+ &lt;div class="user-menu"&gt;
+ &lt;span class="user-menu_profile-pic"&gt;&lt;/span&gt;
+ &lt;span class="user-menu_username"&gt;danyll&lt;/span&gt;
+ &lt;img class="connection_icon" src="data:image/png;base64,iVBORw0KGgoAAAAN..."&gt;
+ &lt;span class="connection_status"&gt;online&lt;/span&gt;
+ &lt;/div&gt;
+ &lt;div class="input-box"&gt;
+ &lt;input type="text" class="input-box_text"&gt;
+ &lt;/div&gt;
+ &lt;/div&gt;
+&lt;/body&gt;
+</code></pre>
+<p>The end result looks like this:</p>
+<p><a href="https://cask.scotch.io/2015/05/slack-mockup-11.png"><img src="https://cask.scotch.io/2015/05/slack-mockup-11-889x500.png" alt="slack-mockup-1" width="889" class="aligncenter size-large wp-image-9363"></a></p>
+<p>Not an exact match, but it&#x2019;s close enough!</p>
+<h2>Templating</h2>
+<p>But that was a <em>big</em> file, and it can become a problem when we have multiple people working on it at the same time &#x2013; the front-end developer wants to add a class while the backend developer wants to change a variable name? Even with Git, it can be messy.</p>
+<p>HTML5 introduced a new <a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template"><code>&lt;template&gt;</code></a> element, which Meteor takes advantage of to allow us to separate our markup into more managable chunks.</p>
+<p>You simply take out some markup and wrap it inside a <code>&lt;template&gt;</code> element. You can then insert or remove that template dynamically. The <code>&lt;template&gt;</code> element should have an attribute <code>name</code>, like <code>header</code>, which is what you&#x2019;ll refer to when you use the template.</p>
+<p>Meteor uses its own version of the <a href="http://handlebarsjs.com/">Handlebars</a> templating engine called Spacebar, and that&#x2019;s what we&#x2019;ll use to insert our templates.</p>
+<h3>Spacebars</h3>
+<p>There are four major types of template tags provided by Spacebars:</p>
+<ol>
+<li><code>{{ variable }}</code> &#x2013; Everything inside the double-braces are evaluated and printed as plain text</li>
+<li><code>{{&gt; message }}</code> &#x2013; inserts a template by name. So to insert the <code>header</code> template, I&#x2019;d write <code>{{&gt; header}}</code>.</li>
+<li><code>{{#each}}</code> &#x2013; these <em>block tags</em> define logic you&#x2019;d be familiar with, like <code>#if</code> or <code>#each</code></li>
+<li><code>{{{}}}</code> &#x2013; Everything inside the triple-braces are inserted as raw HTML</li>
+</ol>
+<p>Spacebars leaves you with a much neater, manageable markup.</p>
+<h4>room.html</h4>
+<pre><code class="language-markup">
+&lt;head&gt;
+ &lt;meta charset="utf-8"&gt;
+ &lt;meta http-equiv="X-UA-Compatible" content="IE=edge"&gt;
+ &lt;title&gt;&lt;/title&gt;
+ &lt;link href='http://fonts.googleapis.com/css?family=Lato:400,700,900' rel='stylesheet' type='text/css'&gt;
+&lt;/head&gt;
+&lt;body&gt;
+ {{&gt; header}}
+ &lt;div class="main"&gt;
+ {{&gt; listings}}
+ {{&gt; messages}}
+ &lt;/div&gt;
+ {{&gt; footer}}
+&lt;/body&gt;
+</code></pre>
+<h4>messages.html</h4>
+<pre><code class="language-markup">
+&lt;template name="messages"&gt;
+ &lt;div class="message-history"&gt;
+ {{&gt; message text="All these messages"}}
+ {{&gt; message text="Uses the same template"}}
+ {{&gt; message text="But have a different data context"}}
+ {{&gt; message text="It's why these messages are all different!"}}
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+<h4>message.html</h4>
+<pre><code class="language-markup">
+&lt;template name="message"&gt;
+ &lt;div class="message"&gt;
+ &lt;a href="" class="message_profile-pic"&gt;&lt;/a&gt;
+ &lt;a href="" class="message_username"&gt;scotch&lt;/a&gt;
+ &lt;span class="message_timestamp"&gt;1:31 AM&lt;/span&gt;
+ &lt;span class="message_star"&gt;&lt;/span&gt;
+ &lt;span class="message_content"&gt;Some sample text&lt;/span&gt;
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+<h3>Meteor&#x2019;s Magic</h3>
+<p>You might have noticed that we named our HTML file <code>room.html</code>, and not the usual <code>index.html</code>; but when we navigated to <code>localhost:3000</code>, we were still able to see the page. Without routing, how does Meteor know which files to serve?</p>
+<p>When you build your application, Meteor goes through all the <code>.html</code> files that are not inside the <code>server/</code>, <code>public/</code> and <code>private/</code> directories, and search for <code>&lt;head&gt;</code>, <code>&lt;body&gt;</code> and <code>&lt;template&gt;</code> elements. The contents of the these elements are aggregated together and translated into JavaScript, which gets sent to the client. The client will then re-build the page using these scripts.</p>
+<p>Looking at the HTML file that does get sent over, you can see that it&#x2019;s just a bare-bone skeleton &#x2013; everything is rendered via information contained in the JavaScript files. This is why the name of the HTML file doesn&#x2019;t matter.</p>
+<pre><code class="language-markup">
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+ &lt;link rel="stylesheet" type="text/css" class="__meteor-css__" href="/bf13b96942f2893b46b5edb25734c3eb9c47279b.css?meteor_css_resource=true"&gt;
+&lt;script type="text/javascript"&gt;__meteor_runtime_config__ = JSON.parse(decodeURIComponent("%7B%22meteorRelease%22%3A%22METEOR%401.1.0.2%22%2C%22ROOT_URL%22%3A%22http%3A%2F%2Flocalhost%3A3000%2F%22%2C%22ROOT_URL_PATH_PREFIX%22%3A%22%22%2C%22appId%22%3A%221glu7f5jidcmv1vfqmqa%22%2C%22autoupdateVersion%22%3A%22350c1c5d88ed8487ef7af2db8f2cb02c36651cd5%22%2C%22autoupdateVersionRefreshable%22%3A%22df31ac58c2d23c893d30002007959e1c98c88700%22%2C%22autoupdateVersionCordova%22%3A%22none%22%7D"));&lt;/script&gt;
+ &lt;script type="text/javascript" src="/56c27ba4c0d6bab40c8e71c90d30aec9014a83be.js"&gt;&lt;/script&gt;
+&lt;meta charset="utf-8"&gt;
+ &lt;meta http-equiv="X-UA-Compatible" content="IE=edge"&gt;
+ &lt;title&gt;&lt;/title&gt;
+ &lt;link href='http://fonts.googleapis.com/css?family=Lato:400,700,900' rel='stylesheet' type='text/css'&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<h2>Data Context</h2>
+<p>Right now all our messages are identical, that wouldn&#x2019;t make a good chat app. Instead, we need to pass in parameters into the templates which we can then use as variables.</p>
+<p>So instead of <code>{{&gt; message}}</code>, we write <code>{{&gt; message text='Message text'}}</code>, and in our <code>message</code> template</p>
+<pre><code class="language-markup">
+&lt;template name="message"&gt;
+ &lt;div class="message"&gt;
+ &lt;a href="" class="message_profile-pic"&gt;&lt;/a&gt;
+ &lt;a href="" class="message_username"&gt;scotch&lt;/a&gt;
+ &lt;span class="message_timestamp"&gt;1:31 AM&lt;/span&gt;
+ &lt;span class="message_star"&gt;&lt;/span&gt;
+ &lt;span class="message_content"&gt;{{text}}&lt;/span&gt;
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+<p>This will insert the <code>text</code> variable into the template.</p>
+<pre><code class="language-markup">
+&lt;div class="message-history"&gt;
+{{&gt; message text="All these messages"}}
+{{&gt; message text="Uses the same template"}}
+{{&gt; message text="But have a different data context"}}
+{{&gt; message text="It's why these messages are all different!"}}
+&lt;/div&gt;
+</code></pre>
+<p><a href="https://cask.scotch.io/2015/05/data-context.png"><img src="https://cask.scotch.io/2015/05/data-context.png" alt="data-context" width="342" class="aligncenter size-full wp-image-9359"></a></p>
+<h2>Template Helpers</h2>
+<p>I hope you realized that listing out each message individually will not work in the long run. Instead, let&#x2019;s create an array holding these messages, and then use the <code>{{#each}}</code> block tag of Spacebars to list them out.</p>
+<p>To do this, we will use Template Helpers; you can think of them as variables you can use inside your template.</p>
+<p>To define a template helper, use the syntax <code>Template.templateName.helpers</code>. Since our messages are found inside the <code>messages</code> template, we will write:</p>
+<pre><code class="language-javascript">
+Template.messages.helpers({
+ messages: [
+ { text: "All these messages" },
+ { text: "Uses the same template" },
+ { text: "But have a different data context" },
+ { text: "It's why these messages are all different!" },
+ { text: "Hey!" },
+ { text: "What's up man!" },
+ { text: "Hello" }
+ ]
+});
+</code></pre>
+<p>And now we can use the <code>{{#each}}</code> block tag in our <code>messages</code> template</p>
+<pre><code class="language-markup">
+&lt;template name="messages"&gt;
+ &lt;div class="message-history"&gt;
+ {{#each messages}}
+ {{&gt; message text=text}}
+ {{/each}}
+ &lt;/div&gt;
+&lt;/template&gt;
+</code></pre>
+<p>As expected, we get the same results, only now it&#x2019;s much tidier!</p>
+<p><a href="https://cask.scotch.io/2015/05/using-helpers.png"><img src="https://cask.scotch.io/2015/05/using-helpers.png" alt="using-helpers" width="346" class="aligncenter size-full wp-image-9360"></a></p>
+<h2>Template Event Map</h2>
+<p>The template event maps specifies all the event handlers of the template. In our case, we need to listen in the <code>footer</code> template for when the user presses <kbd>&#x21B5;</kbd> (Enter / Return), afterwhich we should take what&#x2019;s in the input text box, and add it to our helper array.</p>
+<p>Similar to template helpers, you specify the event map using the syntax <code>Template.name.events</code>. For the keys in the event map, the first word specifies which events to bind, and the</p>
+<pre><code class="language-javascript">
+Template.footer.events({
+ 'keypress input': function(event) {
+ if (event.charCode == 13) {
+ event.stopPropagation();
+ $('.message-history').append('&lt;div class="message"&gt;&lt;a href="" class="message_profile-pic"&gt;&lt;/a&gt;&lt;a href="" class="message_username"&gt;scotch&lt;/a&gt;&lt;span class="message_timestamp"&gt;1:31 AM&lt;/span&gt;&lt;span class="message_star"&gt;&lt;/span&gt;&lt;span class="message_content"&gt;' + $('.input-box_text').val() + '&lt;/span&gt;&lt;/div&gt;');
+ $('.input-box_text').val("");
+ return false;
+ }
+ }
+});
+</code></pre>
+<p>For now, we will just append some HTML at the end of <code>&lt;div class="message-history"&gt;</code>, this is in no way ideal! In the next article, we will see how to use collections to make this a lot easier.</p>
+<h2>Excited?</h2>
+<p>This lesson is really just to get you familiar with Meteor and understanding the core architecture of the framework. In the upcoming articles, we will see how we can store our messages inside a database, and how Blaze will live-update our user interface with new messages as they are being added. We will also create different rooms, and allow users to join them using subscriptions and publications! Stay tuned!</p>
+
+					
+
+
+
+											
+											
+				</div>
+
+									
+					</div>
+</body></html>

@@ -1,0 +1,1475 @@
+<!DOCTYPE html><html><head><title>grammarly/rocker-compose</title></head><body>
+<h1>grammarly/rocker-compose</h1><p><a href="https://github.com/grammarly/rocker-compose" target="_new">Original URL</a></p>
+<p><blockquote>rocker-compose Docker composition tool with idempotency features for deploying applications that consist of multiple containers. It's intended to be used in the following cases: Deploying&hellip;</blockquote></p>
+<div><article class="markdown-body entry-content"><h2><a id="user-content-rocker-compose" class="anchor" href="https://github.com/grammarly/rocker-compose#rocker-compose"></a>rocker-compose</h2>
+
+<p>Docker composition tool with idempotency features for deploying applications that consist of multiple containers. It's intended to be used in the following cases:</p>
+
+<ol>
+<li>Deploying containerized apps to servers</li>
+<li>Running containerized apps locally for development or testing</li>
+</ol>
+
+<h2><a id="user-content-table-of-contents" class="anchor" href="https://github.com/grammarly/rocker-compose#table-of-contents"></a>Table of contents</h2>
+
+
+
+<h2><a id="user-content-rationale" class="anchor" href="https://github.com/grammarly/rocker-compose#rationale"></a>Rationale</h2>
+
+<p>There is an official <a href="https://github.com/docker/compose">docker-compose</a> tool that may do the trick. But we found that it is missing a few key features that makes us unable to use it for production deployment. rocker-compose is designed to be a deployment tool in the first place and be useful for development as a bonus (docker-compose is vise versa). For us, a docker deployment tool should:</p>
+
+<ol>
+<li>Be able to read the manifest (configuration file) and run an isolated chain of containers, respecting a dependency graph</li>
+<li>Be idempotent: only affected containers should be restarted <em>(docker-compose simply restarts everything on every run)</em></li>
+<li>Support configurable namespaces and avoid name clashes between apps <em>(docker-compose does not even support underscores in container names - that's a bummer)</em></li>
+<li>Remove containers that are not in the manifest anymore <em>(docker-compose does not)</em></li>
+<li>Respect any changes that can be made to containers' configuration. Images can be updated, their names might stay the same (in case of using mutable tags)</li>
+<li>From the dependency graph, we can determine, which actions may run in parallel, and utilize it</li>
+<li>Support templating in the manifest file: not only ENV variables, but also conditionals, etc. <em>(docker-compose does not have it, but they recently came up with a <a href="https://github.com/docker/compose/issues/1377">pretty good solution</a>, which we also adopted)</em></li>
+</ol>
+
+<p>Contributing these features to docker-compose was also an option, but we decided to come up with a new solution due the following reasons:</p>
+
+<ol>
+<li><code>docker-machine</code> is written in Python, we don't have tools in Python. Also it would be nice if the tool was written in Go to benefit from the existing ecosystem and to ease installations on development machines and any instance or CI server</li>
+<li>We wanted to have full control over the tool and be able to add any feature to it any time</li>
+<li>Time factor was also critical, we were able to come up with a working solution in four days</li>
+</ol>
+
+<h2><a id="user-content-how-it-works" class="anchor" href="https://github.com/grammarly/rocker-compose#how-it-works"></a>How it works</h2>
+
+<p>The most notable feature of <code>rocker-compose</code> is <strong>idempotency</strong>. We have to be able to compare any bit of a container runtime, which includes configuration and state.
+For every run, rocker-compose is building two data sets: <strong>desired</strong> and <strong>actual</strong>. "Desired" is the list of containers given in the manifest. "Actual" is the list of currently running containers we get through the Docker API. By <a href="https://github.com/grammarly/rocker-compose/blob/master/src/compose/diff.go">comparing the two sets</a> and knowing the dependencies between the containers we are about to run, we build an <a href="https://github.com/grammarly/rocker-compose/blob/master/src/compose/action.go">ordered action list</a>. You can also consider the action list as a <em>delta</em> between the two sets.</p>
+
+<p>If a desired container does not exist, <code>rocker-compose</code> simply creates it (and optionally starts). For an existing container with the same name (namespace does help here), it does a more sophisticated comparison:</p>
+
+<ol>
+<li><strong>Compare configuration.</strong> When starting a container, <code>rocker-compose</code> puts the serialized source YAML configuration to a label called <code>rocker-compose-config</code>. By <a href="https://github.com/grammarly/rocker-compose/blob/master/src/compose/config/compare.go">comparing</a> the source config from the manifest and the one stored in a running container label, <code>rocker-compose</code> can detect changes.</li>
+<li><strong>Compare image id</strong>. <code>rocker-compose</code> also checks if the image id has changed. It may happen when you are using <code>:latest</code> tags, and an image can be updated without changing the tag.</li>
+<li><a href="https://github.com/grammarly/rocker-compose#state">Compare state</a>.</li>
+</ol>
+
+<p>It allows <code>rocker-compose</code> to perform <strong>as few changes as possible</strong> to make the actual state match the desired one. If something was changed, <code>rocker-compose</code> recreates the container from scratch. Note that any container change can trigger recreations of other containers depending on that one.</p>
+
+<p><strong>In case of loose coupling</strong>, you can benefit from a micro-services approach and do clever updates, affecting only a single container, without touching others. See <a href="https://github.com/grammarly/rocker-compose#patterns">patterns</a> to learn more about the best practices.</p>
+
+<h2><a id="user-content-production-use" class="anchor" href="https://github.com/grammarly/rocker-compose#production-use"></a>Production use</h2>
+
+<p><code>rocker-compose</code> isn't yet battle-tested for production. However, it's intended to be used for deployments due to its idempotent properties. The idea is that anything you do with <code>rocker-compose</code> on your local machine you can do on a remote machine by simply adding remote host parameters or having <a href="https://docs.docker.com/reference/commandline/cli/#environment-variables">appropriate ENV</a>. <code>rocker-compose</code> implements docker's native client interface for connection parameterization.</p>
+
+<div class="highlight highlight-bash"><pre>$ rocker-compose run <span class="pl-c"># gathers info about docker server from ENV</span>
+$ rocker-compose <span class="pl-s"><span class="pl-pds">$(</span>docker-machine config qa1<span class="pl-pds">)</span></span> run <span class="pl-c"># connects to qa1 server and runs there </span></pre></div>
+
+<p><em>NOTE: You should have qa1 machine registered in your docker-machine</em></p>
+
+<p>See <a href="https://github.com/grammarly/rocker-compose#command-line-reference">command line reference</a> for more details.</p>
+
+<h2><a id="user-content-migrating-from-docker-compose" class="anchor" href="https://github.com/grammarly/rocker-compose#migrating-from-docker-compose"></a>Migrating from docker-compose</h2>
+
+<pre><code>diff docker-compose rocker-compose
+</code></pre>
+
+<p>rocker-compose does its best to be compatible with docker-compose manifests, however there are few differences you should consider in order to migrate:</p>
+
+<ol>
+<li>rocker-compose does not support image names without tags specified. In case you have images without tags, just add <code>:latest</code> explicitly.</li>
+<li>rocker-compose does not support <code>build</code> and <code>dockerfile</code> properties for the container spec. If you rely on it heavily, please file an issue and describe your use case.</li>
+<li>Instead of <code>external_links</code> property, you can specify a different or empty namespace, e.g. <code>links: other.app</code> or <code>links: .redis</code>. However, it is suggested to use <a href="https://github.com/grammarly/rocker-compose#loose-coupling-network">loose coupling strategies</a> instead.</li>
+<li>No <a href="https://docs.docker.com/swarm/">Swarm</a> intergration, since we don't use it. It seems to be not a big deal to implement, so PR or issue, please.</li>
+<li>rocker-compose have <code>restart:always</code> but default. Despite Docker's default value is "no", we found that more often we want to have "always" and people constantly forget to put it.</li>
+<li>There is no <code>rocker-compose scale</code>. Instead, we took a more <a href="https://github.com/grammarly/rocker-compose#dynamic-scaling">declarative approach</a> to replicate containers.</li>
+<li><code>extends</code> works differently. You cannot extend from a different file. <a href="https://github.com/grammarly/rocker-compose#extends">More info</a></li>
+<li>Other properties that are not supported, by may be added easily, file an issue or open a pull request if you miss them: <code>env_file</code>, <code>log_driver</code>, <code>cap_add</code>, <code>devices</code>, <code>security_opt</code>, <code>stdin_open</code>, <code>tty</code>, <code>read_only</code>, <code>volume_driver</code>, <code>mac_address</code>.</li>
+</ol>
+
+<h2><a id="user-content-tutorial" class="anchor" href="https://github.com/grammarly/rocker-compose#tutorial"></a>Tutorial</h2>
+
+<p>Here is an <a href="https://github.com/grammarly/rocker-compose/blob/master/example/wordpress.yml">example of running a wordpress application</a> with rocker-compose:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress </span></span><span class="pl-c"># specify a manifest-level namespace under which all containers will be named</span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">main:</span> </span><span class="pl-c"># container name will be "wordpress.main"</span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.1.2 </span></span><span class="pl-c"># run from "wordpress" image of version 4.1.2</span>
+ <span class="pl-s"><span class="pl-ent">links:</span></span>
+ <span class="pl-c"># link container named "db" as alias "mysql", inside the "main" container</span>
+ <span class="pl-c"># you can reach "db" container by using "mysql" host or using MYSQL_PORT_3306_TCP_ADDR env var</span>
+ <span class="pl-s">- <span class="pl-s">db:mysql</span></span>
+ <span class="pl-s"><span class="pl-ent">ports:</span></span>
+ <span class="pl-s">- <span class="pl-s"><span class="pl-pds">"</span>8080:80<span class="pl-pds">"</span></span></span><span class="pl-c"># throw 8080 port to a host network, map it to 80 internal port</span>
+
+ <span class="pl-s"><span class="pl-ent">db:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">mysql:5.6</span></span>
+ <span class="pl-s"><span class="pl-ent">env:</span></span>
+ <span class="pl-s"><span class="pl-ent">MYSQL_ROOT_PASSWORD:</span> <span class="pl-s">example </span></span><span class="pl-c"># provide MYSQL_ROOT_PASSWORD env var</span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span></span>
+ <span class="pl-c"># specify to mount all volumes from "db_data" container, this way we can</span>
+ <span class="pl-c"># update "db" container without loosing data</span>
+ <span class="pl-s">- <span class="pl-s">db_data </span></span>
+
+ <span class="pl-s"><span class="pl-ent">db_data:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">grammarly/scratch:latest </span></span><span class="pl-c"># use empty image, just for data</span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">created </span></span><span class="pl-c"># this tells compose to not try to run this container, data containers need to be only created</span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span></span>
+ <span class="pl-c"># define the empty directory that will be used by the "db" container</span>
+ <span class="pl-s">- <span class="pl-s">/var/lib/mysql</span></span></pre></div>
+
+<p>You can run this manifest with the following command:</p>
+
+<div class="highlight highlight-bash"><pre>rocker-compose run -f example/wordpress.yml</pre></div>
+
+<p>Or simply this in case your manifest is in the same directory and is named <code>compose.yml</code>:</p>
+
+
+
+<p>The output will be something like the following:</p>
+
+<pre><code>INFO[0000] Reading manifest: .../rocker-compose/example/wordpress.yml
+INFO[0000] Gathering info about 17 containers
+INFO[0000] Create container wordpress.db_data
+INFO[0000] Create container wordpress.db
+INFO[0000] Starting container wordpress.db id:810cb0e65e2d from image mysql:5.6
+INFO[0001] Waiting for 1s to ensure wordpress.db not exited abnormally...
+INFO[0002] Create container wordpress.main
+INFO[0002] Starting container wordpress.main id:20aa94bd256d from image wordpress:4.1.2
+INFO[0002] Waiting for 1s to ensure wordpress.main not exited abnormally...
+INFO[0003] Running containers: wordpress.main, wordpress.db, wordpress.db_data
+</code></pre>
+
+<p><em>NOTE: I have all images downloaded already. Rocker-compose will download missing images during the first run. If you want to pull all images from the manifest separately, there is a <code>rocker-compose pull</code> command for that</em></p>
+
+<p><em>NOTE 2: the line "Gathering info about 17 containers" just means that there are 17 containers on my machine that were created by rocker-compose. You will have 0</em></p>
+
+<p>Rocker-compose creates containers in a deliberate order respecting inter-container dependencies. Let's see what we've created:</p>
+
+<pre><code>$ docker ps -a | grep wordpress
+13f34666431e wordpress:4.1.2 "/entrypoint.sh apac 2 minutes ago Up 2 minutes 0.0.0.0:8080-&gt;80/tcp wordpress.main
+810cb0e65e2d mysql:5.6 "/entrypoint.sh mysq 2 minutes ago Up 2 minutes 3306/tcp wordpress.db
+26511eaeccd2 grammarly/scratch:latest "true" 2 minutes ago wordpress.db_data
+$
+</code></pre>
+
+<p><code>rocker-compose</code> prefixed container names with the namespace "wordpress". Namespaces help <code>rocker-compose</code> to isolate container names and also detect obsolete containers that should be removed.</p>
+
+<p>You can now go to your browser and check <code>:8080</code> under your <code>docker-machine ip</code> address. Wordpress application should be there.</p>
+
+<p>Assuming you have a virtual machine named <code>dev</code>, you can do:</p>
+
+<div class="highlight highlight-bash"><pre>$ open http://<span class="pl-s"><span class="pl-pds">$(</span>docker-machine ip dev<span class="pl-pds">)</span></span>:8080/</pre></div>
+
+<p>Let's inspect some stuff and connect to the Wordpress application container to see how it interacts with mysql:</p>
+
+<div class="highlight highlight-bash"><pre><span class="pl-c"># as you can see, wordpress is running a bunch of apache2 processes</span>
+$ docker <span class="pl-c1">exec</span> -ti wordpress.main ps aux
+USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+root 1 0.0 0.9 177140 20184 <span class="pl-k">?</span> Ss 14:59 0:00 apache2 -DFOREGROUND
+www-data 118 0.0 0.3 177172 7416 <span class="pl-k">?</span> S 14:59 0:00 apache2 -DFOREGROUND
+www-data 119 0.0 0.3 177172 7416 <span class="pl-k">?</span> S 14:59 0:00 apache2 -DFOREGROUND
+www-data 120 0.0 0.3 177172 7416 <span class="pl-k">?</span> S 14:59 0:00 apache2 -DFOREGROUND
+www-data 121 0.0 0.3 177172 7416 <span class="pl-k">?</span> S 14:59 0:00 apache2 -DFOREGROUND
+www-data 122 0.0 0.3 177172 7416 <span class="pl-k">?</span> S 14:59 0:00 apache2 -DFOREGROUND
+root 131 0.0 0.1 17492 2100 <span class="pl-k">?</span> Rs+ 15:12 0:00 ps aux
+
+<span class="pl-c"># let's look at ENV variables that are in our wordpress container</span>
+<span class="pl-c"># there is a MYSQL_PORT_3306_TCP_ADDR which can be used to connect to a db container</span>
+$ docker <span class="pl-c1">exec</span> -ti wordpress.main env
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+HOSTNAME=20aa94bd256d
+MYSQL_PORT=tcp://172.17.3.21:3306
+MYSQL_PORT_3306_TCP=tcp://172.17.3.21:3306
+MYSQL_PORT_3306_TCP_ADDR=172.17.3.21
+MYSQL_PORT_3306_TCP_PORT=3306
+MYSQL_PORT_3306_TCP_PROTO=tcp
+MYSQL_NAME=/wordpress.main/mysql
+MYSQL_ENV_MYSQL_ROOT_PASSWORD=example
+MYSQL_ENV_MYSQL_MAJOR=5.6
+MYSQL_ENV_MYSQL_VERSION=5.6.25
+PHP_INI_DIR=/usr/local/etc/php
+PHP_EXTRA_BUILD_DEPS=apache2-dev
+PHP_EXTRA_CONFIGURE_ARGS=--with-apxs2
+PHP_VERSION=5.6.8
+WORDPRESS_VERSION=4.1.2
+WORDPRESS_UPSTREAM_VERSION=4.1.2
+WORDPRESS_SHA1=9e9745bb8a1166622de866076eac73a49cb3eba0
+HOME=/root
+
+<span class="pl-c"># /etc/hosts shows that there is a host entry for db container as well</span>
+$ docker <span class="pl-c1">exec</span> -ti wordpress.main cat /etc/hosts
+172.17.3.23 20aa94bd256d
+127.0.0.1 localhost
+::1 localhost ip6-localhost ip6-loopback
+fe00::0 ip6-localnet
+ff00::0 ip6-mcastprefix
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+172.17.3.21 mysql 810cb0e65e2d wordpress.db
+
+<span class="pl-c"># you can also open a shell inside of the wordpress container and inspect some stuff</span>
+$ docker <span class="pl-c1">exec</span> -ti wordpress.main bash
+root@20aa94bd256d:/var/www/html# df -h
+Filesystem Size Used Avail Use% Mounted on
+none 19G 17G 598M 97% /
+tmpfs 1002M 0 1002M 0% /dev
+shm 64M 0 64M 0% /dev/shm
+/dev/sda1 19G 17G 598M 97% /etc/hosts
+root@20aa94bd256d:/var/www/html# <span class="pl-c1">exit</span>
+<span class="pl-c1">exit</span>
+$</pre></div>
+
+<p>As you can see, I am almost out of space on my boot2docker virtual machine.</p>
+
+<p>In case you run <code>rocker-compose</code> again without changing anything, it will ensure that nothing was changed and quit:</p>
+
+<pre><code>$ rocker-compose run
+INFO[0000] Reading manifest: .../rocker-compose/example/wordpress.yml
+INFO[0000] Gathering info about 20 containers
+INFO[0000] Running containers: wordpress.main, wordpress.db, wordpress.db_data
+$
+</code></pre>
+
+<p>Let's update our Wordpress application and set the newer version:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-c"># ...</span>
+<span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.2.2</span></span>
+<span class="pl-c"># ...</span></pre></div>
+
+<p>And to apply the effects of our changes, you have to repeat the run:</p>
+
+<pre><code>$ rocker-compose run
+INFO[0000] Reading manifest:.../rocker-compose/example/wordpress.yml
+INFO[0000] Gathering info about 20 containers
+INFO[0000] Pulling image: wordpress:4.2.2 for wordpress.main
+...
+INFO[0045] Removing container wordpress.main id:20aa94bd256d
+INFO[0045] Create container wordpress.main
+INFO[0045] Starting container wordpress.main id:13f34666431e from image wordpress:4.2.2
+INFO[0046] Waiting for 1s to ensure wordpress.main not exited abnormally...
+INFO[0047] Running containers: wordpress.main, wordpress.db, wordpress.db_data
+$
+</code></pre>
+
+<p><code>rocker-compose</code> has automatically pulled the newer version 4.2.2 of Wordpress and restarted the container. Note that our <code>db</code> and <code>db_data</code> containers were untouched since they haven't been changed.</p>
+
+<pre><code>$ docker ps -a | grep wordpress
+13f34666431e wordpress:4.2.2 "/entrypoint.sh apac 2 minutes ago Up 2 minutes 0.0.0.0:8080-&gt;80/tcp wordpress.main
+810cb0e65e2d mysql:5.6 "/entrypoint.sh mysq 15 minutes ago Up 15 minutes 3306/tcp wordpress.db
+26511eaeccd2 grammarly/scratch:latest "true" 15 minutes ago wordpress.db_data
+$
+</code></pre>
+
+<p>You can see that <code>wordpress.main</code> container was restarted later than others. Also, it is running a newer version now.</p>
+
+<p>Any attribute can be changed and after running <code>compose</code> again, it will change as little as it can to make the actual state match the desired one.</p>
+
+<p>After experimenting you can remove containers from the manifest:</p>
+
+<pre><code>$ rocker-compose rm
+INFO[0000] Reading manifest: .../rocker-compose/example/wordpress.yml
+INFO[0000] Gathering info about 20 containers
+INFO[0000] Removing container wordpress.main id:13f34666431e
+INFO[0001] Removing container wordpress.db id:810cb0e65e2d
+INFO[0002] Removing container wordpress.db_data id:26511eaeccd2
+INFO[0002] Nothing is running
+$
+</code></pre>
+
+<h2><a id="user-content-command-line-reference" class="anchor" href="https://github.com/grammarly/rocker-compose#command-line-reference"></a>Command line reference</h2>
+
+<h5><a id="user-content-rocker-compose-1" class="anchor" href="https://github.com/grammarly/rocker-compose#rocker-compose-1"></a><code>rocker-compose</code></h5>
+
+<p>These options are global and can be used with any subcommand:</p>
+
+<table><thead>
+<tr>
+<th>option</th>
+<th>alias</th>
+<th>default value</th>
+<th>description</th>
+<th>example</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>-verbose</code></td>
+<td><code>-vv</code></td>
+<td><code>false</code></td>
+<td>makes debug output</td>
+<td><code>rocker-compose -vv run</code></td>
+</tr>
+<tr>
+<td><code>-log</code></td>
+<td><code>-l</code></td>
+<td><code>nil</code></td>
+<td>redirects output to a log file</td>
+<td><code>rocker-compose -l out.log run</code></td>
+</tr>
+<tr>
+<td><code>-json</code></td>
+<td><em>none</em></td>
+<td>makes json output</td>
+<td><code>rocker-compose -json run</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>-host</code></td>
+<td><code>-H</code></td>
+<td><code>unix:///var/run/docker.sock</code></td>
+<td>Daemon socket(s) to connect to [$DOCKER_HOST]</td>
+<td><code>rocker-compose -H tcp://10.10.41.2:2376 run</code></td>
+</tr>
+<tr>
+<td><code>-tlsverify</code></td>
+<td><code>-tls</code></td>
+<td><code>false</code></td>
+<td>Use TLS and verify the remote</td>
+<td></td>
+</tr>
+<tr>
+<td><code>-tlscacert</code></td>
+<td><em>none</em></td>
+<td><code>~/.docker/ca.pem</code></td>
+<td>Trust certs signed only by this CA</td>
+<td></td>
+</tr>
+<tr>
+<td><code>-tlscert</code></td>
+<td><em>none</em></td>
+<td><code>~/.docker/cert.pem</code></td>
+<td>Path to TLS certificate file</td>
+<td></td>
+</tr>
+<tr>
+<td><code>-tlskey</code></td>
+<td><em>none</em></td>
+<td><code>~/.docker/key.pem</code></td>
+<td>Path to TLS key file</td>
+<td></td>
+</tr>
+<tr>
+<td><code>-auth</code></td>
+<td><code>-a</code></td>
+<td><code>nil</code></td>
+<td>Docker auth, username and password in user:password format</td>
+<td><code>rocker-compose -a user:pass run</code></td>
+</tr>
+<tr>
+<td><code>-help</code></td>
+<td><code>-h</code></td>
+<td><code>nil</code></td>
+<td>shows help</td>
+<td><code>rocker-compose --help</code></td>
+</tr>
+<tr>
+<td><code>-version</code></td>
+<td><code>-v</code></td>
+<td><code>nil</code></td>
+<td>prints rocker-compose version</td>
+<td><code>rocker-compose -v</code></td>
+</tr>
+</tbody></table>
+
+<h5><a id="user-content-common-options-for-run-pull-rm-and-clean-commands" class="anchor" href="https://github.com/grammarly/rocker-compose#common-options-for-run-pull-rm-and-clean-commands"></a>Common options for <code>run</code>, <code>pull</code>, <code>rm</code> and <code>clean</code> commands</h5>
+
+<table><thead>
+<tr>
+<th>option</th>
+<th>alias</th>
+<th>default value</th>
+<th>description</th>
+<th>example</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>-file</code></td>
+<td><code>-d</code></td>
+<td><code>compose.yml</code></td>
+<td>Path to configuration file, if <code>-</code> is given as a value, then STDIN will be used</td>
+<td><code>rocker-compose run -f c.yml</code>, <code>cat c.yml | rocker-compose run -f -</code></td>
+</tr>
+<tr>
+<td><code>-var</code></td>
+<td><em>none</em></td>
+<td><code>[]</code></td>
+<td>Set variables to pass to build tasks</td>
+<td><code>rocker-compose run -var v=1 -var dev=true</code></td>
+</tr>
+<tr>
+<td><code>-dry</code></td>
+<td><code>-d</code></td>
+<td><code>false</code></td>
+<td>Don't execute any operations on target docker</td>
+<td><code>rocker-compose clean -d</code></td>
+</tr>
+</tbody></table>
+
+<h5><a id="user-content-rocker-compose-run--executes-manifest-composeyml" class="anchor" href="https://github.com/grammarly/rocker-compose#rocker-compose-run--executes-manifest-composeyml"></a><code>rocker-compose run</code> &#x2014; executes manifest (compose.yml)</h5>
+
+<table><thead>
+<tr>
+<th>option</th>
+<th>alias</th>
+<th>default value</th>
+<th>description</th>
+<th>example</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>-global</code></td>
+<td><code>-g</code></td>
+<td><code>false</code></td>
+<td>Search for existing containers globally, not only ones started with compose</td>
+<td><code>rocker-compose run -g</code></td>
+</tr>
+<tr>
+<td><code>-force</code></td>
+<td><em>none</em></td>
+<td><code>false</code></td>
+<td>Force recreation of all containers</td>
+<td><code>rocker-compose run -force</code></td>
+</tr>
+<tr>
+<td><code>-attach</code></td>
+<td><em>none</em></td>
+<td><code>false</code></td>
+<td>Stream stdout and stderr of all containers from the spec</td>
+<td><code>rocker-compose run -attach</code></td>
+</tr>
+<tr>
+<td><code>-pull</code></td>
+<td><em>none</em></td>
+<td><code>false</code></td>
+<td>Pull images before running</td>
+<td><code>rocker-compose run -pull</code></td>
+</tr>
+<tr>
+<td><code>-wait</code></td>
+<td><em>none</em></td>
+<td><code>1s</code></td>
+<td>Wait and check exit codes of launched containers</td>
+<td><code>rocker-compose run -wait 5s</code></td>
+</tr>
+<tr>
+<td><code>-ansible</code></td>
+<td><em>none</em></td>
+<td><code>false</code></td>
+<td>output json in ansible format for easy parsing</td>
+<td><code>rocker-compose clean -ansible</code></td>
+</tr>
+</tbody></table>
+
+<p>+ Common options.</p>
+
+<h5><a id="user-content-rocker-compose-pull--pull-images-specified-in-the-manifest" class="anchor" href="https://github.com/grammarly/rocker-compose#rocker-compose-pull--pull-images-specified-in-the-manifest"></a><code>rocker-compose pull</code> &#x2014; pull images specified in the manifest</h5>
+
+<table><thead>
+<tr>
+<th>option</th>
+<th>alias</th>
+<th>default value</th>
+<th>description</th>
+<th>example</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>-ansible</code></td>
+<td><em>none</em></td>
+<td><code>false</code></td>
+<td>output json in ansible format for easy parsing</td>
+<td><code>rocker-compose clean -ansible</code></td>
+</tr>
+</tbody></table>
+
+<p>+ Common options.</p>
+
+<h5><a id="user-content-rocker-compose-rm--stop-and-remove-any-containers-specified-in-the-manifest" class="anchor" href="https://github.com/grammarly/rocker-compose#rocker-compose-rm--stop-and-remove-any-containers-specified-in-the-manifest"></a><code>rocker-compose rm</code> &#x2014; stop and remove any containers specified in the manifest</h5>
+
+<p>+ Common options.</p>
+
+<h5><a id="user-content-rocker-compose-clean--cleanup-old-tags-for-images-specified-in-the-manifest" class="anchor" href="https://github.com/grammarly/rocker-compose#rocker-compose-clean--cleanup-old-tags-for-images-specified-in-the-manifest"></a><code>rocker-compose clean</code> &#x2014; cleanup old tags for images specified in the manifest</h5>
+
+<table><thead>
+<tr>
+<th>option</th>
+<th>alias</th>
+<th>default value</th>
+<th>description</th>
+<th>example</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>-keep</code></td>
+<td><code>-k</code></td>
+<td><code>5</code></td>
+<td>number of last images to keep</td>
+<td><code>rocker-compose clean -k 10</code></td>
+</tr>
+<tr>
+<td><code>-ansible</code></td>
+<td><em>none</em></td>
+<td><code>false</code></td>
+<td>output json in ansible format for easy parsing</td>
+<td><code>rocker-compose clean -ansible</code></td>
+</tr>
+</tbody></table>
+
+<p>+ Common options.</p>
+
+<h5><a id="user-content-rocker-compose-info--show-docker-info-check-connectivity-versions-etc" class="anchor" href="https://github.com/grammarly/rocker-compose#rocker-compose-info--show-docker-info-check-connectivity-versions-etc"></a><code>rocker-compose info</code> &#x2014; show docker info (check connectivity, versions, etc.)</h5>
+
+<table><thead>
+<tr>
+<th>option</th>
+<th>alias</th>
+<th>default value</th>
+<th>description</th>
+<th>example</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>-all</code></td>
+<td><code>-a</code></td>
+<td><code>false</code></td>
+<td>show advanced info</td>
+<td><code>rocker-compose info -a</code></td>
+</tr>
+</tbody></table>
+
+<h2><a id="user-content-composeyml-spec" class="anchor" href="https://github.com/grammarly/rocker-compose#composeyml-spec"></a>compose.yml spec</h2>
+
+<p>The spec is a <a href="http://yaml.org/">YAML</a> file format. Note that the indentation is 2 spaces. Empty lines should be unindented.</p>
+
+<h3><a id="user-content-example" class="anchor" href="https://github.com/grammarly/rocker-compose#example"></a>Example</h3>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress </span></span><span class="pl-c"># specify a manifest-level namespace under which all containers will be named</span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">main:</span> </span><span class="pl-c"># container name will be "wordpress.main"</span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.1.2 </span></span><span class="pl-c"># run from "wordpress" image of version 4.1.2</span>
+ <span class="pl-s"><span class="pl-ent">links:</span></span>
+ <span class="pl-c"># link container named "db" as alias "mysql", inside the "main" container</span>
+ <span class="pl-c"># you can reach "db" container by using "mysql" host or using MYSQL_PORT_3306_TCP_ADDR env var</span>
+ <span class="pl-s">- <span class="pl-s">db:mysql</span></span>
+ <span class="pl-s"><span class="pl-ent">ports:</span></span>
+ <span class="pl-s">- <span class="pl-s"><span class="pl-pds">"</span>8080:80<span class="pl-pds">"</span></span></span><span class="pl-c"># throw 8080 port to a host network, map it to 80 internal port</span>
+
+ <span class="pl-s"><span class="pl-ent">db:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">mysql:5.6</span></span>
+ <span class="pl-s"><span class="pl-ent">env:</span></span>
+ <span class="pl-s"><span class="pl-ent">MYSQL_ROOT_PASSWORD:</span> <span class="pl-s">example </span></span><span class="pl-c"># provide MYSQL_ROOT_PASSWORD env var</span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span></span>
+ <span class="pl-c"># specify to mount all volumes from "db_data" container, this way we can</span>
+ <span class="pl-c"># update "db" container without loosing data</span>
+ <span class="pl-s">- <span class="pl-s">db_data </span></span>
+
+ <span class="pl-s"><span class="pl-ent">db_data:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">grammarly/scratch:latest </span></span><span class="pl-c"># use empty image, just for data</span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">created </span></span><span class="pl-c"># this tells compose to not try to run this container, data containers need to be only created</span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span></span>
+ <span class="pl-c"># define the empty directory that will be used by the "db" container</span>
+ <span class="pl-s">- <span class="pl-s">/var/lib/mysql</span></span></pre></div>
+
+<p>rocker-compose is also compatible with docker-compose format, where containers are specified in the root level:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.1.2</span></span>
+ <span class="pl-s"><span class="pl-ent">links:</span> <span class="pl-s">db:mysql</span></span>
+ <span class="pl-s"><span class="pl-ent">ports:</span> <span class="pl-s"><span class="pl-pds">"</span>8080:80<span class="pl-pds">"</span></span></span>
+
+<span class="pl-s"><span class="pl-ent">db:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">mysql:5.6</span></span>
+ <span class="pl-s"><span class="pl-ent">env:</span> <span class="pl-s">MYSQL_ROOT_PASSWORD=example</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span> <span class="pl-s">db_data </span></span>
+
+<span class="pl-s"><span class="pl-ent">db_data:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">grammarly/scratch:latest</span></span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">created</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span> <span class="pl-s">/var/lib/mysql</span></span></pre></div>
+
+<p>In this case, namespace will be the name of parent directory of your <code>compose.yml</code> file.</p>
+
+<h3><a id="user-content-types" class="anchor" href="https://github.com/grammarly/rocker-compose#types"></a>Types</h3>
+
+<p>String:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress</span></span>
+
+<span class="pl-s"><span class="pl-ent">cmd:</span> <span class="pl-s">while true; do sleep 1; done</span></span>
+
+<span class="pl-s"><span class="pl-ent">cmd:</span> |-</span>
+<span class="pl-s"> set -e</span>
+<span class="pl-s"> touch /var/log/out.log</span>
+<span class="pl-s"> while true; do echo "hello" &gt;&gt; /var/log/out.log; sleep 1; done</span>
+
+<span class="pl-s"><span class="pl-ent">str1:</span> <span class="pl-s">and i am also a string</span></span>
+<span class="pl-s"><span class="pl-ent">str2:</span> <span class="pl-s"><span class="pl-pds">"</span>and i<span class="pl-pds">"</span></span></span></pre></div>
+
+<p>Array:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">cmd:</span> <span class="pl-s">["/bin/sh", "-c", "echo hello"]</span></span>
+
+<span class="pl-s"><span class="pl-ent">volumes_from:</span></span>
+ <span class="pl-s">- <span class="pl-s">data</span></span>
+ <span class="pl-s">- <span class="pl-s">config</span></span>
+
+<span class="pl-s"><span class="pl-ent">ports:</span></span>
+ <span class="pl-s">- <span class="pl-s"><span class="pl-pds">"</span>8080:80<span class="pl-pds">"</span></span></span></pre></div>
+
+<p>Hash:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">env:</span></span>
+ <span class="pl-s"><span class="pl-ent">DB_PASSWORD:</span> <span class="pl-s">lopata</span></span>
+ <span class="pl-s"><span class="pl-ent">DB_HOST:</span> <span class="pl-s">localhost</span></span></pre></div>
+
+<p>Bool:</p>
+
+
+
+<p>Number:</p>
+
+
+
+<p>Ulimit:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">ulimits:</span></span>
+ <span class="pl-s">- <span class="pl-ent">name:</span> <span class="pl-s">nofile</span></span>
+ <span class="pl-c1"><span class="pl-ent">soft:</span> 1024</span>
+ <span class="pl-c1"><span class="pl-ent">hard:</span> 2048</span></pre></div>
+
+<h3><a id="user-content-root-level-properties" class="anchor" href="https://github.com/grammarly/rocker-compose#root-level-properties"></a>Root level properties</h3>
+
+<table><thead>
+<tr>
+<th>Property</th>
+<th>Default value</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><strong>namespace</strong></td>
+<td><em>REQUIRED</em></td>
+<td>String</td>
+<td>root namespace to prefix all container names in the current manifest</td>
+</tr>
+<tr>
+<td><strong>containers</strong></td>
+<td><em>REQUIRED</em></td>
+<td>Hash</td>
+<td>list of containers to run within the current namespace where every key:value pair is a container name as a key and container spec as a value</td>
+</tr>
+</tbody></table>
+
+<h3><a id="user-content-container-properties" class="anchor" href="https://github.com/grammarly/rocker-compose#container-properties"></a>Container properties</h3>
+
+<p>Example:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress</span></span></pre></div>
+
+<p>Where <code>main</code> is a container name and <code>image: wordpress</code> is its spec. If container name begins with an underscore (<code>_</code>) then <code>rocker-compose</code> will not consider it &#x2014; useful for creating base specs for <a href="https://github.com/grammarly/rocker-compose#extends">extends</a>. Note that by convension, properties should be maintained in the given order when writing compose manifests.</p>
+
+<table><thead>
+<tr>
+<th>Property</th>
+<th>Default</th>
+<th>Type</th>
+<th>Run param</th>
+<th>Description</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><strong>extends</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><em>none</em></td>
+<td><code>container_name</code> - extend spec from another container of the current manifest</td>
+</tr>
+<tr>
+<td><strong>image</strong></td>
+<td><em>REQUIRED</em></td>
+<td>String</td>
+<td><code>docker run &lt;image&gt;</code></td>
+<td>image name for the container, the syntax is <code>[registry/][repo/]name[:tag]</code></td>
+</tr>
+<tr>
+<td><strong>state</strong></td>
+<td><code>running</code></td>
+<td>String</td>
+<td><em>none</em></td>
+<td><code>running</code>, <code>ran</code>, <code>created</code> - desired state of a container (<a href="https://github.com/grammarly/rocker-compose#state">read more about state</a>)</td>
+</tr>
+<tr>
+<td><strong>entrypoint</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/reference/run/#entrypoint-default-command-to-execute-at-runtime"><code>--entrypoint</code></a></td>
+<td>overwrite the default entrypoint set by the image</td>
+</tr>
+<tr>
+<td><strong>cmd</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><code>docker run &lt;image&gt; &lt;cmd&gt;</code></td>
+<td>the list of command arguments to pass</td>
+</tr>
+<tr>
+<td><strong>workdir</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#workdir"><code>-w</code></a></td>
+<td>set working directory inside the container</td>
+</tr>
+<tr>
+<td><strong>restart</strong></td>
+<td><code>always</code></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#restart-policies-restart"><code>--restart</code></a></td>
+<td><code>never</code>, <code>always</code>, <code>on-failure,N</code> - container restart policy</td>
+</tr>
+<tr>
+<td><strong>labels</strong></td>
+<td><em>nil</em></td>
+<td>Hash|String</td>
+<td><code>--label FOO=BAR</code></td>
+<td>key/value labels to add to the container</td>
+</tr>
+<tr>
+<td><strong>env</strong></td>
+<td><em>nil</em></td>
+<td>Hash|String</td>
+<td><a href="https://docs.docker.com/reference/run/#env-environment-variables"><code>-e</code></a></td>
+<td>key/value ENV variables</td>
+</tr>
+<tr>
+<td><strong>wait_for</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><em>none</em></td>
+<td>array of container names - wait for other containers to start before starting the container</td>
+</tr>
+<tr>
+<td><strong>links</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/userguide/dockerlinks/"><code>--link</code></a></td>
+<td>other containers to link with; can be <code>container</code> or <code>container:alias</code></td>
+</tr>
+<tr>
+<td><strong>volumes_from</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/userguide/dockervolumes/"><code>--volumes-from</code></a></td>
+<td>mount volumes from other containers</td>
+</tr>
+<tr>
+<td><strong>volumes</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/userguide/dockervolumes/"><code>-v</code></a></td>
+<td>specify volumes of a container, can be <code>path</code> or <code>src:dest</code> <a href="https://github.com/grammarly/rocker-compose#volumes">read more</a></td>
+</tr>
+<tr>
+<td><strong>expose</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/articles/networking/"><code>--expose</code></a></td>
+<td>expose a port or a range of ports from the container without publishing it/them to your host; e.g. <code>8080</code> or <code>8125/udp</code></td>
+</tr>
+<tr>
+<td><strong>ports</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/articles/networking/"><code>-p</code></a></td>
+<td>publish a container&#x1FBF;s port or a range of ports to the host, e.g. <code>8080:80</code> or <code>0.0.0.0:8080:80</code> or <code>8125:8125/udp</code></td>
+</tr>
+<tr>
+<td><strong>publish_all_ports</strong></td>
+<td><code>false</code></td>
+<td>Bool</td>
+<td><a href="https://docs.docker.com/articles/networking/"><code>-P</code></a></td>
+<td>every port in <code>expose</code> will be published to the host</td>
+</tr>
+<tr>
+<td><strong>dns</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/reference/run/#network-settings"><code>--dns</code></a></td>
+<td>add DNS servers to the container</td>
+</tr>
+<tr>
+<td><strong>add_host</strong></td>
+<td><em>nil</em></td>
+<td>Array|String</td>
+<td><a href="https://docs.docker.com/reference/run/#network-settings"><code>--add-host</code></a></td>
+<td>add records to <code>/etc/hosts</code> file, e.g. <code>mysql:172.17.3.21</code></td>
+</tr>
+<tr>
+<td><strong>net</strong></td>
+<td><code>bridge</code></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#network-settings"><code>--net</code></a></td>
+<td>network mode, options are: <code>bridge</code>, <code>host</code>, <code>container:&lt;name|id&gt;</code>; <code>none</code> is used to disable networking</td>
+</tr>
+<tr>
+<td><strong>hostname</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#network-settings"><code>--hostname</code></a></td>
+<td>set a custom hostname for the container</td>
+</tr>
+<tr>
+<td><strong>domainname</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/articles/networking/#configuring-dns"><code>--dns-search</code></a></td>
+<td>set the search domain to <code>/etc/resolv.conf</code></td>
+</tr>
+<tr>
+<td><strong>user</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#user"><code>-u</code></a></td>
+<td>run container process with specified user or UID</td>
+</tr>
+<tr>
+<td><strong>uts</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#uts-settings-uts"><code>--uts</code></a></td>
+<td>if set to <code>host</code> container will inherit host machine's hostname and domain; warning, <strong>insecure</strong>, use only with trusted containers</td>
+</tr>
+<tr>
+<td><strong>pid</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#pid-settings-pid"><code>--pid</code></a></td>
+<td>set the PID (Process) Namespace mode for the container, when set to <code>host</code> will be in host machine's namespace</td>
+</tr>
+<tr>
+<td><strong>privileged</strong></td>
+<td><code>false</code></td>
+<td>Bool</td>
+<td><a href="https://docs.docker.com/reference/run/#runtime-privilege-linux-capabilities-and-lxc-configuration"><code>--privileged</code></a></td>
+<td>give extended privileges to this container</td>
+</tr>
+<tr>
+<td><strong>memory</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td>Number</td>
+<td><a href="https://docs.docker.com/reference/run/#runtime-constraints-on-resources"><code>--memory</code></a></td>
+</tr>
+<tr>
+<td><strong>memory_swap</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td>Number</td>
+<td><a href="https://docs.docker.com/reference/run/#runtime-constraints-on-resources"><code>--memory-swap</code></a></td>
+</tr>
+<tr>
+<td><strong>cpu_shares</strong></td>
+<td><em>nil</em></td>
+<td>Number</td>
+<td><a href="https://docs.docker.com/reference/run/#runtime-constraints-on-resources"><code>--cpu-shares</code></a></td>
+<td>CPU shares (relative weight)</td>
+</tr>
+<tr>
+<td><strong>cpu_period</strong></td>
+<td><em>nil</em></td>
+<td>Number</td>
+<td><a href="https://docs.docker.com/reference/run/#runtime-constraints-on-resources"><code>--cpu-period</code></a></td>
+<td>limit the CPU CFS (Completely Fair Scheduler) period</td>
+</tr>
+<tr>
+<td><strong>cpuset_cpus</strong></td>
+<td><em>nil</em></td>
+<td>String</td>
+<td><a href="https://docs.docker.com/reference/run/#runtime-constraints-on-resources"><code>--cpuset-cpus</code></a></td>
+<td>CPUs in which to allow execution, e.g. <code>0-3</code> or <code>0,1</code></td>
+</tr>
+<tr>
+<td><strong>ulimits</strong></td>
+<td><em>nil</em></td>
+<td>Array of Ulimit</td>
+<td><a href="https://github.com/docker/docker/pull/9437"><code>--ulimit</code></a></td>
+<td>ulimit spec for the container</td>
+</tr>
+<tr>
+<td><strong>kill_timeout</strong></td>
+<td><code>0</code></td>
+<td>Number</td>
+<td><em>none</em></td>
+<td>timeout in seconds to wait for container to <a href="https://docs.docker.com/reference/commandline/stop/">stop before killing it</a> with <code>-9</code></td>
+</tr>
+<tr>
+<td><strong>keep_volumes</strong></td>
+<td><code>false</code></td>
+<td>Bool</td>
+<td><em>none</em></td>
+<td>tell <code>rocker-compose</code> to keep volumes when removing the container</td>
+</tr>
+</tbody></table>
+
+<p>Some aliases are supported for compatibility with <code>docker-compose</code> and <code>docker run</code> specs:</p>
+
+<table><thead>
+<tr>
+<th>docker_compose</th>
+<th>rocker_compose</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><code>command</code></td>
+<td><code>cmd</code></td>
+</tr>
+<tr>
+<td><code>link</code></td>
+<td><code>links</code></td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td><code>labels</code></td>
+</tr>
+<tr>
+<td><code>hosts</code></td>
+<td><code>add_host</code></td>
+</tr>
+<tr>
+<td><code>extra_hosts</code></td>
+<td><code>add_host</code></td>
+</tr>
+<tr>
+<td><code>working_dir</code></td>
+<td><code>workdir</code></td>
+</tr>
+<tr>
+<td><code>environment</code></td>
+<td><code>env</code></td>
+</tr>
+</tbody></table>
+
+<h2><a id="user-content-state" class="anchor" href="https://github.com/grammarly/rocker-compose#state"></a>State</h2>
+
+<p>For every pair of containers with the same name, <code>rocker-compose</code> does a comparison of all properties to figure out changes, as well as a check of the running state. To determine if the container should be restarted, in case all other properties are equal, <code>rocker-compose</code> uses the following decision scheme:</p>
+
+<table><thead>
+<tr>
+<th>Desired State</th>
+<th>Actual State</th>
+<th>Exit Code</th>
+<th>Action</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>running</td>
+<td>not exists</td>
+<td><em>none</em></td>
+<td>start</td>
+</tr>
+<tr>
+<td>running</td>
+<td>exists</td>
+<td><em>any</em></td>
+<td>remove and start</td>
+</tr>
+<tr>
+<td>running</td>
+<td>restarting</td>
+<td><em>any</em></td>
+<td>wait</td>
+</tr>
+<tr>
+<td>running</td>
+<td>running</td>
+<td><em>none</em></td>
+<td>NOOP</td>
+</tr>
+<tr>
+<td>created</td>
+<td>not exists</td>
+<td><em>none</em></td>
+<td>create</td>
+</tr>
+<tr>
+<td>created</td>
+<td>exists</td>
+<td><em>any</em></td>
+<td>NOOP</td>
+</tr>
+<tr>
+<td>created</td>
+<td>restarting</td>
+<td><em>any</em></td>
+<td>remove and create</td>
+</tr>
+<tr>
+<td>created</td>
+<td>running</td>
+<td><em>none</em></td>
+<td>remove and create</td>
+</tr>
+<tr>
+<td>ran</td>
+<td>not exists</td>
+<td><em>none</em></td>
+<td>start and wait</td>
+</tr>
+<tr>
+<td>ran</td>
+<td>exists</td>
+<td><code>0</code></td>
+<td>NOOP</td>
+</tr>
+<tr>
+<td>ran</td>
+<td>exists</td>
+<td>non-zero</td>
+<td>remove, start and wait</td>
+</tr>
+<tr>
+<td>ran</td>
+<td>restarting</td>
+<td><em>any</em></td>
+<td>wait</td>
+</tr>
+<tr>
+<td>ran</td>
+<td>running</td>
+<td><em>none</em></td>
+<td>NOOP?</td>
+</tr>
+</tbody></table>
+
+<p><em>NOTE: by "start" here we mean "create" and then "start"</em></p>
+
+<p><strong>state: ran</strong> is used for single-shot commands to perform some initialization. <code>rocker-compose</code> does not re-run such containers unless they have changed or previous executions exited with non-zero code.</p>
+
+<p><strong>state: created</strong> is mostly used for data volume and network-share containers. They are described in <a href="https://github.com/grammarly/rocker-compose#patterns">patterns</a> section.</p>
+
+<h2><a id="user-content-volumes" class="anchor" href="https://github.com/grammarly/rocker-compose#volumes"></a>Volumes</h2>
+
+<p>It is possible to mount volumes to a running container the same way as it is when using plain <code>docker run</code>. In Docker, there are two types of volumes: <strong>Data volume</strong> and <strong>Mounted host directory</strong>. </p>
+
+<h3><a id="user-content-data-volume" class="anchor" href="https://github.com/grammarly/rocker-compose#data-volume"></a>Data volume</h3>
+
+<p>"Data volume" is a reusable directory managed by Docker daemon that can be shared between containers. Most often, this type of file sharing across containers should be used because of its <a href="http://12factor.net/">12factor</a> compliance &#x2014; you can think of it as "data volume as a service".</p>
+
+<p>Example:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">db:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">mysql:5.6</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span></span>
+ <span class="pl-c"># specify to mount all volumes from "db_data" container, this way we can</span>
+ <span class="pl-c"># update "db" container without loosing data</span>
+ <span class="pl-s">- <span class="pl-s">db_data </span></span>
+
+ <span class="pl-s"><span class="pl-ent">db_data:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">grammarly/scratch:latest </span></span><span class="pl-c"># use empty image, just for data</span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">created </span></span><span class="pl-c"># this tells compose to not try to run this container, data containers needs to be just created</span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span></span>
+ <span class="pl-c"># define the empty directory that will be used by "db" container</span>
+ <span class="pl-s">- <span class="pl-s">/var/lib/mysql</span></span>
+
+ <span class="pl-c"># Cron job container that will periodically backup data from /var/lib/mysql volume in db_data container</span>
+ <span class="pl-s"><span class="pl-ent">db_backup:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">some_cron_backuper_image</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span> <span class="pl-s">db_data</span></span></pre></div>
+
+<h3><a id="user-content-mounted-host-directory" class="anchor" href="https://github.com/grammarly/rocker-compose#mounted-host-directory"></a>Mounted host directory</h3>
+
+<p>While it is useful for development and testing, it's unsafe and error-prone for production use. It requires some external folder to exist on a host machine in order to run your container. Also, it may cause some unpleasant failure modes hard to reproduce. And finally, you cannot guarantee reproducibility of your manifests.</p>
+
+<p>The rule of thumb with "Mounted host directories" is the following:</p>
+
+<ol>
+<li>Use it only for development</li>
+<li>Use it for logging or mounting external devices, such as EBS volumes <em>(this one may be covered by tools like <a href="https://github.com/ClusterHQ/flocker">flocker</a> or future docker volume drivers)</em></li>
+</ol>
+
+<p>Example:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">db:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">mysql:5.6</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span></span>
+ <span class="pl-c"># mount /mnt/data directory from host machine to /var/lib/mysql in the container</span>
+ <span class="pl-c"># container can be safely removed without data loss</span>
+ <span class="pl-s">- <span class="pl-s">/mnt/data:/var/lib/mysql</span></span>
+
+ <span class="pl-c"># Cron job container that will periodically backup data from /mnt/data host machine directory</span>
+ <span class="pl-s"><span class="pl-ent">db_backup:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">some_cron_backuper_image</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span> <span class="pl-s">/mnt/data:/var/lib/mysql</span></span></pre></div>
+
+<p>Development example:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.1.2</span></span>
+ <span class="pl-s"><span class="pl-ent">links:</span> <span class="pl-s">db:mysql</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span></span>
+ <span class="pl-c"># mount ./wordpress-src directory to /var/www/html in the container, this way we can hack wordpress sources while the container is running</span>
+ <span class="pl-s">- <span class="pl-s">./wordpress-src:/var/www/html</span></span>
+ <span class="pl-s"><span class="pl-ent">ports:</span></span>
+ <span class="pl-s">- <span class="pl-s"><span class="pl-pds">"</span>8080:80<span class="pl-pds">"</span></span></span></pre></div>
+
+<p><em>NOTE: you cannot use the last example for production, obviously because there should be no such directory as <code>./wordpress-src</code></em></p>
+
+<h2><a id="user-content-extends" class="anchor" href="https://github.com/grammarly/rocker-compose#extends"></a>Extends</h2>
+
+<p>You can extend some container specifications within a single manifest file. In this example, we will run two identical wordpress containers and assign them to different ports:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-c"># define base _main container spec; it will be ignored by rocker-compose because it starts from _</span>
+ <span class="pl-s"><span class="pl-ent">_main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.1.2</span></span>
+ <span class="pl-s"><span class="pl-ent">links:</span> <span class="pl-s">db:mysql</span></span>
+
+ <span class="pl-c"># extend main1 from _main and override ports to listen on :8080</span>
+ <span class="pl-s"><span class="pl-ent">main1:</span></span>
+ <span class="pl-s"><span class="pl-ent">extends:</span> <span class="pl-s">_main</span></span>
+ <span class="pl-s"><span class="pl-ent">ports:</span> <span class="pl-s"><span class="pl-pds">"</span>8080:80<span class="pl-pds">"</span></span></span>
+
+ <span class="pl-c"># extend main2 from _main and override ports to listen on :8081</span>
+ <span class="pl-s"><span class="pl-ent">main2:</span></span>
+ <span class="pl-s"><span class="pl-ent">extends:</span> <span class="pl-s">_main</span></span>
+ <span class="pl-s"><span class="pl-ent">ports:</span> <span class="pl-s"><span class="pl-pds">"</span>8081:80<span class="pl-pds">"</span></span></span></pre></div>
+
+<p><strong>NOTE:</strong> nested extends are not allowed by <code>rocker-compose</code>.</p>
+
+<h2><a id="user-content-templating" class="anchor" href="https://github.com/grammarly/rocker-compose#templating"></a>Templating</h2>
+
+<p><code>rocker-compose</code> uses Go <a href="http://golang.org/pkg/text/template/">text/template</a> engine to render manifests. This way you can put some logic into your manifests or even inject some variables from the outside:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.1.2</span></span>
+ <span class="pl-s"><span class="pl-ent">links:</span> <span class="pl-s">db:mysql</span></span>
+ {{ if eq .env <span class="pl-s"><span class="pl-pds">"</span>dev<span class="pl-pds">"</span></span> }}
+ <span class="pl-s"><span class="pl-ent">volumes:</span></span>
+ <span class="pl-c"># mount ./wordpress-src directory to /var/www/html in the container, such way we can hack wordpress sources while the container is running</span>
+ <span class="pl-s">- <span class="pl-s">./wordpress-src:/var/www/html</span></span>
+ {{ end }}
+ <span class="pl-s"><span class="pl-ent">ports:</span></span>
+ <span class="pl-s">- <span class="pl-s">{{ or .port "8080" }}:80</span></span></pre></div>
+
+<p>You can run this manifest as follows:</p>
+
+<div class="highlight highlight-bash"><pre>$ rocker-compose run <span class="pl-c"># will not mount src volume and run on 8080</span>
+$ rocker-compose run -var env=dev <span class="pl-c"># will mount src volume and run on :8080</span>
+$ rocker-compose run -var env=dev -var port=8081 <span class="pl-c"># will mount src volume and run on :8081</span></pre></div>
+
+<p>In addition to the <a href="http://golang.org/pkg/text/template/#hdr-Functions">builtin helper functions</a> there are some provided by <code>rocker-compose</code>:</p>
+
+<h6><a id="user-content--bridgeip--example" class="anchor" href="https://github.com/grammarly/rocker-compose#-bridgeip--example"></a>{{ bridgeIp }} <a href="https://github.com/grammarly/rocker-compose#loose-coupling-network">Example</a></h6>
+
+<p>Returns Docker's <a href="https://docs.docker.com/articles/networking/">bridge gateway ip</a>, which can be used to access any exposed ports of an external container. Useful for loose coupling. <a href="https://github.com/grammarly/rocker-compose/blob/88007dcf571da7617f775c9abe1824eedc9598fb/src/compose/docker.go#L59">Source</a></p>
+
+<h6><a id="user-content--seq-to--or--seq-from-to--or--seq-from-to-step-" class="anchor" href="https://github.com/grammarly/rocker-compose#-seq-to--or--seq-from-to--or--seq-from-to-step-"></a>{{ seq <em>To</em> }} or {{ seq <em>From</em> <em>To</em> }} or {{ seq <em>From</em> <em>To</em> <em>Step</em> }}</h6>
+
+<p>Sequence generator. Returns an array of integers of a given sequence. Useful when you need to duplicate some configuration, for example scale containers of the same type. Mostly used in combination with <code>range</code>:</p>
+
+<pre><code>{{ range $i := seq 1 5 2 }}
+container-$i
+{{ end }}
+</code></pre>
+
+<p>This template will yield:</p>
+
+<pre><code>container-1
+container-3
+container-5
+</code></pre>
+
+<p>See <a href="https://github.com/grammarly/rocker-compose#dynamic-scaling">this example</a> of using <code>seq</code> for dynamically scaling containers.</p>
+
+<h2><a id="user-content-dynamic-scaling" class="anchor" href="https://github.com/grammarly/rocker-compose#dynamic-scaling"></a>Dynamic scaling</h2>
+
+<p>Sometimes you need to dynamically set the number of containers to be started. <code>docker-compose</code> has <a href="https://docs.docker.com/compose/cli/#scale">scale</a> command that does exactly what we want. With <code>rocker-compose</code> we can template the configuration with the help of the <code>seq</code> generator:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">scaling</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ {{ <span class="pl-ent">range $n </span>:= seq .n }}
+ <span class="pl-s"><span class="pl-ent">worker_{{$n}}:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">busybox:buildroot-2013.08.1</span></span>
+ <span class="pl-s"><span class="pl-ent">command:</span> <span class="pl-s">for i in `seq 1 10000`; do echo "hello $i!!!!"; sleep 1; done</span></span>
+ {{ end }}</pre></div>
+
+<p>By running <code>rocker-compose</code> with some value for a variable <code>n</code>, it will spawn a desired number of "worker" containers:</p>
+
+<div class="highlight highlight-bash"><pre>rocker-compose run -var n=1 <span class="pl-c"># will spawn worker_1</span>
+rocker-compose run -var n=2 <span class="pl-c"># will add worker_2 while worker_1 is still running</span>
+rocker-compose run -var n=4 <span class="pl-c"># will add worker_3 and worker_4 while worker_1 and worker_2 are running</span>
+rocker-compose run -var n=1 <span class="pl-c"># will kill worker_2, worker_3, and worker_4, while keeping worker_1 running</span></pre></div>
+
+<h3><a id="user-content-a-more-advanced-example" class="anchor" href="https://github.com/grammarly/rocker-compose#a-more-advanced-example"></a>A more advanced example</h3>
+
+<p>We can specify complete groups of containers running independently. Here we use <code>_base</code> container configuration to extend our workers from. Each worker writes its name and message sequence number to a log, which is stored in a dedicated volume container. From the other side, there is a <code>tail_container</code> for each worker, that tails the worker's log.</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">scaling</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">_base:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">busybox:buildroot-2013.08.1</span></span>
+ <span class="pl-s"><span class="pl-ent">cmd:</span> <span class="pl-s">for i in `seq 1 10000`; do echo "hello $NAME $i!!!!" &gt;&gt; /tmp/log; sleep 1; done</span></span>
+ <span class="pl-s"><span class="pl-ent">env:</span></span>
+ <span class="pl-s"><span class="pl-ent">NAME:</span> <span class="pl-s">{{or .name "NONE"}}</span></span>
+
+ {{ <span class="pl-ent">range $n </span>:= seq .n }}
+ <span class="pl-s"><span class="pl-ent">worker_{{$n}}:</span></span>
+ <span class="pl-s"><span class="pl-ent">extends:</span> <span class="pl-s">_base</span></span>
+ <span class="pl-s"><span class="pl-ent">env:</span> <span class="pl-s">NAME=worker-{{$n}}</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span> <span class="pl-s">volume_container_{{$n}}</span></span>
+
+ <span class="pl-s"><span class="pl-ent">volume_container_{{$n}}:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">grammarly/scratch:latest</span></span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">created</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span> <span class="pl-s">/tmp</span></span>
+
+ <span class="pl-s"><span class="pl-ent">tail_container_{{$n}}:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">ubuntu:12.04</span></span>
+ <span class="pl-s"><span class="pl-ent">cmd:</span> <span class="pl-s">tail -f /tmp/log</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span> <span class="pl-s">volume_container_{{$n}}</span></span>
+ <span class="pl-s"><span class="pl-ent">links:</span> <span class="pl-s">worker_{{$n}}</span></span>
+ {{ end }}</pre></div>
+
+<h2><a id="user-content-patterns" class="anchor" href="https://github.com/grammarly/rocker-compose#patterns"></a>Patterns</h2>
+
+<p>Here is a list of the most common problems with multi-container applications and ways you can solve them with <code>rocker-compose</code>.</p>
+
+<h3><a id="user-content-data-volume-containers" class="anchor" href="https://github.com/grammarly/rocker-compose#data-volume-containers"></a>Data volume containers</h3>
+
+<p>By design, containers are transient. Most of the tools for containerized applications are built expecting your apps to respect this rule. Your container can be dropped and created from scratch any time. For example, to update the image some container is running, you have to remove container and create a new one. This is a property of <strong>immutable infrastructure</strong>. In Docker, every container has its own dedicated file system, and by default it is removed along with the container. There is a <code>VOLUME</code> directive, which creates a separate data volume associated with the container that is able to persist after container removal. But there is no way to re-associate the old detached volume with a new container.</p>
+
+<p>A known pattern to workaround containers transient properties while not losing persistent data is to make a "data volume container" and mount its volumes to your application container.</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">db:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">mysql:5.6</span></span>
+ <span class="pl-s"><span class="pl-ent">env:</span> <span class="pl-s">MYSQL_ROOT_PASSWORD=example</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span></span>
+ <span class="pl-c"># db container can be easily re-created without losing data</span>
+ <span class="pl-c"># all data will remain in /var/lib/mysql associated with db_data container</span>
+ <span class="pl-s">- <span class="pl-s">db_data </span></span>
+
+ <span class="pl-s"><span class="pl-ent">db_data:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">grammarly/scratch:latest </span></span><span class="pl-c"># use empty image, just for data</span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">created </span></span><span class="pl-c"># this tells compose to not try to run this container, data containers need to be just created</span>
+ <span class="pl-s"><span class="pl-ent">volumes:</span></span>
+ <span class="pl-c"># define the empty directory that will be used by "db" container</span>
+ <span class="pl-s">- <span class="pl-s">/var/lib/mysql</span></span></pre></div>
+
+<p>Another reason for using this pattern is to split the lifecycle of your application from its configuration:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">wordpress</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">wordpress:4.1.2</span></span>
+ <span class="pl-s"><span class="pl-ent">volumes_from:</span> <span class="pl-s">main_config</span></span>
+
+ <span class="pl-s"><span class="pl-ent">main_config:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">my_wordpress_config</span></span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">created</span></span></pre></div>
+
+<p>This way, you can release <code>my_wordpress_config</code> independently from <code>wordpress</code> and deliver it separately. Keep in ming, though, that the <code>main</code> container will be restarted any time <code>main_config</code> changes.</p>
+
+<p>Dockerfile if the <code>my_wordpress_config</code> image might look like the following:</p>
+
+<div class="highlight highlight-bash"><pre>FROM scratch
+ADD ./config.json /etc/wordpress/config.json <span class="pl-c"># add config file from the context directory to the image</span>
+VOLUME /etc/wordpress <span class="pl-c"># declare /etc/wordpress to be shareable</span></pre></div>
+
+<p>The directory <code>/etc/wordpress</code> will appear in the <code>main</code> container when it is started.</p>
+
+<h3><a id="user-content-bootstrapping" class="anchor" href="https://github.com/grammarly/rocker-compose#bootstrapping"></a>Bootstrapping</h3>
+
+<p>Sometimes you want to do some initialization prior to starting your application container. For example, you may want to create an initial user for a database. <a href="https://github.com/docker-library/mysql/blob/master/5.6/docker-entrypoint.sh">Most of times</a>, people do some sort of <code>./docker-entrypoint.sh</code> wrapping entrypoint script, which is executed as the main process in a container. It does some checks and initialization and then runs an actual process.</p>
+
+<p>There are situations when you are using some vendor image and do not want to extend from it or modify it in any way. In this case, you can use single-run container semantics:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">sensu</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-s"><span class="pl-ent">sensu_client:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">sensu-client</span></span>
+ <span class="pl-s"><span class="pl-ent">links:</span> <span class="pl-s">rabbitmq</span></span>
+ <span class="pl-s"><span class="pl-ent">wait_for:</span></span>
+ <span class="pl-s">- <span class="pl-s">bootstrap </span></span><span class="pl-c"># wait for `bootstrap` container to finish</span>
+
+ <span class="pl-s"><span class="pl-ent">rabbitmq:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">rabbitmq:3-management</span></span>
+
+ <span class="pl-s"><span class="pl-ent">bootstrap:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">tutumcloud/curl</span></span>
+ <span class="pl-s"><span class="pl-ent">state:</span> <span class="pl-s">ran </span></span><span class="pl-c"># rocker-compose will run this container once, unless it's changed</span>
+<span class="pl-s"> <span class="pl-ent">cmd:</span> |-</span>
+<span class="pl-s"> curl --silent -u guest:guest -XPUT -H "Content-Type: application/json" \</span>
+<span class="pl-s"> http://$RABBITMQ_PORT_15672_TCP_ADDR:15672/api/users/sensu \</span>
+<span class="pl-s"> -d '{"password":"sensu","tags":""}'</span>
+ <span class="pl-s"><span class="pl-ent">links:</span></span>
+ <span class="pl-s">- <span class="pl-s">rabbitmq</span></span></pre></div>
+
+<p>This may look as an ugly example, but <a href="https://github.com/grammarly/rocker-compose#state"><code>state:ran</code></a> and <a href="https://github.com/grammarly/rocker-compose#container-properties"><code>wait_for</code></a> are useful primitives that can be used in other cases as well.</p>
+
+<p>Here the start order will be the following:</p>
+
+<ol>
+<li><code>rabbitmq</code> will go first because it does not have any dependencies</li>
+<li><code>bootstrap</code> will run its curl command</li>
+<li><code>sensu_client</code> will be started when <code>bootstrap</code> finished successfully, "sensu" user will be already created</li>
+</ol>
+
+<h3><a id="user-content-loose-coupling-network" class="anchor" href="https://github.com/grammarly/rocker-compose#loose-coupling-network"></a>Loose coupling: network</h3>
+
+<p>The most correct way of linking Docker containers between each other is using <a href="https://docs.docker.com/userguide/dockerlinks/"><code>--link</code></a> primitive. However, in case of container A linked to container B, A needs to be recreated every time we update B. If you rely on ENV variables provided by the links functionality, <a href="https://docs.docker.com/userguide/dockerlinks/#important-notes-on-docker-environment-variables">you cannot update dependencies</a> without recreating your container.</p>
+
+<p>Docker also automatically populates entries to <code>/etc/hosts</code> inside your container. It also updates hosts entires when dependencies <strong>restart</strong>, but not when you <strong>recreate</strong> them (that commonly happens when you update underlying images.) Accessing links though <code>/etc/hosts</code> also does not help loose coupling because you need B to exist anyway in order to even start A.</p>
+
+<p>Both approaches are considered tight coupling and it's ok to use them as long as you acknowledge that fact.</p>
+
+<p>Sometimes you want to detach your application container from some dependency. Let's assume you have an app which is writing metrics to <a href="https://github.com/etsy/statsd">StatsD</a> daemon by UDP, and you don't care if the daemon is present the time you start your application. </p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">myapp</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-c"># container A</span>
+ <span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">alpine:3.2</span></span>
+ <span class="pl-c"># writes counter to statsd every second, note `statsd` host to `nc`</span>
+ <span class="pl-s"><span class="pl-ent">cmd:</span> <span class="pl-s">while true; do echo "foo:1|c" | nc -u -w0 statsd 8125; sleep 1; done</span></span>
+ <span class="pl-s"><span class="pl-ent">add_host:</span></span>
+ <span class="pl-c"># this will populate "statsd" host mapped to a</span>
+ <span class="pl-c"># Docker's bridge ip address</span>
+ <span class="pl-s">- <span class="pl-s">statsd:{{ bridgeIp }}</span></span>
+
+<span class="pl-c"># in another manifest managed by another team</span>
+<span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">platform</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-c"># container B</span>
+ <span class="pl-s"><span class="pl-ent">statsd:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">statsd</span></span>
+ <span class="pl-s"><span class="pl-ent">ports:</span></span>
+ <span class="pl-c"># this will bind 8125/udp port and it will be available</span>
+ <span class="pl-c"># on the Docker's bridge ip</span>
+ <span class="pl-s">- <span class="pl-s"><span class="pl-pds">"</span>8125:8125/udp<span class="pl-pds">"</span></span></span></pre></div>
+
+<p>This way, <code>myapp.main</code> can run independently from <code>platform.statsd</code> and at the same time be able to write metrics to <code>statsd:8125</code>. In case statsd is not present, metrics will be simply dropped on the floor.</p>
+
+<p>This is a tradeoff because you have to expose a known port to a host network. Ports may clash, you don't have full isolation here and benefit from random port mapping. In every particular situation you have to balance between loose coupling and isolation.</p>
+
+<h3><a id="user-content-network-share" class="anchor" href="https://github.com/grammarly/rocker-compose#network-share"></a>Network share</h3>
+
+<p>In case you have containers A and B from example above in the same manifest, you can do loose coupling without exposing any global ports to a host network. The trick is to use <code>net: container:&lt;id|name&gt;</code> feature:</p>
+
+<div class="highlight highlight-yaml"><pre><span class="pl-s"><span class="pl-ent">namespace:</span> <span class="pl-s">myapp</span></span>
+<span class="pl-s"><span class="pl-ent">containers:</span></span>
+ <span class="pl-c"># container A</span>
+ <span class="pl-s"><span class="pl-ent">main:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">alpine:3.2</span></span>
+ <span class="pl-c"># wire the network to a dummy container</span>
+ <span class="pl-s"><span class="pl-ent">net:</span> <span class="pl-s">container:dummy</span></span>
+ <span class="pl-c"># writes counter to statsd every second, note `127.0.0.1` host to `nc`</span>
+ <span class="pl-s"><span class="pl-ent">cmd:</span> <span class="pl-s">while true; do echo "foo:1|c" | nc -u -w0 127.0.0.1 8125; sleep 1; done</span></span>
+
+ <span class="pl-c"># container B</span>
+ <span class="pl-s"><span class="pl-ent">statsd:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">statsd</span></span>
+ <span class="pl-c"># wire the network to a dummy container</span>
+ <span class="pl-s"><span class="pl-ent">net:</span> <span class="pl-s">container:dummy</span></span>
+
+ <span class="pl-c"># simple container that hangs in 'while true' forever</span>
+ <span class="pl-s"><span class="pl-ent">dummy:</span></span>
+ <span class="pl-s"><span class="pl-ent">image:</span> <span class="pl-s">grammarly/net</span></span></pre></div>
+
+<p>In this example <code>dummy</code> container plays the role of a network host. Containers that connected to it by <code>net: container:dummy</code> share all ports between each other.</p>
+
+<p><strong>Note</strong> that ports now may clash between container A and B since they now are in the same network.</p>
+
+<p><strong>Keep in mind</strong> that you cannot mix links with <code>net:conainer</code> mode.</p>
+
+<h3><a id="user-content-loose-coupling-files" class="anchor" href="https://github.com/grammarly/rocker-compose#loose-coupling-files"></a>Loose coupling: files</h3>
+
+<p>TODO</p>
+
+<h2><a id="user-content-contributing" class="anchor" href="https://github.com/grammarly/rocker-compose#contributing"></a>Contributing</h2>
+
+<h3><a id="user-content-dependencies" class="anchor" href="https://github.com/grammarly/rocker-compose#dependencies"></a>Dependencies</h3>
+
+<p>Use <a href="http://getgb.io/">gb</a> to test and build. We vendor all dependencies, you can find them under <code>/vendor</code> directory.</p>
+
+<p>Please, use <a href="https://golang.org/cmd/gofmt/">gofmt</a> in order to automatically re-format Go code into vendor standartised convension. Ideally, you have to set it on post-save action in your IDE. For SublimeText3, <a href="https://github.com/DisposaBoy/GoSublime">GoSublime</a> package does the right thing.</p>
+
+<h3><a id="user-content-build" class="anchor" href="https://github.com/grammarly/rocker-compose#build"></a>Build</h3>
+
+<p>(will procude a binary into <code>bin/</code> directory)</p>
+
+
+
+<p>or build for all platforms:</p>
+
+
+
+<p>If you have a github access token, you can also do a github release:</p>
+
+
+
+<h3><a id="user-content-test" class="anchor" href="https://github.com/grammarly/rocker-compose#test"></a>Test</h3>
+
+
+
+<h3><a id="user-content-test-something-particular" class="anchor" href="https://github.com/grammarly/rocker-compose#test-something-particular"></a>Test something particular</h3>
+
+<div class="highlight highlight-bash"><pre>gb <span class="pl-c1">test</span> compose/... -run TestMyFunction</pre></div>
+
+<h3><a id="user-content-todo" class="anchor" href="https://github.com/grammarly/rocker-compose#todo"></a>TODO</h3>
+
+<ul class="task-list">
+<li class="task-list-item"> Introduce templating for compose.yml to substitute variables from the outside</li>
+<li class="task-list-item"> Refactor config.go - move some functions to config_convert.go</li>
+<li class="task-list-item"> Remove obsolete containers (e.g. removed from compose.yml)</li>
+<li class="task-list-item"> EnsureContainer for containers out of namespace (cannot be created)</li>
+<li class="task-list-item"> client.go execution functions</li>
+<li class="task-list-item"> Add labels for containers launched by compose?</li>
+<li class="task-list-item"> rocker-compose executable with docker connection and cli flags</li>
+<li class="task-list-item"> Choose and adopt a logging framework</li>
+<li class="task-list-item"> Protect from loops in dependencies</li>
+<li class="task-list-item"> Cross-compilation for linux and darwin (run in container? how will gb work?)</li>
+<li class="task-list-item"> Attach stdout of launched (or existing) containers</li>
+<li class="task-list-item"> Force-restart option</li>
+<li class="task-list-item"> Never remove volumes of some containers</li>
+<li class="task-list-item"> Parallel pull operation</li>
+<li class="task-list-item"> Force-pull option (if image exists, only for "latest" or non-semver tags?)</li>
+<li class="task-list-item"> Clean command, keep_versions config attribute for containers</li>
+<li class="task-list-item"> ansible-module mode for rocker-compose executable</li>
+<li class="task-list-item"> Write detailed readme, manual and tutorial</li>
+<li class="task-list-item"> Dry mode, todo: ensure dry works for all actions</li>
+</ul>
+
+<div class="highlight highlight-bash"><pre>grep -R TODO <span class="pl-k">**</span>/<span class="pl-k">*</span>.go <span class="pl-k">|</span> grep -v <span class="pl-s"><span class="pl-pds">'</span>^vendor/<span class="pl-pds">'</span></span></pre></div>
+
+<h2><a id="user-content-authors" class="anchor" href="https://github.com/grammarly/rocker-compose#authors"></a>Authors</h2>
+
+
+
+<h2><a id="user-content-license" class="anchor" href="https://github.com/grammarly/rocker-compose#license"></a>License</h2>
+
+<p>(c) Copyright 2015 Grammarly, Inc.</p>
+
+<p>Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at</p>
+
+<p><a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a></p>
+
+<p>Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.</p>
+</article>
+ </div>
+</body></html>

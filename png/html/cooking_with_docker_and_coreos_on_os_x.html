@@ -1,0 +1,138 @@
+<!DOCTYPE html><html><head><title>Cooking with Docker and CoreOS on OS X</title></head><body>
+<h1>Cooking with Docker and CoreOS on OS X</h1><p><a href="http://www.siliconfidential.com/articles/docker-coreos-osx/" target="_new">Original URL</a></p>
+<p><blockquote>This posts assumes some familiarity with Docker&#x2014;it&#x2019;s a practical guide to a workflow on OS X. The Problem Docker is hot. It represents a significant addition to the second derivative of&hellip;</blockquote></p>
+<div><div class="article-wrap">
+ <p><em>This posts assumes some familiarity with Docker&#x2014;it&#x2019;s a practical guide to a workflow on OS X.</em></p>
+
+<h2 id="the-problem">The Problem</h2>
+<p>Docker is hot. It represents a significant addition to the second derivative of the state of our art. And while there are plenty of tutorials on using Docker floating around, none of them left me with all of the functionality I needed, or a clear picture of how to do real work. I have been frustrated, tickled, and tantalized. Docker, you were a real tease&#x2014;until today.</p>
+
+<h2 id="the-solution">The Solution</h2>
+
+<p>When you&#x2019;re finished, you should have a native docker client, container ports that are easily accessible via localhost, and the ability to edit files on live containers from the comfort of your own <code>$EDITOR</code>.</p>
+
+<h2 id="the-recipe">The Recipe</h2>
+
+<p>Preheat the oven: install <a href="http://vagrantup.com/">Vagrant</a> and <a href="https://www.virtualbox.org/">VirtualBox</a>. Then download docker:</p>
+
+<div class="highlight"><pre><code class="bash">curl -o docker http://get.docker.io/builds/Darwin/x86_64/docker-latest
+chmod +x docker
+<span class="c"># look for the docker daemon on tcp instead of unix</span>
+<span class="c"># (good idea to put this in .bashrc or similar)</span>
+<span class="nb">export </span><span class="nv">DOCKER_HOST</span><span class="o">=</span>tcp://
+sudo cp docker /usr/local/bin/
+</code></pre></div>
+
+<h3 id="the-docker-daemon-in-coreos-via-vagrant">The Docker Daemon: in CoreOS via Vagrant</h3>
+
+<div class="highlight"><pre><code class="bash">git clone https://github.com/coreos/coreos-vagrant/
+<span class="nb">cd </span>coreos-vagrant
+<span class="nv">$EDITOR</span> Vagrantfile
+</code></pre></div>
+
+<p>We&#x2019;ll edit the <code>Vagrantfile</code> to setup an NFS share (for editing container files) and port forwarding (for visiting our beautiful applications via localhost):</p>
+
+<div class="highlight"><pre><code class="ruby"> <span class="c1"># make sure these lines are present and not commented</span>
+ <span class="c1"># and replace /Users/cam/src with your own</span>
+ <span class="n">config</span><span class="o">.</span><span class="n">vm</span><span class="o">.</span><span class="n">network</span> <span class="s2">"private_network"</span><span class="p">,</span> <span class="ss">ip</span><span class="p">:</span> <span class="s2">"172.12.8.150"</span>
+ <span class="n">config</span><span class="o">.</span><span class="n">vm</span><span class="o">.</span><span class="n">synced_folder</span> <span class="s2">"/Users/cam/src"</span><span class="p">,</span> <span class="s2">"/home/core/share"</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="s2">"core"</span><span class="p">,</span> <span class="ss">:nfs</span> <span class="o">=&gt;</span> <span class="kp">true</span><span class="p">,</span> <span class="ss">:mount_options</span> <span class="o">=&gt;</span> <span class="o">[</span><span class="s1">'nolock,vers=3,udp'</span><span class="o">]</span>
+
+ <span class="c1"># you'll need to add these lines</span>
+ <span class="p">(</span><span class="mi">49000</span><span class="o">.</span><span class="n">.</span><span class="mi">49900</span><span class="p">)</span><span class="o">.</span><span class="n">each</span> <span class="k">do</span> <span class="o">|</span><span class="n">port</span><span class="o">|</span>
+ <span class="n">config</span><span class="o">.</span><span class="n">vm</span><span class="o">.</span><span class="n">network</span> <span class="ss">:forwarded_port</span><span class="p">,</span> <span class="ss">:host</span> <span class="o">=&gt;</span> <span class="n">port</span><span class="p">,</span> <span class="ss">:guest</span> <span class="o">=&gt;</span> <span class="n">port</span>
+ <span class="k">end</span>
+</code></pre></div>
+
+<h3 id="install-the-latest-docker-in-the-vm">Install the latest docker in the VM</h3>
+<p>At time of writing, this is necessary because the docker client is native to OS X only as of 0.8, and CoreOS is still running 0.7.5, which is not on speaking terms with its younger sibling.</p>
+
+<div class="highlight"><pre><code class="bash">vagrant up
+vagrant ssh
+<span class="c"># you should land in /home/core, and</span>
+<span class="c"># see /home/core/share pointing to your host share</span>
+
+<span class="c"># install docker</span>
+wget --no-check-certificate https://get.docker.io/builds/Linux/x86_64/docker-latest -O docker
+chmod +x docker
+</code></pre></div>
+
+<p>Add a service for the downloaded docker:</p>
+
+<div class="highlight"><pre><code class="bash">vi /media/state/units/docker-local.service
+<span class="c"># copy the block below into the file above</span>
+<span class="o">[</span>Unit<span class="o">]</span>
+<span class="nv">Description</span><span class="o">=</span>docker <span class="nb">local</span>
+
+<span class="o">[</span>Service<span class="o">]</span>
+<span class="nv">PermissionsStartOnly</span><span class="o">=</span><span class="nb">true</span>
+<span class="nv">ExecStartPre</span><span class="o">=</span>/usr/bin/systemctl <span class="nb">kill </span>docker.service
+<span class="nv">ExecStart</span><span class="o">=</span>/home/core/docker -H 0.0.0.0:4243 -H unix:///var/run/docker.sock -d
+
+<span class="o">[</span>Install<span class="o">]</span>
+<span class="nv">WantedBy</span><span class="o">=</span>local.target
+</code></pre></div>
+
+<p>Kill the 0.7.5 docker daemon and start 0.8:</p>
+
+<div class="highlight"><pre><code class="bash">sudo systemctl restart <span class="nb">local</span>-enable.service
+</code></pre></div>
+
+<p>If you make subsequent modifications to the new service file, you&#x2019;ll need to restart it with a different incantation:</p>
+
+<div class="highlight"><pre><code class="bash">sudo systemctl restart docker-local.service
+</code></pre></div>
+
+<h3 id="something-smells-delicious">Something smells delicious&#x2026;</h3>
+
+<div class="highlight"><pre><code class="bash"><span class="c"># from your os x terminal</span>
+&gt; docker version
+Client version: 0.8.0
+Go version <span class="o">(</span>client<span class="o">)</span>: go1.2
+Git commit <span class="o">(</span>client<span class="o">)</span>: cc3a8c8
+Server version: 0.8.0
+Git commit <span class="o">(</span>server<span class="o">)</span>: cc3a8c8
+Go version <span class="o">(</span>server<span class="o">)</span>: go1.2
+</code></pre></div>
+
+<h3 id="docker-is-served">Docker is served</h3>
+
+<p>Garnish your <code>docker run</code> commands with a spring of <code>-v</code>, and your containers will share files with your local file system via the vm.</p>
+
+<div class="highlight"><pre><code class="bash"><span class="c"># on the osx host, in /Users/cam/src/hey-ma</span>
+docker build -t camron/hey-ma .
+
+<span class="c"># run the container with a volume that links it to the vm's shared</span>
+<span class="c"># folder, which is synced with a folder on the host machine</span>
+docker run -v /home/core/share/hey-ma:/hey-ma camron/hey-ma /bin/bash
+<span class="nb">cd </span>hey-ma<span class="p">;</span> python server.py
+<span class="c"># hack hack hack in /Users/cam/src/hey-ma</span>
+<span class="c"># Ctrl-C</span>
+python server.py
+<span class="c"># new code!</span>
+</code></pre></div>
+
+<p>Woot!</p>
+
+<p>There is one hiccough, which is that I get an error running a container with a volume if the volume directory already exists in the container, which it is wont to do if you&#x2019;re maintaining a Dockerfile (which you should) and using the <code>ADD . /dir</code> build strategy (which is good). This is, however, the approach explicitly proscribed and used by @jpetazzo, so I bet I&#x2019;m doing something wrong, or there is a bug that will get fixed soon. (In the meantime, however, I haven&#x2019;t found it problematic to mount the volume elsewhere.)</p>
+
+
+
+
+
+
+
+
+ 
+ <footer>
+ 
+ <p class="byline"><time datetime="2014-02-13T00:00:00-08:00">February 13, 2014</time></p>
+ </footer>
+
+ 
+ 
+ 
+ <a href="http://disqus.com" class="dsq-brlink">blog comments powered by </a>
+
+ </div>
+ </div>
+</body></html>
