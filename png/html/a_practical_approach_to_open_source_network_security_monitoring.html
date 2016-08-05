@@ -1,0 +1,178 @@
+<!DOCTYPE html><html><head><title>A practical approach to Open Source network security monitoring</title></head><body>
+<h1>A practical approach to Open Source network security monitoring</h1><p><a href="https://www.graylog.org/blog/62-a-practical-approach-to-open-source-network-security-monitoring" target="_new">Original URL</a></p>
+<p><blockquote>Introduction In this post, the second of our series, we will take a look at how you can analyze network traffic data in order to detect network intrusions. Every phase of intrusion (phases&hellip;</blockquote></p>
+<div><div class="blog-post-body">
+<h2>Introduction</h2>
+
+<p>In this post, the second of our series, we will take a look at how you can analyze network traffic data in order to detect network intrusions. Every phase of intrusion (phases we&#x2019;ve outlined in <a href="https://www.graylog.org/blog/61-cyber-security-understanding-the-5-phases-of-intrusion">our first blog post</a>) will leave traces and with the correct tools in place, you can detect these early on and take countermeasures.</p>
+
+<p>The first part of this article is how to collect data and what high level network logs look like. If you are already comfortable with this, skip ahead to &#x201C;Analyze the data you are collecting&#x201D; for examples on what to look out for.</p>
+
+<h2>Collect data and make it observable</h2>
+
+<h3>Network layer logs</h3>
+
+<p>The most important source of data is your network layer logs. By collecting high level information on the IP address, time communicated, and port and protocol used, you will get a very complete overview of the factual network activity. This is very important because what you think is happening in your network is not the complete picture .</p>
+
+<p>These high level network layer logs will look like the example below:</p>
+
+<pre><code>2016-07-21 16:28:49.523 ACCEPT TCP 172.30.0.76:22 -&gt; 172.30.0.120:38920
+</code></pre>
+
+<p>This log message tells you the following:</p>
+
+<ul>
+<li>A connection was established at 2016-07-21 16:28:49.523</li>
+<li>The connection was from 172.30.0.76, port 22 (SSH) to 172.30.0.120, port 38920</li>
+<li>It was accepted by the destination host (if, for example, the destination port was not open, you would see something like REJECT)</li>
+</ul>
+
+<p>What this tells us, most importantly, is that 172.30.0.76 is talking to 172.30.0.120 and has a successfully established connection.These high level logs will not actually record the data that is being transferred or even inspect the traffic to extract metadata. This is simply to record traffic flow.</p>
+
+<h3>How to collect network layer logs</h3>
+
+<p>The most popular way to collect network layer logs is forwarding them directly from your routers, firewalls and switches using a protocol like Netflow, and into Graylog. (<a href="https://marketplace.graylog.org/addons/29bcffe3-816e-402f-89c8-06a8e2657c34">Graylog Netflow Input</a>)</p>
+
+<p>Most professional devices support Netflow forwarding natively and the configuration is described in the documentation your vendor provides.</p>
+
+<p>An alternative is using <a href="https://en.wikipedia.org/wiki/Network_tap">network taps</a> that will sit in the middle of a physical network cable and forward a copy of the wire data 1:1 to another host on the network. This host can parse the data and forward it to Graylog.</p>
+
+<p><img src="https://s3.amazonaws.com/graylogblog/network_security_1/network_tap.jpg" alt=""></p>
+
+<p>(A simple network tap in our lab. Forwarding all data directly from the wire to a Raspberry Pi, which is forwarding it to Graylog.)</p>
+
+<p>If you are using a public cloud, you will usually not have access to Netflow or even tap logs. If you are lucky, your provider will still allow access to network layer logs. AWS, for example, has a <a href="http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/flow-logs.html">FlowLog API</a> and the upcoming v1.0 release of our <a href="https://github.com/Graylog2/graylog-plugin-aws">AWS Graylog Plugin</a> can read and parse those for all your VPC's network interfaces, including those attached to EC2, RDS and ELB instances.</p>
+
+<p>Note that there are legal implications of listening to network data in many countries and you should definitely check with a lawyer.</p>
+
+<h2>Analyze the data you are collecting</h2>
+
+<p>Once you have started collecting the data, you can begin to analyze it to detect and mitigate malicious activity.</p>
+
+<p>Below are three specific examples on how to use Graylog to monitor your network security.</p>
+
+<h3>1. Outside connections to internal services</h3>
+
+<p>You will usually have two kinds of expected and allowed connection patterns:</p>
+
+<ul>
+<li>Outside connections are expected
+
+<ul>
+<li>This service is supposed to accept connections from foreign networks. The HTTP server of a public website (or load balancer in front of it), your email servers, public FTP servers and others are classic examples for this.</li>
+</ul></li>
+<li>Inside connections only
+
+<ul>
+<li>All connections to this service are coming from within your networks and this is a purely internal service that should never be accessed from the outside. This could be your travel planner tool, an internal forum, accounting software, etc.</li>
+</ul></li>
+</ul>
+
+<p>If a purely internal system is accessed directly from the outside, this is something you want to further investigate. The connections you are seeing might just be harmless automated port scans, but the next time it could be a sophisticated attacker on a mission.</p>
+
+<p>A Graylog query could look like this:</p>
+
+<pre><code>from_internal:false AND action:ACCEPT
+</code></pre>
+
+<p>By using the quick values analysis to get the top destination addresses, you can determine if those should accept outside connections or not:</p>
+
+<p><a href="https://s3.amazonaws.com/graylogblog/network_security_1/from_internal_quickvalues.png"><img src="https://s3.amazonaws.com/graylogblog/network_security_1/from_internal_quickvalues.png" alt=""></a></p>
+
+<p>If you find a system that accepts outside connections but should not, refine the Graylog query a little to see what is communicating with it:</p>
+
+<p><a href="https://s3.amazonaws.com/graylogblog/network_security_1/from_internal_detail_result.png"><img src="https://s3.amazonaws.com/graylogblog/network_security_1/from_internal_detail_result.png" alt=""></a></p>
+
+<p>Use this analysis to find and then fix all cracks by tightening your firewall rules.</p>
+
+<p>The <code>from_internal</code> field is added by a Graylog pipeline rule like this:</p>
+
+<pre><code>rule "determine if connection originated from internal IP"
+when
+ has_field("aws_source") &amp;&amp; has_field("src_addr")
+then
+ set_field("from_internal", cidr_match("172.30.0.0/16", to_ip($message.src_addr)));
+end
+</code></pre>
+
+<p>(It adds <code>from_internal=true</code> to every message that has the field <code>src_address</code> set to an IP address in the <code>172.30.0.0/16</code> network.)</p>
+
+<p>Another useful pipeline step is to enrich messages with DNS lookups of IP addresses so messages with the field <code>dst_addr:172.30.0.16</code> also get another field like <code>dst_addr_hostname:filesrv1</code>. (Our AWS plugin does that automatically for EC2, ELB and RDS instances)</p>
+
+<h3>2. Data flow from databases and file servers</h3>
+
+<p>Find out where bytes flow to from sensitive data repositories like databases or file servers:</p>
+
+<pre><code>src_addr:172.30.0.86 AND (src_port:3306 OR src_port:22)
+</code></pre>
+
+<p>You can also get a graphical analysis of the total number of bytes that are leaving a specific IP address with Graylog:</p>
+
+<p><a href="https://s3.amazonaws.com/graylogblog/network_security_1/bytes_analysis.png"><img src="https://s3.amazonaws.com/graylogblog/network_security_1/bytes_analysis.png" alt=""></a></p>
+
+<p>Now you can go in and analyze where the data landed, using a quickvalues analysis on the destination address (<code>dst_addr</code>) field. You should always search for unusual connections.</p>
+
+<p>The same concept/theory applies for workstations of users. In many cases, workstations should never transfer huge amounts of data, especially not outside of your networks.</p>
+
+<p>You can create a geo analysis to see where the data is going and to find unusual activity faster:</p>
+
+<p><a href="https://s3.amazonaws.com/graylogblog/network_security_1/dst_addr_geo.png"><img src="https://s3.amazonaws.com/graylogblog/network_security_1/dst_addr_geo.png" alt=""></a></p>
+
+<p>If all your workstations or employees with restricted access are in a special network, you could add a <code>is_workstation=true</code> field for easier querying later. Do this with another Graylog pipeline rule:</p>
+
+<pre><code>set_field("is_workstation", cidr_match("172.10.0.0/16", to_ip($message.src_addr)));
+</code></pre>
+
+<p>Bonus points for configuring a Graylog alert to trigger whenever the data flow from a database server to unusual destinations exceeds a certain threshold.</p>
+
+<h3>3. Rejected connections</h3>
+
+<p>Many rejected connections are indicators of scans or attackers who are trying to learn more about your network. (See our previous <a href="https://www.graylog.org/blog/61-cyber-security-understanding-the-5-phases-of-intrusion">blog post about the 5 phases of intrusion</a>)</p>
+
+<p>The Graylog query for this could not be easier:</p>
+
+<pre><code>action:REJECT
+</code></pre>
+
+<p>Run a quickvalues analysis to find the IP addresses that caused the most rejected connections:</p>
+
+<p><a href="https://s3.amazonaws.com/graylogblog/network_security_1/rejected_quickvalues.png"><img src="https://s3.amazonaws.com/graylogblog/network_security_1/rejected_quickvalues.png" alt=""></a></p>
+
+<p>A geo analysis of this is helpful here, too:</p>
+
+<p><a href="https://s3.amazonaws.com/graylogblog/network_security_1/rejected_geo.png"><img src="https://s3.amazonaws.com/graylogblog/network_security_1/rejected_geo.png" alt=""></a></p>
+
+<p>This can usually be safely automated. Use a Graylog alert callback to automatically block IP ranges in your firewalls.</p>
+
+<h3>Anything else</h3>
+
+<p>There are many more examples on ways to find malicious activity, but this article can provide ideas of where to start.</p>
+
+<p>When analyzing your logs, you will most likely find harmless, automated scans on your infrastructure. However, if attackers do make it through firewalls and to private information, you have a record of cracks in your infrastructure and will need to block access as soon as possible. You should also focus your attention to improving security measures in your system. </p>
+
+<p>It is also necessary to alert law enforcement and specialized security companies immediately if attackers have been detected within your networks.</p>
+
+<h2>Set up dashboards and alerts</h2>
+
+<h3>Dashboards</h3>
+
+<p>With the huge amount of data and information coming in every second, it is important to have measures in place that help you keep an overview, and not miss any suspicious activity.</p>
+
+<p>Dashboards are a great way to get operational awareness without having to do manual searches and analysis. Every minute you invest in good dashboards will save you time in the future.</p>
+
+<p><a href="https://s3.amazonaws.com/graylogblog/network_security_1/dashboard.png"><img src="https://s3.amazonaws.com/graylogblog/network_security_1/dashboard.png" alt=""></a></p>
+
+<h3>Alerts</h3>
+
+<p>Some suspicious activity can even be detected by Graylog automatically when you configure quality alert condition rules. For example, you could trigger an email or Slack message the moment a login to your system from outside of you trusted network occurs. Then, investigate the activity in Graylog.</p>
+
+<h2>The next post in this series</h2>
+
+<p>In the next post we&#x2019;ll talk about how Open Source intrusion detection systems (IDS) can inspect the package contents and send alerts to Graylog for powerful analysis and correlation.</p>
+
+
+</div>
+ 
+ 
+</div>
+</body></html>

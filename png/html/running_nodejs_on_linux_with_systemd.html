@@ -1,0 +1,345 @@
+<!DOCTYPE html><html><head><title>Running Node.js on Linux with systemd</title></head><body>
+<h1>Running Node.js on Linux with systemd</h1><p><a href="https://blog.codeship.com/running-node-js-linux-systemd/?utm_source=nodeweekly" target="_new">Original URL</a></p>
+<p><blockquote>The Node.js community has embraced process monitoring tools such as PM2, Nodemon, and Forever, which is understandable. For example, in addition to process monitoring, PM2 also boasts features around&hellip;</blockquote></p>
+<div><summery class="article__summery colxs100">
+ <p>The Node.js community has embraced process monitoring tools such as <a href="http://pm2.keymetrics.io/">PM2</a>, <a href="http://nodemon.io/">Nodemon</a>, and <a href="https://github.com/foreverjs/forever">Forever</a>, which is understandable. For example, in addition to process monitoring, PM2 also boasts features around logging and port-sharing or clustering.</p>
+<p>However, I&#x2019;m a firm believer in using the Linux init system for process monitoring. In this blog post, I&#x2019;ll show you how to recreate process management, logging and clustering functionality using the Linux init system, systemd, and I&#x2019;ll make the case for this being a superior approach.</p>
+<p>Please note that I&#x2019;ve no intention of casting aspersions on any of the tools I&#x2019;ve mentioned. But I think gaining familiarity with Linux is important for Node.js developers; it&#x2019;s important to use standard tools that are well-proven and widely understood by sysadmins everywhere.</p>
+
+
+<h2>A Note about PM2</h2>
+<p>I will be making reference to PM2 because it has become ubiquitous in the Node.js community, and therefore it will serve as most people&#x2019;s frame of reference. PM2 makes it very easy to do:</p>
+<ol>
+<li>Process management</li>
+<li>Log management</li>
+<li>Port-sharing magic for Node.js applications</li>
+</ol>
+<p>PM2&#x2019;s ease of use is certainly one of its strongest points; it hides some of the operational realities of running services on Linux from Node.js developers. In this blog post, I&#x2019;m going to show you how to do each of these three things with systemd.</p>
+<h2>An Explanation of Linux Init Systems</h2>
+<p>Although PM2 and similar tools are ubiquitous in the Node.js world, that&#x2019;s not necessarily the case in other communities. Running your application with the Linux init system will ensure that it&#x2019;s familiar to any Linux sysadmin. Therefore, knowing more about Linux, the operating system on which the vast majority of Node.js applications run, is very important for Node.js developers.</p>
+
+
+<p>First, let&#x2019;s run through a brief primer on what Linux init systems are.</p>
+<p>Each Linux distribution has a master process running as PID 1 (process ID 1) that is the ancestor of all processes that run on the system. Even if an application spawns a bunch of child processes and orphans them, the init system will still be their ancestor and will clean them up.</p>
+<p>The init system is responsible for starting and stopping services on boot. Typically, sysadmins will write init scripts to start, stop, and restart each service (<em>e.g.</em>, databases, web servers). Basically, the Linux init system is the ultimate process monitor.</p>
+<p>systemd is more or less the standard Linux system in the latest release of most Linux distributions, so that&#x2019;s the one I&#x2019;m going to cover here. It should be relatively easy to translate these concepts into another init system, such as upstart.</p>
+<h2>Creating a Sample Node.js Application</h2>
+<p>To aid explanation, I&#x2019;m going to use a simple, contrived Node.js application that talks to Redis. It has one HTTP endpoint that outputs &#x201C;Hello, World!&#x201D; and a counter taken from Redis. It can be found here:</p>
+<p>https://github.com/lukebond/demo-api-redis</p>
+<p>You will also need:</p>
+<ul>
+<li>A Linux distribution running <a href="https://en.wikipedia.org/wiki/Systemd#Adoption_and_reception">systemd</a></li>
+<li>Node.js installed</li>
+<li>Redis installed (but not running)</li>
+</ul>
+<p>Clone the above repository to somewhere in your Linux system and run <code>npm install</code>.</p>
+<h2>Creating Unit Files</h2>
+<p>Next we&#x2019;ll create a <em>unit file</em> for our Node.js service. A unit file is what systemd uses to describe a service, its configuration, how to run it, and so on. It&#x2019;s a text file similar to an INI file.</p>
+<p>Create the following text file and copy it to <code>/etc/systemd/system/demo-api-redis@.service</code>:</p>
+<pre class="line-numbers"><code class="language-javascript">[Unit]
+Description=HTTP Hello World
+After=network.target
+
+[Service]
+User=luke
+Environment=REDIS_HOST=localhost
+WorkingDirectory=/home/luke/Development/demo-api-redis
+ExecStart=/usr/bin/node index.js
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+<blockquote>
+<p>Remember! Modify the path on the <code>WorkingDirectory=</code> line to the location where you cloned the git repository.</p>
+</blockquote>
+<p>Now that the unit file is created and is in the correct location on your system, we need to tell systemd to reload its config to pick up the new unit file, then enable and start the service:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl daemon-reload
+$ systemctl enable demo-api-redis@1
+$ systemctl start demo-api-redis@1</code></pre>
+<blockquote>
+<p>Learn more about <a href="https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units">how to use <code>systemctl</code> here</a>.</p>
+</blockquote>
+<p><em>Enabling</em> a service means that systemd will start that service automatically on boot, but it doesn&#x2019;t start it now. <em>Starting</em> a service is required to start the service now.</p>
+<p>Check the status of the service to see if it worked:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl status demo-api-redis@1
+&#x25CF; demo-api-redis@1.service - HTTP Hello World
+ Loaded: loaded (/etc/systemd/system/demo-api-redis@.service; enabled; vendor preset: disabled)
+ Active: activating (auto-restart) (Result: exit-code) since Thu 2016-06-30 17:20:09 BST; 62ms ago
+ Process: 29787 ExecStart=/usr/bin/node index.js (code=exited, status=1/FAILURE)
+ Main PID: 29787 (code=exited, status=1/FAILURE)
+
+Jun 30 17:20:09 luke-arch systemd[1]: demo-api-redis@1.service: Main process exited, code=exited, status=1/FAILURE
+Jun 30 17:20:09 luke-arch systemd[1]: demo-api-redis@1.service: Unit entered failed state.
+Jun 30 17:20:09 luke-arch systemd[1]: demo-api-redis@1.service: Failed with result 'exit-code'.</code></pre>
+<p>This is failing because Redis isn&#x2019;t running. Let&#x2019;s explore dependencies in systemd!</p>
+
+<h2>Exploring systemd Dependencies</h2>
+<p>We can add the <code>Wants=</code> directive to the <code>[Unit]</code> section of a unit file to declare dependencies between services. There are other directives with different semantics (<em>e.g.</em>, <code>Requires=</code>) but <code>Wants=</code> will cause the depended-upon service (in this case, Redis) to be started when our Node.js service is started.</p>
+<p>Your unit file should now look like this:</p>
+<pre class="line-numbers"><code class="language-javascript">[Unit]
+Description=HTTP Hello World
+After=network.target
+Wants=redis.service
+
+[Service]
+User=luke
+Environment=REDIS_HOST=localhost
+WorkingDirectory=/home/luke/Development/demo-api-redis
+ExecStart=/usr/bin/node index.js
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+<p>Signal systemd to reload its config:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl daemon-reload</code></pre>
+<p>Ask systemd to <code>cat</code> the unit file just to ensure it has picked up our changes:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl cat demo-api-redis@1
+# /etc/systemd/system/demo-api-redis@.service
+[Unit]
+Description=HTTP Hello World
+After=network.target
+Wants=redis.service
+
+[Service]
+Environment=REDIS_HOST=localhost
+User=luke
+WorkingDirectory=/home/luke/Development/demo-api-redis
+ExecStart=/usr/bin/node index.js
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+<p>And now restart the service. We can see that the service now works:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl restart demo-api-redis@1
+$ systemctl status demo-api-redis@1
+&#x25CF; demo-api-redis@1.service - HTTP Hello World
+ Loaded: loaded (/etc/systemd/system/demo-api-redis@.service; enabled; vendor preset: disabled)
+ Active: active (running) since Thu 2016-06-30 17:17:19 BST; 187ms ago
+ Main PID: 27050 (node)
+ Tasks: 10 (limit: 512)
+ CGroup: /system.slice/system-demo\x2dapi\x2dredis.slice/demo-api-redis@1.service
+ &#x2514;&#x2500;27050 /usr/bin/node index.js
+
+Jun 30 17:17:19 luke-arch systemd[1]: Started HTTP Hello World.
+$ curl localhost:9000
+"Hello, world 192.168.1.39! 1 hits."</code></pre>
+<p>It works because it has triggered Redis to run:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl status redis
+&#x25CF; redis.service - Advanced key-value store
+ Loaded: loaded (/usr/lib/systemd/system/redis.service; disabled; vendor preset: disabled)
+ Active: active (running) since Fri 2016-07-01 10:31:54 BST; 3s ago
+ Main PID: 28643 (redis-server)
+ Tasks: 3 (limit: 512)
+ Memory: 6.3M
+ CPU: 10ms
+ CGroup: /system.slice/redis.service
+ &#x2514;&#x2500;28643 /usr/bin/redis-server 127.0.0.1:6379 
+
+Jul 01 10:31:54 luke-arch redis-server[28643]: `-._ `-._`-.__.-'_.-' _.-'
+Jul 01 10:31:54 luke-arch redis-server[28643]: `-._ `-.__.-' _.-'
+Jul 01 10:31:54 luke-arch redis-server[28643]: `-._ _.-'
+Jul 01 10:31:54 luke-arch redis-server[28643]: `-.__.-'
+Jul 01 10:31:54 luke-arch redis-server[28643]: 28643:M 01 Jul 10:31:54.216 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
+Jul 01 10:31:54 luke-arch redis-server[28643]: 28643:M 01 Jul 10:31:54.216 # Server started, Redis version 3.2.1
+Jul 01 10:31:54 luke-arch redis-server[28643]: 28643:M 01 Jul 10:31:54.216 # WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory
+Jul 01 10:31:54 luke-arch redis-server[28643]: 28643:M 01 Jul 10:31:54.216 # WARNING you have Transparent Huge Pages (THP) support enabled in your kernel. This will create latency and memory usage issues with Red
+Jul 01 10:31:54 luke-arch redis-server[28643]: 28643:M 01 Jul 10:31:54.216 a_comprehensive_look_at_jquery_selectors.md a_practical_approach_to_open_source_network_security_monitoring.md a_primer_on_the_react_ecosystem_part_1_of_3.md a_primer_on_the_react_ecosystem_part_2_of_3.md data.json data_ml devops docker embedded everything_about_the_modular_scale_sass_libary_and_modular_scale_with_typi.md exploring_rx_operators_flatmap.md gaming ghost.md github go got_any_rces.md guri_vr_virtual_reality_for_the_rest_of_us.md how_to_modularize_html_using_template_engines_and_gulp__zell_liews_blog_about_web_design_and_development.md html javascript linux mobile png programming react_storybooks_meets_create_react_app_—_kadira_voice.md remove_photo_backgrounds_with_cloudinary.md science social tidy understanding_native_javascript_array_methods_–_ben_frain.md url_to_filename.csv web_dev write_like_you_talk.md DB loaded from disk: 0.000 seconds
+Jul 01 10:31:54 luke-arch redis-server[28643]: 28643:M 01 Jul 10:31:54.216 a_comprehensive_look_at_jquery_selectors.md a_practical_approach_to_open_source_network_security_monitoring.md a_primer_on_the_react_ecosystem_part_1_of_3.md a_primer_on_the_react_ecosystem_part_2_of_3.md data.json data_ml devops docker embedded everything_about_the_modular_scale_sass_libary_and_modular_scale_with_typi.md exploring_rx_operators_flatmap.md gaming ghost.md github go got_any_rces.md guri_vr_virtual_reality_for_the_rest_of_us.md how_to_modularize_html_using_template_engines_and_gulp__zell_liews_blog_about_web_design_and_development.md html javascript linux mobile png programming react_storybooks_meets_create_react_app_—_kadira_voice.md remove_photo_backgrounds_with_cloudinary.md science social tidy understanding_native_javascript_array_methods_–_ben_frain.md url_to_filename.csv web_dev write_like_you_talk.md The server is now ready to accept connections on port 6379</code></pre>
+<h2>Process Management</h2>
+<p>The first item of PM2 functionality we&#x2019;re working toward is process management. This means restarting services when they crash and when the machine reboots. Do we have this functionality yet? Let&#x2019;s find out.</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl status demo-api-redis@1 | grep "PID"
+ Main PID: 28649 (node)
+$ sudo kill -9 28649
+$ systemctl status demo-api-redis@1
+&#x25CF; demo-api-redis@1.service - HTTP Hello World
+ Loaded: loaded (/etc/systemd/system/demo-api-redis@.service; enabled; vendor preset: disabled)
+ Active: failed (Result: signal) since Fri 2016-07-01 10:55:49 BST; 2s ago
+ Process: 29145 ExecStart=/usr/bin/node index.js (code=killed, signal=KILL)
+ Main PID: 29145 (code=killed, signal=KILL)
+
+Jul 01 10:55:39 luke-arch systemd[1]: Started HTTP Hello World.
+Jul 01 10:55:40 luke-arch node[29145]: (node:29145) DeprecationWarning: process.EventEmitter is deprecated. Use require('events') instead.
+Jul 01 10:55:40 luke-arch node[29145]: Listening on port 9000
+Jul 01 10:55:49 luke-arch systemd[1]: demo-api-redis@1.service: Main process exited, code=killed, status=9/KILL
+Jul 01 10:55:49 luke-arch systemd[1]: demo-api-redis@1.service: Unit entered failed state.
+Jul 01 10:55:49 luke-arch systemd[1]: demo-api-redis@1.service: Failed with result 'signal'.</code></pre>
+<p>So systemd is not restarting our service when it crashes, but never fear &#x2014; systemd has a range of options for configuring this behavior. Adding the following to the <code>[Service]</code> section of our unit file will be fine for our purposes:</p>
+<pre class="line-numbers"><code class="language-javascript">Restart=always
+RestartSec=500ms
+StartLimitInterval=0</code></pre>
+<p>This tells systemd to always restart the service after a 500ms delay. You can configure it to give up eventually, but this should be fine for our purposes. Now reload systemd&#x2019;s config and restart the service and try killing the process:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl daemon-reload
+$ systemctl cat demo-api-redis@1
+# /etc/systemd/system/demo-api-redis@.service
+[Unit]
+Description=HTTP Hello World
+After=network.target
+Wants=redis.service
+
+[Service]
+Environment=REDIS_HOST=localhost
+User=luke
+WorkingDirectory=/home/luke/Development/demo-api-redis
+ExecStart=/usr/bin/node index.js
+
+[Install]
+WantedBy=multi-user.target
+$ systemctl restart demo-api-redis@1
+$ systemctl status demo-api-redis@1.service | grep PID
+ Main PID: 29145 (code=killed, signal=KILL)
+$ sudo kill -9 29145
+$ systemctl status demo-api-redis@1
+&#x25CF; demo-api-redis@1.service - HTTP Hello World
+ Loaded: loaded (/etc/systemd/system/demo-api-redis@.service; disabled; vendor preset: disabled)
+ Active: active (running) since Fri 2016-07-01 11:08:41 BST; 2s ago
+ Main PID: 29884 (node)
+ Tasks: 10 (limit: 512)
+ CGroup: /system.slice/system-demo\x2dapi\x2dredis.slice/demo-api-redis@1.service
+ &#x2514;&#x2500;29884 /usr/bin/node index.js
+
+Jul 01 11:08:41 luke-arch systemd[1]: Stopped HTTP Hello World.
+Jul 01 11:08:41 luke-arch systemd[1]: Started HTTP Hello World.
+Jul 01 11:08:41 luke-arch node[29884]: (node:29884) DeprecationWarning: process.EventEmitter is deprecated. Use require('events') instead.
+Jul 01 11:08:41 luke-arch node[29884]: Listening on port 9000</code></pre>
+<p>It works! systemd is now restarting our service when it goes down. It will also start it up automatically if the machine reboots (that&#x2019;s what it means to <code>enable</code> a service). Go ahead and reboot to prove it.</p>
+<p>We&#x2019;ve now recreated one of our three PM2 features: process management. Let&#x2019;s move on to the next one.</p>
+<h2>Logging</h2>
+<p>This is the easiest of our three target features. systemd has a very powerful logging tool called <code>journalctl</code>. It&#x2019;s a sysadmin&#x2019;s Swiss Army knife of logging, and it can do anything you&#x2019;ll ever need from a logging tool. No Node.js userland tool comes close.</p>
+<p>To scroll through logs for a unit or service:</p>
+<pre class="line-numbers"><code class="language-javascript">$ journalctl -u demo-api-redis@1</code></pre>
+<p>To follow the same:</p>
+<pre class="line-numbers"><code class="language-javascript">$ journalctl -u demo-api-redis@1 -f</code></pre>
+<p>You can ask for logs since the last boot:</p>
+<pre class="line-numbers"><code class="language-javascript">$ journalctl -u demo-api-redis@1 --boot</code></pre>
+<p>Or since a specific time, in various ways:</p>
+<pre class="line-numbers"><code class="language-javascript">$ journalctl -u demo-api-redis@1 --since 08:00
+$ journalctl -u demo-api-redis@1 --since today
+$ journalctl -u demo-api-redis@1 --since yesterday
+$ journalctl -u demo-api-redis@1 --since 2016-06-02 15:36:00</code></pre>
+<p>You can filter by log level (console.log, console.error, etc.):</p>
+<pre class="line-numbers"><code class="language-javascript">$ journalctl -u demo-api-redis@1 -p err</code></pre>
+<p>There is so much more you can do; it&#x2019;s super powerful. <a href="https://www.digitalocean.com/community/tutorials/how-to-use-journalctl-to-view-and-manipulate-systemd-logs">This article is a great place to start to learn all about <code>journalctl</code>.</a></p>
+<h2>Multiple Instances</h2>
+<p>We&#x2019;ve covered two of our three features now. The last one is port sharing, or clustering as it is often called in the Node.js world. But before we can address that, we need to be able to run multiple instances of our service.</p>
+<p>You may have noticed that our unit file has an <code>@</code> symbol in the filename, and that we&#x2019;ve been referring to our service as <code>demo-api-redis@1</code>. The <code>1</code> after the <code>@</code> symbol is the instance name (it doesn&#x2019;t have to be a number). We could run two more instances of our service using something like <code>systemctl start demo-api-redis@{2,3}</code>, but first we need them to bind to different ports or they&#x2019;ll clash.</p>
+<p>Our sample app takes an environment variable to set the port, so we can use the instance name to give each service a unique port. Add the following additional <code>Environment=</code> line to the <code>[Service]</code> section of the unit file:</p>
+<pre class="line-numbers"><code class="language-javascript">Environment=LISTEN_PORT=900%i</code></pre>
+<p>This will mean that <code>demo-api-redis@1</code> will get port <code>9001</code>, <code>demo-api-redis@2</code> will get port <code>9002</code>, and <code>demo-api-redis@3</code> will get port <code>9003</code>, leaving <code>9000</code> for our load balancer.</p>
+<p>Once you&#x2019;ve edited the unit file, you need to reload the config, check that it&#x2019;s correct, start two new instances, and restart the existing one:</p>
+<pre class="line-numbers"><code class="language-javascript">$ systemctl daemon-reload
+$ systemctl cat demo-api-redis@1
+# /etc/systemd/system/demo-api-redis@.service
+[Unit]
+Description=HTTP Hello World
+After=network.target
+Wants=redis.service
+
+[Service]
+Environment=REDIS_HOST=localhost
+Environment=LISTEN_PORT=900%i
+User=luke
+WorkingDirectory=/home/luke/Development/demo-api-redis
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=500ms
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target
+$ systemctl enable demo-api-redis@{2,3}
+$ systemctl start demo-api-redis@{2,3}
+$ systemctl restart demo-api-redis@1
+$ systemctl status demo-api-redis@{1,2,3}
+&#x25CF; demo-api-redis@1.service - HTTP Hello World
+ Loaded: loaded (/etc/systemd/system/demo-api-redis@.service; enabled; vendor preset: disabled)
+ Active: active (running) since Fri 2016-07-01 11:08:41 BST; 56min ago
+ Main PID: 29884 (node)
+ CGroup: /system.slice/system-demo\x2dapi\x2dredis.slice/demo-api-redis@1.service
+ &#x2514;&#x2500;29884 /usr/bin/node index.js
+
+Jul 01 11:08:41 luke-arch systemd[1]: Stopped HTTP Hello World.
+Jul 01 11:08:41 luke-arch systemd[1]: Started HTTP Hello World.
+Jul 01 11:08:41 luke-arch node[29884]: (node:29884) DeprecationWarning: process.EventEmitter is deprecated. Use require('events') instead.
+Jul 01 11:08:41 luke-arch node[29884]: Listening on port 9001
+
+&#x25CF; demo-api-redis@2.service - HTTP Hello World
+ Loaded: loaded (/etc/systemd/system/demo-api-redis@.service; enabled; vendor preset: disabled)
+ Active: active (running) since Fri 2016-07-01 12:04:34 BST; 18s ago
+ Main PID: 30747 (node)
+ CGroup: /system.slice/system-demo\x2dapi\x2dredis.slice/demo-api-redis@2.service
+ &#x2514;&#x2500;30747 /usr/bin/node index.js
+
+Jul 01 12:04:34 luke-arch systemd[1]: Started HTTP Hello World.
+Jul 01 12:04:34 luke-arch node[30747]: (node:30747) DeprecationWarning: process.EventEmitter is deprecated. Use require('events') instead.
+Jul 01 12:04:34 luke-arch node[30747]: Listening on port 9002
+
+&#x25CF; demo-api-redis@3.service - HTTP Hello World
+ Loaded: loaded (/etc/systemd/system/demo-api-redis@.service; enabled; vendor preset: disabled)
+ Active: active (running) since Fri 2016-07-01 12:04:34 BST; 18s ago
+ Main PID: 30753 (node)
+ CGroup: /system.slice/system-demo\x2dapi\x2dredis.slice/demo-api-redis@3.service
+ &#x2514;&#x2500;30753 /usr/bin/node index.js
+
+Jul 01 12:04:34 luke-arch systemd[1]: Started HTTP Hello World.
+Jul 01 12:04:34 luke-arch node[30753]: (node:30753) DeprecationWarning: process.EventEmitter is deprecated. Use require('events') instead.
+Jul 01 12:04:34 luke-arch node[30753]: Listening on port 9003</code></pre>
+<p>We should now be able to curl each of these:</p>
+<pre class="line-numbers"><code class="language-javascript">$ curl localhost:900{1,2,3}
+"Hello, world 192.168.1.39! 52 hits.""Hello, world 192.168.1.39! 53 hits.""Hello, world 192.168.1.39! 54 hits."</code></pre>
+<p>I&#x2019;m assuming a 4-core machine, so I&#x2019;m running three instances, leaving one core for Redis (which is probably not necessary). Adjust this accordingly for your environment and application.</p>
+<p>Now, on to the final part: load balancing.</p>
+<h2>Load Balancing</h2>
+<p>One could use NGINX or HAProxy to balance the traffic across the instances of our service. However, since I&#x2019;m claiming that it&#x2019;s super simple to replace PM2 functionality, I wanted to go with something lighter.</p>
+<p><a href="https://www.inlab.de/balance.html">Balance</a> is a tiny (few-hundred lines of C) TCP load balancer that&#x2019;s fast and simple to use. For example:</p>
+<pre class="line-numbers"><code class="language-javascript">$ balance -f 9000 127.0.0.1:900{1,2,3} &amp;
+$ curl localhost:9000
+"Hello, world 192.168.1.39! 20 hits."</code></pre>
+<p>The above one-liner launches balance, listening on port <code>9000</code> and balancing across ports <code>9001-9003</code>. But we don&#x2019;t want to run it in the foreground like this. Let&#x2019;s write a unit file:</p>
+<pre class="line-numbers"><code class="language-javascript">$ cat /etc/systemd/system/balance.service
+[Unit]
+Description=Balance - Simple TCP Load Balancer
+After=syslog.target network.target nss-lookup.target
+
+[Service]
+ExecStart=/usr/bin/balance -f 9000 127.0.0.1:9001 127.0.0.1:9002 127.0.0.1:9003
+
+[Install]
+WantedBy=multi-user.target
+$ systemctl daemon-reload
+$ systemctl enable balance
+$ systemctl start balance
+$ systemctl status balance
+&#x25CF; balance.service - Balance - Simple TCP Load Balancer
+ Loaded: loaded (/etc/systemd/system/balance.service; enabled; vendor preset: disabled)
+ Active: active (running) since Fri 2016-07-01 13:56:46 BST; 3s ago
+ Main PID: 32674 (balance)
+ Tasks: 1 (limit: 512)
+ Memory: 316.0K
+ CPU: 10ms
+ CGroup: /system.slice/balance.service
+ &#x2514;&#x2500;32674 /usr/bin/balance -f 9000 127.0.0.1:9001 127.0.0.1:9002 127.0.0.1:9003
+
+Jul 01 13:56:46 luke-arch systemd[1]: Started Balance - Simple TCP Load Balancer.
+$ curl localhost:9000
+"Hello, world 192.168.1.39! 21 hits."</code></pre>
+<h2>Conclusion</h2>
+<p>We&#x2019;ve successfully recreated the three main features of PM2 using basic Linux tools, in fact, mostly just systemd. But this is only a very basic implementation. There are a number of details I&#x2019;ve overlooked for the sake of simplicity:</p>
+<ul>
+<li>SSL termination.</li>
+<li>Ports <code>9001-9003</code> are currently bound to the public IP, not the private (this is just laziness in my Node.js sample app).</li>
+<li>The balance unit file has hardcoded ports 9001-9003; it should be relatively easy to dynamically configure balance and send it a signal to reload config.</li>
+<li>I&#x2019;d normally use containers so that the dependencies (<em>e.g.</em>, Node.js version) is bundled inside the container and doesn&#x2019;t need to be installed on the host.</li>
+</ul>
+<p>Linux init systems such as systemd are the ultimate process monitor, and systemd in particular is so much more than that. It can do all that PM2 and similar tools can do, and then some. The tooling is far superior, it&#x2019;s more mature, and it has a much larger userbase of seasoned sysadmins.</p>
+
+
+<p>Learning to use systemd for running your Node.js applications (or any other applications for that matter) is much easier than you might think. Once you&#x2019;ve spent a little time learning these concepts, I think you&#x2019;ll agree that Linux is the best tool for the job. After all, you&#x2019;ll need to configure the Linux init systemd to start PM2 on boot and restart it if it crashes. If you need the Linux init system to start your process monitor, why not just use it to run all your services?</p>
+<h2>Further Reading</h2>
+
+
+<div class="tm-click-to-tweet">
+
+<p><a href="https://twitter.com/share?text=%22Running+Node.js+on+Linux+with+systemd%22+via+%40lukeb0nd&amp;url=https://blog.codeship.com/running-node-js-linux-systemd/" target="_blank" class="tm-ctt-btn">Click To Tweet</a>
+</p>
+</div>
+ 
+ </summery>
+ </div>
+</body></html>

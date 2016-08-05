@@ -1,0 +1,192 @@
+<!DOCTYPE html><html><head><title>Exploring Rx Operators: flatMap</title></head><body>
+<h1>Exploring Rx Operators: flatMap</h1><p><a href="http://blog.thoughtram.io/rx/2016/08/01/exploring-rx-operators-flatmap.html" target="_new">Original URL</a></p>
+<p><blockquote>This is another post in a series of articles to discover the magic of different Rx operators. In our last article, Exploring Rx Operators: map we learned how we can map the notifications of&hellip;</blockquote></p>
+<div><div class="thtrm-article">
+ 
+ <p>This is another post in a series of articles to discover the magic of different Rx operators. In our last article, <a href="http://blog.thoughtram.io/angular/2016/05/16/exploring-rx-operators-map.html">Exploring Rx Operators: map</a> we learned how we can map the notifications of Observables to create other more meaningful Observables.</p>
+
+<p>Today we like to move our attention to another very important and also related operator, namely <code class="highlighter-rouge">flatMap</code>. In the same way that the <code class="highlighter-rouge">map</code> operator is closely related to the <code class="highlighter-rouge">map</code> function that we know from Arrays, <code class="highlighter-rouge">flatMap</code> should sound familiar to many people who worked with collections in a functional programming kind of way. In fact, the similarity is so strong that it makes sense to first move our attention to a collection based example.</p>
+
+<h2 id="understanding-flatmap-for-collections">Understanding <code class="highlighter-rouge">flatMap</code> for collections</h2>
+
+<p>Consider the following collection of invoices where each invoice has a property <code class="highlighter-rouge">positions</code> holding the individual items of the invoice. That&#x2019;s a pretty common (yet simplified) structure of pretty much every e-commerce system out there.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kd">let</span> <span class="nx">invoices</span> <span class="o">=</span> <span class="p">[{</span>
+ <span class="na">id</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+ <span class="na">date</span><span class="p">:</span> <span class="s1">'07-29-2016'</span><span class="p">,</span>
+ <span class="na">customerId</span><span class="p">:</span> <span class="mi">4711</span><span class="p">,</span>
+ <span class="na">positions</span><span class="p">:</span> <span class="p">[</span>
+ <span class="p">{</span> <span class="na">id</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="na">title</span><span class="p">:</span> <span class="s1">'Superhero shirt'</span> <span class="p">},</span>
+ <span class="p">{</span> <span class="na">id</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="na">title</span><span class="p">:</span> <span class="s1">'Batman mask'</span> <span class="p">}</span>
+ <span class="p">]</span>
+ <span class="p">},{</span>
+ <span class="na">id</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+ <span class="na">date</span><span class="p">:</span> <span class="s1">'07-29-2016'</span><span class="p">,</span>
+ <span class="na">customerId</span><span class="p">:</span> <span class="mi">4712</span><span class="p">,</span>
+ <span class="na">positions</span><span class="p">:</span> <span class="p">[</span>
+ <span class="p">{</span> <span class="na">id</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="na">title</span><span class="p">:</span> <span class="s1">'Batman car'</span> <span class="p">},</span>
+ <span class="p">{</span> <span class="na">id</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="na">title</span><span class="p">:</span> <span class="s1">'Spiderman suit'</span> <span class="p">}</span>
+ <span class="p">]</span>
+ <span class="p">}</span>
+<span class="p">]</span></code></pre></figure>
+
+<p>What if we are interested in a collection of all <em>positions</em>? Of course we could simply loop through all invoices and push the positions into a new shared collection.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kd">let</span> <span class="nx">positions</span> <span class="o">=</span> <span class="p">[];</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">inv</span> <span class="nx">of</span> <span class="nx">invoices</span><span class="p">)</span> <span class="p">{</span>
+ <span class="nx">positions</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">inv</span><span class="p">.</span><span class="nx">positions</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">positions</span><span class="p">);</span></code></pre></figure>
+
+<p>But <a href="http://jsbin.com/ziveloviqa/edit?js,console">that&#x2019;s</a> very imperative and focuses a lot on the actual implementation. What we rather like to have is a declarative solution that focuses on <em>what</em> we want to achieve. Coming from a collection of invoices, we want to retrieve a collection of positions.</p>
+
+<p>In the functional programming world there&#x2019;s a <code class="highlighter-rouge">flatMap</code> function for exactly this use case.</p>
+
+<p>Unfortunately native JavaScript Arrays don&#x2019;t have a <code class="highlighter-rouge">flatMap</code> function yet. However, we can reach for the popular <a href="http://lodash.com">lodash</a> library and rewrite the code to use <code class="highlighter-rouge">flatMap</code> with that.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kd">let</span> <span class="nx">positions</span> <span class="o">=</span> <span class="nx">_</span><span class="p">.</span><span class="nx">flatMap</span><span class="p">(</span><span class="nx">invoices</span><span class="p">,</span> <span class="nx">inv</span> <span class="o">=&gt;</span> <span class="nx">inv</span><span class="p">.</span><span class="nx">positions</span><span class="p">);</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">positions</span><span class="p">);</span></code></pre></figure>
+
+<p>We just <a href="http://jsbin.com/cuwowuliru/edit?html,js,console">replaced</a> four lines of code with a single one that is far easier to follow. This declarative solution doesn&#x2019;t move our intention to the actual implementation. We don&#x2019;t even know whether it&#x2019;s using a for loop behind the scenes or not. Once you become familar with the vocabulary the code becomes much easier to understand then it&#x2019;s imperative counterpart. Pretty neat, no?</p>
+
+<p>What <code class="highlighter-rouge">flatMap</code> does is, it goes through each invoice in our collection and applies our function which maps to the array of positions. It then flattens all the positions into a single collection, hence the name <code class="highlighter-rouge">flatMap</code>. Just to make it very clear: A simple <code class="highlighter-rouge">map</code> isn&#x2019;t suitable here because it would leave us with an array of arrays which is not quite what we want.</p>
+
+<p>By now you may be wondering what this has to do with <code class="highlighter-rouge">flatMap</code> from the Rx library. The good news is, if you&#x2019;ve understand the example above, understanding <code class="highlighter-rouge">flatMap</code> for Observables isn&#x2019;t a far stretch. In fact, it&#x2019;s very similar.</p>
+
+<h2 id="understanding-flatmap-for-observables">Understanding <code class="highlighter-rouge">flatMap</code> for Observables</h2>
+
+<p>Remember that Observables are very much like collections with the difference that items are <em>pushed</em> to us as they arrive instead of being pulled out. In our example above we had a collection of invoices where each invoice had a collection of positions. Can we have an Observable of invoices where each invoice has an Observable of positions? Well, we could make that up but it would suggest that we have invoices where the positions may arrive asynchronously.</p>
+
+<p>A better suited example may be an Observable of tweets where each tweet has an Observable of like actions. A <code class="highlighter-rouge">LikeAction</code> is a simple enum with two variants <code class="highlighter-rouge">Like</code> and <code class="highlighter-rouge">Unlike</code>.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kr">enum</span> <span class="nx">LikeAction</span> <span class="p">{</span>
+ <span class="nx">Like</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+ <span class="nx">Unlike</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>We can assign the values <code class="highlighter-rouge">1</code> and <code class="highlighter-rouge">-1</code> to the variants so that we can easily accumulate a total count of them later.</p>
+
+<p>A <code class="highlighter-rouge">Tweet</code> is a simple class with a <code class="highlighter-rouge">text</code> property of type <code class="highlighter-rouge">string</code> and a <code class="highlighter-rouge">likes</code> property of type <code class="highlighter-rouge">Observable&lt;LikeAction&gt;</code>.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kr">class</span> <span class="nx">Tweet</span> <span class="p">{</span>
+ <span class="nx">likes</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Rx</span><span class="p">.</span><span class="nx">Subject</span><span class="o">&lt;</span><span class="nx">LikeAction</span><span class="o">&gt;</span><span class="p">();</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="kr">public</span> <span class="nx">text</span><span class="err">:</span> <span class="nx">string</span><span class="p">)</span> <span class="p">{}</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>Don&#x2019;t get confused by the use of <code class="highlighter-rouge">Subject</code> here. A subject is an <code class="highlighter-rouge">Observable</code> that one can not only subscribe to but also raise notifications on which is exactly what we need to mock the actions.</p>
+
+<p>Now that we have our basic models we can create an <code class="highlighter-rouge">Observable&lt;Tweet&gt;</code> and save a reference to it. Again, we&#x2019;re using <code class="highlighter-rouge">Subject</code> for the purpose of mocking out our notifications.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kd">let</span> <span class="nx">tweets</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Rx</span><span class="p">.</span><span class="nx">Subject</span><span class="o">&lt;</span><span class="nx">Tweet</span><span class="o">&gt;</span><span class="p">();</span></code></pre></figure>
+
+<p>Tweets are pushed through the <code class="highlighter-rouge">Observable&lt;Tweet&gt;</code> as they arrive. Whenever someone likes or unlikes a tweet the <code class="highlighter-rouge">Observable&lt;LikeAction&gt;</code> on that tweet pushes a new notification.</p>
+
+<p>To make a tweet we have to create an instance of <code class="highlighter-rouge">Tweet</code> and pass it to <code class="highlighter-rouge">next</code> on our tweets <code class="highlighter-rouge">Subject</code>.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kd">let</span> <span class="nx">firstTweet</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Tweet</span><span class="p">(</span><span class="s1">'first tweet'</span><span class="p">);</span>
+<span class="nx">tweets</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">firstTweet</span><span class="p">);</span></code></pre></figure>
+
+<p>Adding or removing likes is as simple as calling <code class="highlighter-rouge">likes.next(val)</code> with either <code class="highlighter-rouge">LikeAction.Like</code> or <code class="highlighter-rouge">LikeAction.Unlike</code>.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="c1">//increases likes</span>
+<span class="nx">firstTweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">LikeAction</span><span class="p">.</span><span class="nx">Like</span><span class="p">);</span>
+
+<span class="c1">//decreases likes</span>
+<span class="nx">firstTweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">LikeAction</span><span class="p">.</span><span class="nx">Unlike</span><span class="p">);</span></code></pre></figure>
+
+<p>Now that we have set up the ground work let&#x2019;s come to the interesting part. We like to be able to keep track of all likes/unlikes so that we can show the total number of likes of all tweets.</p>
+
+<p>Remember the imperative for loop that we wrote in the previous example to collect all positions manually? We could kind of do the same here to calculate the total number of likes <a href="http://jsbin.com/yoximomuji/1/edit?js,console">manually</a>.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kd">let</span> <span class="nx">likeCount</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="nx">tweets</span><span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="nx">tweet</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="nx">tweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="nx">likeAction</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="nx">likeCount</span> <span class="o">=</span> <span class="nx">likeCount</span> <span class="o">+</span> <span class="nx">likeAction</span><span class="p">;</span>
+ <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="err">`</span><span class="nx">Total</span> <span class="na">Likes</span><span class="p">:</span> <span class="nx">$</span><span class="p">{</span><span class="nx">likeCount</span><span class="p">}</span><span class="err">`</span><span class="p">);</span>
+ <span class="p">});</span>
+<span class="p">});</span></code></pre></figure>
+
+<blockquote>
+ <p><strong>Special tip:</strong> Don&#x2019;t get confused, the fact that we can accumulate our <code class="highlighter-rouge">LikeActions</code> is simply because we assigned <code class="highlighter-rouge">1</code> and <code class="highlighter-rouge">-1</code> to them.</p>
+</blockquote>
+
+<p>But just as we used <code class="highlighter-rouge">flatMap</code> to get one single collection of positions of all the invoices we can use <code class="highlighter-rouge">flatMap</code> <a href="http://jsbin.com/lupazehuve/1/edit?js,console">here</a> to get one single <code class="highlighter-rouge">Observable</code> for all like actions of all the tweets.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kd">let</span> <span class="nx">likeCount</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="nx">tweets</span><span class="p">.</span><span class="nx">flatMap</span><span class="p">(</span><span class="nx">tweet</span> <span class="o">=&gt;</span> <span class="nx">tweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">)</span>
+ <span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="nx">like</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="nx">likeCount</span> <span class="o">=</span> <span class="nx">likes</span> <span class="o">+</span> <span class="nx">like</span><span class="p">;</span>
+ <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="err">`</span><span class="na">Likes</span><span class="p">:</span> <span class="nx">$</span><span class="p">{</span><span class="nx">likes</span><span class="p">}</span><span class="err">`</span><span class="p">);</span>
+ <span class="p">});</span></code></pre></figure>
+
+<blockquote>
+ <p><strong>Special tip:</strong> This is a perfect use case for the <code class="highlighter-rouge">scan</code> operator which can help us to get rid of the manual book-keeping in the <code class="highlighter-rouge">likeCount</code> variable. But let&#x2019;s not get ahead of ourselves.</p>
+</blockquote>
+
+<p>So what does the above code do? For each tweet that gets pushed to us <code class="highlighter-rouge">flatMap</code> maps to the <code class="highlighter-rouge">Observable&lt;LikeAction&gt;</code> on the <code class="highlighter-rouge">likes</code> property. It subscribes to these Observables and flattens the notifications into a single <code class="highlighter-rouge">Observable&lt;LikeAction&gt;</code> that we can then subscribe to.</p>
+
+<p>The full working code of our example looks like this.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="kr">enum</span> <span class="nx">LikeAction</span> <span class="p">{</span>
+ <span class="nx">Like</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+ <span class="nx">Unlike</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+<span class="p">}</span>
+
+<span class="kr">class</span> <span class="nx">Tweet</span> <span class="p">{</span>
+ <span class="nx">likes</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Rx</span><span class="p">.</span><span class="nx">Subject</span><span class="o">&lt;</span><span class="nx">LikeAction</span><span class="o">&gt;</span><span class="p">();</span>
+ <span class="nx">constructor</span> <span class="p">(</span><span class="kr">public</span> <span class="nx">text</span><span class="err">:</span> <span class="nx">string</span><span class="p">)</span> <span class="p">{}</span>
+<span class="p">}</span>
+
+<span class="kd">let</span> <span class="nx">tweets</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Rx</span><span class="p">.</span><span class="nx">Subject</span><span class="o">&lt;</span><span class="nx">Tweet</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="kd">let</span> <span class="nx">likeCount</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="nx">tweets</span><span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="nx">tweet</span> <span class="o">=&gt;</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">tweet</span><span class="p">.</span><span class="nx">text</span><span class="p">));</span>
+
+<span class="nx">tweets</span><span class="p">.</span><span class="nx">flatMap</span><span class="p">(</span><span class="nx">tweet</span> <span class="o">=&gt;</span> <span class="nx">tweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">)</span>
+ <span class="p">.</span><span class="nx">subscribe</span><span class="p">(</span><span class="nx">likeAction</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="nx">likeCount</span> <span class="o">=</span> <span class="nx">likeCount</span> <span class="o">+</span> <span class="nx">likeAction</span><span class="p">;</span>
+ <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="err">`</span><span class="nx">Total</span> <span class="na">Likes</span><span class="p">:</span> <span class="nx">$</span><span class="p">{</span><span class="nx">likeCount</span><span class="p">}</span><span class="err">`</span><span class="p">);</span>
+ <span class="p">});</span>
+
+<span class="kd">let</span> <span class="nx">firstTweet</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Tweet</span><span class="p">(</span><span class="s1">'first tweet'</span><span class="p">);</span>
+<span class="kd">let</span> <span class="nx">secondTweet</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Tweet</span><span class="p">(</span><span class="s1">'second tweet'</span><span class="p">);</span>
+
+<span class="nx">tweets</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">firstTweet</span><span class="p">);</span>
+<span class="nx">tweets</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">secondTweet</span><span class="p">);</span>
+
+<span class="nx">firstTweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">LikeAction</span><span class="p">.</span><span class="nx">Like</span><span class="p">);</span>
+<span class="nx">secondTweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">LikeAction</span><span class="p">.</span><span class="nx">Like</span><span class="p">);</span>
+<span class="nx">secondTweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">LikeAction</span><span class="p">.</span><span class="nx">Like</span><span class="p">);</span>
+<span class="nx">secondTweet</span><span class="p">.</span><span class="nx">likes</span><span class="p">.</span><span class="nx">next</span><span class="p">(</span><span class="nx">LikeAction</span><span class="p">.</span><span class="nx">Unlike</span><span class="p">);</span></code></pre></figure>
+
+<p>When we run the code we see the following output.</p>
+
+<figure class="highlight"><pre><code class="language-js"><span class="nx">first</span> <span class="nx">tweet</span>
+<span class="nx">second</span> <span class="nx">tweet</span>
+<span class="nx">Total</span> <span class="nx">Likes</span><span class="err">:</span> <span class="mi">1</span>
+<span class="nx">Total</span> <span class="nx">Likes</span><span class="err">:</span> <span class="mi">2</span>
+<span class="nx">Total</span> <span class="nx">Likes</span><span class="err">:</span> <span class="mi">3</span>
+<span class="nx">Total</span> <span class="nx">Likes</span><span class="err">:</span> <span class="mi">2</span></code></pre></figure>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>Observables are really powerful. They allow us to to compose asynchronous tasks in a functional reactive way. Because they share so many similarities with collections we can apply a lot of our knowledge from popular libraries such as lodash.</p>
+
+
+ 
+ </div>
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+ </div>
+</body></html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html><html><head><title>gh-ost</title></head><body>
+<h1>gh-ost</h1><p><a href="http://githubengineering.com/gh-ost-github-s-online-migration-tool-for-mysql/" target="_new">Original URL</a></p>
+<p><blockquote>Today we are announcing the open source release of gh-ost: GitHub&#x2019;s triggerless online schema migration tool for MySQL. gh-ost has been developed at GitHub in recent months to answer a problem&hellip;</blockquote></p>
+<div><div class="markdown-body">
+ <p>Today we are announcing the open source release of <a href="http://github.com/github/gh-ost">gh-ost</a>: GitHub&#x2019;s triggerless online schema migration tool for MySQL.</p>
+
+<p><code class="highlighter-rouge">gh-ost</code> has been developed at GitHub in recent months to answer a problem we faced with ongoing, continuous production changes requiring modifications to MySQL tables. <code class="highlighter-rouge">gh-ost</code> changes the existing online table migration paradigm by providing a low impact, controllable, auditable, operations friendly solution.</p>
+
+<p>MySQL table migration is a well known problem, and has been addressed by online schema change tools since 2009. Growing, fast-paced products often require changes to database structure. Adding/changing/removing columns and indexes etc., are blocking operations with the default MySQL behavior. We conduct such schema changes multiple times per day and wish to minimize user facing impact.</p>
+
+<p>Before illustrating <code class="highlighter-rouge">gh-ost</code>, let&#x2019;s address the existing solutions and the reasoning for embarking on a new tool.</p>
+
+<h3 id="online-schema-migrations-existing-landscape">Online schema migrations, existing landscape</h3>
+
+<p>Today, online schema changes are made possible via these three main options:</p>
+
+
+
+<p>Other options include Rolling Schema Upgrade with Galera Cluster, and otherwise non-InnoDB storage engines. At GitHub we use the common master-replicas architecture and utilize the reliable InnoDB engine.</p>
+
+<p>Why have we decided to embark on a new solution rather than use either of the above? The existing solutions are all limited in their own ways, and the below is a very brief and generalized breakdown of some of their shortcomings. We will drill down more in-depth about the shortcomings of the trigger-based online schema change tools.</p>
+
+<ul>
+ <li>
+ <p>Replica migration makes for an operational overhead, which requires larger host count, longer delivery times and more complex management. Changes are applied explicitly on specific replicas or on sub-trees of the topology. Such considerations as hosts going down, host restores from an earlier backup, newly provisioned hosts, all require a strict tracking system for per-host changes. A change might require multiple iterations, hence more time. Promoting a replica to master incurs a brief outage. Multiple changes going at once are more difficult to coordinate. We commonly deploy multiple schema changes per day and wish to be free of the management overhead, while we recognize this solution to be in use.</p>
+ </li>
+ <li>
+ <p>MySQL&#x2019;s Online DDL for InnoDB is only &#x201C;online&#x201D; on the server on which it is invoked. Replication stream serializes the <code class="highlighter-rouge">alter</code> which causes replication lag. An attempt to run it individually per-replica results in much of the management overhead mentioned above. The DDL is uninterruptible; killing it halfway results in long rollback or with data dictionary corruption. It does not play &#x201C;nice&#x201D;; it cannot throttle or pause on high load. It is a commitment into an operation that may exhaust your resources.</p>
+ </li>
+ <li>
+ <p>We&#x2019;ve been using <code class="highlighter-rouge">pt-online-schema-change</code> for years. However as we grew in volume and traffic, we hit more and more problems, to the point of considering many migrations as &#x201C;risky operations&#x201D;. Some migrations would only be able to run during off-peak hours or through weekends; others would consistently cause MySQL outage.
+All existing online-schema-change tools utilize MySQL <code class="highlighter-rouge">triggers</code> to perform the migration, and therein lies a few problems.</p>
+ </li>
+</ul>
+
+<h3 id="whats-wrong-with-trigger-based-migrations">What&#x2019;s wrong with trigger-based migrations?</h3>
+
+<p>All online-schema-change tools operate in similar manner: they create a <em>ghost</em> table, in the likeness of your original table, migrate that table while empty, slowly and incrementally copy data from your original table to the <em>ghost</em> table, meanwhile propagating ongoing changes (any <code class="highlighter-rouge">INSERT</code>, <code class="highlighter-rouge">DELETE</code>, <code class="highlighter-rouge">UPDATE</code> applied to your table) to the <em>ghost</em> table. When the tool is satisfied the tables are in sync, it replaces your original table with the <em>ghost</em> table.</p>
+
+<p>Tools like <code class="highlighter-rouge">pt-online-schema-change</code>, <code class="highlighter-rouge">LHM</code> and <code class="highlighter-rouge">oak-online-alter-table</code> use a synchronous approach, where each change to your table translates immediately, utilizing same transaction space, to a mirrored change on the <em>ghost</em> table. The Facebook tool uses an asynchronous approach of writing changes to a changelog table, then iterating that and applying changes onto the <em>ghost</em> table. All of these tools use triggers to identify those ongoing changes to your table.</p>
+
+<p>Triggers are stored routines which are invoked on a per-row operation upon <code class="highlighter-rouge">INSERT</code>, <code class="highlighter-rouge">DELETE</code>, <code class="highlighter-rouge">UPDATE</code> on a table. A trigger may contain a set of queries, and these queries run in the same transaction space as the query that manipulates the table. This makes for an atomicy of both the original operation on the table and the trigger-invoked operations.</p>
+
+<p>Trigger usage in general, and trigger-based migrations in particular, suffer from the following:</p>
+
+<ul>
+ <li>
+ <p>Triggers, being stored routines, are interpreted code. MySQL does not precompile them. Hooking onto your query&#x2019;s transaction space, they add the overhead of a parser and interpreter to each query acting on your migrated table.</p>
+ </li>
+ <li>
+ <p>Locks: the triggers share the same transaction space as the original queries, and while those queries compete for locks on the table, the triggers independently compete on locks on another table. This is in particular acute with the synchronous approach. Lock contention is directly related to write concurrency on the master. We have experienced near or complete lock downs in production, to the effect of rendering the table or the entire database inaccessible due to lock contention.
+Another aspect of trigger locks is the metadata locks they require when created or destroyed. We&#x2019;ve seen stalls to the extent of many seconds to a minute while attempting to remove triggers from a busy table at the end of a migration operation.</p>
+ </li>
+ <li>
+ <p>Non pausability: when load on the master turns high, you wish to throttle or suspend your pending migration. However a trigger-based solution cannot truly do so. While it may suspend the row-copy operation, it cannot suspend the triggers. Removal of the triggers results in data loss. Thus, the triggers must keep working throughout the migration. On busy servers, we have seen that even as the online operation throttles, the master is brought down by the load of the triggers.</p>
+ </li>
+ <li>
+ <p>Concurrent migrations: we or others may be interested in being able to run multiple concurrent migrations (on different tables). Given the above trigger overhead, we are not prepared to run multiple concurrent trigger-based migrations. We are unaware of anyone doing so in practice.</p>
+ </li>
+ <li>
+ <p>Testing: we might want to experiment with a migration, or evaluate its load. Trigger based migrations can only simulate a migration on replicas via Statement Based Replication, and are far from representing a true master migration given that the workload on a replica is single threaded (that is always the case on a per-table basis, regardless of multi-threaded replication technology in use).</p>
+ </li>
+</ul>
+
+
+
+<p><code class="highlighter-rouge">gh-ost</code> stands for GitHub&#x2019;s Online Schema Transmogrifier/Transfigurator/Transformer/Thingy</p>
+
+<div>
+<img alt="gh-ost light logo" src="http://githubengineering.com/images/announcing-gh-ost/gh-ost-general-flow.png">
+</div>
+
+<p><code class="highlighter-rouge">gh-ost</code> is:</p>
+
+<ul>
+ <li>Triggerless</li>
+ <li>Lightweight</li>
+ <li>Pauseable</li>
+ <li>Dynamically controllable</li>
+ <li>Auditable</li>
+ <li>Testable</li>
+ <li>Trustable</li>
+</ul>
+
+<h4 id="triggerless">Triggerless</h4>
+
+<p><code class="highlighter-rouge">gh-ost</code> does not use triggers. It intercepts changes to table data by tailing the binary logs. It therefore works in an asynchronous approach, applying the changes to the <em>ghost</em> table some time after they&#x2019;ve been committed.</p>
+
+<p><code class="highlighter-rouge">gh-ost</code> expects binary logs in RBR (Row Based Replication) format; however that does not mean you cannot use it to migrate a master running with SBR (Statement Based Replication). In fact, we do just that. <code class="highlighter-rouge">gh-ost</code> is happy to read binary logs from a replica that translates SBR to RBR, and it is happy to reconfigure the replica to do that.</p>
+
+<h4 id="lightweight">Lightweight</h4>
+
+<p>By not using triggers, <code class="highlighter-rouge">gh-ost</code> decouples the migration workload from the general master workload. It does not regard the concurrency and contention of queries running on the migrated table. Changes applied by such queries are streamlined and serialized in the binary log, where <code class="highlighter-rouge">gh-ost</code> picks them up to apply on the <code class="highlighter-rouge">gh-ost</code> table. In fact, <code class="highlighter-rouge">gh-ost</code> also serializes the row-copy writes along with the binary log event writes. Thus, the master only observes a single connection that is sequentially writing to the <em>ghost</em> table. This is not very different from ETLs.</p>
+
+<h4 id="pauseable">Pauseable</h4>
+
+<p>Since all writes are controlled by <code class="highlighter-rouge">gh-ost</code>, and since reading the binary logs is an asynchronous operation in the first place, <code class="highlighter-rouge">gh-ost</code> is able to suspend all writes to the master when throttling. Throttling implies no row-copy on the master <em>and</em> no row updates. <code class="highlighter-rouge">gh-ost</code> does create an internal tracking table and keeps writing heartbeat events to that table even when throttled, in negligible volumes.</p>
+
+<p><code class="highlighter-rouge">gh-ost</code> takes throttling one step further and offers multiple controls over throttling:</p>
+
+<ul>
+ <li>Load: a familiar feature for users of <code class="highlighter-rouge">pt-online-schema-change</code>, one may set thresholds on MySQL metrics, such as <code class="highlighter-rouge">Threads_running=30</code>
+</li>
+ <li>Replication lag: <code class="highlighter-rouge">gh-ost</code> has a built-in heartbeat mechanism which it utilizes to examine replication lag; you may specify control replicas, or <code class="highlighter-rouge">gh-ost</code> will implicitly use the replica you hook it to in the first place.</li>
+ <li>
+ <p>Query: you may present with a query that decides if throttling should kick in. Consider <code class="highlighter-rouge">SELECT HOUR(NOW()) BETWEEN 8 and 17</code>.</p>
+
+ <p>All the above metrics can be <em>dynamically changed</em> even while the migration is executing.</p>
+ </li>
+ <li>Flag file: touch a file and <code class="highlighter-rouge">gh-ost</code> begins throttling. Remove the file and it resumes work.</li>
+ <li>User command: dynamically connect to <code class="highlighter-rouge">gh-ost</code> (see following) across the network and <em>instruct it</em> to start throttling.</li>
+</ul>
+
+<h4 id="dynamically-controllable">Dynamically controllable</h4>
+
+<p>With existing tools, when a migration generates a high load, the DBA would reconfigure, say, a smaller <code class="highlighter-rouge">chunk-size</code>, terminate and re-run the migration from start. We find this wasteful.</p>
+
+<p><code class="highlighter-rouge">gh-ost</code> listens to requests via unix socket file and (configurable) via TCP. You may give <code class="highlighter-rouge">gh-ost</code> instructions even while migration is running. You may, for example:</p>
+
+<ul>
+ <li>
+<code class="highlighter-rouge">echo throttle | socat - /tmp/gh-ost.sock</code> to start throttling. Likewise you may <code class="highlighter-rouge">no-throttle</code>
+</li>
+ <li>Change execution parameters: <code class="highlighter-rouge">chunk-size=1500</code>, <code class="highlighter-rouge">max-lag-millis=2000</code>, <code class="highlighter-rouge">max-load=Thread_running=30</code> are examples to instructions <code class="highlighter-rouge">gh-ost</code> accepts that change its behavior.</li>
+</ul>
+
+<h4 id="auditable">Auditable</h4>
+
+<p>Likewise, the same interface can be used to ask <code class="highlighter-rouge">gh-ost</code> of the <em>status</em>. <code class="highlighter-rouge">gh-ost</code> is happy to report current progress, major configuration params, identity of servers involved and more. As this information is accessible via network, it gives great visibility into the ongoing operation, that you would otherwise find today only by using a shared screen or tailing log files.</p>
+
+<h4 id="testable">Testable</h4>
+
+<p>Because the binary log content is decoupled from the master&#x2019;s workload, applying a migration on a replica is more similar to a true master migration (though still not completely, and more work is on the roadmap).</p>
+
+<p><code class="highlighter-rouge">gh-ost</code> comes with built-in support for testing via <code class="highlighter-rouge">--test-on-replica</code>: it allows you to run a migration on a replica, such that at the end of the migration <code class="highlighter-rouge">gh-ost</code> would stop the replica, swap tables, reverse the swap, and leave you with both tables in place and in sync, replication stopped. This allows you to examine and compare the two tables at your leisure.</p>
+
+<p>This is how we test <code class="highlighter-rouge">gh-ost</code> in production at GitHub: we have multiple designated production replicas; they are not serving traffic but instead running continuous covering migration test on all tables. Each of our production tables, as small as empty and as large as many hundreds of GB, is being migrated via a trivial statement that does not really modify its structure (<code class="highlighter-rouge">engine=innodb</code>). Each such migration ends with stopped replication. We take complete checksum of entire table data from both the original table and <em>ghost</em> table and expect them to be identical. We then resume replication and proceed to next table. Every single one of our production tables is <em>known</em> to have passed multiple successful migrations via <code class="highlighter-rouge">gh-ost</code>, on replica.</p>
+
+<h4 id="trustable">Trustable</h4>
+
+<p>All the above, and more, are made to build trust with <code class="highlighter-rouge">gh-ost</code>&#x2019;s operation. After all, it is a new tool in a landscape that has used the same tool for years.</p>
+
+<ul>
+ <li>
+ <p>We test <code class="highlighter-rouge">gh-ost</code> on replicas; we&#x2019;ve completed thousands of successful migrations before trying it out on masters for the first time. So can you. Migrate your replicas, verify the data is intact. We want you to do that!</p>
+ </li>
+ <li>
+ <p>As you execute <code class="highlighter-rouge">gh-ost</code>, and as you may suspect load on your master is increasing, go ahead and initiate throttling. Touch a file. <code class="highlighter-rouge">echo throttle</code>. See how the load on your master is just back to normal. By just knowing you <em>can</em> do that, you will gain a lot of peace of mind.</p>
+ </li>
+ <li>
+ <p>A migration begins and the ETA says it&#x2019;s going to end at <code class="highlighter-rouge">2:00am</code>? Are you concerned with the final cut-over, where the tables are swapped, and you want to stick around? You can instruct <code class="highlighter-rouge">gh-ost</code> to <em>postpone</em> the cut-over using a flag file. <code class="highlighter-rouge">gh-ost</code> will complete the row-copy but will not flip the tables. Instead, it will keep applying ongoing changes, keeping the <em>ghost</em> table in sync. As you come to the office the next day, remove the flag file or <code class="highlighter-rouge">echo unpostpone</code> into <code class="highlighter-rouge">gh-ost</code>, and the cut-over will be made. We don&#x2019;t like our software to bind us into observing its behavior. It should instead liberate us to do things humans do.</p>
+ </li>
+ <li>
+ <p>Speaking of ETA, <code class="highlighter-rouge">--exact-rowcount</code> will keep you smiling. Pay the initial price of a lengthy <code class="highlighter-rouge">SELECT COUNT(*)</code> on your table. <code class="highlighter-rouge">gh-ost</code> will get an accurate estimate of the amount of work it needs to do. It will heuristically <em>update</em> that estimation as migration proceeds. While ETA timing is always subject to change, progress percentage turns accurate. If, like us, you&#x2019;ve been bitten by migrations stating <code class="highlighter-rouge">99%</code> then stalling for an hour keeping you biting your fingernails, you&#x2019;ll appreciate the change.</p>
+ </li>
+</ul>
+
+<h3 id="gh-ost-operation-modes">gh-ost operation modes</h3>
+
+<p><code class="highlighter-rouge">gh-ost</code> operates by connecting to potentially multiple servers, as well as connecting itself as a replica in order to stream binary log events directly from one of those servers. There are various operation modes, which depend on your setup, configuration, and where you want to run the migration.</p>
+
+<div>
+<img alt="gh-ost operation modes" src="http://githubengineering.com/images/announcing-gh-ost/gh-ost-operation-modes.png">
+</div>
+
+<h5 id="a-connect-to-replica-migrate-on-master">a. Connect to replica, migrate on master</h5>
+
+<p>This is the mode <code class="highlighter-rouge">gh-ost</code> expects by default. <code class="highlighter-rouge">gh-ost</code> will investigate the replica, crawl up to find the topology&#x2019;s master, and connect to it as well. Migration will:</p>
+
+<ul>
+ <li>Read and write row-data on master</li>
+ <li>Read binary logs events on the replica, apply the changes onto the master</li>
+ <li>Investigate table format, columns &amp; keys, count rows on the replica</li>
+ <li>Read internal changelog events (such as heartbeat) from the replica</li>
+ <li>Cut-over (switch tables) on the master</li>
+</ul>
+
+<p>If your master works with SBR, this is the mode to work with. The replica must be configured with binary logs enabled (<code class="highlighter-rouge">log_bin</code>, <code class="highlighter-rouge">log_slave_updates</code>) and should have <code class="highlighter-rouge">binlog_format=ROW</code> (<code class="highlighter-rouge">gh-ost</code> can apply the latter for you).</p>
+
+<p>However even with RBR we suggest this is the least master-intrusive operation mode.</p>
+
+<h5 id="b-connect-to-master">b. Connect to master</h5>
+
+<p>If you don&#x2019;t have replicas, or do not wish to use them, you are still able to operate directly on the master. <code class="highlighter-rouge">gh-ost</code> will do all operations directly on the master. You may still ask it to be considerate of replication lag.</p>
+
+<ul>
+ <li>Your master must produce binary logs in RBR format.</li>
+ <li>You must approve this mode via <code class="highlighter-rouge">--allow-on-master</code>.</li>
+</ul>
+
+<h5 id="c-migratetest-on-replica">c. Migrate/test on replica</h5>
+
+<p>This will perform a migration on the replica. <code class="highlighter-rouge">gh-ost</code> will briefly connect to the master but will thereafter perform all operations on the replica without modifying anything on the master.
+Throughout the operation, <code class="highlighter-rouge">gh-ost</code> will throttle such that the replica is up to date.</p>
+
+<ul>
+ <li>
+<code class="highlighter-rouge">--migrate-on-replica</code> indicates to <code class="highlighter-rouge">gh-ost</code> that it must migrate the table directly on the replica. It will perform the cut-over phase even while replication is running.</li>
+ <li>
+<code class="highlighter-rouge">--test-on-replica</code> indicates the migration is for purpose of testing only. Before cut-over takes place, replication is stopped. Tables are swapped and then swapped back: your original table returns to its original place.
+Both tables are left with replication stopped. You may examine the two and compare data.</li>
+</ul>
+
+<h3 id="gh-ost-at-github">gh-ost at GitHub</h3>
+
+<p><code class="highlighter-rouge">gh-ost</code> is now powering all of our production migrations. We&#x2019;re running it daily, as engineering requests come, sometimes multiple times a day. With its auditing and control capabilities, we will be integrating it into our chatops. Our engineers will have clear insight into migration progress and will be able to control its behavior. Metrics and events are being collected and will provide with clear visibility into migration operations in production.</p>
+
+<h3 id="open-source">Open source</h3>
+
+<p><code class="highlighter-rouge">gh-ost</code> is <a href="https://github.com/github/gh-ost">released</a> with to the open source community <a href="https://github.com/github/gh-ost/blob/master/LICENSE">under the <code class="highlighter-rouge">MIT</code> license</a>.</p>
+
+<p>While we find it to be stable, we have improvements we want to make. We release it at this time as we wish to welcome community participation and contributions. From time to time we may publish suggestions for community contributions.</p>
+
+<p><code class="highlighter-rouge">gh-ost</code> is actively maintained. We encourage you to try it out, test it; we&#x2019;ve made great efforts to make it trustworthy.</p>
+
+<h3 id="acknowledgements">Acknowledgements</h3>
+
+<p><code class="highlighter-rouge">gh-ost</code> is designed, developed, reviewed and tested by the database infrastructure engineering team at GitHub:</p>
+
+<p><a href="https://github.com/jonahberquist">@jonahberquist</a>, <a href="https://github.com/ggunson">@ggunson</a>, <a href="https://github.com/tomkrouper">@tomkrouper</a>, <a href="https://github.com/shlomi-noach">@shlomi-noach</a></p>
+
+<p>We would like to acknowledge the engineers at GitHub who have provided valuable information and advice. Thank you to our friends from the MySQL community who have reviewed and commented on this project during its pre-production stages.</p>
+
+ </div>
+ 
+
+</div>
+</body></html>

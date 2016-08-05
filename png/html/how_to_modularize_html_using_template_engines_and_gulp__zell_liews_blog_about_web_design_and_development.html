@@ -1,0 +1,372 @@
+<!DOCTYPE html><html><head><title>How to Modularize HTML Using Template Engines and Gulp | Zell Liew's blog about web design and development</title></head><body>
+<h1>How to Modularize HTML Using Template Engines and Gulp | Zell Liew's blog about web design and development</h1><p><a href="http://zellwk.com/blog/nunjucks-with-gulp/" target="_new">Original URL</a></p>
+<p><blockquote>Template Engines are tools that help us break HTML code into smaller pieces that we can reuse across multiple HTML files. They also give you the power to feed data into variables that help you&hellip;</blockquote></p>
+<div><article>
+ 
+ 
+ 
+ <p>Template Engines are tools that help us break HTML code into smaller pieces that we can reuse across multiple HTML files. They also give you the power to feed data into variables that help you simplify your code. </p>
+<p>You can only use template engines if you had a way to compile them into HTML. This means that you can only use them if you&#x2019;re working with a backend language, or if you&#x2019;re using client-side JavaScript.</p>
+<p>However, with Node.js, we can now harness the power of template engines easily through the use of tools like Gulp. </p>
+<p>That&#x2019;s what we&#x2019;re going to cover today in this chapter. We&#x2019;re going to find out what template engines are, why we should use them, and how to set one up with Gulp. </p>
+
+<p>Let&#x2019;s start by looking more closely at the two main benefits that template engines bring. </p>
+<h2 id="two-benefits-of-template-engines">Two benefits of template engines</h2>
+<p>Here are the two benefits that template engines bring: </p>
+<ol>
+<li>It lets you break HTML code into smaller files </li>
+<li>It lets you use data to populate your markup</li>
+</ol>
+<p>Let&#x2019;s go through them one by one.</p>
+<h3 id="breaking-html-into-smaller-files">Breaking HTML into smaller files</h3>
+<p>It&#x2019;s common for a HTML file to contain blocks of code that are repeated across the website. Consider this markup for a second: </p>
+<pre><code class="lang-html"><p class="hljs-tag">&lt;<p class="hljs-name">body</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">nav</p>&gt;</p> ... <p class="hljs-tag">&lt;/<p class="hljs-name">nav</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"content"</p>&gt;</p> ... <p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">footer</p>&gt;</p> ... <p class="hljs-tag">&lt;/<p class="hljs-name">footer</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">body</p>&gt;</p>
+</code></pre>
+<p>Much of these code, particularly those within <code>nav</code> and <code>footer</code>, are repeated across multiple pages. </p>
+<p>Since they are repeated, we can pull them out and place them into smaller files called <strong>partials</strong>. </p>
+<p>For example, the navigation partial may contain a simple navigation like this: </p>
+<pre><code class="lang-html">
+<p class="hljs-tag">&lt;<p class="hljs-name">nav</p>&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"index.html"</p>&gt;</p>Home<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"about.html"</p>&gt;</p>About<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"contact.html"</p>&gt;</p>Contact<p class="hljs-tag">&lt;/&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">nav</p>&gt;</p>
+</code></pre>
+<p>Then, we can reuse this partial across our HTML files. Here&#x2019;s what HTML files might look like with partials included: </p>
+<pre><code class="lang-html"><p class="xml"><p class="hljs-tag">&lt;<p class="hljs-name">body</p>&gt;</p>
+ </p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">include</p></p> partials "nav" %}</p><p class="xml">
+ <p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"content"</p>&gt;</p> ... <p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>
+ </p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">include</p></p> partials "footer" %}</p><p class="xml">
+<p class="hljs-tag">&lt;/<p class="hljs-name">body</p>&gt;</p></p>
+</code></pre>
+<p>Note: The syntax for including partials are different for each template engine. This one shown above is for Nunjucks or Swig. </p>
+<p>There&#x2019;s one great thing about being able to break code up like this. </p>
+<p>Just imagine what you would do if you had to change the navigation now. When you use a partial, all you have to do is change code in the navigation partial and all your pages will be updated. Contrast that with having to change the same code across every file the navigation is used on. Which is easier and more effective?</p>
+<p>This ability to break code up into smaller files helps us write lesser (duplicated) code while at the same time preserve our sanity when code need to be changed. </p>
+<p>Let&#x2019;s move on to the second benefit.</p>
+<h3 id="using-data-to-populate-markup">Using data to populate markup</h3>
+<p>This benefit is best explained with an example. Let&#x2019;s say you&#x2019;re creating a gallery of images. Your markup would be something similar to this: </p>
+<pre><code class="lang-html">&lt;<p class="hljs-selector-tag">div</p> class=<p class="hljs-string">"gallery"</p>&gt;
+ &lt;<p class="hljs-selector-tag">div</p> class=<p class="hljs-string">"gallery__item"</p>&gt;
+ &lt;<p class="hljs-selector-tag">img</p> src=<p class="hljs-string">"item-1.png"</p> alt=<p class="hljs-string">"item-1"</p>&gt;
+ &lt;/div&gt;
+ &lt;<p class="hljs-selector-tag">div</p> class=<p class="hljs-string">"gallery__item"</p>&gt;
+ &lt;<p class="hljs-selector-tag">img</p> src=<p class="hljs-string">"item-2.png"</p> alt=<p class="hljs-string">"item-2"</p>&gt;
+ &lt;/div&gt;
+ &lt;<p class="hljs-selector-tag">div</p> class=<p class="hljs-string">"gallery__item"</p>&gt;
+ &lt;<p class="hljs-selector-tag">img</p> src=<p class="hljs-string">"item-3.png"</p> alt=<p class="hljs-string">"item-3"</p>&gt;
+ &lt;/div&gt;
+ &lt;<p class="hljs-selector-tag">div</p> class=<p class="hljs-string">"gallery__item"</p>&gt;
+ &lt;<p class="hljs-selector-tag">img</p> src=<p class="hljs-string">"item-4.png"</p> alt=<p class="hljs-string">"item-4"</p>&gt;
+ &lt;/div&gt;
+ &lt;<p class="hljs-selector-tag">div</p> class=<p class="hljs-string">"gallery__item"</p>&gt;
+ &lt;<p class="hljs-selector-tag">img</p> src=<p class="hljs-string">"item-5.png"</p> alt=<p class="hljs-string">"item-5"</p>&gt;
+ &lt;/div&gt;
+&lt;/div&gt;
+</code></pre>
+<p>Notice how the <code>.gallery__item</code> div was repeated multiple times above? </p>
+<p>If you had to change the markup of one <code>.gallery__item</code>, you&#x2019;d have to change it in five different places. </p>
+<p>Now, imagine if you had the ability to write HTML with some sort of logic. You&#x2019;d probably write something similar to this: </p>
+<pre><code class="lang-html">&lt;div <p class="hljs-class"><p class="hljs-keyword">class</p></p>=<p class="hljs-string">"gallery"</p>&gt;
+ 
+ &lt;div <p class="hljs-class"><p class="hljs-keyword">class</p></p>=<p class="hljs-string">"gallery__item"</p>&gt;
+ <p class="xml"><p class="hljs-tag">&lt;<p class="hljs-name">img</p> <p class="hljs-attr">src</p>=<p class="hljs-string">"$path-to-image"</p> <p class="hljs-attr">alt</p>=<p class="hljs-string">"$alt-text"</p>&gt;</p>
+ <p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p></p>
+ 
+&lt;<p class="hljs-regexp">/div&gt;</p>
+</code></pre>
+<p>Template engines gives you the ability to use such a loop. Instead of looping exactly five times, it loops through a set of data that you pass to it. The html would become: </p>
+<pre><code class="lang-html"><p class="xml"><p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"gallery"</p>&gt;</p>
+ </p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">for</p></p> image images %}</p><p class="xml">
+ <p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"gallery__item"</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">img</p> <p class="hljs-attr">src</p>=</p></p><p class="hljs-template-variable">{{src}}</p><p class="xml"><p class="hljs-tag"> <p class="hljs-attr">alt</p>=</p></p><p class="hljs-template-variable">{{alt}}</p><p class="xml">
+ <p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>
+ </p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">endfor</p></p> %}</p><p class="xml">
+<p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p></p>
+</code></pre>
+<p>The data would be a JSON file that resembles the following: </p>
+<pre><code class="lang-javascript"><p class="hljs-symbol">images:</p> [{
+<p class="hljs-symbol"> src:</p> <p class="hljs-string">"item1.png"</p>,
+<p class="hljs-symbol"> alt:</p> <p class="hljs-string">"alt text for item1"</p>
+ }, {
+<p class="hljs-symbol"> src:</p> <p class="hljs-string">"item2.png"</p>,
+<p class="hljs-symbol"> alt:</p> <p class="hljs-string">"alt text for item1"</p>
+ },
+ 
+ ]
+</code></pre>
+<p>When the data is supplied, the template engine would create a markup such that the number of <code>.gallery__items</code> would correspond to the number of items in the <code>images</code> array of the data. </p>
+<p>The best part is that you only have to change the markup once and all <code>.gallery__items</code> would be updated. </p>
+<p>Here, template engines once again gives you the ability to write lesser code, and helps preserve your sanity when code needs to be changed. </p>
+<p>Since we know what template engines does now, lets move on and learn how use a template engine with Gulp.</p>
+<h2 id="using-a-template-engine-with-gulp">Using a template engine with Gulp</h2>
+<p>Before we move on and create a gulp task that uses a template engine, let&#x2019;s look at a list of popular template engines that Gulp is able to use (Note: They&#x2019;re all JavaScript based templat engines).</p>
+<p>Here&#x2019;s the list in alphabetical order: </p>
+
+<p>Each template engine is unique. It has it&#x2019;s pros and cons and it&#x2019;s syntax can be wildly different from other template engines. Because of this, let&#x2019;s learn to use one template engine in this article &#x2013; Nunjucks. </p>
+<p>You can opt to use other template engines if you wish to, but the instructions to use them will be different. </p>
+<p>I highly recommend Nunjucks because it&#x2019;s extremely powerful. It has features (like inheritance) that most template engines do not have. I&#x2019;ve also used Mustache and Handlebars previously, and found that they weren&#x2019;t powerful enough in many circumstances. </p>
+<p>Now, let&#x2019;s implement Nunjucks into our workflow. </p>
+<h2 id="using-nunjucks-with-gulp">Using Nunjucks with Gulp</h2>
+<p>We can use Nunjucks through a plugin called <a href="https://github.com/carlosl/gulp-nunjucks-render">gulp-nunjucks-render</a></p>
+<p>Let&#x2019;s start by installing gulp-nunjucks-render.</p>
+<pre><code class="lang-bash">$ npm install gulp-nunjucks-render --<p class="hljs-built_in">save</p>-<p class="hljs-built_in">dev</p>
+</code></pre>
+<pre><code class="lang-javascript"><p class="hljs-keyword">var</p> nunjucksRender = <p class="hljs-built_in">require</p>(<p class="hljs-string">'gulp-nunjucks-render'</p>);
+</code></pre>
+<p>Next, we need to create a project structure that allows us to use Nunjucks easily. We will use this structure: </p>
+<pre><code class="lang-bash">project/ 
+ <p class="hljs-string">|- app/ </p>
+ <p class="hljs-string">|- index.html and other .html files</p>
+ <p class="hljs-string">|- pages/</p>
+ <p class="hljs-string">|- templates/</p>
+ <p class="hljs-string">|- partials/</p>
+</code></pre>
+<p><strong>The <code>templates</code> folder</strong> is used for storing all Nunjucks partials and other Nunjucks files that will be added to files in the <code>pages</code> folder. </p>
+<p><strong>The <code>pages</code> folder</strong> is used for storing files that will be compiled into HTML. Once they are compiled, they will be created in the <code>app</code> folder. </p>
+<p>Let&#x2019;s work through the process of creating some Nunjucks files before creating the Gulp task. </p>
+<p>First of all, one good thing about Nunjucks (that other template engines might not have) is that it allows you to create a template that contains boilerplate HTMl code which can be inherited by other pages. Let&#x2019;s call this boilerplate HTML <code>layout.nunjucks</code>. </p>
+<p>Create a file called <code>layout.nunjucks</code> and place it in your <code>templates</code> folder. It should contain some boilerplate code like <code>&lt;html&gt;</code>, <code>&lt;head&gt;</code> and <code>&lt;body&gt;</code> tags. It can also contain things that are similar across all your pages, like links to CSS and JavaScript files.</p>
+<p>Here&#x2019;s an example of a <code>layout.nunjucks</code> file:</p>
+<pre><code class="lang-html"><p class="xml">
+
+
+<p class="hljs-tag">&lt;<p class="hljs-name">html</p> <p class="hljs-attr">lang</p>=<p class="hljs-string">"en"</p>&gt;</p>
+<p class="hljs-tag">&lt;<p class="hljs-name">head</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">meta</p> <p class="hljs-attr">charset</p>=<p class="hljs-string">"UTF-8"</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">title</p>&gt;</p>Document<p class="hljs-tag">&lt;/<p class="hljs-name">title</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">link</p> <p class="hljs-attr">rel</p>=<p class="hljs-string">"stylesheet"</p> <p class="hljs-attr">href</p>=<p class="hljs-string">"css/styles.css"</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">head</p>&gt;</p>
+<p class="hljs-tag">&lt;<p class="hljs-name">body</p>&gt;</p>
+
+ 
+ </p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">block</p></p> content %}</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">endblock</p></p> %}</p><p class="xml">
+
+ <p class="hljs-tag">&lt;<p class="hljs-name">script</p> <p class="hljs-attr">src</p>=<p class="hljs-string">"bower_components/jquery/dist/jquery.js"</p>&gt;</p><p class="hljs-tag">&lt;/<p class="hljs-name">script</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">script</p> <p class="hljs-attr">src</p>=<p class="hljs-string">"js/main.js"</p>&gt;</p><p class="hljs-tag">&lt;/<p class="hljs-name">script</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">body</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">html</p>&gt;</p></p>
+</code></pre>
+<p>By the way, I prefer to use the <code>.nunjucks</code> extension for Nunjucks files and partials because it lets me know that I&#x2019;m working with Nunjucks. If you&#x2019;re not comfortable with <code>.nunjucks</code>, feel free to leave your files as <code>.html</code>. </p>
+<p>Next, let&#x2019;s create a <code>index.nunjucks</code> file in the <code>pages</code> directory. This file would eventually be converted into <code>index.html</code> and placed in the <code>app</code> folder. </p>
+<p>It should extend <code>layouts.nunjucks</code> so it contains the boilerplate code we defined in <code>layout.nunjucks</code>: </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">extends</p></p> "layout.nunjucks" %}</p>
+</code></pre>
+<p>We can then add HTML code that&#x2019;s specific to <code>index.nunjucks</code> between <code>{% block content %}</code> and <code>{% endblock %}</code>. </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">extends</p></p> "layout.nunjucks" %}</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">block</p></p> content %}</p><p class="xml"> 
+<p class="hljs-tag">&lt;&gt;</p>This is the index page<p class="hljs-tag">&lt;/&gt;</p>
+</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">endblock</p></p> %}</p>
+</code></pre>
+<p>We&#x2019;re done with setting up Nunjucks files. Now, let&#x2019;s create a <code>nunjucks</code> task that coverts <code>index.nunjucks</code> into <code>index.html</code>. </p>
+<pre><code class="lang-javascript">gulp.task(<p class="hljs-string">'nunjucks'</p>, <p class="hljs-function"><p class="hljs-keyword">function</p> </p>{
+ 
+});
+</code></pre>
+<p>Within the <code>nunjucks</code> task, we first need tell Nunjucks where to locate our templates. We can do so with the <code>nunjucks.configure</code> function that gulp-nunjucks-render provides.</p>
+<pre><code class="lang-javascript">gulp.task(<p class="hljs-string">'nunjucks'</p>, <p class="hljs-function"><p class="hljs-keyword">function</p> </p>{
+ nunjucksRender.nunjucks.configure([<p class="hljs-string">'app/templates/'</p>]);
+});
+</code></pre>
+<p>Next, we add files from <code>pages</code> into the gulp task through <code>gulp.src</code>. Then, we output these files in <code>app</code>. </p>
+<pre><code class="lang-javascript">gulp.task(<p class="hljs-string">'nunjucks'</p>, <p class="hljs-function"><p class="hljs-keyword">function</p> </p>{
+ nunjucksRender.nunjucks.configure([<p class="hljs-string">'app/templates/'</p>]);
+
+ 
+ <p class="hljs-keyword">return</p> gulp.src(<p class="hljs-string">'app/pages/**/*.+(html|nunjucks)'</p>)
+ 
+ .pipe(nunjucksRender())
+ 
+ .pipe(gulp.dest(<p class="hljs-string">'app'</p>))
+});
+</code></pre>
+<p>Now, try running <code>gulp nunjucks</code> in your command line. Gulp would have created an <code>index.html</code> and placed it in the <code>app</code> folder for you. </p>
+<p><img src="http://www.zell-weekeat.com/wp-content/uploads/2015/09/index-html-by-nunjucks.png" alt=""></p>
+<p>If you opened up this <code>index.html</code> file, you should see the following code: </p>
+<pre><code class="lang-html">
+<p class="hljs-tag">&lt;<p class="hljs-name">html</p> <p class="hljs-attr">lang</p>=<p class="hljs-string">"en"</p>&gt;</p>
+<p class="hljs-tag">&lt;<p class="hljs-name">head</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">meta</p> <p class="hljs-attr">charset</p>=<p class="hljs-string">"UTF-8"</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">title</p>&gt;</p>Document<p class="hljs-tag">&lt;/<p class="hljs-name">title</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">link</p> <p class="hljs-attr">rel</p>=<p class="hljs-string">"stylesheet"</p> <p class="hljs-attr">href</p>=<p class="hljs-string">"css/styles.css"</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">head</p>&gt;</p>
+<p class="hljs-tag">&lt;<p class="hljs-name">body</p>&gt;</p>
+
+ <p class="hljs-tag">&lt;&gt;</p>This is the index page<p class="hljs-tag">&lt;/&gt;</p>
+
+ <p class="hljs-tag">&lt;<p class="hljs-name">script</p> <p class="hljs-attr">src</p>=<p class="hljs-string">"js/main.js"</p>&gt;</p><p class="hljs-tag">&lt;/<p class="hljs-name">script</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">body</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">html</p>&gt;</p>
+</code></pre>
+<p>Notice how everything (except the <code>&lt;h1&gt;</code> tag) came from <code>layouts.nunjucks</code>? That&#x2019;s what <code>layout.nunjucks</code> is for. If you need to mess around with the <code>&lt;head&gt;</code> tag, add JavaScript or change CSS files, you know you can do it in <code>layouts.nunjucks</code> and every single page will be updated accordingly. </p>
+<p>At this point, you&#x2019;ve successfully extended <code>layouts.nunjucks</code> into <code>index.nunjucks</code> and rendered it <code>index.nunjucks</code> into <code>index.html</code>. There&#x2019;s a few more things we can improve on. One of the things we can do is to learn to use a partial. </p>
+<h2 id="adding-a-nunjucks-partial">Adding a Nunjucks Partial</h2>
+<p>We need to create a partial before we can add it to <code>index.nunjucks</code>. Let&#x2019;s create a partial called <code>navigation.nunjucks</code> and place it in a <code>partials</code> folder that&#x2019;s within the <code>templates</code> folder.</p>
+<p><img src="http://www.zell-weekeat.com/wp-content/uploads/2015/09/nav-partial.png" alt=""></p>
+<p>Then, let&#x2019;s add a simple navigation to this partial: </p>
+<pre><code class="lang-html">
+<p class="hljs-tag">&lt;<p class="hljs-name">nav</p>&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>Home<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>About<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>Contact<p class="hljs-tag">&lt;/&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">nav</p>&gt;</p>
+</code></pre>
+<p>Let&#x2019;s now add the partial to our <code>index.nunjucks</code> file. We can add partials with the help of the <code>{% include "path-to-partial" %}</code> statement that Nunjucks provides. </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">block</p></p> content %}</p><p class="xml"> 
+
+<p class="hljs-tag">&lt;&gt;</p>This is the index page<p class="hljs-tag">&lt;/&gt;</p>
+
+</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">include</p></p> "partials/navigation.nunjucks" %}</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">endblock</p></p> %}</p>
+</code></pre>
+<p>Now, if you run <code>gulp nunjucks</code>, you should get a <code>index.html</code> file with the following code: </p>
+<pre><code class="lang-html">
+
+<p class="hljs-tag">&lt;&gt;</p>This is the index page<p class="hljs-tag">&lt;/&gt;</p>
+
+<p class="hljs-tag">&lt;<p class="hljs-name">nav</p>&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>Home<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>About<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>Contact<p class="hljs-tag">&lt;/&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">nav</p>&gt;</p>
+
+
+</code></pre>
+<p>That wasn&#x2019;t so hard, was it? :) </p>
+<p>Let&#x2019;s move on. When using partials like navigation, we can often run into situations where we had to add a class to one of the links when we&#x2019;re on the page. Here&#x2019;s an example: </p>
+<pre><code class="lang-html"><p class="hljs-tag">&lt;<p class="hljs-name">nav</p>&gt;</p>
+ 
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"active"</p>&gt;</p>Home<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>About<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p>&gt;</p>Contact<p class="hljs-tag">&lt;/&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">nav</p>&gt;</p>
+</code></pre>
+<p>The <code>active</code> class should only be present on the <code>homepage</code> link if we&#x2019;re on the homepage. If we&#x2019;re on the about page, then the <code>active</code> class should only be present on the <code>about</code> link.</p>
+<p>We can do this with a slightly modified version of partials called <strong>Macros</strong>. The only difference is that you can add variables to it just like working with a function in JavaScript</p>
+<p>Now, let&#x2019;s learn to use a macro as the navigation instead. </p>
+<h2 id="adding-a-nunjucks-macro">Adding a Nunjucks Macro</h2>
+<p>First, let&#x2019;s create a <code>nav-macro.nunjucks</code> file in a <code>macros</code> folder that is within the <code>templates</code> folder. (We&#x2019;re using <code>nav-macro</code> to make sure you don&#x2019;t get confused between the two navigation nunjuck files)</p>
+<p><img src="http://www.zell-weekeat.com/wp-content/uploads/2015/09/path-to-macros.png" alt=""></p>
+<p>We can begin writing macros once you have created the <code>nav-macro.nunjucks</code> file. All macros begin and end with the following tags: </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-keyword">macro</p></p> functionName() %}</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-keyword">endmacro</p></p> %}</p>
+</code></pre>
+<p>Let&#x2019;s create a macro called <code>active</code>. It&#x2019;s purpose is to output the <code>active</code> class for the navigation. It should take one argument, <code>activePage</code>, that defaults to <code>'home'</code>. </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-keyword">macro</p></p> active(activePage='home') %}</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-keyword">endmacro</p></p> %}</p>
+</code></pre>
+<p>We&#x2019;ll write HTML that would be created within the macro. Here, we can also use the <code>if</code> function provided by Nunjucks to check if an <code>active</code> class should be added: </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-keyword">macro</p></p> active(activePage='home') %}</p><p class="xml">
+<p class="hljs-tag">&lt;<p class="hljs-name">nav</p>&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p> <p class="hljs-attr">class</p>=</p></p><p class="hljs-template-tag">{% activePage == 'home' %}</p><p class="xml"><p class="hljs-tag"><p class="hljs-string"> active </p></p></p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-keyword">endif</p></p> %}</p><p class="xml">Home<p class="hljs-tag">&lt;/&gt;</p>
+ 
+<p class="hljs-tag">&lt;/<p class="hljs-name">nav</p>&gt;</p>
+</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-keyword">endmacro</p></p> %}</p>
+</code></pre>
+<p>We&#x2019;re done writing the macro now. Let&#x2019;s learn to use it in <code>index.nunjucks</code> next. </p>
+<p>We use the <code>import</code> function in Nunjucks to add a macro file. (We used an <code>include</code> function when we added a partial previously). When we import a macro file, we have to set it as a variable as well. Here&#x2019;s an example:</p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">block</p></p> content %}</p><p class="hljs-template-tag">{% <p class="hljs-name">import</p> 'macros/navigation.nunjucks' nav %}</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">endblock</p></p> %}</p>
+</code></pre>
+<p>In this case, we&#x2019;ve set the <code>nav</code> variable as the entire <code>navigation.nunjucks</code> macro file. We can then use the <code>nav</code> variable to call any macro that were written in the file. </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name">import</p> 'macros/navigation.nunjucks' nav %}</p><p class="hljs-template-variable">{{nav.active('home')}}</p>
+</code></pre>
+<p>With this change, try running <code>gulp nunjucks</code> again and you should be able to see this output: </p>
+<pre><code class="lang-html"><p class="hljs-tag">&lt;<p class="hljs-name">nav</p>&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p> <p class="hljs-attr">class</p>=<p class="hljs-string">" active "</p>&gt;</p>Home<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p> <p class="hljs-attr">class</p>=&gt;</p>About<p class="hljs-tag">&lt;/&gt;</p>
+ <p class="hljs-tag">&lt; <p class="hljs-attr">href</p>=<p class="hljs-string">"#"</p> <p class="hljs-attr">class</p>=&gt;</p>Contact<p class="hljs-tag">&lt;/&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">nav</p>&gt;</p>
+</code></pre>
+<p>That&#x2019;s it for using Macros. Knowing this would invariably help you out a lot while using Nunjucks :) </p>
+<p>There&#x2019;s one more thing we can do to enhance our templating experience with Nunjucks, and that&#x2019;s populating the HTML with data. </p>
+<h2 id="populating-html-with-data">Populating HTML with data</h2>
+<p>Let&#x2019;s start by creating a file called <code>data.json</code> that contains your data. I&#x2019;d recommend you place this <code>data.json</code> in the <code>app</code> folder. </p>
+<pre><code class="lang-bash">cd app
+touch data.json
+</code></pre>
+<p>Let&#x2019;s add some data now. We can use the data from the earlier example. </p>
+<pre><code class="lang-javascript">{
+ <p class="hljs-attr">"images"</p>: [{
+ <p class="hljs-attr">"src"</p>: <p class="hljs-string">"image-one.png"</p>,
+ <p class="hljs-attr">"alt"</p>: <p class="hljs-string">"Image one alt text"</p>
+ }, {
+ <p class="hljs-attr">"src"</p>: <p class="hljs-string">"image-two.png"</p>,
+ <p class="hljs-attr">"alt"</p>: <p class="hljs-string">"Image two alt text"</p>
+ }]
+}
+</code></pre>
+<p>We then have to tweak the <code>nunjucks</code> task slightly to use data from this <code>data.json</code> file. To do so, we need to use to the help of another gulp plugin called <a href="https://www.npmjs.com/package/gulp-data">gulp-data</a>. </p>
+<p>Let&#x2019;s install gulp-data before moving on.</p>
+<pre><code class="lang-bash">$ npm install gulp-<p class="hljs-class"><p class="hljs-keyword">data</p> </p>
+</code></pre>
+<pre><code class="lang-javascript"><p class="hljs-built_in">var</p> <p class="hljs-built_in">data</p> = <p class="hljs-keyword">require</p>(<p class="hljs-string">'gulp-data'</p>);
+</code></pre>
+<p>Gulp-data takes in a function that allows you to return a file. We can use the <code>require</code> function Node provides to get this <code>data</code> file:</p>
+<pre><code class="lang-javascript">.pipe(data(<p class="hljs-function"><p class="hljs-keyword">function</p>() </p>{
+ <p class="hljs-keyword">return</p> <p class="hljs-built_in">require</p>(<p class="hljs-string">'./app/data.json'</p>)
+}))
+</code></pre>
+<p>When using <code>require</code> to get files from a custom directory (not <code>node_modules</code>), we need to tell Node the path to the directory. Here, we start with a <code>./</code> that tells Node to start with the current directory, then look into <code>app</code> for the <code>data.json</code> file. </p>
+<p>Note: A better way is to use two functions, <code>JSON.parse()</code> and <code>fs.readFileSync()</code> instead of <code>require</code>. We will cover how to do so in <a href="http://zell-weekeat.com/automate-your-workflow/">&#x201C;Automating Your Workflow with Gulp&#x201D;</a>.</p>
+<p>Let&#x2019;s add the gulp-data to our <code>nunjucks</code> task now. </p>
+<pre><code class="lang-javascript">gulp.task(<p class="hljs-string">'nunjucks'</p>, <p class="hljs-function"><p class="hljs-keyword">function</p>() </p>{
+ nunjucksRender.nunjucks.configure([<p class="hljs-string">'app/templates/'</p>]);
+
+ <p class="hljs-keyword">return</p> gulp.src(<p class="hljs-string">'app/pages/**/*.+(html|nunjucks)'</p>)
+ 
+ .pipe(data(<p class="hljs-function"><p class="hljs-keyword">function</p>() </p>{
+ <p class="hljs-keyword">return</p> <p class="hljs-built_in">require</p>(<p class="hljs-string">'./app/data.json'</p>)
+ }))
+ .pipe(nunjucksRender())
+ .pipe(gulp.dest(<p class="hljs-string">'app'</p>))
+});
+</code></pre>
+<p>Finally, let&#x2019;s add some markup to <code>index.nunjucks</code> so it uses the data we&#x2019;ve added. </p>
+<pre><code class="lang-html"><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">block</p></p> content %}</p><p class="xml">
+<p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"gallery"</p>&gt;</p>
+ 
+ </p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">for</p></p> image images %}</p><p class="xml">
+ <p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"gallery__item"</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">img</p> <p class="hljs-attr">src</p>=</p></p><p class="hljs-template-variable">{{image.src}}</p><p class="xml"><p class="hljs-tag"> <p class="hljs-attr">alt</p>=</p></p><p class="hljs-template-variable">{{image.alt}}</p><p class="xml">
+ <p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>
+ </p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">endfor</p></p> %}</p><p class="xml">
+<p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>
+</p><p class="hljs-template-tag">{% <p class="hljs-name"><p class="hljs-name">endblock</p></p> %}</p>
+</code></pre>
+<pre><code class="lang-html">
+<p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"gallery"</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"gallery__item"</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">img</p> <p class="hljs-attr">src</p>=<p class="hljs-string">"image-one.png"</p> <p class="hljs-attr">alt</p>=<p class="hljs-string">"Image one alt text"</p>&gt;</p>
+ <p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>Now, if you run `gulp nunjucks`, you should get a `index.html` file with the following markup: 
+
+ <p class="hljs-tag">&lt;<p class="hljs-name">div</p> <p class="hljs-attr">class</p>=<p class="hljs-string">"gallery__item"</p>&gt;</p>
+ <p class="hljs-tag">&lt;<p class="hljs-name">img</p> <p class="hljs-attr">src</p>=<p class="hljs-string">"image-two.png"</p> <p class="hljs-attr">alt</p>=<p class="hljs-string">"Image two alt text"</p>&gt;</p>
+ <p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>
+<p class="hljs-tag">&lt;/<p class="hljs-name">div</p>&gt;</p>
+</code></pre>
+<p>Nice! </p>
+<p>That&#x2019;s the basics to using the Nunjucks template engine with Gulp. Let&#x2019;s wrap this article up now.</p>
+<h2 id="wrapping-up">Wrapping up</h2>
+<p>We&#x2019;ve learned how template engines make development much easier and how to use them in general. </p>
+<p>In this chapter we&#x2019;ve learned how template engines make development much easier, and how to use them (in a general sense). </p>
+<p>We then dove deeper into one template engine, Nunjucks, got it to work with Gulp, and learned how to use three Nunjucks provides: </p>
+<ul>
+<li><code>extend</code> to inherit a Nunjucks file </li>
+<li><code>include</code> to include a partial </li>
+<li><code>import</code> to import a macro </li>
+</ul>
+<p>FYI, the information we covered here is just half of one chapter in &#x201C;Automating Your Workflow with Gulp&#x201D; :) </p>
+<p>The rest of this chapter are about three things that I&#x2019;m unable to cover in this article since it requires information from earlier parts of the book. They are: </p>
+<ul>
+<li>Watching and compiling nunjucks files </li>
+<li>Preventing errors from Nunjucks from breaking Gulp&#x2019;s watch</li>
+<li>Reloading the browser automatically whenever a file changes</li>
+</ul>
+<p>These three things help speed your entire workflow up, so it can be super beneficial for you if you manage to integrate them into your workflow. </p>
+<p>Check out <a href="http://zell-weekeat.com/automate-your-workflow/">&#x201C;Automating Your Workflow with Gulp&#x201D;</a> if your&#x2019;re curious to learn how to do so. </p>
+<p>What did you think of this article? I&#x2019;d love to hear your questions and comments so please leave them below. </p>
+
+</article>
+
+</div>
+</body></html>
