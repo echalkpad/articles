@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><head><title>Sharing between main and renderer process</title></head><body>
+<h1>Sharing between main and renderer process</h1><p><a href="http://electron.rocks/sharing-between-main-and-renderer-process/" target="_new">Original URL</a></p>
+<p><blockquote>In main process: global.something = value; In renderer process: const remote = require('electron').remote; var something = remote.getGlobal('something'); To use same instance between main and&hellip;</blockquote></p>
+<div><div class="entry-content">
+					
+
+<p>In main process:</p>
+
+<pre><code>global.something = value;</code></pre>
+
+<p>In renderer process:</p>
+
+<pre><code>const remote = require('electron').remote;
+var something = remote.getGlobal('something');
+</code></pre>
+
+
+
+<p>To use same instance between main and renderer process, you can use global object from Node. To demonstrate this, let&#x2019;s add logger to sample Todo application.</p>
+
+<p>In <code>main.js</code> we&#x2019;re going to create logger instance which can be required and used in all other renderers. For logging I&#x2019;m using <a href="https://www.npmjs.com/package/winston">winston</a>:</p>
+
+<pre><code>const logger = require('winston');
+logger.level = 'debug';
+</code></pre>
+
+<p>Also, let&#x2019;s add logging to file:</p>
+
+<pre><code>var logFolder = path.join(app.getPath("userData"), "logs");
+var logFile = new Date().toISOString().replace(/:/g, '.') + '.log';
+logger.add(logger.transports.File, { filename: path.join(logFolder, logFile) });
+</code></pre>
+
+<p>This should create timestamped log file for each session in log folder in your <a href="http://electron.atom.io/docs/api/app/#appgetpathname">user data folder</a>. <br>
+<em>Note: All <code>:</code> chars needs to be escaped, since it will create problems on Windows.</em></p>
+
+<p>Finally, save logger instance to global object:</p>
+
+<pre><code>global.logger = logger;</code></pre>
+
+<p>Now that logger is accessible in global object, in renderer you can fetch it by using remote module. Following code will fetch logger instance and inject it in Angular for use throughout the app:</p>
+
+<pre><code>const {remote} = require('electron');
+const logger = remote.getGlobal('logger');
+angular
+ .module('app')
+ .value('logger', logger);
+</code></pre>
+
+<p><strong>Final note:</strong></p>
+
+<p>Although winston does create one instance which can be used throughout your app, this doesn&#x2019;t apply when you have main and renderer process architecture like is in Electron. That's why I had to inject single instance in each renderer.</p>
+
+<p>You can see it in action in standard <a href="https://github.com/Vj3k0/ea-todo">example project</a>.</p>
+
+<p>Hope it helps, cheers!</p>
+				</div>
+				
+			</div>
+</body></html>

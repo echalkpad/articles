@@ -1,186 +1,245 @@
 <!DOCTYPE html><html><head><title>tutorialzine</title></head><body>
-<h1>tutorialzine</h1><p><a href="http://tutorialzine.com/2014/09/creating-your-first-node-js-command-line-application/" target="_new">Original URL</a></p>
-<p><blockquote>Martin Angelov September 25th, 2014 Command-line utilities are a must for every seasoned web developer. Node.js makes developing such tools extremely easy thanks to a wealth of open source modules&hellip;</blockquote></p>
+<h1>tutorialzine</h1><p><a href="http://tutorialzine.com/2015/12/creating-your-first-desktop-app-with-html-js-and-electron/" target="_new">Original URL</a></p>
+<p><blockquote>Danny Markov December 16th, 2015 Web applications become more and more powerful every year, but there is still room for desktop apps with full access to the hardware of your computer. Today you can&hellip;</blockquote></p>
 <div><div class="post-body">
 				
 
-				<p class="post-info"><i class="icon-author"></i> Martin Angelov <i class="icon-cal"></i><time datetime="2014-09-25">September 25th, 2014</time></p>
+				<p class="post-info"><i class="icon-author"></i> Danny Markov <i class="icon-cal"></i><time datetime="2015-12-16">December 16th, 2015</time></p>
 
 				
 
+				<p>Web applications become more and more powerful every year, but there is still room for desktop apps with full access to the hardware of your computer. Today you can create desktop apps using&#xA0;the already familiar HTML, JS and Node.js, then package it into an executable file and distribute it accordingly across Windows, OS X and Linux.</p>
+<p>There are two popular open source projects which make this possible. These are&#xA0;<a href="http://nwjs.io/" target="_blank">NW.js</a>, which <a title="Creating Your First Desktop App With HTML, JS and Node-WebKit" href="http://tutorialzine.com/2015/01/your-first-node-webkit-app/">we covered a few months ago</a>, and the newer <a href="http://electron.atom.io/" target="_blank">Electron</a>, which we are going to use today (see the differences between them <a href="https://github.com/atom/electron/blob/master/docs/development/atom-shell-vs-node-webkit.md" target="_blank">here</a>). We are going to rewrite the older NW.js version to use Electron, so you can easily compare them.</p>
+<h3>Getting Started With Electron</h3>
+<p>Apps&#xA0;built with Electron are just web sites&#xA0;which are opened in an embedded Chromium web&#xA0;browser. In addition to the regular HTML5 APIs, these websites can use&#xA0;the full suite of Node.js modules and special Electron modules&#xA0;which give access to the operating system.</p>
+<p>For the sake of this tutorial, we will be building a simple app that fetches the most recent&#xA0;Tutorialzine articles via our&#xA0;RSS feed and displays them in a cool looking carousel.&#xA0;All the files needed for the app to work are available in an&#xA0;archive which you can get from the <strong>Download</strong>&#xA0;button near the top of the page.</p>
+<p><span>Extract its&#xA0;contents in a&#xA0;directory of your choice.&#xA0;Judging by the file structure, you would never guess this is a desktop application and not just a simple website.</span></p>
+<div id="attachment_6938" class="wp-caption aligncenter"><img class="wp-image-6938 size-full" src="http://cdn.tutorialzine.com/wp-content/uploads/2015/12/electron-app-tree.png" alt="Directory Structure" width="407"><p class="wp-caption-text">Directory Structure</p></div>
+<p>We will take a closer look at the more interesting files and how it all works in a minute, but first, let&#x2019;s take the app for a spin.</p>
+<h3>Running the App</h3>
+<p>Since an Electron app is just a fancy Node.js app, you will need to&#xA0;have <a href="https://www.npmjs.com/" target="_blank">npm</a> installed. You can learn how to do it&#xA0;<a href="http://blog.npmjs.org/post/85484771375/how-to-install-npm" target="_blank">here</a>, it&#x2019;s pretty straightforward.</p>
+<p>Once&#xA0;you&#x2019;ve got that covered, open a new cmd or terminal in the directory with the extracted files and run&#xA0;this command:</p>
+<pre class="brush:bash">npm&#xA0;install</pre>
+<p>This will create a <strong>node_modules</strong> folder containing&#xA0;all the Node.js dependencies required for the app to work. Everything should be good to go now, in the same terminal as before enter the following:</p>
+<pre class="brush:bash">npm&#xA0;start</pre>
+<p>The app should open up in it&#x2019;s own window. Notice it has a top menu bar and everything!</p>
+<div id="attachment_6991" class="wp-caption aligncenter"><img class="size-full wp-image-6991" src="http://cdn.tutorialzine.com/wp-content/uploads/2015/12/electron_app_1.png" alt="Electron App In Action" width="1410"><p class="wp-caption-text">Electron App In Action</p></div>
+<p>You&#x2019;ve probably noticed that starting the app isn&#x2019;t too user friendly. However, this is just the developer&#x2019;s way of running&#xA0;an Electron app. When packaged for the public, the it&#xA0;will be installed like a normal program and opened like&#xA0;one, just by double clicking on its icon.</p>
+<h3>How it&#x2019;s made</h3>
+<p>Here, we will talk about the most essential files in any&#xA0;electron app. Let&#x2019;s start with package.json, which holds various information about the project, such as the version, npm dependencies and other important settings.</p>
+<h4>package.json</h4>
+<pre>{
+ "name": "electron-app",
+ "version": "1.0.0",
+ "description": "",
+ "main": "main.js",
+ "dependencies": {
+ "pretty-bytes": "^2.0.1"
+ },
+ "devDependencies": {
+ "electron-prebuilt": "^0.35.2"
+ },
+ "scripts": {
+ "start": "electron main.js"
+ },
+ "author": "",
+ "license": "ISC"
+}
+</pre>
+<p>If you&#x2019;ve worked with node.js before, you already know how this works. The most significant thing to note here is the <strong>scripts</strong> property, where we&#x2019;ve defined the <code>npm start</code> command, allowing us to run the app like we did earlier.&#xA0;When we call it, we ask electron to run&#xA0;the <strong>main.js</strong> file. This JS file contains a short script that&#xA0;opens the app window, and defines some options and event handlers.</p>
+<h4>main.js</h4>
+<pre>var app = require('app'); // Module to control application life.
+var BrowserWindow = require('browser-window'); // Module to create native browser window.
 
-											
-				
-						
-				<p>Command-line utilities are a must for every seasoned web developer. Node.js makes developing such tools extremely easy thanks to a wealth of open source modules and a great package manager.</p>
-<p>In this tutorial, we will convert our <a title="Cute File Browser with jQuery and PHP" href="http://tutorialzine.com/2014/09/cute-file-browser-jquery-ajax-php/">Cute File Browser</a>, which we published last week, from PHP to Node. Our goal is to create a command line utility that users can start on their machine and make any folder available on the local network. This can be used in a home or office setting to quickly share a folder with files to everybody on the same network.</p>
-<h3>Quick start</h3>
-<p>The source code is available on <a href="https://github.com/martinaglv/cute-files" target="_blank">github</a> and <a href="https://www.npmjs.org/package/cute-files" target="_blank">npm</a>.&#xA0;If you don&#x2019;t want to follow this tutorial and only want to play with it, you can install it directly with this command:</p>
-<pre class="brush:plain">npm install -g cute-files</pre>
-<p>Then, navigate to a folder you wish to share in your terminal,&#xA0;and execute the command you&#xA0;just installed:</p>
-<pre class="brush:plain">cute-files</pre>
-<p>Now that folder will be available on <code>&lt;yourip&gt;:3000</code> and will be accessible by anyone in your lan.</p>
-<div id="attachment_4501" class="wp-caption alignnone"><a href="http://cdn.tutorialzine.com/wp-content/uploads/2014/09/file-and-folder-grid.jpg"><img class="size-full wp-image-4501" src="http://cdn.tutorialzine.com/wp-content/uploads/2014/09/file-and-folder-grid.jpg" alt="Cute file browser" width="680"></a><p class="wp-caption-text">Cute file browser (last week&#x2019;s demo, but the frontend is the same)</p></div>
-<h3>Let&#x2019;s build it step by step</h3>
-<p>Command line utilities are just regular node programs. They are available globally and can be called from any folder. So the steps for creating our command-line application are nearly identical to any other node-based project that you might have developed before. Create a new folder for your project and navigate to it in your terminal. We will refer to it as your <strong>project folder</strong>.</p>
-<h4>Setting up package.json</h4>
-<p>Assuming that you have already installed <a href="http://nodejs.org/" target="_blank">node</a>, we must first create a <strong>package.json</strong> file. The npm utility can help you with that. Run this command in your project folder:</p>
-<pre class="brush:plain">npm init</pre>
-<p>You will be prompted for information about your project. If you are not sure what to type just hit return for the default values. Fill in&#xA0;<strong>cute-files.js</strong> as the&#xA0;entry point. This will be the main file, which will be called by node. The package.json is not yet complete &#x2013; we want to make our script available globally, so we need to to add an extra field &#x2013; <strong>bin&#xA0;</strong>(see <a href="https://github.com/martinaglv/cute-files/blob/master/package.json#L29" target="_blank">my package.json</a> as an example). This tells npm to make these scripts available as executables.</p>
-<h4>Installing some packages</h4>
-<p>Now you will need to install some libraries that we need for the file browser. The <strong>&#x2013;save</strong> flag will add them to your package.json automatically:</p>
-<pre class="brush:plain">npm install commander content-disposition express --save</pre>
-<p>Here is what we will use them for:</p>
-<ul>
-<li><a href="https://www.npmjs.org/package/commander" target="_blank">commander</a>&#xA0;will parse command line arguments. We will only support one &#x2013; for the <strong>port</strong>, but since attribute parsing is a fundamental part of writing command line apps it&#xA0;is good to know how to use this library.</li>
-<li><a href="https://www.npmjs.org/package/content-disposition" target="_blank">content-disposition</a> will tell us the correct attachment headers for each file. These headers are needed in order to force the files to get downloaded (otherwise the browser would just open them).</li>
-<li><a href="https://www.npmjs.org/package/express" target="_blank">express</a> will serve the files and handle the <strong>/scan</strong> route which sends a JSON of all files and directories to the frontend.</li>
-</ul>
-<h4>Module for scanning files</h4>
-<p>In order to offer instant search and browsing, our application will send a JSON with all files and folder to the frontend on load. In the <a title="Cute File Browser with jQuery and PHP" href="http://tutorialzine.com/2014/09/cute-file-browser-jquery-ajax-php/" target="_blank">original tutorial</a>, we did this with PHP, but now we will do it with Node.&#xA0;Create a new file in the project folder &#x2013; <strong>scan.js</strong> &#x2013; and paste the following code:</p>
-<pre class="brush:js">var fs = require('fs'),
-	path = require('path');
+// Keep a global reference of the window object, if you don't, the window will
+// be closed automatically when the JavaScript object is garbage collected.
+var mainWindow = null;
 
-
-module.exports = function scan(dir, alias){
-
-	return {
-		name: alias,
-		type: 'folder',
-		path: alias,
-		items: walk(dir, alias)
-	};
-
-};
-
-
-function walk(dir, prefix){
-
-	prefix = prefix || '';
-
-	if(!fs.existsSync(dir)){
-		return [];
-	}
-
-	return fs.readdirSync(dir).filter(function(f){
-
-		return f &amp;&amp; f[0] != '.'; // Ignore hidden files
-
-	}).map(function(f){
-
-		var p = path.join(dir, f),
-			stat = fs.statSync(p);
-
-		if(stat.isDirectory()){
-
-			return {
-				name: f,
-				type: 'folder',
-				path: path.join(prefix, p),
-				items: walk(p, prefix)
-			};
-
-		}
-
-		return {
-			name: f,
-			type: 'file',
-			path: path.join(prefix, p),
-			size: stat.size
-		}
-
-	});
-
-};</pre>
-<p>This code uses node&#x2019;s <a href="http://nodejs.org/api/fs.html" target="_blank">fs module</a>, and recursively goes through all files and folders in a directory. It exports the <strong>scan</strong> function which gets called with a path and an alias. The path is the folder to be scanned, and the alias is the name with which it will be presented in the interface (we don&#x2019;t want to show the real directory name which is served). In our example, we replace it with &#x201C;files&#x201D;.</p>
-<h4>Main module</h4>
-<p>The main file of our app is <strong>cute-files.js</strong>. Create the file, and paste the following code:</p>
-<pre class="brush:js">#!/usr/bin/env node
-
-var path = require('path');
-var express = require('express');
-var contentDisposition = require('content-disposition');
-var pkg = require( path.join(__dirname, 'package.json') );
-
-var scan = require('./scan');
-
-
-// Parse command line options
-
-var program = require('commander');
-
-program
-	.version(pkg.version)
-	.option('-p, --port &lt;port&gt;', 'Port on which to listen to (defaults to 3000)', parseInt)
-	.parse(process.argv);
-
-var port = program.port || 3000;
-
-
-// Scan the directory in which the script was called. It will
-// add the 'files/' prefix to all files and folders, so that
-// download links point to our /files route
-
-var tree = scan('.', 'files');
-
-
-// Ceate a new express app
-
-var app = express();
-
-// Serve static files from the frontend folder
-
-app.use('/', express.static(path.join(__dirname, 'frontend')));
-
-// Serve files from the current directory under the /files route
-
-app.use('/files', express.static(process.cwd(), {
-	index: false,
-	setHeaders: function(res, path){
-
-		// Set header to force files to download
-
-		res.setHeader('Content-Disposition', contentDisposition(path))
-
-	}
-}));
-
-// This endpoint is requested by our frontend JS
-
-app.get('/scan', function(req,res){
-	res.send(tree);
+// Quit when all windows are closed.
+app.on('window-all-closed', function() {
+ // On OS X it is common for applications and their menu bar
+ // to stay active until the user quits explicitly with Cmd + Q
+ if (process.platform != 'darwin') {
+ app.quit();
+ }
 });
 
+// This method will be called when Electron has finished
+// initialization and is ready to create browser windows.
+app.on('ready', function() {
+ // Create the browser window.
+ mainWindow = new BrowserWindow({width: 900, height: 600});
 
-// Everything is setup. Listen on the port.
+ // and load the index.html of the app.
+ mainWindow.loadURL('file://' + __dirname + '/index.html');
 
-app.listen(port);
-
-console.log('Cute files is running on port ' + port);</pre>
-<p>The first line is important. Although it is not valid JS, it is used on *nix systems to allow scripts to be executed as programs, which is exactly what we need in order to make the <strong>cute-files</strong> command available anywhere.</p>
-<p>This script uses <strong>express</strong> and the other modules we installed previously, and our scan.js module. All that is left is to copy over the front end from the original tutorial.</p>
-<h4>The frontend</h4>
-<p>Nick already did most of the work in last week&#x2019;s tutorial. Our scan.js script returns the same output as scan.php did, so no modifications to&#xA0;the frontend are necessary. We only need to copy over <strong>index.html</strong> and the <strong>assets</strong> folder from last time to a new folder &#x2013; <strong>frontend</strong>, which will be served by express. You can see how your directories should look like from <a href="https://github.com/martinaglv/cute-files" target="_blank">the repo</a>.</p>
-<h4>Linking the module</h4>
-<p>Your new module is ready! It should work when you run <strong>node cute-files.js</strong> in the project folder. But this is not very useful, as it will only serve the project folder &#x2013; we want to be able to call the <strong>cute-files</strong>&#xA0;command from any directory, but it is not available unless you install the module globally.&#xA0;npm has a useful command which will help us. Run this in your terminal from the project folder:</p>
-<pre class="brush:plain">npm link
+ // Emitted when the window is closed.
+ mainWindow.on('closed', function() {
+ // Dereference the window object, usually you would store windows
+ // in an array if your app supports multi windows, this is the time
+ // when you should delete the corresponding element.
+ mainWindow = null;
+ });
+});
 </pre>
-<p>This will make the module available globally, so now you can use the <strong>cute-files</strong> command anywhere!</p>
-<h3>Publishing to npm</h3>
-<p>Where is the fun of writing a module and not sharing it with your friends? It is straightforward to&#xA0;publish your new module on npm (however I advice against doing it for this specific module &#x2013; it will only be duplicate of cute-files):</p>
-<ol>
-<li>Create an account on <a href="https://www.npmjs.org/" target="_blank">npm&#x2019;s website</a></li>
-<li>Login from the npm command line utility with the&#xA0;<code>npm login</code> command</li>
-<li>Choose a unique name for your module, and update package.json</li>
-<li>cd into the project folder and run <code>npm publish .</code></li>
-</ol>
-<p>If everything went without a hitch, in a few seconds you will see your module on npm&#x2019;s website and everybody will be able to install it.</p>
-<p><strong>Good job! You just created your first command-line application with node!</strong></p>
+<p>Take a look at what we do in the &#x2018;ready&#x2019; method. First we define a browser window and set it&#x2019;s initial size. Then, we load the <strong>index.html</strong> file in it, which works similarly to opening a HTML file in your browser.</p>
+<p>As you will&#xA0;see, the HTML file itself is nothing special &#x2013; a container for the carousel and a paragraph were CPU and RAM stats are displayed.</p>
+<h4>index.html</h4>
+<pre>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+
+ &lt;meta charset="utf-8"&gt;
+ &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
+
+ &lt;title&gt;Tutorialzine Electron Experiment&lt;/title&gt;
+
+ &lt;link rel="stylesheet" href="./css/jquery.flipster.min.css"&gt;
+ &lt;link rel="stylesheet" href="./css/styles.css"&gt;
+
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;div class="flipster"&gt;
+ &lt;ul&gt;
+ &lt;/ul&gt;
+&lt;/div&gt;
+
+&lt;p class="stats"&gt;&lt;/p&gt;
+
+&lt;!--&gt;In Electron, this is the correct way to include jQuery&lt;--&gt;
+&lt;script&gt;window.$ = window.jQuery = require('./js/jquery.min.js');&lt;/script&gt;
+&lt;script src="./js/jquery.flipster.min.js"&gt;&lt;/script&gt;
+&lt;script src="./js/script.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p>The HTML also links to the needed stylesheets, JS libraries and scripts. Notice that jQuery is included in a weird way. See <a href="http://stackoverflow.com/questions/32621988/electron-jquery-is-not-defined" target="_blank">this issue</a> for more information about that.</p>
+<p>Finally, here is the actual JavaScript for the app. In it&#xA0;we access Tutorialzine&#x2019;s RSS feed, fetch recent articles and display them. If we try to do this in a browser environment, it won&#x2019;t work, because the RSS feed is located on a different domain and fetching from it is forbidden. In Electron, however, this limitation doesn&#x2019;t apply and we can simply get the needed information with an AJAX request.</p>
+<pre>$(function(){
+
+ // Display some statistics about this computer, using node's os module.
+
+ var os = require('os');
+ var prettyBytes = require('pretty-bytes');
+
+ $('.stats').append('Number of cpu cores: &lt;span&gt;' + os.cpus().length + '&lt;/span&gt;');
+ $('.stats').append('Free memory: &lt;span&gt;' + prettyBytes(os.freemem())+ '&lt;/span&gt;');
+
+ // Electron's UI library. We will need it for later.
+
+ var shell = require('shell');
+
+
+ // Fetch the recent posts on Tutorialzine.
+
+ var ul = $('.flipster ul');
+
+ // The same-origin security policy doesn't apply to electron, so we can
+ // send ajax request to other sites. Let's fetch Tutorialzine's rss feed:
+
+ $.get('http://feeds.feedburner.com/Tutorialzine', function(response){
+
+ var rss = $(response);
+
+ // Find all articles in the RSS feed:
+
+ rss.find('item').each(function(){
+ var item = $(this);
+
+ var content = item.find('encoded').html().split('&lt;/a&gt;&lt;/div&gt;')[0]+'&lt;/a&gt;&lt;/div&gt;';
+ var urlRegex = /(http|ftp|https):\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;amp;:/~\+#]*[\w\-\@?^=%&amp;amp;/~\+#])?/g;
+
+ // Fetch the first image of the article.
+ var imageSource = content.match(urlRegex)[1];
+
+
+ // Create a li item for every article, and append it to the unordered list.
+
+ var li = $('&lt;li&gt;&lt;img /&gt;&lt;a target="_blank"&gt;&lt;/a&gt;&lt;/li&gt;');
+
+ li.find('a')
+ .attr('href', item.find('link').text())
+ .text(item.find("title").text());
+
+ li.find('img').attr('src', imageSource);
+
+ li.appendTo(ul);
+
+ });
+
+ // Initialize the flipster plugin.
+
+ $('.flipster').flipster({
+ style: 'carousel'
+ });
+
+ // When an article is clicked, open the page in the system default browser.
+ // Otherwise it would open it in the electron window which is not what we want.
+
+ $('.flipster').on('click', 'a', function (e) {
+
+ e.preventDefault();
+
+ // Open URL with default browser.
+
+ shell.openExternal(e.target.href);
+
+ });
+
+ });
+
+});</pre>
+<p>A cool thing about the above code, is that in one file we simultaneously use:</p>
+<ul>
+<li>JavaScript&#xA0;libraries &#x2013; jQuery and&#xA0;<a href="https://github.com/drien/jquery-flipster" target="_blank">jQuery Flipster</a>&#xA0;to make&#xA0;the&#xA0;carousel.</li>
+<li>Electron native modules &#x2013; Shell&#xA0;which provides APIs for desktop related tasks, in our case opening a URL&#xA0;in the default web browser.</li>
+<li>Node.js modules &#x2013;&#xA0;<a href="https://nodejs.org/api/os.html" target="_blank">OS</a> for accessing system memory information,&#xA0;<a href="https://www.npmjs.com/package/pretty-bytes" target="_blank">Pretty Bytes</a> for formatting.</li>
+</ul>
+<p>And with this our app is ready!</p>
+<h3>Packaging and Distribution</h3>
+<p>There is one other important thing to do to make your app ready for end users. You need to package it&#xA0;into an executable that can be started with a double click on users&#x2019; machines. Since Electron apps can work on multiple operating systems and every OS is different, there need to be separate distributions for Windows, for OS X and for Linux. Tools such as this npm module are a good place to start &#x2013; <a href="https://github.com/maxogden/electron-packager" target="_blank">Electron Packager</a>.</p>
+<p>Take into consideration that the packaging takes&#xA0;all your assets, all the required node.js modules, plus&#xA0;a minified WebKit browser and places them together in a single executable file. All these things sum up and the final result&#xA0;is an app that is roughly 50mb in size.&#xA0;This is quite a lot and isn&#x2019;t practical for a simple app like our example here, but this becomes irrelevant&#xA0;when we work with big, complex applications.</p>
+<h3>Conclusion</h3>
+<p>The only major difference with NW.js that you will see in our example is that NW.js opens an HTML page directly, whereas Electron starts up by executing a JavaScript file and you create an application window through code. Electron&#x2019;s way gives you more control, as you can easily build multi-window applications and organize the communication between them.</p>
+<p>Overall Electron is an exciting way to build desktop web applications using web technologies. Here is what you should read next:</p>
 
 				
-				
+								
+					<div class="webappstudio-animation">
 
-				
+						<a href="http://bootstrapstudio.io/"></a>
+
+						<div class="limiter">
+
+							<h6>Presenting <strong><span>Bootstrap Studio</span></strong></h6>
+
+							<p>a revolutionary tool that developers and designers use to create<br>beautiful interfaces using the Bootstrap Framework.</p>
+
+							<a href="http://tutorialzine.com/2015/12/creating-your-first-desktop-app-with-html-js-and-electron/">Learn more</a>
+
+							<div class="animation">
+
+								<img src="http://cdn.tutorialzine.com/wp-content/themes/tzine/img/webappstudio/animation/browser.svg" class="browser" alt="Web Browser Frame">
+
+								<img src="http://cdn.tutorialzine.com/wp-content/themes/tzine/img/webappstudio/animation/box.svg" class="box" alt="DevKit Box">
+
+
+								
+								
+								
+
+								<img src="http://cdn.tutorialzine.com/wp-content/themes/tzine/img/webappstudio/animation/cursor.svg" class="cursor" alt="Mouse Cursor" width="32">
+
+								
+
+							</div>
+
+						</div>
+
+					</div>
+							
+								
 				
 
 				

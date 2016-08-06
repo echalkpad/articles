@@ -12,7 +12,7 @@ I have also implemented the solution here on my [blog](http://osvaldas.info/blog
 
 All simple. Let's take the FAQ page as an example. Here's a typical markup:
 
-```
+```html
 <h1>FAQ</h1>
 <div class="faq">
     <input type="search" value="" placeholder="Type some keywords (e.g. giza, babylon, colossus)" />
@@ -55,7 +55,7 @@ Since I chose FAQ page as an example, there are some issues to deal with.
 
 It is a good practice to hide the answers by default and show them only when user needs them, that is to say when they _press_ the question:
 
-```
+```js
 .faq > ul > li:not( .is-active ) > div
 {
     display: none;
@@ -79,7 +79,7 @@ The user won't be able to see the answers. Unless you show them by default or de
 
 The usage of _fragment identifiers_ enables us to take the advantage of CSS's pseudo selector `:target`:
 
-```
+```js
 .faq > ul > li:not( :target ) > div
 {
     display: none;
@@ -88,7 +88,7 @@ The usage of _fragment identifiers_ enables us to take the advantage of CSS's ps
 
 Furthermore, the real-time search is not possible as well. But you can either provide a sever-side search possibility or hide the search field and so as not to confuse the user:
 
-```
+```html
 <html class="no-js">
     <head>
         <!-- remove this if you use Modernizr -->
@@ -99,7 +99,7 @@ Furthermore, the real-time search is not possible as well. But you can either pr
 
 I added a class name `no-js` to `<html>` element. The `<script>` part removes that class name. If JavaScript support is disabled in a browser, the class name won't be removed; therefore:
 
-```
+```js
 .no-js .faq input
 {
     display: none;
@@ -116,7 +116,7 @@ If there is only one list item that matches user's query, it is a good practice 
 
 Here on my blog I have a _filterable_ list of blog post titles only. Each post has some related keywords assigned. So, during the search, how do I make an item discoverable even if the title does not consist of a particular keyword? For example, how can I make the entry _"Real-Time Search in JavaScript"_ visible if a user entered _"jquery"_? Yes, exactly, that is adding keywords and hiding them with CSS:
 
-```
+```html
 <li>
     <h2><a href="/real-time-search-in-javascript">Real-Time Search in JavaScript</a></h2>
     <p class="hidden-keywords" aria-hidden="true">jquery filter input html css</p>

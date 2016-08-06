@@ -1,0 +1,114 @@
+<!DOCTYPE html><html><head><title>Building and deploying application</title></head><body>
+<h1>Building and deploying application</h1><p><a href="http://electron.rocks/building-and-deploying-application/" target="_new">Original URL</a></p>
+<p><blockquote>Article updated to use electron-builder v4+ This article is part of the Distributing Electron apps series. Goal Make one-liner to build and deploy your app! Cut to the chase Put this in development&hellip;</blockquote></p>
+<div><div class="entry-content">
+					<p><strong>Article updated to use electron-builder v4+</strong></p>
+
+<p><em>This article is part of the <a href="http://electron.rocks/distributing-electron-apps/">Distributing Electron apps</a> series.</em></p>
+
+<h2 id="goal">Goal</h2>
+
+<p>Make <strong>one-liner</strong> to build and deploy your app!</p>
+
+<h2 id="cuttothechase">Cut to the chase</h2>
+
+<p>Put this in development (root) <code>package.json</code>:</p>
+
+<pre><code>"scripts": {
+ "dist": "build -mwl --x64 --ia32",
+ "prerelease:osx": "rm -rf release/osx &amp;&amp; mkdirp release/osx",
+ "release:osx": "cp -rv dist/osx/*.{dmg,zip} release/osx &amp;&amp; PACKAGE_VERSION=$(cat app/package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]') &amp;&amp; echo $PACKAGE_VERSION &gt;&gt; ./release/osx/VERSION",
+ "prerelease:win32": "rm -rf release/win32 &amp;&amp; mkdirp release/win32",
+ "release:win32": "cp -v dist/win-ia32/{RELEASES,*.nupkg,*.exe} release/win32",
+ "prerelease:win64": "rm -rf release/win64 &amp;&amp; mkdirp release/win64",
+ "release:win64": "cp -v dist/win/{RELEASES,*.nupkg,*.exe} release/win64",
+ "release": "npm run release:osx &amp;&amp; npm run release:win32 &amp;&amp; npm run release:win64",
+ "deploy": "PACKAGE_VERSION=$(cat app/package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]') &amp;&amp; aws s3 sync release/ s3://eatodo/updates/$PACKAGE_VERSION/ --acl public-read &amp;&amp; aws s3 sync s3://eatodo/updates/$PACKAGE_VERSION/ s3://eatodo/updates/latest/ --delete --acl public-read",
+ "all": "npm run dist &amp;&amp; npm run release &amp;&amp; npm run deploy",
+ }
+</code></pre>
+
+<p><em>You can make your build with <code>Gulp</code>, <code>Grunt</code>, <code>npm</code> or whatever you'd like. I've decided to keep things simple and use <code>npm script</code> (<a href="http://blog.keithcirkel.co.uk/how-to-use-npm-as-a-build-tool/">awesome post that I had to link to</a>).</em></p>
+
+<h2 id="creatingdistfiles">Creating dist files</h2>
+
+<p>First off, we need to actually pack up our app using <code>electron-builder</code>. In development <code>package.json</code>, I've created following scripts:</p>
+
+<pre><code>"dist": "build -owl --x64 &amp;&amp; build -wl --ia32"
+</code></pre>
+
+<p>Electron-builder can take care of packing for multiple platforms in parallel. Once this is done, you should see your <code>dist</code> folder filled with goodies.</p>
+
+<h2 id="preparefordeploying">Prepare for deploying</h2>
+
+<p>Now that we've created distributables, we have to put them in specific structure that will be uploaded to S3. After some testing, I've came up to conclusion that the best structure for my projects is following:</p>
+
+<pre><code>[folder-version]
+&#x251C;&#x2500;&#x2500; [osx]
+ &#x251C;&#x2500;&#x2500; eatodo-0.0.1.dmg
+ &#x251C;&#x2500;&#x2500; eatodo-0.0.1-mac.zip
+ &#x251C;&#x2500;&#x2500; VERSION
+&#x251C;&#x2500;&#x2500; [win32]
+ &#x251C;&#x2500;&#x2500; eatodo-0.0.1-ia32-full.nupkg
+ &#x251C;&#x2500;&#x2500; eatodo Setup 0.0.1-ia32.exe
+ &#x251C;&#x2500;&#x2500; RELEASES
+&#x251C;&#x2500;&#x2500; [win64]
+ &#x251C;&#x2500;&#x2500; eatodo-0.0.1-full.nupkg
+ &#x251C;&#x2500;&#x2500; eatodo Setup 0.0.1.exe
+ &#x251C;&#x2500;&#x2500; RELEASES
+</code></pre>
+
+<p>For OS X, relevant files are:</p>
+
+<ul>
+<li><code>.dmg</code> - Installer for user</li>
+<li><code>.zip</code> - App update package</li>
+<li><code>VERSION</code> - File containing string representation of application version (read from your application <code>package.json</code>)</li>
+</ul>
+
+<p>File <code>VERSION</code> is needed since our server which will be used to provide updates to applications need to see which is the latest version. Be patient and read further.</p>
+
+<p>For Windows, it's basically c/p of <code>electron-builder</code> output.</p>
+
+<p>To make this, I've created some scripts again:</p>
+
+<pre><code>"prerelease:osx": "rm -rf release/osx &amp;&amp; mkdirp release/osx",
+"release:osx": "cp -rv dist/osx/*.{dmg,zip} release/osx &amp;&amp; PACKAGE_VERSION=$(cat app/package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]') &amp;&amp; echo $PACKAGE_VERSION &gt;&gt; ./release/osx/VERSION",
+"prerelease:win32": "rm -rf release/win32 &amp;&amp; mkdirp release/win32",
+"release:win32": "cp -v dist/win-ia32/{RELEASES,*.nupkg,*.exe} release/win32",
+"prerelease:win64": "rm -rf release/win64 &amp;&amp; mkdirp release/win64",
+"release:win64": "cp -v dist/win/{RELEASES,*.nupkg,*.exe} release/win64",
+"release": "npm run release:osx &amp;&amp; npm run release:win32 &amp;&amp; npm run release:win64"
+</code></pre>
+
+<p>Scripts <code>prerelease</code> are run automatically by npm and are just used to clean up and prepare folder structure. Somewhat complex step is <code>release:osx</code> where version from your application <code>package.json</code> is read and saved as <code>VERSION</code> file.</p>
+
+<h2 id="deploy">Deploy</h2>
+
+<p>We have all the files ready in <code>release</code> folder. Awesome! Now to push it to S3. I suggest <a href="http://docs.aws.amazon.com/cli/latest/userguide/installing.html">installing</a> <code>aws</code> and using it to transfer files to S3. I tried <code>s3cli</code> for the same purpose, but it had problems handling files this big (remember that its min ~40MB).</p>
+
+<p>So here is the <code>npm script</code> for that as well:</p>
+
+<pre><code>"deploy": "PACKAGE_VERSION=$(cat app/package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]') &amp;&amp; aws s3 sync release/ s3://eatodo/updates/$PACKAGE_VERSION/ --acl public-read &amp;&amp; aws s3 sync s3://eatodo/updates/$PACKAGE_VERSION/ s3://eatodo/updates/latest/ --delete --acl public-read"
+</code></pre>
+
+<p>Again, it will read the package version, and upload contents of <code>release</code> folder to S3 and will create folder with name of the version. After that it will copy contents from that new folder to <code>latest</code> folder. This <code>latest</code> folder is key folder which is targeted for auto updating.</p>
+
+<p>Since contents are changed, next time application is started on Windows, it will automatically pick up new files from <code>RELEASES</code> file. On OS X, your server needs to refresh and read contents of <code>VERSIONS</code> file so that next requests will compare with new version.</p>
+
+<h2 id="asipromised">As I promised...</h2>
+
+<pre><code>"all": "npm run dist &amp;&amp; npm run release &amp;&amp; npm run deploy"
+</code></pre>
+
+<p><strong>One-liner</strong>: <code>npm run all</code>.</p>
+
+<p>I would love to hear some improvements or how you're handling your projects... </p>
+
+<p><em><strong>Note:</strong> You can't use this to deploy for Linux. Automatic updates doesn't work for it. See note about Linux in <a href="http://electron.atom.io/docs/api/auto-updater/#linux">Electron documentation</a>.</em></p>
+
+<p>Take care!</p>
+				</div>
+				
+			</div>
+</body></html>

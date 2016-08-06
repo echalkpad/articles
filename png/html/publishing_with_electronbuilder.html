@@ -1,0 +1,140 @@
+<!DOCTYPE html><html><head><title>Publishing with electron-builder</title></head><body>
+<h1>Publishing with electron-builder</h1><p><a href="http://electron.rocks/electron-builder-explained/" target="_new">Original URL</a></p>
+<p><blockquote>This article is part of the Distributing Electron apps series. This article was updated to demonstrate working with electron-builder v5. Go-to tool for building Electron apps is electron-builder.&hellip;</blockquote></p>
+<div><div class="entry-content">
+					<p><em>This article is part of the <a href="http://electron.rocks/distributing-electron-apps/">Distributing Electron apps</a> series.</em></p>
+
+<p><strong>This article was updated to demonstrate working with electron-builder v5.</strong></p>
+
+<p>Go-to tool for building Electron apps is <a href="https://www.npmjs.com/package/electron-builder">electron-builder</a>. When I first tried to build app, documentation was pretty scarce so I had to do a bit of digging myself. Docs are a bit better now, but I'll try to explain it in more detail and point out some gotchas.</p>
+
+<p>Electron-builder is using two <code>package.json</code> structure. This means you'll have one <code>package.json</code> in your root folder and one in your app folder. In my sample application I'm using following structure:</p>
+
+<pre><code>[ea-todo]
+&#x251C;&#x2500;&#x2500; [app]
+ &#x251C;&#x2500;&#x2500; ...
+ &#x251C;&#x2500;&#x2500; main.js
+ &#x251C;&#x2500;&#x2500; package.json &lt;- application package.json
+&#x251C;&#x2500;&#x2500; ...
+&#x251C;&#x2500;&#x2500; [build] &lt;- build resources
+&#x251C;&#x2500;&#x2500; [dist] &lt;- generated distributions
+&#x251C;&#x2500;&#x2500; package.json &lt;- development package.json
+</code></pre>
+
+<p>As it is stated in electron-builder docs, two <code>package.json</code> structure is useful for separating your development and application dependencies. As of electron-builder v3, all build specification is now defined in development <code>package.json</code>.</p>
+
+<p><em>Note: Although it is said that you don't have to use two <code>package.json</code>, I had problems building when using single one. For now, I recommend going with the flow and using two files.</em></p>
+
+<p>Your development <code>package.json</code> is going to be used to specify all metadata for building application for multiple platforms. But first, in your root let's add electron-builder:</p>
+
+<pre><code>npm install electron-builder --save-dev 
+</code></pre>
+
+<h2 id="applicationpackagejson">Application package.json</h2>
+
+<p>In your application <code>package.json</code>, at minimum, you must have <code>name</code>, <code>description</code>, <code>version</code> </p>
+
+<pre><code>{
+ "name": "eatodo",
+ "description": "Simple TODO application built with Electron and AngularJS.",
+ "version": "0.0.1"
+ "author": "Vjekoslav Ratkajec &lt;<a class="__cf_email__" href="http://electron.rocks/cdn-cgi/l/email-protection">[email&#xA0;protected]</a>&gt;"
+ "main": "main.js"
+}
+</code></pre>
+
+<p>Now couple of <strong>important</strong> notes: </p>
+
+<ul>
+<li>Be sure to have simple <code>name</code> meaning no spaces or dashes (I had problems with packing for Windows when using minus in name).</li>
+<li>When building application and auto-update packages, it will read this <code>version</code> number and create packages based on it (be sure to update it when publishing new version of your app).</li>
+<li>Building for Linux failed when I didn't have email defined for <code>author</code>.</li>
+</ul>
+
+<h2 id="developmentpackagejson">Development package.json</h2>
+
+<p>In your development <code>package.json</code> you need to include all those dependencies that you need to run and build stuff.</p>
+
+<pre><code>{
+ ...
+ "devDependencies": {
+ "electron-builder": "~5.12.X",
+ "electron-prebuilt": "~1.2.X"
+ },
+ "build": {
+ "appId": "hr.creaticon.eatodo",
+ "app-category-type": "public.app-category.productivity",
+ "dmg": {
+ ...
+ },
+ "win": {
+ "iconUrl": "http://eatodo.s3.amazonaws.com/icon.ico"
+ }
+ }
+}
+</code></pre>
+
+<p>So, I've added build property and you need to at least define <code>appId</code> and <code>app-category-type</code>. This properties are used by <code>electron-packager</code>. <a href="https://www.npmjs.com/package/electron-packager#packageropts-callback">Here</a> is the list of all possible properties. </p>
+
+<p><strong>Beware</strong> that <code>iconUrl</code> needs to be URL and not local path. This is because it is needed on runtime by auto-updater for Windows.</p>
+
+<p>I'll be making separate posts on publishing for Windows and OS X, but I'll make couple of notes here:</p>
+
+<ul>
+<li>Under the hood, <code>electron-builder</code> uses <code>appdmg</code> to publish for OS X, so refer to <a href="https://www.npmjs.com/package/appdmg#json-specification">all possible options</a>.</li>
+<li>Under the hood, <code>electron-builder</code> uses <code>windows-installer</code> to publish for Windows, so refer to <a href="https://github.com/electron/windows-installer#usage">all possible options</a>.</li>
+</ul>
+
+<h3 id="buildfiles">Build files</h3>
+
+<p>Lastly, to generate distribution files, <code>electron-builder</code> will have to get some UI resources. Electron-builder by default looks for this files in <code>build</code> directory:</p>
+
+<pre><code>[your-app]
+&#x251C;&#x2500;&#x2500; ...
+&#x251C;&#x2500;&#x2500; [build]
+ &#x251C;&#x2500;&#x2500; background.png
+ &#x251C;&#x2500;&#x2500; icon.icns
+ &#x251C;&#x2500;&#x2500; icon.ico
+&#x251C;&#x2500;&#x2500; ...
+</code></pre>
+
+<p><strong>Watch out</strong>: </p>
+
+<ul>
+<li>Resources need to be in this folder by these names, since <code>electron-builder</code> is expecting them.</li>
+<li>Make sure that you icons are at least 256x256px since building will fail for Windows if it is smaller.</li>
+</ul>
+
+<p>Handy tool to convert your image to icons format: <a href="https://iconverticons.com/online/">https://iconverticons.com/online/</a></p>
+
+<h2 id="runningeverything">Running everything</h2>
+
+<p>All of the things should be configured correctly now. One thing that can ease running is defining npm scripts. Here is excerpt from my development <code>package.json</code>:</p>
+
+<pre><code>"scripts": {
+ "postinstall": "install-app-deps",
+ "start": "electron ./app --enable-logging",
+ "dev": "NODE_ENV='development' npm run start",
+ "dist": "build -mwl --x64 --ia32"
+}
+</code></pre>
+
+<p>Couple of notes here:</p>
+
+<ul>
+<li>When you installed <code>electron-builder</code> in your <code>node_modules/.bin</code> folder you have <code>build</code> which is going to be used to run build process and since executing <code>npm run</code> command will look for binaries in that folder, we don't need to put explicit path to it. </li>
+<li>Build is made in parallel, so is best to define multiple targets and build at once.</li>
+</ul>
+
+<h2 id="finally">Finally</h2>
+
+<pre><code>npm run dist 
+</code></pre>
+
+<p>All of your generated packages are available in <code>dist</code> folder. Although this will generate you files which you can install on Windows and OS X, we need to add some code to our app to integrate fetching and installing automatic updates.</p>
+
+<p><em>Next, read how to <a href="http://electron.rocks/publishing-for-os-x/">publish for OS X</a>.</em></p>
+				</div>
+				
+			</div>
+</body></html>

@@ -1,0 +1,386 @@
+<!DOCTYPE html><html><head><title>Build a Music Streaming App with Electron, React & ES6</title></head><body>
+<h1>Build a Music Streaming App with Electron, React & ES6</h1><p><a href="https://www.sitepoint.com/music-streaming-app-electron-react-es6/" target="_new">Original URL</a></p>
+<p><blockquote>This article was peer reviewed by Mark Brown, Dan Prince and Bruno Mota. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be! Developed by GitHub,&hellip;</blockquote></p>
+<div><div class="ArticleCopy language-">
+ <p><em>This article was peer reviewed by <a href="https://www.sitepoint.com/author/mbrown">Mark Brown</a>, <a href="https://www.sitepoint.com/author/dprince">Dan Prince</a> and <a href="https://www.sitepoint.com/author/bmota/">Bruno Mota</a>. Thanks to all of SitePoint&#x2019;s peer reviewers for making SitePoint content the best it can be!</em></p>
+
+<p>Developed by GitHub, Electron is a framework that allows you to leverage your web design skills to build slick, cross-platform desktop apps. In this tutorial, I&#x2019;ll demonstrate how to combine the power of Electron with React, ES6 and the Soundcloud API to create a stylish music streaming app that will stream your favorite tunes right to your desktop. I&#x2019;ll also demonstrate how you can package the app and distribute it as a portable, OS-specific bundle.</p>
+<p>This tutorial assumes a basic knowledge of React. If you&#x2019;d like a primer before you begin, check out our <a href="http://www.sitepoint.com/getting-started-react/">getting started tutorial</a>. The code for this tutorial is available from our <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/">GitHub repo</a>.</p>
+<h2 id="overviewofwhatwerebuilding">Overview of What We&#x2019;re Building</h2>
+<p>This is what our app is going to look like:</p>
+<p><img src="http://dab1nmslvvntp.cloudfront.net/wp-content/uploads/2016/03/1456922655electron-soundcloud.png" alt="Soundcloud player"></p>
+<p>We will use React to create the UI, the SoundCloud API to get the tracks, and Electron to allow the app to run in a browser-like environment. As you can see, it will have a search field for searching for the music to be played and the results will be the audio players for each of the results. Pretty much like what you see on the SoundCloud website.</p>
+<p>If you want to follow along make sure you have a SoundCloud account and a <a href="http://soundcloud.com/you/apps/new">SoundCloud app</a>. Take note of the API key because we will use it later.</p>
+<h2 id="addingelectronandotherdependencies">Adding Electron and Other Dependencies</h2>
+<p>Start by cloning the <a href="https://github.com/atom/electron-quick-start">Electron Quick Start repo on Github</a> into a folder titled <code>soundcloud-player</code>:</p>
+<pre><code class="bash language-bash">git clone https://github.com/atom/electron-quick-start soundcloud-player
+</code></pre>
+<p>Enter that folder, then open the <code>package.json</code> file and add the following dev dependencies:</p>
+<pre><code class="javascript language-javascript">"devDependencies": {
+ "electron-prebuilt": "^1.2.0",
+ "babel-preset-es2015": "^6.9.0",
+ "babel-preset-react": "^6.5.0",
+ "babelify": "^7.3.0",
+ "browserify": "^13.0.1"
+}
+</code></pre>
+<p>Here&#x2019;s a brief description of each package:</p>
+<ul>
+<li><a href="https://www.npmjs.com/package/electron-prebuilt">electron-prebuilt</a> &#x2014;installs Electron prebuilt binaries for command-line use.</li>
+<li><a href="https://www.npmjs.com/package/babel-preset-es2015">babel-preset-es2015</a>&#x2014;used for transforming ES6 code to ES5 code (which can run in any modern browser).</li>
+<li><a href="https://www.npmjs.com/package/babel-preset-react">babel-preset-react</a>&#x2014;used for transforming JSX code to JavaScript.</li>
+<li><a href="https://www.npmjs.com/package/babelify">babelify</a>&#x2014;the Babel transformer for Browserify.</li>
+<li><a href="https://www.npmjs.com/package/browserify">browserify</a>&#x2014;builds a bundle you can serve up to the browser in a single <code>&lt;script&gt;</code> tag.</li>
+</ul>
+<p>Add the following under <code>dependencies</code>:</p>
+<pre><code class="javascript language-javascript">"dependencies": {
+ "node-soundcloud": "0.0.5",
+ "react": "^0.14.8",
+ "react-dom": "^0.14.8",
+ "react-loading": "0.0.9",
+ "react-soundplayer": "^0.3.6"
+}
+</code></pre>
+<p>Here&#x2019;s a brief description of each package:</p>
+<ul>
+<li><a href="https://www.npmjs.com/package/node-soundcloud">node-soundcloud</a>&#x2014;allows us to make calls to the SoundCloud API.</li>
+<li><a href="https://www.npmjs.com/package/react">react</a>&#x2014;the React library. Allows us to create UI components.</li>
+<li><a href="https://www.npmjs.com/package/react-dom">react-dom</a>&#x2014;allows us to render React components into the DOM.</li>
+<li><a href="https://www.npmjs.com/package/react-loading">react-loading</a>&#x2014;used as a loading indicator for the app.</li>
+<li><a href="https://www.npmjs.com/package/react-soundplayer">react-soundplayer</a>&#x2014;a React component that allows us to easily create custom audio players for SoundCloud.</li>
+</ul>
+<p>Once you&#x2019;ve added the <code>dependencies</code> and <code>devDependencies</code>, execute <code>npm install</code> to install all of them.</p>
+<p>Finally, add the scripts for compiling and starting the app. This will allow you to run <code>npm run compile</code> to compile the app and <code>npm start</code> to run it.</p>
+<pre><code class="javascript language-javascript">"scripts": {
+ "compile": "browserify -t [ babelify --presets [ react es2015 ] ] src/app.js -o js/app.js",
+ "start": "electron main.js"
+}
+</code></pre>
+<p>While we&#x2019;re at it, we can remove the electron-quick-start-specific stuff and add sensible defaults of our own.</p>
+<pre><code class="javascript language-javascript">{
+ "name": "electron-soundcloud-player",
+ "version": "1.0.0",
+ "description": "Plays music from SoundCloud",
+ "main": "main.js",
+ "scripts": {
+ "start": "electron main.js",
+ "compile": "browserify -t [ babelify --presets [ react es2015 ] ] src/app.js -o js/app.js"
+ },
+ "author": "Wern Ancheta",
+ ...
+}
+</code></pre>
+<p>All in all, your <code>package.json</code> file should now <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/package.json">look like this</a>.</p>
+<h2 id="projectstructure">Project Structure</h2>
+<p>This is how we are intending to structure our project:</p>
+<pre><code class="bash language-bash">.
+&#x251C;&#x2500;&#x2500; css
+&#x2502; &#x2514;&#x2500;&#x2500; style.css
+&#x251C;&#x2500;&#x2500; index.html
+&#x251C;&#x2500;&#x2500; js
+&#x251C;&#x2500;&#x2500; main.js
+&#x251C;&#x2500;&#x2500; package.json
+&#x251C;&#x2500;&#x2500; README.md
+&#x2514;&#x2500;&#x2500; src
+ &#x251C;&#x2500;&#x2500; app.js
+ &#x2514;&#x2500;&#x2500; components
+ &#x251C;&#x2500;&#x2500; ProgressSoundPlayer.js
+ &#x2514;&#x2500;&#x2500; Track.js
+</code></pre>
+<p>Let&#x2019;s create those missing directories:</p>
+<pre><code class="bash language-bash">mkdir -p css js src/components
+</code></pre>
+<p>And the files they should contain:</p>
+<pre><code class="bash language-bash">touch css/style.css src/app.js src/components/ProgressSoundPlayer.js src/components/Track.js
+</code></pre>
+<p>The <code>js</code> directory will hold the compiled JavaScript for our app, the <code>css</code> directory our app&#x2019;s styles and the <code>src</code> directory the app&#x2019;s components.</p>
+<p>Of the files we pulled in from the Electron Quick Start repo, we can remove the following:</p>
+<pre><code>rm renderer.js LICENSE.md
+</code></pre>
+<p>Which leaves <code>main.js</code> and <code>&#xEC;ndex.html</code>. Of these two files, it is <code>main.js</code> which is responsible for creating a new browser window in which the app will run. However, we need to make a couple of changes to it. Firstly adjust the width on line 13:</p>
+<pre><code class="javascript language-javascript">mainWindow = new BrowserWindow({width: 1000, height: 600})
+</code></pre>
+<p>Secondly remove the following from line 19 (as otherwise our app will initialize showing the dev tools):</p>
+<pre><code class="javascript language-javascript">mainWindow.webContents.openDevTools()
+</code></pre>
+<p>When <code>main.js</code> creates the new browser window, it will load <code>index.html</code> (we&#x2019;ll look at this file later on in the tutorial). From here, the app will run in the same way as it would in a browser window.</p>
+<h2 id="buildingtheapp">Building the App</h2>
+<h3 id="thetrackcomponent">The Track Component</h3>
+<p>Next let&#x2019;s create the <code>Track</code> component for the audio player (in <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/src/components/Track.js">src/components/Track.js</a>).</p>
+<p>First we require React and a few components provided by React SoundPlayer:</p>
+<pre><code class="javascript language-javascript">import React, {Component} from 'react';
+import { PlayButton, Progress, Timer } from 'react-soundplayer/components';
+</code></pre>
+<p>Note that by using this syntax we are effectively extracting the <code>Component</code> class from React. As the name suggests, <code>Component</code> is used for creating new components.</p>
+<p>Then we create a new component named <code>Track</code> and give it a <code>render</code> method. Note that we&#x2019;re exporting this class so it can be imported into another file later on.</p>
+<pre><code class="javascript language-javascript">export default class Track extends Component {
+ render() {
+ ...
+ }
+}
+</code></pre>
+<p>Inside the <code>render</code> method we extract the information about the current audio track from the <code>props</code> it received and then assign them to their own variables using <a href="https://www.sitepoint.com/preparing-ecmascript-6-destructuring-assignment/">destructuring assignment</a>. This way we can use <code>track</code> instead of <code>this.props.track</code>.</p>
+<pre><code class="javascript language-javascript">const { track, soundCloudAudio, playing, seeking, currentTime, duration } = this.props;
+</code></pre>
+<p>We then calculate the track&#x2019;s current progress:</p>
+<pre><code class="javascript language-javascript">const currentProgress = this.props.currentTime / this.props.duration create_a_simple_restful_api_with_golang.md data.json data_ml devops docker embedded gaming github go html javascript linux mobile png programming science social tidy tutorialzine.md url_to_filename.csv using_couchbase_server_in_a_golang_web_application.md web_dev 100 || 0;
+</code></pre>
+<p>And return the UI of the component.</p>
+<pre><code class="javascript language-javascript">return (
+ &lt;div className="player"&gt;
+ &lt;PlayButton
+ className="orange-button"
+ soundCloudAudio={soundCloudAudio}
+ playing={playing}
+ seeking={seeking} /&gt;
+ &lt;Timer
+ duration={duration}
+ className="timer"
+ soundCloudAudio={soundCloudAudio}
+ currentTime={currentTime} /&gt;
+ &lt;div className="track-info"&gt;
+ &lt;h2 className="track-title"&gt;{track &amp;&amp; track.title}&lt;/h2&gt;
+ &lt;h3 className="track-user"&gt;{track &amp;&amp; track.user &amp;&amp; track.user.username}&lt;/h3&gt;
+ &lt;/div&gt;
+ &lt;Progress
+ className="progress-container"
+ innerClassName="progress"
+ soundCloudAudio={soundCloudAudio}
+ value={currentProgress} /&gt;
+ &lt;/div&gt;
+);
+</code></pre>
+<p>As you can see from the above code, we have a pretty standard audio player. It has a play button, a timer (which shows the current play time/duration), the title and username of the user who uploaded the song, and a progress bar.</p>
+<p>Here&#x2019;s what the <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/src/components/Track.js">complete component looks like</a>.</p>
+<h3 id="theprogresssoundplayercomponent">The ProgressSoundPlayer Component</h3>
+<p>Let&#x2019;s move on to the ProgressSoundPlayer component (<a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/src/components/ProgressSoundPlayer.js">src/components/ProgressSoundPlayer.js</a>). This will serve as the wrapper for the <code>Track</code> component created above.</p>
+<p>Aside from React and the <code>Track</code> component, we also need to import the <code>SoundPlayerContainer</code>. The <code>SoundPlayerContainer</code> is a higher level container that propagates its children with the props they will need to build the audio player.</p>
+<pre><code class="javascript language-javascript">import React, {Component, PropTypes} from 'react';
+import { SoundPlayerContainer } from 'react-soundplayer/addons';
+import Track from './Track';
+</code></pre>
+<p>Next up, we&#x2019;ll create the <code>ProgressSoundPlayer</code> component. All this does is render the <code>SoundPlayerContainer</code> which wraps the <code>Track</code> component. Note that we do not need to pass anything to the <code>Track</code> component since <code>SoundPlayerContainer</code> automatically does this for us behind the scenes. We do however, need to pass the <code>resolveUrl</code> and <code>clientId</code> as props for the <code>SoundPlayerContainer</code>.</p>
+<pre><code class="javascript language-javascript">export default class ProgressSoundPlayer extends Component {
+ render() {
+ const {resolveUrl, clientId} = this.props;
+ return (
+ &lt;SoundPlayerContainer resolveUrl={resolveUrl} clientId={clientId}&gt;
+ &lt;Track /&gt;
+ &lt;/SoundPlayerContainer&gt;
+ );
+ }
+}
+</code></pre>
+<p>Finally we specify the props required by this component. In this case we require the <code>resolveUrl</code> and <code>clientId</code> to be passed in when this component is rendered.</p>
+<pre><code class="javascript language-javascript">ProgressSoundPlayer.propTypes = {
+ resolveUrl: PropTypes.string.isRequired,
+ clientId: PropTypes.string.isRequired
+};
+</code></pre>
+<p>Specifying the <code>propTypes</code> is a <a href="https://facebook.github.io/react/docs/reusable-components.html#prop-validation">good practice to get into</a>. This will trigger warnings in the dev tools console if the props that the component requires don&#x2019;t get passed to it. Note that we didn&#x2019;t have to do this earlier in the <code>Track</code> component since the <code>SoundPlayerContainer</code> is responsible for passing in all of the necessary props.</p>
+<p>Here&#x2019;s what the <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/src/components/ProgressSoundPlayer.js">complete component looks like</a>.</p>
+<h3 id="maincomponent">Main Component</h3>
+<p>The main file is <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/src/app.js">src/app.js</a>. This is responsible for rendering the full UI of the app&#x2014;that is the search field, and the audio players.</p>
+<p>Breaking the code down, we first import all the libraries that we need. Each of these were mentioned earlier in the dependencies section (except for the <code>ProgressSoundPlayer</code> which we created).</p>
+<pre><code class="javascript language-javascript">import React, {Component} from 'react';
+import ReactDOM from 'react-dom';
+import ProgressSoundPlayer from './components/ProgressSoundPlayer';
+import SC from 'node-soundcloud';
+import Loading from 'react-loading';
+</code></pre>
+<p>Add your SoundCloud client ID:</p>
+<pre><code class="javascript language-javascript">var client_id = 'YOUR SOUNDCLOUD APP ID';
+</code></pre>
+<p>Note that you can use something like <a href="https://github.com/motdotla/dotenv">dotenv</a> so you won&#x2019;t have to push this piece of data to your repository.</p>
+<p>Initialize the node-soundcloud library by supplying an object containing your SoundCloud client ID.</p>
+<pre><code class="javascript language-javascript">SC.init({
+ id: client_id
+});
+</code></pre>
+<p>Create the <code>Main</code> component:</p>
+<pre><code class="javascript language-javascript">class Main extends Component {
+ ...
+}
+</code></pre>
+<p>Inside the class, define the constructor method. This allows us to add code for initializing this class. Inside the <code>constructor</code> method we then call <code>super()</code> to call the constructor of the <code>Component</code> class and any initialization code that the <code>Component</code> class has.</p>
+<pre><code class="javascript language-javascript">constructor(props){
+ super();
+}
+</code></pre>
+<p>Next we set the default state of the app:</p>
+<ul>
+<li><code>query</code> is the default search query.</li>
+<li><code>hasResults</code> is used for tracking whether the component currently has any results from the API or not.</li>
+<li><code>searchResults</code> stores the current search results.</li>
+<li><code>isLoading</code> is used for tracking whether the app is currently fetching results from the API or not. When this is set to <code>true</code>, the spinner becomes visible to indicate that there&#x2019;s something going on.</li>
+</ul>
+<pre><code class="javascript language-javascript">this.state = {
+ query: '',
+ hasResults: false,
+ searchResults: [],
+ isLoading: false
+};
+</code></pre>
+<p>Then comes the <code>handleTextChange</code> method. This is used for updating the value of <code>query</code> in the <code>state</code> and also calls the <code>search</code> method if the <em>Enter</em> key is pressed. This method gets called when the <code>onKeyUp</code> event gets fired on the search field.</p>
+<pre><code class="javascript language-javascript">handleTextChange(event){
+ this.setState({
+ query: event.target.value
+ });
+ if(event.key === 'Enter'){
+ this.search.call(this);
+ }
+}
+</code></pre>
+<p>After that we have the <code>search</code> method, which sends the query to the SoundCloud API and processes the response. First it sets the <code>isLoading</code> state to <code>true</code> so that the spinner becomes visible. Then it makes a <code>GET</code> request to the <code>tracks</code> endpoint of the SoundCloud API. This endpoint accepts the query as its required parameter, but we also pass in an additional <code>embeddable_by</code> parameter to specify that we only want to fetch tracks that are embeddable by everyone. Once we get a response back, we check if there are any errors and if there aren&#x2019;t, we update the <code>state</code> with the search results. At this point the component should now re-render to show the search results.</p>
+<pre><code class="javascript language-javascript">search(){
+ this.setState({
+ isLoading: true
+ });
+
+ SC.get('/tracks', {
+ q: this.state.query,
+ embeddable_by: 'all'
+ }, (err, tracks) =&gt; {
+ if(!err){
+ this.setState({
+ hasResults: true,
+ searchResults: tracks,
+ isLoading: false
+ });
+ }
+ });
+}
+</code></pre>
+<p>The <code>render</code> method renders the UI of the component. This contains a search field for entering the song name or artist and a button for submitting the search. It also contains a couple of conditional statements for rendering the <code>Loading</code> component (which only becomes visible when <code>isLoading</code> has a truthy value) and the search results (which are only displayed when <code>hasResults</code> is truthy but <code>isLoading</code> is falsy).</p>
+<pre><code class="javascript language-javascript">render(){
+ return (
+ &lt;div&gt;
+ &lt;h1&gt;Electron SoundCloud Player&lt;/h1&gt;
+ &lt;input type="search"
+ onKeyUp={this.handleTextChange.bind(this)}
+ className="search-field"
+ placeholder="Enter song name or artist..." /&gt;
+ &lt;button className="search-button"
+ onClick={this.search.bind(this)}&gt;Search&lt;/button&gt;
+ &lt;div className="center"&gt;
+ {this.state.isLoading &amp;&amp; &lt;Loading type="bars" color="#FFB935" /&gt;}
+ &lt;/div&gt;
+ {this.state.hasResults &amp;&amp; !this.state.isLoading ?
+ this.renderSearchResults.call(this) :
+ this.renderNoSearchResults.call(this)}
+ &lt;/div&gt;
+ );
+}
+</code></pre>
+<p>Notice that we have to use <code>bind()</code> for the <code>handleTextChange</code> method and <code>call()</code> for the <code>renderSearchResults</code> and <code>renderNoSearchResults</code> methods. This is because methods in React aren&#x2019;t automatically bound when using the ES6 class syntax. Alternatively, you can use something like <a href="https://github.com/developit/decko">decko</a> to auto-bind specific methods to the class. For example:</p>
+<pre><code class="javascript language-javascript">import { bind } from 'decko';
+
+// ...
+
+@bind
+handleTextChange(event){
+ this.setState({
+ query: event.target.value
+ });
+ if(event.key == 'Enter'){
+ this.search();
+ }
+}
+</code></pre>
+<p>Next, we have a method that gets called by default since there are no search results when the component first gets rendered.</p>
+<pre><code class="javascript language-javascript">renderNoSearchResults(){
+ return (
+ &lt;div id="no-results"&gt;&lt;/div&gt;
+ );
+}
+</code></pre>
+<p>And the method that is called when there are search results to display. This calls the <code>map</code> method in the <code>searchResults</code> to loop through all the results and execute the <code>renderPlayer</code> function for each iteration.</p>
+<pre><code class="javascript language-javascript">renderSearchResults(){
+ return (
+ &lt;div id="search-results"&gt;
+ {this.state.searchResults.map(this.renderPlayer.bind(this))}
+ &lt;/div&gt;
+ );
+}
+</code></pre>
+<p>The <code>renderPlayer</code> function accepts the individual <code>track</code> object as its argument. We use it as a source for the <code>key</code> and <code>resolveUrl</code> props. If you&#x2019;ve worked with React in the past, you already know that when using the <code>map</code> method to render a list, we always have to pass a unique <code>key</code> or else React will complain. The other two props: <code>clientId</code> and <code>resolveUrl</code> are required by the <code>ProgressSoundPlayer</code> component. The <code>clientId</code> is the SoundCloud API key which you defined earlier and the <code>resolveUrl</code> is the unique URL that refers to that specific audio track. It&#x2019;s the same URL that you get when you visit the page for a specific audio track on SoundCloud.</p>
+<pre><code class="javascript language-javascript">renderPlayer(track){
+ return (
+ &lt;ProgressSoundPlayer
+ key={track.id}
+ clientId={client_id}
+ resolveUrl={track.permalink_url} /&gt;
+ );
+}
+</code></pre>
+<p>Finally, we render the component into the DOM.</p>
+<pre><code class="javascript language-javascript">var main = document.getElementById('main');
+ReactDOM.render(&lt;Main /&gt;, main);
+</code></pre>
+<p>Here&#x2019;s what the <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/src/app.js">complete component looks like</a>.</p>
+<h3 id="stylingtheapp">Styling the App</h3>
+<p>The styles for the app reside in <a href="https://github.com/sitepoint-editors/electron-soundcloudplayer/blob/master/css/style.css">css/style.css</a>. The stylesheet contains style declarations for each of the components (play button, search button, progress bar, and other elements that we&#x2019;ve used).</p>
+<h3 id="indexfile">Index File</h3>
+<p>As mentioned earlier, when Electron&#x2019;s <code>main.js</code> file creates the new browser window, it will load <code>index.html</code>. There&#x2019;s nothing fancy here, just your standard HTML file with a style sheet and a JavaScript file.</p>
+<pre><code class="markup language-markup">&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+ &lt;head&gt;
+ &lt;meta charset="UTF-8"&gt;
+ &lt;title&gt;Electron Soundcloud Player&lt;/title&gt;
+ &lt;link rel="stylesheet" href="css/style.css"&gt;
+ &lt;/head&gt;
+ &lt;body&gt;
+ &lt;div id="main"&gt;&lt;/div&gt;
+ &lt;script src="js/app.js"&gt;&lt;/script&gt;
+ &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<h2 id="compilingtheapp">Compiling the App</h2>
+<p>Inside the Electron environment you can actually require stuff just as you would in a standard Node.js app. This means that you can actually use something like:</p>
+<pre><code class="javascript language-javascript">import fs from 'fs';
+
+const buffer = fs.readFileSync(`${__dirname}/index.html`);
+console.log(buffer.toString());
+</code></pre>
+<p>And Electron will happily run it for you.</p>
+<p>But since we&#x2019;ve used ES6 and JSX to write the app, we can&#x2019;t really use this feature. An option that we do have is to use Babel to transform the JSX and ES6 code into code that&#x2019;s readable by the browser (ES5). Earlier in the <a href="https://www.sitepoint.com/music-streaming-app-electron-react-es6/#addingelectronandotherdependencies">dependencies section</a>, we installed all of the necessary packages in order for this to work. So all you have to do now is execute the following command to generate the main JavaScript file:</p>
+<pre><code class="bash language-bash">npm run compile
+</code></pre>
+<h2 id="runningandpackagingtheapp">Running and Packaging the App</h2>
+<p>You can run the app by executing <code>npm start</code> in the root of your project. But that wouldn&#x2019;t be any fun at all. You might as well just run the app in the browser and call it a day. Instead, what we&#x2019;ll do is to package the app into a single folder. That folder will contain all the files necessary for the app to run. You can then create an archive from that folder to distribute your app.</p>
+<p>To package the app we need to install electron-packager:</p>
+<pre><code class="bash language-bash">npm install electron-packager -g
+</code></pre>
+<p>Once installed, you can go one level up from the root of your project and execute the following command:</p>
+<pre><code class="bash language-bash">electron-packager ./soundcloud-player SoundCloudPlayer --version=1.2.4 --platform=linux --out=/home/jim/Desktop --arch=all --ignore="(node_modules|src)"
+</code></pre>
+<p>Breaking this command down we have:</p>
+<ul>
+<li><code>./soundcloud-player</code>&#x2014;your project directory.</li>
+<li><code>SoundCloudPlayer</code>&#x2014;your app name.</li>
+<li><code>--version=1.2.0</code>&#x2014;the version of Electron that you want to use. It&#x2019;s at version 1.2.0 at the time of writing of this article, so if you&#x2019;re reading this at a later time, you can probably use the latest version as long as there are no breaking changes in the API.</li>
+<li><code>--platform=linux</code>&#x2014;the platform where you want to deploy to. In this case I used Linux since I&#x2019;m on Ubuntu. If you want to package for all major platforms (Windows, OSX, Linux) though, you can use the <code>--all</code> option instead.</li>
+<li><code>--out=/home/wern/Desktop</code>&#x2014;the output directory. This is where the package will get created.</li>
+<li><code>--arch=all</code>&#x2014;the processor architecture. We&#x2019;ve specified <code>all</code> which means it will build for both 32-bit and 64-bit operating systems.</li>
+<li><code>--ignore="(node_modules|src)"</code>&#x2014;since the app is going to get packaged with Electron and Chrome, the size is going to be pretty big. The only thing that we could do to prevent it from further inflating is to exclude all the files that we do not need. Since we&#x2019;re already compiling into a single JavaScript file, we no longer need anything inside the <code>node_modules</code> and the <code>src</code> directory.</li>
+</ul>
+<p>You can read more about electron-packager on <a href="https://github.com/electron-userland/electron-packager">the project&#x2019;s homepage</a>. You can read up on the other available command line arguments in <a href="https://github.com/electron-userland/electron-packager/blob/master/usage.txt">the documentation</a>.</p>
+<h2 id="wheretogofromhere">Where to Go From Here</h2>
+<p>In this tutorial we&#x2019;ve built a pretty simple Electron app. It works but we can still improve on it. Here are some suggestions for improvements that could be made:</p>
+<ul>
+<li>Paginate the search results.</li>
+<li>Add a function to automatically stop a playing track once the user searches.</li>
+<li>Remove the button and call search directly from the <code>handleTextChange</code> method.</li>
+<li><a href="http://electron.atom.io/docs/v0.36.8/tutorial/application-packaging/">Package the app to an asar archive</a> to avoid exposing your source code to everyone.</li>
+<li>If you&#x2019;re serious about distributing your app to the whole world. You can create an installer for all major platforms (Windows, OSX, and Linux). There&#x2019;s a project called <a href="https://github.com/loopline-systems/electron-builder">electron-builder</a> which allows you to do so.</li>
+</ul>
+<p>To find more inspiration, check out the <a href="http://www.soundnodeapp.com/">SoundNode app</a>&#x2014;an Open-Source project to support SoundCloud for desktop Mac, Windows, and Linux.</p>
+<p>If you&#x2019;re looking into learning more about Electron and building desktop apps using web technologies in general, I recommend you to check out the following resources:</p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>In this tutorial we&#x2019;ve learned how to create a sleek and stylish cross-platform application using Electron. What&#x2019;s better is that we&#x2019;ve done this by leveraging our existing web dev skills. We&#x2019;ve also seen how easy it is to package and distribute this app as an OS-specific bundle.</p>
+<p>I&#x2019;d love to hear about the applications you build with Electron in the comments below.</p>
+ </div>
+
+ </div>
+</body></html>
