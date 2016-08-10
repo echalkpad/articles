@@ -1,0 +1,154 @@
+<!DOCTYPE html><html><head><title>Writing a JavaScript Framework - Project Structuring</title></head><body>
+<h1>Writing a JavaScript Framework - Project Structuring</h1><p><a href="https://blog.risingstack.com/writing-a-javascript-framework-project-structuring/" target="_new">Original URL</a></p>
+<p><blockquote>In the last couple of months Bertalan Miklos, JavaScript engineer at RisingStack wrote a next generation client-side framework, called NX. In the Writing a JavaScript Framework series, Bertalan&hellip;</blockquote></p>
+<div><section class="post-content">
+<p>In the last couple of months Bertalan Miklos, JavaScript engineer at RisingStack wrote a next generation client-side framework, called <a href="http://nx-nxframework.rhcloud.com" target="_blank">NX</a>. In the <strong>Writing a JavaScript Framework</strong> series, Bertalan shares what he learned during the process:</p>
+<p><strong>In this chapter, I am going to explain how NX is structured, and how I solved its use case specific difficulties regarding extendibility, dependency injection and private variables.</strong></p>
+<p>The series includes the following chapters.</p>
+<ol>
+<li>Project structuring (current chapter) </li>
+<li>Execution timing </li>
+<li>Sandboxed code evaluation </li>
+<li>Data binding (part 1) </li>
+<li>Data binding (part 2) </li>
+<li>Custom elements </li>
+<li>Client side routing</li>
+</ol>
+<h2 id="projectstructuring">Project Structuring</h2>
+<p>There is no structure that fits all projects, although there are some general guidelines. Those who are interested can check out our <a href="https://blog.risingstack.com/node-hero-node-js-project-structure-tutorial/">Node.js project structure tutorial</a> from the Node Hero series.</p>
+<h3 id="anoverviewofthenxjavascriptframework">An overview of the NX JavaScript Framework</h3>
+<p>NX aims to be an open-source community driven project, which is easy to extend and scales well. </p>
+<ul>
+<li>It has all the features expected from a modern client-side framework. </li>
+<li>It has no external dependencies, other than polyfills.</li>
+<li>It consists around 3000 lines altogether.</li>
+<li>No module is longer than 300 lines.</li>
+<li>No feature module has more than 3 dependencies.</li>
+</ul>
+<p>Its final dependency graph looks like this:</p>
+<p><img src="https://risingstack-blog.s3.amazonaws.com/2016/Jul/javascript_framework_in_2016_the_nx_project_structure-1467708098586.svg" alt="JavaScript Framework in 2016: The NX project structure"></p>
+<p>This structure provides a solution for some typical framework related difficulties.</p>
+<ul>
+<li>Extendibility</li>
+<li>Dependency injection</li>
+<li>Private variables</li>
+</ul>
+<h3 id="achievingextendibility">Achieving Extendibility</h3>
+<p>Easy extendibility is a must for community driven projects. To achieve it, the project should have a small core and a predefined dependency handling system. The former ensures that it is understandable, while the latter ensures that it will stay that way. </p>
+<p>In this section, I focus on having a small core.</p>
+<p>The main feature expected from modern frameworks is the ability to create custom components and use them in the DOM. NX has the single <code>component</code> function as its core, and that does exactly this. It allows the user to configure and register a new component type.</p>
+<pre><code class="language-javascript">component(config) 
+ .register('comp-name')
+</code></pre>
+<p>The registered <code>comp-name</code> is a blank component type which can be instantiated inside the DOM as expected.</p>
+<pre><code class="language-html">&lt;comp-name&gt;&lt;/comp-name&gt; 
+</code></pre>
+<p>The next step is to ensure that the components can be extended with new features. To keep both simplicity and extendibility, these new features should not pollute the core. This is where dependency injection comes handy.</p>
+<h2 id="dependencyinjectiondiwithmiddlewares">Dependency Injection (DI) with Middlewares</h2>
+<p>If you are unfamiliar with dependency injection, I suggest you to read our article on the topic : <a href="https://blog.risingstack.com/dependency-injection-in-node-js">Dependency Injection in Node.js</a>.</p>
+<blockquote>
+<p>Dependency injection is a design pattern in which one or more dependencies (or services) are injected, or passed by reference, into a dependent object.</p>
+</blockquote>
+<p>DI removes hard burnt dependencies but introduces a new problem. The user has to know how to configure and inject all the dependencies. Most client-side frameworks have DI containers doing this instead of the user.</p>
+<blockquote>
+<p>A Dependency Injection Container is an object that knows how to instantiate and configure objects.</p>
+</blockquote>
+<p>Another approach is the middleware DI pattern, which is widely used on the server side (Express, Koa). The trick here is that all injectable dependencies (middlewares) have the same interface and can be injected the same way. In this case, no DI container is needed. </p>
+<p>I went with this solution to keep simplicity. If you ever used Express the below code will be very familiar.</p>
+<pre><code class="language-javascript">component() 
+ .use(paint) // inject paint middleware
+ .use(resize) // inject resize middleware
+ .register('comp-name')
+
+function paint (elem, state, next) { 
+ // elem is the component instance, set it up or extend it here
+ elem.style.color = 'red'
+ // then call next to run the next middleware (resize)
+ next()
+}
+
+function resize (elem, state, next) { 
+ elem.style.width = '100 px'
+ next()
+}
+</code></pre>
+<p>Middlewares execute when a new component instance is attached to the DOM and typically extend the component instance with new features. Extending the same object by different libraries leads to name collisions. Exposing private variables deepens this problem and may cause accidental usage by others. </p>
+<p>Having a small public API and hiding the rest is a good practice to avoid these.</p>
+<h3 id="handlingprivacy">Handling privacy</h3>
+<p>Privacy is handled by function scope in JavaScript. When cross-scope private variables are required, people tend to prefix them with <code>_</code> to signal their private nature and expose them publicly. This prevents accidental usage but doesn't avoid name collisions. A better alternative is the ES6 <code>Symbol</code> primitive.</p>
+<blockquote>
+<p>A symbol is a unique and immutable data type, that may be used as an identifier for object properties.</p>
+</blockquote>
+<p>The below code demonstrates a symbol in action.</p>
+<pre><code class="language-javascript">const color = Symbol()
+
+// a middleware
+function colorize (elem, state, next) { 
+ elem[color] = 'red'
+ next()
+}
+</code></pre>
+<p>Now <code>'red'</code> is only reachable by owning a reference to the <code>color</code> symbol (and the element). The privacy of <code>'red'</code> can be controlled by exposing the <code>color</code> symbol to different extents. With a reasonable number of private variables, having a central symbol storage is an elegant solution.</p>
+<pre><code class="language-javascript">// symbols module
+exports.private = { 
+ color: Symbol('color from colorize')
+}
+exports.public = {} 
+</code></pre>
+<p>And an <code>index.js</code> like below.</p>
+<pre><code class="language-javascript">// main module
+const symbols = require('./symbols') 
+exports.symbols = symbols.public 
+</code></pre>
+<p>The storage is accessible inside the project for all modules, but the private part is not exposed to the outside. The public part can be used to expose low-level features to external developers. This prevents accidental usage since the developer has to explicitly require the needed symbol to use it. Moreover, symbol references can not collide like string names, so name collision is impossible.</p>
+<p>The points below summarize the pattern for different scenarios.</p>
+<p><strong>1. Public variables</strong></p>
+<p>Use them normally.</p>
+<pre><code class="language-javascript">function (elem, state, next) { 
+ elem.publicText = 'Hello World!'
+ next()
+}
+</code></pre>
+<p><strong>2. Private variables</strong></p>
+<p>Cross-scope variables, that are private to the project should have a symbol key added to the private symbol registry.</p>
+<pre><code class="language-javascript">// symbols module
+exports.private = { 
+ text: Symbol('private text')
+}
+exports.public = {} 
+</code></pre>
+<p>And required from it when needed somewhere.</p>
+<pre><code class="language-javascript">const private = require('symbols').private
+
+function (elem, state, next) { 
+ elem[private.text] = 'Hello World!'
+ next()
+}
+</code></pre>
+<p><strong>3. Semi-private variables</strong></p>
+<p>Variables of the low level API should have a symbol key added to the public symbol registry.</p>
+<pre><code class="language-javascript">// symbols module
+exports.private = { 
+ text: Symbol('private text')
+}
+exports.public = { 
+ text: Symbol('exposed text')
+}
+</code></pre>
+<p>And required from it when needed somewhere.</p>
+<pre><code class="language-javascript">const exposed = require('symbols').public
+
+function (elem, state, next) { 
+ elem[exposed.text] = 'Hello World!'
+ next()
+}
+</code></pre>
+<h3 id="conclusion">Conclusion</h3>
+<p>If you are interested in the NX framework, please <a href="http://nx-nxframework.rhcloud.com">visit the home page</a>. Adventurous readers can find the NX source code in <a href="https://github.com/RisingStack/nx-framework">this Github repository</a>.</p>
+<p>I hope you found this a good read, <strong>see you next time when I&#x2019;ll discuss execution timing!</strong></p>
+<p>If you have any thoughts on the topic, share it in the comments. <br>
+<br></p>
+</section>
+
+</div>
+</body></html>

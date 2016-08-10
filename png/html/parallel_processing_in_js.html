@@ -1,0 +1,285 @@
+<!DOCTYPE html><html><head><title>Parallel Processing in JS</title></head><body>
+<h1>Parallel Processing in JS</h1><p><a href="https://advancedweb.hu/2016/08/09/parallel-processing-in-js/" target="_new">Original URL</a></p>
+<p><blockquote>Motivation For a long time, Javascript was missing any kind of processing threads. While the single-threaded model added to developer comfort, it also made the platform unable to do serious and time&hellip;</blockquote></p>
+<div><div class="body">
+ 
+<h2 id="motivation">Motivation</h2>
+
+<p>For a long time, Javascript was missing any kind of processing threads. While the single-threaded model added
+to developer comfort, it also made the platform unable to do serious and time consuming calculations,
+and the only way to circumvent it was to do it on a remote server.</p>
+
+<p>Luckily, with the introduction and widespread adoption of Web Workers, we can now do resource-intensive
+calculations on background threads. On the down side, the specification had to fit into the current
+ecosystem, and it feels quite awkward at times. If you came from languages where threading
+is supported from the beginning, you might find the amount of restrictions surprising. It&#x2019;s far from
+just instantiating a new Thread and everything you write into that will be processed in parallel.</p>
+
+<p>This post is an introduction to Web Workers, how and when you can use them, and their peculiarities.
+I&#x2019;ll also cover how to use them in WebPack, and the possible pitfalls.</p>
+
+<h2 id="web-workers">Web Workers</h2>
+
+<p>Code (<a href="https://github.com/sashee/parallel-processing-in-js/blob/master/worker.html">html</a>,
+<a href="https://github.com/sashee/parallel-processing-in-js/blob/master/worker.js">js</a>) and
+<a href="https://sashee.github.io/parallel-processing-in-js/worker.html">demo</a> are available.</p>
+
+<p>Web Workers are probably the only way to achieve true multi-processing in Javascript. To create a
+worker, you need to instantiate it with the code it will run.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">const</span> <span class="nx">worker</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Worker</span><span class="p">(</span><span class="s2">"worker.js"</span><span class="p">);</span></code></pre></div>
+
+<p>This will create a Worker instance with the desired code. You can then communicate with the worker
+using postMessage, same as you would with IFrames. Since there are no cross-origin problems in play,
+there is no need to verify origins.</p>
+
+
+
+<p>And in the worker&#x2019;s code, you can listen to these events.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="nx">onmessage</span> <span class="o">=</span> <span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+	<span class="c1">// e.data will contain the value passed</span>
+<span class="p">};</span></code></pre></div>
+
+<p>This works both ways, so you can postMessage some data back from the worker&#x2019;s code into your main
+program.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="c1">// In the worker's code</span>
+<span class="nx">postMessage</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span></code></pre></div>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="c1">// In the main thread</span>
+<span class="nx">worker</span><span class="p">.</span><span class="nx">onmessage</span> <span class="o">=</span> <span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+	<span class="c1">// e.data will contain the value passed</span>
+<span class="p">};</span></code></pre></div>
+
+<p>These are the basics to get started with workers.</p>
+
+<h3 id="error-handling">Error handling</h3>
+
+<p>You have multiple methods to handle errors in the worker&#x2019;s code. You can catch and pass them via the
+postMessage channel. That would require some extra coding, but this is the most versatile and safest
+way.</p>
+
+<p>The other way is to use the <em>onerror</em> handler. This catches all exceptions that are not handled inside
+the worker itself and lets the caller code decide how to proceed. To set up error handling, all you
+need is to attach a handler.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="nx">worker</span><span class="p">.</span><span class="nx">onerror</span> <span class="o">=</span> <span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+	<span class="c1">// e is the exception</span>
+<span class="p">};</span></code></pre></div>
+
+<p>To ease debugging, there are some extra fields in the exception object. There are <em>filename</em>, <em>lineno</em>, and
+<em>colno</em> properties that indicate where things went wrong.</p>
+
+<h3 id="cleanup">Cleanup</h3>
+
+<p>Cleaning up workers after they are not needed is crucial. They spawn real OS-level threads, and they
+can easily kill the browser process if you spawn too many of them simultaneously.</p>
+
+<p>You have two ways to kill a worker process: inside the worker, or from outside. I think it&#x2019;s
+best to handle the lifecycle from the main page, but there might be certain situations you might
+think otherwise.</p>
+
+<p>To kill a worker, simply call its <em>terminate()</em> method. This will abruptly kill it, freeing all
+resources it is using. If it was processing something, that would halt too.</p>
+
+<p>If you want the worker to manage its lifecycle, just call the <em>stop()</em> method from the worker code.</p>
+
+<p>Either way, the worker is stopped, and should not leave anything behind.</p>
+
+<p>If you are using one-shot workers, that are doing some computations and then get discarded, make sure
+you are terminating them in the onerror handler too. Failing to do so will introduce hard-to-find
+leaks in your code.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="nx">worker</span><span class="p">.</span><span class="nx">onerror</span> <span class="o">=</span> <span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+	<span class="nx">worker</span><span class="p">.</span><span class="nx">terminate</span><span class="p">();</span>
+	<span class="nx">reject</span><span class="p">(</span><span class="nx">e</span><span class="p">);</span>
+<span class="p">};</span>
+<span class="nx">worker</span><span class="p">.</span><span class="nx">onmessage</span> <span class="o">=</span> <span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+	<span class="nx">worker</span><span class="p">.</span><span class="nx">terminate</span><span class="p">();</span>
+	<span class="nx">resolve</span><span class="p">(</span><span class="nx">e</span><span class="p">.</span><span class="nx">data</span><span class="p">);</span>
+<span class="p">}</span></code></pre></div>
+
+<h3 id="inline-workers">Inline Workers</h3>
+
+<p><a href="https://github.com/sashee/parallel-processing-in-js/blob/master/inline-worker.html">Code</a> and
+<a href="https://sashee.github.io/parallel-processing-in-js/inline-worker.html">demo</a> are available.</p>
+
+<p>Moving the worker code out to a separate file is making some simple cases more difficult than they
+should be. Luckily, the workers can be instantiated using a Blob, and you can make them however you&#x2019;d like.</p>
+
+<p>To make an inline worker, just create a Blob with the desired code, make an Object URL from it,
+and you can give it the worker constructor.</p>
+
+<div class="highlight"><pre><code class="language-html"><span class="c">&lt;!-- http://stackoverflow.com/a/6454685/2032154 --&gt;</span>
+<span class="nt">&lt;script </span><span class="na">id=</span><span class="s">"worker"</span> <span class="na">type=</span><span class="s">"javascript/worker"</span><span class="nt">&gt;</span>
+	<span class="c1">// Put your worker code here</span>
+<span class="nt">&lt;/script&gt;</span></code></pre></div>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">const</span> <span class="nx">code</span> <span class="o">=</span> <span class="nx">URL</span><span class="p">.</span><span class="nx">createObjectURL</span><span class="p">(</span><span class="k">new</span> <span class="nx">Blob</span><span class="p">([</span>
+	<span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s2">"worker"</span><span class="p">).</span><span class="nx">textContent</span>
+<span class="p">]));</span>
+<span class="kr">const</span> <span class="nx">worker</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Worker</span><span class="p">(</span><span class="nx">code</span><span class="p">);</span></code></pre></div>
+
+<p>Since you are creating a global ObjectURL, don&#x2019;t forget to get rid of it when it&#x2019;s not needed. Generally,
+you&#x2019;d revoke it when you terminate the worker instance.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="nx">worker</span><span class="p">.</span><span class="nx">terminate</span><span class="p">();</span>
+<span class="nx">URL</span><span class="p">.</span><span class="nx">revokeObjectURL</span><span class="p">(</span><span class="nx">code</span><span class="p">);</span></code></pre></div>
+
+<h3 id="workers-in-workers">Workers in Workers</h3>
+
+<p>In theory, you can spawn subworkers inside a worker, and it should work the same as you create one
+from the main thread. There is even an <a href="https://html.spec.whatwg.org/multipage/workers.html#delegation">example</a>
+in the spec on how to do it. But unfortunately there is a long-standing <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=31666">Chrome bug</a>, that prevents this use case. It might
+get fixed at some point, but this ticket was opened back in 2010, and there has been little progress since.
+You should not rely on this feature.</p>
+
+<h3 id="passing-data">Passing data</h3>
+
+<p><a href="https://github.com/sashee/parallel-processing-in-js/blob/master/data-passing.html">Code</a> and
+<a href="https://sashee.github.io/parallel-processing-in-js/data-passing.html">demo</a> are available.</p>
+
+<p>There are a few edge cases that you should be aware of when passing data to and from the worker.
+Passing simple values like numbers, strings, and arrays work as you&#x2019;d expect. You can pass simple
+structures and they get serialized/deserialized properly. In effect, you should not resort to serializing
+objects into JSON just to keep the structure; in fact, postMessage uses a <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm">structured clone algorithm</a>,
+which can process a few more types, like RegExps and Blobs, and circular references.</p>
+
+<p>That said, you should still limit what you pass to the simplest types as possible. There is no
+way you could pass functions, and even the supported types have some limitations; those would
+easily manifest themselves as hard-to-debug bugs. If you could define your API to handle only
+strings, numbers, arrays, and objects, you are less likely to face these kinds of problems.</p>
+
+<h4 id="circular-references">Circular references</h4>
+
+<p>If you have a complex object, there can be circular references in it. If you try to serialize it into
+JSON, you&#x2019;ll get a <em>TypeError: Converting circular structure to JSON</em>.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kd">let</span> <span class="nx">a</span> <span class="o">=</span> <span class="p">{};</span>
+<span class="kd">let</span> <span class="nx">b</span> <span class="o">=</span> <span class="p">{</span><span class="nx">a</span><span class="p">};</span>
+<span class="nx">a</span><span class="p">.</span><span class="nx">b</span> <span class="o">=</span> <span class="nx">b</span><span class="p">;</span>
+<span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">({</span><span class="nx">a</span><span class="p">,</span><span class="nx">b</span><span class="p">});</span> <span class="c1">// Error</span></code></pre></div>
+
+<p>But you can safely pass the same object to the postMessage, and you can use it inside the worker.</p>
+
+<h4 id="transferable-objects">Transferable objects</h4>
+
+<p>To prevent concurrent modification, everything you pass to postMessage is copied to the
+other side. This makes sure that you can not modify the same object from two places in parallel.</p>
+
+<p>But if you want to pass large amounts of data around, you&#x2019;ll quickly experience how slow these copy
+operations are. For example, if you are doing image-related calculations, you&#x2019;re likely to pass whole
+images; making the copies might easily be the bottleneck.</p>
+
+<p>Fortunately, there are transferable object, and you can, well, transfer them instead of copy them.
+One such transferable object is an <em>ArrayBuffer</em>, which can contain just about any raw data.</p>
+
+<p>If you transfer an object, the thread that originally owned it loses access. It makes sure
+that while the data is not copied, no concurrent modifications can happen.</p>
+
+<p>The postMessage syntax is quite awkward regarding transferables. You need to pass the data as previous
+as the first argument, but you need to pass an array of transferables as the second one.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">const</span> <span class="nx">ab</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">ArrayBuffer</span><span class="p">(</span><span class="mi">100</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">ab</span><span class="p">.</span><span class="nx">byteLength</span><span class="p">);</span> <span class="c1">// 100</span>
+<span class="nx">worker</span><span class="p">.</span><span class="nx">postMessage</span><span class="p">(</span><span class="nx">ab</span><span class="p">,</span> <span class="p">[</span><span class="nx">ab</span><span class="p">]);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">ab</span><span class="p">.</span><span class="nx">byteLength</span><span class="p">);</span> <span class="c1">// 0</span></code></pre></div>
+
+<p>Make sure you pass the transferable in the second argument; if you forget, the data will be copied
+over.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">const</span> <span class="nx">ab</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">ArrayBuffer</span><span class="p">(</span><span class="mi">100</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">ab</span><span class="p">.</span><span class="nx">byteLength</span><span class="p">);</span> <span class="c1">// 100</span>
+<span class="nx">worker</span><span class="p">.</span><span class="nx">postMessage</span><span class="p">(</span><span class="nx">ab</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">ab</span><span class="p">.</span><span class="nx">byteLength</span><span class="p">);</span> <span class="c1">// 100</span></code></pre></div>
+
+<h3 id="webpack">Webpack</h3>
+
+<p><a href="https://github.com/sashee/parallel-processing-in-js/blob/master/webpack/src/app.js">Code</a> and
+<a href="https://sashee.github.io/parallel-processing-in-js/webpack/dist/index.html">demo</a> are available.</p>
+
+<p>To use Web Workers with Webpack, you can use the <a href="https://github.com/webpack/worker-loader">worker-loader</a>.
+Just add it to the <em>devDependencies</em> section at your package.json, run <em>npm install</em>, and it&#x2019;s all set up.</p>
+
+<p>To use a worker, simply <em>require</em> it.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">const</span> <span class="nx">workerCode</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">"worker!./worker.js"</span><span class="p">);</span>
+
+<span class="p">...</span>
+
+<span class="kr">const</span> <span class="nx">worker</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">workerCode</span><span class="p">();</span></code></pre></div>
+
+<p>This will instantiate the worker, and you can use it the same way as without Webpack.</p>
+
+<p>To instantiate an inline worker, all you need to do is add the <em>inline</em> query parameter to the loader.</p>
+
+<p><a href="https://github.com/sashee/parallel-processing-in-js/blob/master/webpack/src/inline.js">Code</a> and
+<a href="https://sashee.github.io/parallel-processing-in-js/webpack/dist/inline.html">demo</a> are available.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">const</span> <span class="nx">workerCode</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">"worker?inline!./worker.js"</span><span class="p">);</span>
+
+<span class="p">...</span>
+
+<span class="kr">const</span> <span class="nx">worker</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">workerCode</span><span class="p">();</span></code></pre></div>
+
+<p>You can even import and use any modules inside the workers.</p>
+
+<div class="highlight"><pre><code class="language-javascript"><span class="kr">import</span> <span class="nx">fibonacci</span> <span class="nx">from</span> <span class="s2">"./fibonacci.js"</span><span class="p">;</span>
+
+<span class="p">...</span>
+
+<span class="kr">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="nx">fibonacci</span><span class="p">(</span><span class="nx">num</span><span class="p">);</span></code></pre></div>
+
+<h4 id="the-worse-parts">The worse parts</h4>
+
+<p>Getting the workers up and running in Webpack is quite easy. But there are a few obstacles you need
+to be aware of when you use this approach.</p>
+
+<p>First, there seems to be <strong>no way to move out the common parts</strong> of the code. If you have a worker that
+depends on a piece of code, then it will be included no matter whether other parts of your codebase also use
+it. And if you have multiple workers using the same library, then it will be included in all of them.</p>
+
+<p>You might think that if you dump worker-loader and specify a new entry point then use the
+<a href="https://webpack.github.io/docs/code-splitting.html">CommonsChunkPlugin</a>, it will take care of this.
+But unfortunately workers are not like a browser window, and some features are not available that the
+resulting code would require.</p>
+
+<p>Also, using inline workers do no better in this regard. The shared code is still present in multiple
+places inside the bundle.</p>
+
+<p>And second, <strong>inline workers
+<a href="https://github.com/webpack/worker-loader/blob/master/createInlineWorker.js#L16">leak ObjectURLs</a></strong>.
+They are created, but never freed. This might not seem a big problem, but if you use a lot of one-shot
+workers, it may affect performance.</p>
+
+<p>Based on the above observations, my advice is to use normal workers, and look out what you import into them.
+And also make sure you send appropriate cache headers, so that the browser does not need to download the code
+more than once.</p>
+
+<h2 id="iframes">IFrames</h2>
+
+<p>Web Workers are very similar to IFrames, and they might give the impression that using them would also
+result in parallel processing. But since IFrames have access to non-threadsafe APIs, like the DOM,
+the browser cannot spawn new threads for them. Click <a href="https://sashee.github.io/parallel-processing-in-js/iframe.html">here</a> for a demonstration.</p>
+
+<p>Cross-origin IFrames are quite different. They do not have access to most of the APIs, and they can
+communicate only via postMessage, same as Web Workers. This, in theory, allows browsers to run these
+IFrames on different threads and that would result in parallel processing.</p>
+
+<p>But in practice, they are still single-threaded, and the browser doesn&#x2019;t give them any special handling.
+To see it in action, click <a href="https://sashee.github.io/parallel-processing-in-js/iframe-crossorigin.html">here</a>.</p>
+
+
+
+<p>Web Workers solve the long-standing issue in Javascript on parallel processing. Albeit its syntax
+is a bit awkward and it poses quite a few limitations, the support is solid and does its job
+well. On the other hand, while there are basic tooling, they are not mature enough to be reliable.
+Seems like this technology is far from being mainstream, as there is only niche use-case.</p>
+
+<p>That said, if you need parallel processing, you don&#x2019;t need to wait for something else. Learn its rough
+edges, use the tools you need, and you can drastically improve the user experience.</p>
+
+ </div>
+</div>
+</body></html>

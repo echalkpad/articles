@@ -1,0 +1,124 @@
+<!DOCTYPE html><html><head><title>Writing a JavaScript Framework - Execution timing, beyond setTimeout</title></head><body>
+<h1>Writing a JavaScript Framework - Execution timing, beyond setTimeout</h1><p><a href="https://blog.risingstack.com/writing-a-javascript-framework-execution-timing-beyond-settimeout/" target="_new">Original URL</a></p>
+<p><blockquote>This is the second chapter of the Writing a JavaScript framework series. In this chapter, I am going to explain the different ways of executing asynchronous code in the browser. You will read about&hellip;</blockquote></p>
+<div><section class="post-content">
+<p><strong>This is the second chapter of the Writing a JavaScript framework series. In this chapter, I am going to explain the different ways of executing asynchronous code in the browser. You will read about the event loop and the differences between timing techniques, like setTimeout and Promises.</strong></p>
+<p><em>The series is about an open-source client-side framework, called NX. During the series, I explain the main difficulties I had to overcome while writing the framework. If you are interested in NX please visit the <a href="http://nx-framework.com" target="_blank">home page</a>.</em></p>
+<p>The series includes the following chapters:</p>
+<ol>
+<li><a href="https://blog.risingstack.com/writing-a-javascript-framework-project-structuring/">Project structuring</a> </li>
+<li>Execution timing (current chapter) </li>
+<li>Sandboxed code evaluation </li>
+<li>Data binding (part 1) </li>
+<li>Data binding (part 2) </li>
+<li>Custom elements </li>
+<li>Client side routing</li>
+</ol>
+<h2 id="asynccodeexecution">Async code execution</h2>
+<p>Most of you are probably familiar with <code>Promise</code>, <code>process.nextTick()</code>, <code>setTimeout()</code> and maybe <code>requestAnimationFrame()</code> as ways of executing asynchronous code. They all use the event loop internally, but they behave quite differently regarding precise timing. </p>
+<p>In this chapter, I will explain the differences, then show you how to implement a timing system that a modern framework, like NX requires. Instead of reinventing the wheel we will use the native event loop to achieve our goals.</p>
+<h2 id="theeventloop">The event loop</h2>
+<p>The event loop is not even mentioned in the <a href="http://www.ecma-international.org/ecma-262/6.0/" target="_blank">ES6 spec</a>. JavaScript only has jobs and job queues on its own. A more complex event loop is specified separately by NodeJS and the <a href="https://www.w3.org/TR/2016/CR-html51-20160621/webappapis.html#event-loops" target="_blank">HTML5 spec</a>. Since this series is about the front-end I will explain the latter one here.</p>
+<p>The event loop is called a loop for a reason. It is infinitely looping and looking for new tasks to execute. A single iteration of this loop is called a tick. The code executed during a tick is called a task.</p>
+<pre><code class="language-javascript">while (eventLoop.waitForTask()) { 
+ eventLoop.processNextTask()
+}
+</code></pre>
+<p>Tasks are synchronous pieces of code that may schedule other tasks in the loop. An easy programmatic way to schedule a new task is <code>setTimeout(taskFn)</code>. However, tasks may come from several other sources like user events, networking or DOM manipulation.</p>
+<p><img src="https://risingstack-blog.s3.amazonaws.com/2016/Aug/Execution_timing_event_lopp_with_tasks-1470127590983.svg" alt="Execution timing: Event loop with tasks"></p>
+<h3 id="taskqueues">Task queues</h3>
+<p>To complicate things a bit, the event loop can have multiple task queues. The only two restrictions are that events from the same task source must belong to the same queue and tasks must be processed in insertion order in every queue. Apart from these, the user agent is free to do as it wills. For example, it may decide which task queue to process next.</p>
+<pre><code class="language-javascript">while (eventLoop.waitForTask()) { 
+ const taskQueue = eventLoop.selectTaskQueue()
+ if (taskQueue.hasNextTask()) {
+ taskQueue.processNextTask()
+ }
+}
+</code></pre>
+<p>With this model, we loose precise control over timing. The browser may decide to totally empty several other queues before it gets to our task scheduled with <code>setTimeout()</code>.</p>
+<p><img src="https://risingstack-blog.s3.amazonaws.com/2016/Aug/Execution_timing_event_loop_with_task_queues-1470127624172.svg" alt="Execution timing: Event loop with task queues"></p>
+<h3 id="themicrotaskqueue">The microtask queue</h3>
+<p>Fortunately, the event loop also has a single queue called the microtask queue. The microtask queue is completely emptied in every tick after the current task finished executing.</p>
+<pre><code class="language-javascript">while (eventLoop.waitForTask()) { 
+ const taskQueue = eventLoop.selectTaskQueue()
+ if (taskQueue.hasNextTask()) {
+ taskQueue.processNextTask()
+ }
+
+ const microtaskQueue = eventLoop.microTaskQueue
+ while (microtaskQueue.hasNextMicrotask()) {
+ microtaskQueue.processNextMicrotask()
+ }
+}
+</code></pre>
+<p>The easiest way to schedule a microtask is <code>Promise.resolve().then(microtaskFn)</code>. Microtasks are processed in insertion order, and since there is only one microtask queue, the user agent can't mess with us this time. </p>
+<p>Moreover, microtasks can schedule new microtasks that will be inserted in the same queue and processed in the same tick.</p>
+<p><img src="https://risingstack-blog.s3.amazonaws.com/2016/Aug/Execution_timing_event_loop_with_microtask_queue-1470127679393.svg" alt="Execution timing: Event loop with microtask queue"></p>
+<h3 id="rendering">Rendering</h3>
+<p>The last thing missing is the rendering schedule. Unlike event handling or parsing, rendering is not done by separate background tasks. It is an algorithm that <strong>may</strong> run at the end of every loop tick. </p>
+<p>The user agent has a lot of freedom again: It may render after every task, but it may decide to let hundreds of tasks execute without rendering. </p>
+<p>Fortunately, there is <code>requestAnimationFrame()</code>, that executes the passed function right before the next render. Our final event loop model looks like this.</p>
+<pre><code class="language-javascript">while (eventLoop.waitForTask()) { 
+ const taskQueue = eventLoop.selectTaskQueue()
+ if (taskQueue.hasNextTask()) {
+ taskQueue.processNextTask()
+ }
+
+ const microtaskQueue = eventLoop.microTaskQueue
+ while (microtaskQueue.hasNextMicrotask()) {
+ microtaskQueue.processNextMicrotask()
+ }
+
+ if (shouldRender()) {
+ applyScrollResizeAndCSS()
+ runAnimationFrames()
+ render()
+ }
+}
+</code></pre>
+<p><img src="https://risingstack-blog.s3.amazonaws.com/2016/Aug/Execution_timing_event_loop_with_rendering-1470127703068.svg" alt="Execution timing: Event loop with rendering"></p>
+<p>Now let&#x2019;s use all this knowledge to build a timing system!</p>
+<h2 id="usingtheeventloop">Using the event loop</h2>
+<p>As most modern frameworks, <a href="http://nx-framework.com" target="_blank">NX</a> deals with DOM manipulation and data binding in the background. It batches operations and executes them asynchronously for better performance. To time these things right it relies on <code>Promises</code>, <code>MutationObservers</code> and <code>requestAnimationFrame()</code>.</p>
+<p>The desired timing is this:</p>
+<ol>
+<li>Code from the developer </li>
+<li>Data binding and DOM manipulation reactions by NX </li>
+<li>Hooks defined by the developer </li>
+<li>Rendering by the user agent</li>
+</ol>
+<h3 id="step1">#Step 1</h3>
+<p>NX registers object mutations with <a href="https://ponyfoo.com/articles/es6-proxies-in-depth" target="_blank">ES6 Proxies</a> and DOM mutations with a <a href="https://davidwalsh.name/mutationobserver-api" target="_blank">MutationObserver</a> synchronously (more about these in the next chapters). It delays the reactions as microtasks until step 2 for optimized performance. This delay is done by <code>Promise.resolve().then(reaction)</code> for object mutations, and handled automatically by the MutationObserver as it uses microtasks internally.</p>
+<h3 id="step2">#Step 2</h3>
+<p>The code (task) from the developer finished running. The microtask reactions registered by NX start executing. Since they are microtasks they run in order. Note that we are still in the same loop tick.</p>
+<h3 id="step3">#Step 3</h3>
+<p>NX runs the hooks passed by the developer using <code>requestAnimationFrame(hook)</code>. This may happen in a later loop tick. The important thing is that the hooks run before the next render and after all data, DOM and CSS changes are processed.</p>
+<h3 id="step4">#Step 4</h3>
+<p>The browser renders the next view. This may also happen in a later loop tick, but it never happens before the previous steps in a tick.</p>
+<h2 id="thingstokeepinmind">Things to keep in mind</h2>
+<p>We just implemented a simple but effective timing system on top of the native event loop. It works well in theory, but timing is a delicate thing, and slight mistakes can cause some very strange bugs.</p>
+<p>In a complex system, it is important to set up some rules about the timing and keep to them later. For NX I have the following rules.</p>
+<ol>
+<li>Never use <code>setTimeout(fn, 0)</code> for internal operations </li>
+<li>Register microtasks with the same method </li>
+<li>Reserve microtasks for internal operations only </li>
+<li>Do not pollute the developer hook execution time window with anything else</li>
+</ol>
+<h3 id="rule1and2">#Rule 1 and 2</h3>
+<p>Reactions on data and DOM manipulation should execute in the order the manipulations happened. It is okay to delay them as long as their execution order is not mixed up. Mixing execution order makes things unpredictable and difficult to reason about. <br>
+<code>setTimeout(fn, 0)</code> is totally unpredictable. Registering microtasks with different methods also leads to mixed up execution order. For example <code>microtask2</code> would incorrectly execute before <code>microtask1</code> in the example below.</p>
+<pre><code class="language-javascript">Promise.resolve().then().then(microtask1) 
+Promise.resolve().then(microtask2) 
+</code></pre>
+<p><img src="https://risingstack-blog.s3.amazonaws.com/2016/Aug/Execution_timing_microtask_registration_method-1470127727609.svg" alt="Execution timing: Microtask registration method"></p>
+<h3 id="rule3and4">#Rule 3 and 4</h3>
+<p>Separating the time window of the developer code execution and the internal operations is important. Mixing these two would start to cause seemingly unpredictable behavior, and it would eventually force developers to learn about the internal working of the framework. I think many front-end developers have experiences like this already.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>If you are interested in the NX framework, please visit the <a href="http://nx-framework.com" target="_blank">home page</a>. Adventurous readers can find the <a href="https://github.com/RisingStack/nx-framework" target="_blank">NX source code</a> in this Github repository.</p>
+<p>I hope you found this a good read, see you next time when I&#x2019;ll discuss sandboxed code evaluation!</p>
+<p>If you have any thoughts on the topic, please share them in the comments. </p>
+
+</section>
+
+</div>
+</body></html>

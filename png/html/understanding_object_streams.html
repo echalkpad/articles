@@ -1,0 +1,216 @@
+<!DOCTYPE html><html><head><title>Understanding Object Streams</title></head><body>
+<h1>Understanding Object Streams</h1><p><a href="https://nodesource.com/blog/understanding-object-streams/" target="_new">Original URL</a></p>
+<p><blockquote>One of the most useful, yet most commonly misunderstood types of Node.js streams are object streams. In this article we'll explain what exactly object streams are, how they behave in contrast to&hellip;</blockquote></p>
+<div><div class="blog-content markdown ns-hljs">
+ <p>One of the most useful, yet most commonly misunderstood types of Node.js streams are object streams. In this article we'll explain what exactly object streams are, how they behave in contrast to regular streams, and how we can use them ourselves.</p>
+
+<h2 id="whenbuffersandstringsdontsuffice">When Buffers and Strings Don't Suffice</h2>
+
+<p>Streams were originally designed to make processing I/O in Node more manageable and efficient. Streams are essentially <code>EventEmitter</code>s that can represent a readable and/or writable source of data. Just like a stream of liquid, the data flows to/from.</p>
+
+<p>By default streams only support dealing with <code>String</code>s and <code>Buffer</code>s. Node's core modules don't use object streams, partly because there aren't any real use cases yet. However, we can make use of object streams in our own code by using the <code>objectMode</code> option.</p>
+
+<p>When in <code>objectMode</code>, streams can push <code>String</code>s and <code>Buffer</code>s as well as any other JavaScript object. Another major difference is that when in <code>objectMode</code>, the internal buffering algorithm counts objects rather than bytes. This means if we have a Transform stream with the <code>highWaterMark</code> option set to 5, the stream will only buffer a maximum of 5 objects internally.</p>
+
+<h2 id="creatinganobjectstream">Creating an Object Stream</h2>
+
+<p>We'll start off by demonstrating a simple stream with <code>objectMode</code> enabled. We're going to create a simple <code>Transform</code> stream that receives data from a source, uppercases it, and splits the result at every whitespace character. As a result, our stream will emit arrays. Object streams don't have to be <code>Transform</code> streams, but we're going to implement one as an example.</p>
+
+<p>For the examples in this article we're going to use a module from npm called <em><a href="https://www.npmjs.com/package/through2">through2</a></em>. <em>through2</em> is a tiny abstraction around Node's core <code>stream.Tranform</code> class that allows you to create streams easily. We're also going to use another module called <em><a href="https://www.npmjs.com/package/split2">split2</a></em> to split our input by newlines.</p>
+
+<pre><code class="language-js">var through2 = require('through2') 
+var split2 = require('split2')
+
+var stream = through2({ objectMode: true }, function(chunk, enc, callback) { 
+ var string = chunk.toString()
+ var result = string.replace(/\n/, '').toUpperCase().split(/[ \t]/)
+
+ this.push(result)
+ callback()
+})
+
+stream.on('data', function(data) { 
+ var toString = Object.prototype.toString.call(data)
+ console.log('type of data:', toString)
+ console.log('data:', data, '\n')
+})
+
+process.stdin 
+ .pipe(split2())
+ .pipe(stream)
+</code></pre>
+
+<p>If we run this and feed some lines into the standard input, they'll be written back to the standard output like so.</p>
+
+<pre> 
+<b>Hello world</b> 
+type of data: [object Array] 
+data: ["HELLO", "WORLD"]
+
+<b>Transform streams are great!</b> 
+type of data: [object Array] 
+data: ["TRANSFORM", "STREAMS", "ARE", "GREAT!"] 
+</pre>
+
+<h2 id="playingnicelywithotherstreams">Playing Nicely With Other Streams</h2>
+
+<p>If an object stream <em>isn't</em> emitting <code>String</code>s or <code>Buffer</code>s, it's important to note that you can't pipe it to a non-object stream. Let's take the following code:</p>
+
+<pre><code class="language-js">var through2 = require('through2')
+
+var objectStream = through2.obj(function(chunk, encoding, callback) { 
+ chunk.timestamp = new Date()
+ this.push(chunk)
+ callback()
+})
+
+objectStream.pipe(process.stdout)
+
+objectStream.write({ status: 404, message: 'Not found' }) 
+objectStream.write({ status: 500, message: 'Internal server error'}) 
+</code></pre>
+
+<p>If we try run that, it'll fail straight away with a <code>TypeError: invalid data</code>. This happens because <code>process.stdout</code> is a regular stream that can only deal with <code>String</code>s and <code>Buffer</code>s. If we want to be able to pipe our data to <code>process.stdout</code>, we need to create another object stream that appropriately transforms our data, for example, by emitting a JSON-stringified version of our object.</p>
+
+<pre><code class="language-js">var jsonStream = through2.obj(function(chunk, encoding, callback) { 
+ this.push(JSON.stringify(chunk, null, 4) + '\n')
+ callback()
+})
+
+objectMode.pipe(jsonStream) 
+ .pipe(process.stdout)
+</code></pre>
+
+<p>If we run this code again, we can see that we get JSON data in our console.</p>
+
+<pre><code class="language-json">{
+ "status": 400,
+ "message": "Not found",
+ "timestamp": "2015-01-31T14:04:02.978Z"
+}
+{
+ "status": 500,
+ "message": "Internal server error",
+ "timestamp": "2015-01-31T14:04:02.978Z"
+}
+</code></pre>
+
+<h2 id="whereareobjectstreamsuseful">Where Are Object Streams Useful?</h2>
+
+<p>Though object streams aren't used in Node's core, they can be useful in a few cases.</p>
+
+<h3 id="protocolparsers">Protocol Parsers</h3>
+
+<p>These streams can take in raw data from a server and create useful and consumable representations of it in JavaScript. For example, the <em><a href="https://www.npmjs.com/package/irc-message-stream">irc-message-stream</a></em> module can take a stream of IRC data, parse it and push descriptive JavaScript objects.</p>
+
+<pre><code class="language-js">var net = require('net') 
+var messageStream = require('irc-message-stream')
+
+net.connect(6667, 'irc.freenode.net') 
+ .pipe(messageStream())
+ .on('data', function(message) {
+ console.log(JSON.stringify(message, null, 4))
+ console.log('is server?', message.prefixIsServer())
+ })
+</code></pre>
+
+<p>This will produce output similar to the following:</p>
+
+<pre><code>{
+ "tags": {}
+ "prefix": "server.freenode.net",
+ "command": "*",
+ "params": ["randomuser", "*** Looking up your hostname..."]
+}
+is server? true 
+</code></pre>
+
+<p><em><a href="https://www.npmjs.com/package/csv-parse">csv-parse</a></em> (the module used in <em><a href="https://www.npmjs.com/package/csv">csv</a></em>) also uses an object stream, to parse CSV data from buffers. You can see the implementation for this <a href="https://github.com/wdavidw/node-csv-parse/blob/7be7339b5215c461651ee0ed19103b07e6848295/lib/index.js#L70">over here</a>, the module would be used like so:</p>
+
+<pre><code class="language-js">var fs = require('fs') 
+var csvParse = require('csv-parse')
+
+fs.createReadStream('data.csv') 
+ .pipe(csvParse({ auto_parse: true }))
+ .on('data', function(record) {
+ console.log(JSON.stringify(record))
+ })
+</code></pre>
+
+<p>If we create <em>data.csv</em> with some CSV data (such as below), we can see what output we'll get from running our code.</p>
+
+<pre><code class="language-text">Fionn,Kelleher,"Writer, Developer",1234 
+Phil,Lynott,"Singer, Songwriter",5678 
+</code></pre>
+
+<pre><code class="language-json">["Fionn","Kelleher","Writer, Developer",1234]
+["Phil","Lynott","Singer, Songwriter",5678]
+</code></pre>
+
+<p>If we wanted to, we could chain our stream of CSV data with another Transform stream to convert it into a more descriptive object.</p>
+
+<pre><code class="language-js">var fs = require('fs') 
+var csvParse = require('csv-parse') 
+var through2 = require('through2')
+
+fs.createReadStream('data.csv') 
+ .pipe(csvParse({ auto_parse: true }))
+ .pipe(through2.obj(function(chunk, encoding, callback) {
+ this.push({
+ firstName: chunk[0],
+ lastName: chunk[1],
+ professions: chunk[2].split(', '),
+ id: chunk[3]
+ })
+ callback()
+ }))
+ .on('data', function(record) {
+ console.log(JSON.stringify(record, null, 4))
+ })
+</code></pre>
+
+<p>This will give us the following output.</p>
+
+<pre><code class="language-json">{
+ "firstName": "Fionn",
+ "lastName": "Kelleher",
+ "professions": [
+ "Writer",
+ "Developer"
+ ],
+ "id": 1234
+}
+{
+ "firstName": "Phil",
+ "lastName": "Lynott",
+ "professions": [
+ "Singer",
+ "Songwriter"
+ ],
+ "id": 5678
+}
+</code></pre>
+
+<h3 id="databaserecords">Database Records</h3>
+
+<p>Another common use case for object streams is for consuming database records. Modules like <em><a href="https://www.npmjs.com/package/levelup">LevelUP</a></em> can create streams that emit objects with key/value pairs.</p>
+
+<pre><code class="language-js">var levelup = require('levelup') 
+var db = levelup('./testdb')
+
+db.createReadStream() 
+ .on('data', function (data) {
+ console.log(data.key, "=", data.value)
+ })
+
+db.put('hello', 'world', function (err) { 
+ if (err) console.log(err)
+})
+</code></pre>
+
+
+
+<p>Hopefully from reading this, you have a more concrete understanding of object streams and how they can be applied.</p>
+ </div>
+ </div>
+</body></html>

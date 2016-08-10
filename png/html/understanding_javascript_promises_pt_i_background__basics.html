@@ -1,0 +1,323 @@
+<!DOCTYPE html><html><head><title>Understanding JavaScript Promises, Pt. I: Background & Basics</title></head><body>
+<h1>Understanding JavaScript Promises, Pt. I: Background & Basics</h1><p><a href="https://scotch.io/tutorials/understanding-javascript-promises-pt-i-background-basics" target="_new">Original URL</a></p>
+<p><blockquote>The Promised Land Native Promises are amongst the biggest changes ES2015 make to the JavaScript landscape. They eliminate some of the more substantial problems with callbacks, and allow us to write&hellip;</blockquote></p>
+<div><div class="content">
+<h2>The Promised Land</h2>
+<p><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise">Native Promises</a> are amongst the biggest changes ES2015 make to the JavaScript landscape. They eliminate some of the more substantial problems with callbacks, and allow us to write asynchronous code that more nearly abides by synchronous logic.</p>
+<p>It's probably safe to say that promises, together with <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function*">generators</a>, represent the New Normal&#x2122; of asyc. Whether you use them or not, you've <em>got</em> to understand them.</p>
+<p>Promises feature a fairly simple API, but come with a bit of a learning curve. They can be conceptually exotic if you've never seen them before, but all it takes to wrap your head around them is a gentle introduction and ample practice. </p>
+<p>By the end of this article, you'll be able to:</p>
+<ul>
+<li>Articulate <em>why</em> we have promises, and what problems they solve;</li>
+<li>Explain <em>what</em> promises are, from the perspective both of their <em>implementation</em> and their <em>usage</em>; and</li>
+<li>Reimplement common callback patterns using promises.</li>
+</ul>
+<p>Oh, one note. The examples assume you're running Node. You can copy/paste the scripts manually, or <a href="https://github.com/Peleke/promises/">clone my repo</a> to save the trouble.</p>
+<p>Just clone it down and checkout the <code>Part_1</code> branch:</p>
+<pre><code class="language-bash">git clone https://github.com/Peleke/promises/
+git checkout Part_1-Basics</code></pre>
+<p>. . . And you're good to go. The following is our outline for this path of promises:</p>
+<ul>
+<li>The Problem with Callbacks</li>
+<li>Promises: Definitions w/ Notes from the A+ Spec</li>
+<li>Promises &amp; Un-inversion of Control</li>
+<li>Control Flow with Promises </li>
+<li>Grokking <code>then</code>, <code>reject</code>, &amp; <code>resolve</code></li>
+</ul>
+<h2>Asynchronicity</h2>
+<p>If you've spent any time at all with JavaScript, you've probably heard that it's <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/EventLoop">fundamentally <em>non-blocking</em></a>, or <em>asynchronous</em>. But what doe that mean, exactly? </p>
+<h3>Sync &amp; Async</h3>
+<p><strong>Synchronous code</strong> runs <em>before</em> any code that follows it. You'll also see the term <strong>blocking</strong> as a synonym for synchronous, since it <em>block</em> the rest of the program from running until it finishes. </p>
+<pre><code class="language-javascript">// readfile_sync.js
+
+"use strict";
+
+// This example uses Node, and so won't run in the browser. 
+const filename = 'text.txt', 
+ fs = require('fs');
+
+console.log('Reading file . . . ');
+
+// readFileSync BLOCKS execution until it returns. 
+// The program will wait to execute anything else until this operation finishes. 
+const file = fs.readFileSync(`${__dirname}/${filename}`); 
+
+// This will ALWAYS print after readFileSync returns. . . 
+console.log('Done reading file.');
+
+// . . . And this will ALWAYS print the contents of 'file'.
+console.log(`Contents: ${file.toString()}`); </code></pre>
+<p><img src="https://cdn.scotch.io/1/YFAlIhhTpyghE3mzYSXw_6203660244.png" alt="Predictable results from readFileSync."></p>
+<p><strong>Asynchronous code</strong> is just the opposite: It allows the rest of the program to execute while it handles long-running operations, such as I/O or network operations. This is also called <strong>non-blocking code</strong>. Here's the asynchronous analogue of the above snippet:</p>
+<pre><code class="language-javascript">// readfile_async.js
+
+"use strict";
+
+// This example uses Node, so it won't run in the browser.
+const filename = 'text.txt', 
+ fs = require('fs'),
+ getContents = function printContent (file) {
+ try {
+ return file.toString();
+ } catch (TypeError) {
+ return file; 
+ } 
+ }
+
+console.log('Reading file . . . ');
+console.log("=".repeat(76));
+
+// readFile executes ASYNCHRONOUSLY. 
+// The program will continue to execute past LINE A while 
+// readFile does its business. We'll talk about callbacks in detail
+// soon -- for now, just pay mind to the the order of the log
+// statements.
+let file;
+fs.readFile(`${__dirname}/${filename}`, function (err, contents) {
+ file = contents;
+ console.log( `Uh, actually, now I'm done. Contents are: ${ getContents(file) }`);
+}); // LINE A
+
+// These will ALWAYS print BEFORE the file read is complete.
+
+// Well, that's both misleading and useless.
+console.log(`Done reading file. Contents are: ${getContents(file)}`); 
+console.log("=".repeat(76));</code></pre>
+<p><img src="https://cdn.scotch.io/1/eSFXleTTiVtdfMn2RFng_61ff5d552e.png" alt="Async I/O can make for confusing results."></p>
+<p>The major advantage to synchronous code is that it's easy to read and reason about: Synchronous programs execute from top to bottom, and line <em>n</em> finishes before line <em>n + 1</em>. Period. </p>
+<p>The major disadvantage is that synchronous code is slow&#x2014;often debilitatingly so. Freezing the browser for two seconds every time your user needs to hit the server makes for a lousy user experience.</p>
+<p>And this, <em>mes amis</em>, is why JavaScript is non-blocking at the core.</p>
+<h3>The Challenge of Asynchronicity</h3>
+<p>Going async buys us speed, but costs us linearity. Even the trivial script above demonstrates this. Note that:</p>
+<ol>
+<li>There's no way to know when <code>file</code> will be available, other than handing control to <code>readFile</code> and letting <em>it</em> notify us when it's ready; and</li>
+<li>Our program no longer executes the way it reads, which makes it harder to reason about.</li>
+</ol>
+<p>These problems alone are enough to occupy us for the rest of this article.</p>
+<h2>Callbacks &amp; Fallbacks</h2>
+<p>Let's strip our async <code>readFile</code> example down a bit.</p>
+<pre><code class="language-javascript">"use strict";
+
+const filename = 'throwaway.txt',
+ fs = require('fs');
+
+let file, useless;
+
+useless = fs.readFile(`${__dirname}/${filename}`, function callback (error, contents) {
+ file = contents;
+ console.log( `Got it. Contents are: ${contents}`);
+ console.log( `. . . But useless is still ${useless}.` );
+});
+
+console.log(`File is ${undefined}, but that'll change soon.`);</code></pre>
+<p>Since <code>readFile</code> is non-blocking, it must return immediately for the program to continue to execute. Since <em>Immediately</em> isn't enough time to perform I/O, it returns <code>undefined</code>, and we execute as much as we can until <code>readFile</code> finishes . . . Well, reading the file.</p>
+<p>The question is, <em>how do we know when the read is complete</em>? </p>
+<p>Unfortunately, <em>we</em> can't. But <code>readFile</code> can. In the snippet above, we've passed <code>readFile</code> two arguments: A filename, and a function, called a <strong>callback</strong>, which we want to execute as soon as the read is finished.</p>
+<p>In English, this reads something like: "<code>readFile</code>; see what's inside of <code>${__dirname}/${filename}</code>, and take your time. Once you know, run this <code>callback</code> with the <code>contents</code>, and let me know if there was an <code>error</code>."</p>
+<p>The important thing to take away is that <em>we</em> can't know when the file contents are ready: Only <code>readFile</code> can. That's why we hand it our callback, and trust <em>it</em> to do the right thing with it. </p>
+<p>This is the pattern for dealing with asynchronous functions in general: Call it with parameters, and pass it a callback to run with the result.</p>
+<p>Callbacks are <em>a</em> solution, but they're not perfect. Two bigger problems are:</p>
+<ol>
+<li>Inversion of control; and</li>
+<li>Complicated error handling.</li>
+</ol>
+<h4>Inversion of Control</h4>
+<p>The first problem is one of trust.</p>
+<p>When we pass <code>readFile</code> our callback, we <em>trust</em> it will call it. There is absolutely no guarantee it actually will. Nor is there any guarantee that, if it does call, that it will be with the right parameters, in the right order, the right number of times.</p>
+<p>In practice, this obviously hasn't been fatal: We've written callbacks for twenty years without breaking the Internet. And, in this case, we know that it's probably safe to hand control to core Node code. </p>
+<p>But handing control over mission-critical aspects of your application to a third party should feel risky, and has been the source of many a hard-to-squash <a href="https://en.wikipedia.org/wiki/Heisenbug">heisenbug</a> in the past.</p>
+<h4>Implicit Error Handling</h4>
+<p>In synchronous code, we can use <code>try</code>/<code>catch</code>/<code>finally</code> to handle errors.</p>
+<pre><code class="language-javascript">"use strict";
+
+// This example uses Node, and so won't run in the browser. 
+const filename = 'text.txt', 
+ fs = require('fs');
+
+console.log('Reading file . . . ');
+
+let file;
+try {
+ // Wrong filename. D'oh!
+ file = fs.readFileSync(`${__dirname}/${filename + 'a'}`); 
+ console.log( `Got it. Contents are: '${file}'` );
+} catch (err) {
+ console.log( `There was a/n ${err}: file is ${file}` );
+}
+
+console.log( 'Catching errors, like a bo$$.' );</code></pre>
+<p>Async code lovingly tosses that out the window.</p>
+<pre><code class="language-javascript">"use strict";
+
+// This example uses Node, and so won't run in the browser. 
+const filename = 'throwaway.txt', 
+ fs = require('fs');
+
+console.log('Reading file . . . ');
+
+let file;
+try {
+ // Wrong filename. D'oh!
+ fs.readFile(`${__dirname}/${filename + 'a'}`, function (err, contents) {
+ file = contents;
+ });
+
+ // This shouldn't run if file is undefined
+ console.log( `Got it. Contents are: '${file}'` );
+} catch (err) {
+ // In this case, catch should run, but it never will.
+ // This is because readFile passes errors to the callback -- it does /not/
+ // throw them.
+ console.log( `There was a/n ${err}: file is ${file}` );
+}</code></pre>
+<p>This doesn't work as expected. This is because the <code>try</code> block wraps <code>readFile</code>, <em>which will always return successfully with <code>undefined</code></em> . This means that <code>try</code> will <em>always</em> complete without incident.</p>
+<p>The only way for <code>readFile</code> to notify you of errors is to pass them to your callback, where we handle them ourselves.</p>
+<pre><code class="language-javascript">"use strict";
+
+// This example uses Node, and so won't run in the browser. 
+const filename = 'throwaway.txt',
+ fs = require('fs');
+
+console.log('Reading file . . . ');
+
+fs.readFile(`${__dirname}/${filename + 'a'}`, function (err, contents) {
+ if (err) { // catch
+ console.log( `There was a/n ${err}.` );
+ } else { // try
+ console.log( `Got it. File contents are: '${file}'`);
+ }
+});</code></pre>
+<p>This example isn't so bad, but propagating information about the error through large programs quickly beomes unwieldly.</p>
+<p>Promises address both of these problems, and several others, by <em>un</em>inverting control, and "synchronizing" our asynchronous code so as to enable more familiar error handling.</p>
+<h2>Promises</h2>
+<p>Imagine you just ordered the entire <a href="https://github.com/getify/You-Dont-Know-JS/blob/master/README.md#you-dont-know-js-book-series">You Don't Know JS</a> catalog from O'Reilly. In exchange for your hard-earned cash, they send a receipt acknowledging that you'll receive a shiny new stack of books next Monday. Until then, you don't <em>have</em> that new stack of books. But you can trust that you <em>will</em>, because they <em>promised</em> to send it. </p>
+<p>That promise is enough that, before they even arrive, you can plan to set aside time to read every day; agree to loan a few of the titles out to friends; and give your boss notice that you'll be too busy reading for a full week to come to the office. You don't need the books to make those plans&#x2014;you just need to know you'll get them.</p>
+<p>Of course, O'Reilly might tell you a few days later that they can't fill the order for whatever reason. At that point, you'll erase that block of daily reading time; let your friends <del>down</del> know the you won't receive the books, after all; and tell your boss you actually <em>will</em> be reporting to work next week.</p>
+<p>A <strong>promise</strong> is like that receipt. It's an object that stands in for a value that <em>is not ready yet</em>, but <em>will be ready later</em>&#x2014;in other words, a <em>future value</em>. You treat the promise as if it were the value you're waiting for, and write your code as if you already had it. </p>
+<p>In the event there's a hiccup, Promises handle the interrupted control flow internally, and allow you to use a special <code>catch</code> keyword to handle errors. It's a little different from the synchronous version, but nonetheless more familiar than coordinating multiple error handlers across otherwise uncoordinated callbacks.</p>
+<p>And, since a promise <em>hands you</em> the value when it's ready, <em>you</em> decide what to do with it. This fixes the inversion of control problem: <em>You</em> handle your application logic directly, without having to hand control to third parties. </p>
+<h3>The Promise Life Cycle: A Brief Look at States</h3>
+<p>Imagine you've used a Promise to make an API call. </p>
+<p>Since the server can't respond instantaneously, the Promise doesn't immediately contain its final value, nor will it be able to immediately report an error. Such a Promise is said to be <strong>pending</strong>. This is the case where you're waiting for your stack of books.</p>
+<p>Once the server <em>does</em> respond, there are two possible outcomes. </p>
+<ol>
+<li>The Promise gets the value it expected, in which case it is <strong>fulfilled</strong>. This is receiving your book order.</li>
+<li>In the event there's an error somewhere along the pipeline, the Promise is said to be <strong>rejected</strong>. This is the notification that you won't get your order.</li>
+</ol>
+<p>Together, these are the three possible <strong>states</strong> a Promise can be in. Once a Promise is either fulfilled or rejected, it <em>cannot</em> transition to any other state.</p>
+<p>Now that the jargon is out of the way, let's see how we actually use these things.</p>
+<h2>Fundamental Methods on Promises</h2>
+<p>To quote the <a href="https://promisesaplus.com/">Promises/A+ spec</a>:</p>
+<blockquote>
+<p>A promise represents the eventual result of an asynchronous operation. The primary way of interacting with a promise is through its <code>then</code> method, which registers callbacks to receive either a promise&#x2019;s eventual value or the reason why the promise cannot be fulfilled.</p>
+</blockquote>
+<p>This section will take a closer look at the basic usage of Promises:</p>
+<ol>
+<li>Creating Promises with the constructor;</li>
+<li>Handling success with <code>resolve</code>; </li>
+<li>Handling errors with <code>reject</code>; and</li>
+<li>Setting up control flow with <code>then</code> and <code>catch</code>.</li>
+</ol>
+<p>In this example, we'll use Promises to clean up the <code>fs.readFile</code> code from above.</p>
+<h2>Creating Promises</h2>
+<p>The most basic way to create a Promise is to use the constructor directly. </p>
+<pre><code class="language-js">'use strict';
+
+const fs = require('fs');
+
+const text = 
+ new Promise(function (resolve, reject) {
+ // Does nothing
+ })</code></pre>
+<p>Note that we pass the Promise constructor a function as an argument. This is where we tell the Promise <em>how</em> to execute the asynchronous operation; what to do when we get the value we expect; and what to do if we get an error. In particular:</p>
+<ol>
+<li>The <code>resolve</code> argument is <em>also</em> a function, and encapsulates what we want to do when we receive the <strong>expected value</strong>. When we get that expected value (<code>val</code>), we call <code>resolve</code> with it: <code>resolve(val)</code>.</li>
+<li>The <code>reject</code> argument is <em>also</em> a function, and represents what we want to do when we receive an <strong>error</strong>. If we get an error (<code>err</code>), we call <code>reject</code> with it: <code>reject(err)</code>.</li>
+<li>Finally, the function we pass to the Promise constructor handles the asynchronous code itself. If it returns as expected, we call <code>resolve</code> with the value we get back. If it throws an error, we call <code>reject</code> with the error.</li>
+</ol>
+<p>Our running example is to wrap <code>fs.readFile</code> in a Promise. What should our <code>resolve</code> and <code>reject</code> look like?</p>
+<ol>
+<li>In the event of success, we want to <code>console.log</code> the file contents.</li>
+<li>In the event of error, we'll do the same thing: <code>console.log</code> the error.</li>
+</ol>
+<p>That nets us something like this.</p>
+<pre><code class="language-js">// constructor.js
+
+const resolve = console.log, 
+ reject = console.log;</code></pre>
+<p>Next, we need to fill out the function that we pass to the constructor. Remember, our task is to:</p>
+<ol>
+<li>Read a file, and</li>
+<li>If successful, <code>resolve</code> the contents;</li>
+<li>Else, <code>reject</code> with an error.</li>
+</ol>
+<p>Thus:</p>
+<pre><code class="language-js">// constructor.js
+
+const text = 
+ new Promise(function (resolve, reject) {
+ // Normal fs.readFile call, but inside Promise constructor . . . 
+ fs.readFile('text.txt', function (err, text) {
+ // . . . Call reject if there's an error . . . 
+ if (err) 
+ reject(err);
+ // . . . And call resolve otherwise.
+ else
+ // We need toString() because fs.readFile returns a buffer.
+ resolve(text.toString());
+ })
+ })</code></pre>
+<p>With that, we're technically done: This code creates a Promise that does exactly what we want it to. But, if you run the code, you'll notice that it executes without printing a result or an error.</p>
+<h2>She made a Promise, and then . . .</h2>
+<p>The problem is that we <em>wrote</em> our <code>resolve</code> and <code>reject</code> methods, but didn't actually pass them to the Promise! For that, we need to introduce the basic function for setting up Promise-based control-flow: <code>then</code>.</p>
+<p>Every Promise has a method, called <code>then</code>, which accepts two functions as arguments: <code>resolve</code>, and <code>reject</code>, <em>in that order</em>. Calling <code>then</code> on a Promise and passing it these functions allows the function you passed to the constructor to access them.</p>
+<pre><code class="language-js">// constructor.js
+
+const text = 
+ new Promise(function (resolve, reject) {
+ fs.readFile('text.txt', function (err, text) {
+ if (err) 
+ reject(err);
+ else
+ resolve(text.toString());
+ })
+ })
+ .then(resolve, reject);</code></pre>
+<p>With that, our Promise reads the file, and calls the <code>resolve</code> method we wrote before upon success.</p>
+<p>It's also crucial to remember that <code>then</code> <strong>always returns a Promise object</strong>. That means you can chain several <code>then</code> calls to create complex and synchronous-looking control flows over asynchronous operations. We'll dig into this in much more detail in the next installment, but the <code>catch</code> example in the next subsection gives a taste as to what this looks like.</p>
+<h2>Syntactical Sugar for Catching Errors</h2>
+<p>We passed <code>then</code> two functions: <code>resolve</code>, which we call in the event of success; and <code>reject</code>, which we call in the event of error.</p>
+<p>Promises also expose a function similar to <code>then</code>, called <code>catch</code>. It accepts a reject handler as its single argument.</p>
+<p>Since <code>then</code> always returns a Promise, in the example above, we could have <em>only</em> passed <code>then</code> a resolve handler, and chained a <code>catch</code> with our reject handler afterwards.</p>
+<pre><code class="language-js">const text = 
+ new Promise(function (resolve, reject) {
+ fs.readFile('tex.txt', function (err, text) {
+ if (err) 
+ reject(err);
+ else
+ resolve(text.toString());
+ })
+ })
+ .then(resolve)
+ .catch(reject);</code></pre>
+<p>Finally, it's worth pointing out that <code>catch(reject)</code> is just syntactic sugar for <code>then(undefined, reject)</code>. So, we could also write:</p>
+<pre><code class="language-js">const text = 
+ new Promise(function (resolve, reject) {
+ fs.readFile('tex.txt', function (err, text) {
+ if (err) 
+ reject(err);
+ else
+ resolve(text.toString());
+ })
+ })
+ .then(resolve)
+ .then(undefined, reject);</code></pre>
+<p>. . . But that's much less readable.</p>
+<h2>Wrapping Up</h2>
+<p>Promises are an indispensable tool in the async programming toolkit. They can be intimidating at first, but that's only because they're unfamiliar: Use them a few times, and they'll be as natural as <code>if</code>/<code>else</code>. </p>
+<p>Next time, we'll get some practice by converting callback-based code to use Promises, and take a look at <a href="https://github.com/kriskowal/q">Q</a>, a popular Promises library. </p>
+<p>Until then, read Domenic Denicola's <a href="https://github.com/domenic/promises-unwrapping/blob/master/docs/states-and-fates.md">States and Fates</a> to master the terminology, and read Kyle Simpson's chapter on <a href="https://github.com/getify/You-Dont-Know-JS/blob/master/async%20%26%20performance/ch3.md">Promises</a> from the book series we ordered earlier.</p>
+<p>As always, drop questions in the comments below, or shoot them to me on Twitter (<a href="http://www.twitter.com/PelekeS">@PelekeS</a>). I promise to respond!</p>
+</div>
+</div>
+</body></html>

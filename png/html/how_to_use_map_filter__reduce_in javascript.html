@@ -1,0 +1,317 @@
+<!DOCTYPE html><html><head><title>How to Use Map, Filter, & Reduce in JavaScript</title></head><body>
+<h1>How to Use Map, Filter, & Reduce in JavaScript</h1><p><a href="http://code.tutsplus.com/tutorials/how-to-use-map-filter-reduce-in-javascript--cms-26209" target="_new">Original URL</a></p>
+<p><blockquote>Functional programming has been making quite a splash in the&#xA0;development world these days. And for good reason: Functional techniques can help you write more declarative code&#xA0;that is easier&hellip;</blockquote></p>
+<div><div class="post-body__content"><p>Functional programming has been making quite a splash in the&#xA0;development world these days. And for good reason: Functional techniques can help you write more declarative code&#xA0;that is easier to understand at a glance, refactor, and test.&#xA0;<br></p><p>One of the cornerstones of functional programming is its special&#xA0;use of&#xA0;lists and list operations. And those things are exactly what the sound like they are: arrays of things, and the stuff you do to them. But the functional mindset treats them a bit differently than you might expect.</p><p>This article will take a close look at what I like to call the "big three" list operations: <code class="inline">map</code>, <code class="inline">filter</code>, and <code class="inline">reduce</code>. Wrapping your head around these three functions is an important step towards being able to write clean functional code, and opens the doors to the vastly powerful techniques of functional and reactive programming.</p><p>It also means you'll never&#xA0;have to write a <code class="inline">for</code> loop again.</p><p>Curious? Let's dive in.</p><h2>A Map From List to List</h2><p>Often, we find ourselves needing to take an array and modify every element in it in exactly the same way. Typical examples of this are squaring every element in an array of numbers,&#xA0;retrieving the name from a list of users, or running a regex against an array of strings.</p><p><code class="inline">map</code>&#xA0;is a method built to do&#xA0;exactly that. It's defined on <code class="inline">Array.prototype</code>, so&#xA0;you can call it&#xA0;on any array, and it accepts a callback as its first argument.&#xA0;</p><p>When you call&#xA0;<code class="inline">map</code>&#xA0;on an array, it&#xA0;executes that callback on every element within it, returning a <em>new</em>&#xA0;array with all of the values that the callback returned.</p><p>Under the hood,&#xA0;<code class="inline">map</code> passes three arguments to&#xA0;your callback:</p><ol>
+<li>The <em>current item</em> in the array</li>
+<li>The <em>array index</em> of the current item</li>
+<li>The <em>entire array</em> you called map on&#xA0;</li>
+</ol><p>Let's look at some code.</p><h3>
+<code class="inline">map</code> in Practice</h3><p>Suppose we have an app that maintains an array of your tasks for the day. Each <code class="inline">task</code> is an object, each with a <code class="inline">name</code> and <code class="inline">duration</code> property:</p><pre class="brush: javascript noskimlinks noskimwords">// Durations are in minutes
+
+var tasks = [
+
+ {
+
+ 'name' : 'Write for Envato Tuts+',
+
+ 'duration' : 120
+
+ },
+
+ {
+
+ 'name' : 'Work out',
+
+ 'duration' : 60
+
+ },
+
+ {
+
+ 'name' : 'Procrastinate on Duolingo',
+
+ 'duration' : 240
+
+ }
+
+];</pre><p>Let's say we want to create a new array with just the name of each task, so we can take a look at everything we've gotten done today. Using a <code class="inline">for</code> loop, we'd write something like this:</p><pre class="brush: javascript noskimlinks noskimwords">var task_names = [];
+
+for (var i = 0, max = tasks.length; i &lt; max; i += 1) {
+
+ task_names.push(tasks[i].name);
+
+}</pre><p>JavaScript also offers a&#xA0;<code class="inline">forEach</code> loop. It functions like a&#xA0;<code class="inline">for</code> loop, but manages all the messiness of checking our loop index against the array length for us:</p><pre class="brush: plain noskimlinks noskimwords">var task_names = [];
+
+tasks.forEach(function (task) {
+
+ task_names.push(task.name);
+ 
+});</pre><p>Using <code class="inline">map</code>, we can write:</p><pre class="brush: javascript noskimlinks noskimwords">var task_names = tasks.map(function (task, index, array) {
+
+ return task.name; 
+
+});</pre><p>I include the <code class="inline">index</code> and &#xA0;<code class="inline">array</code> parameters to remind you that they're there if you need them. Since I didn't use them here, though, you could leave them out, and the code would run just fine.</p><p>There are a few important differences between the two approaches:</p><ol>
+<li>Using <code class="inline">map</code>, you don't have to manage the state of the <code class="inline">for</code> loop yourself.</li>
+<li>You can operate on the element directly, rather than having to index into the array.</li>
+<li>You don't have to create a new array and <code class="inline">push</code> into it. <code class="inline">map</code>&#xA0;returns the finished product all in one go, so we can simply assign the return value to a new variable.</li>
+<li>You <em>do</em> have to remember to include a&#xA0;<code class="inline">return</code>&#xA0;statement in your callback. If you don't, you'll get a new array filled with <code class="inline">undefined</code>.&#xA0;</li>
+</ol><p>Turns out, <em>all</em> of the functions we'll look at today share these characteristics.</p><p>The fact that we don't have to manually manage the state of the loop makes our code simpler and more maintainable. The fact that we can operate directly on the element instead of having to index into the array makes things more readable.&#xA0;</p><p>Using a&#xA0;<code class="inline">forEach</code> loop solves both of these problems for us. But&#xA0;<code class="inline">map</code> still has at least two distinct advantages:</p><ol>
+<li>
+<code class="inline">forEach</code>&#xA0;returns&#xA0;<code class="inline">undefined</code>, so it doesn't chain with other array methods.&#xA0;<code class="inline">map</code> returns an array, so you&#xA0;<em>can</em> chain it with other array methods.</li>
+<li>
+<code class="inline">map</code>&#xA0;returns<em>&#xA0;</em>an array with the finished product, rather than requiring us to mutate an array inside the loop.&#xA0;</li>
+</ol><p>Keeping the number of places where you modify state to an absolute minimum is an important tenet of functional programming. It makes for safer and more intelligible code.</p><p>Now is also a good time to point out that if you're in Node, testing these examples in the Firefox browser console, or using <a href="https://babeljs.io/" target="_self">Babel</a>&#xA0;or <a href="https://github.com/google/traceur-compiler" target="_self">Traceur</a>, you can write this more concisely with ES6 arrow functions:</p><pre class="brush: javascript noskimlinks noskimwords">var task_names = tasks.map((task) =&gt; task.name );</pre><p>Arrow functions let us&#xA0;leave out&#xA0;the <code class="inline">return</code> keyword in one-liners.&#xA0;</p><p>It doesn't get much more readable than that.</p><h3>Gotchas</h3><p>The callback you pass to&#xA0;<code class="inline">map</code> must&#xA0;have an explicit&#xA0;<code class="inline">return</code> statement, or&#xA0;<code class="inline">map</code> will spit out an array full of&#xA0;<code class="inline">undefined</code>. It's not hard to remember to include a&#xA0;<code class="inline">return</code> value, but it's not hard&#xA0;to forget.&#xA0;</p><p>If you <em>do</em> forget,&#xA0;<code class="inline">map</code> won't complain. Instead, it'll quietly hand back an array full of&#xA0;nothing.&#xA0;Silent errors like that can be surprisingly hard to debug.&#xA0;</p><p>Fortunately, this is the&#xA0;<em>only</em> gotcha with&#xA0;<em></em><code class="inline">map</code>. But it's a common enough pitfall that I'm obliged to emphasize:&#xA0;Always make sure your callback contains a&#xA0;<code class="inline">return</code> statement!</p><h3>Implementation</h3><p>Reading&#xA0;implementations&#xA0;is an important part of understanding. So, let's write our own lightweight <code class="inline">map</code> to better understand what's going on under the hood. If you want to see a production-quality implementation, check out <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map" target="_self">Mozilla's polyfill at MDN</a>.</p><pre class="brush: javascript noskimlinks noskimwords">var map = function (array, callback) {
+
+ var new_array = [];
+
+ array.forEach(function (element, index, array) {
+ new_array.push(callback(element)); 
+ });
+
+ return new_array;
+
+};
+
+var task_names = map(tasks, function (task) {
+
+ return task.name;
+
+});</pre><p>This code accepts an array and a callback function as arguments. It then creates a new array; executes the callback on each element on the array we passed in; pushes the results into the new array; and returns the new array.&#xA0;If you run this in your console, you'll get the same result as before.&#xA0;Just&#xA0;make sure you initialize&#xA0;<code class="inline">tasks</code> before you test it out!</p><p>While we're using a for loop under the hood, wrapping it up into a function hides the details and lets us work with the abstraction instead.&#xA0;</p><p>That makes our code more declarative&#x2014;it says&#xA0;<em>what</em>&#xA0;to do, not&#xA0;<em>how</em> to do it. You'll appreciate how much more readable, maintainable, and, erm, <em>debuggable</em>&#xA0;this can make your code.</p><h2>Filter Out the Noise</h2><p>The next of our array operations&#xA0;is <code class="inline">filter</code>. It does exactly what it sounds like: It takes an array, and filters out unwanted elements.</p><p>Like <code class="inline">map</code>, <code class="inline">filter</code> is defined on&#xA0;<code class="inline">Array.prototype</code>. It's available on&#xA0;any array, and you pass it a callback as its first argument. <code class="inline">filter</code>&#xA0;executes that callback on each element of the array, and spits out a <em>new</em> array containing&#xA0;<em>only</em> the elements for which the callback returned&#xA0;<code class="inline">true</code>.</p><p>Also like <code class="inline">map</code>, <code class="inline">filter</code>&#xA0;passes your callback three arguments:</p><ol>
+<li>The <em>current item</em>&#xA0;</li>
+<li>The <em>current index</em>
+</li>
+<li>The&#xA0;<em>array</em> you called <code class="inline">filter</code> on</li>
+</ol><h3>
+<code class="inline">filter</code> in Practice</h3><p>Let's revisit our task example. Instead of pulling out the names of each task, let's say I want to get a list of just the tasks that took me two hours or more to get done.&#xA0;</p><p>Using <code class="inline">forEach</code>, we'd write:</p><pre class="brush: javascript noskimlinks noskimwords">var difficult_tasks = [];
+
+tasks.forEach(function (task) {
+ if (task.duration &gt;= 120) {
+ difficult_tasks.push(task);
+ }
+});</pre><p>With <code class="inline">filter</code>:</p><pre class="brush: javascript noskimlinks noskimwords">var difficult_tasks = tasks.filter(function (task) {
+ return task.duration &gt;= 120;
+});
+
+// Using ES6
+var difficult_tasks = tasks.filter((task) =&gt; task.duration &gt;= 120 );</pre><p>Here, I've gone ahead and left out the <code class="inline">index</code> and <code class="inline">array</code> arguments to our callback, since we don't use them.</p><p>Just like <code class="inline">map</code>, <code class="inline">filter</code> lets us:</p><ul>
+<li>avoid mutating an array inside a <code class="inline">forEach</code> or <code class="inline">for</code>&#xA0;loop</li>
+<li>assign its result directly to a new variable, rather than push into an array we defined elsewhere</li>
+</ul><h3>Gotchas</h3><p>The callback you pass to&#xA0;<code class="inline">map</code> has to include a return statement if you want it to function properly. With&#xA0;<code class="inline">filter</code>, you also have to include a&#xA0;return statement, and you <em>must</em> make sure it returns a boolean value.</p><p>If you forget your&#xA0;return statement, your callback will return <code class="inline">undefined</code>, which&#xA0;<code class="inline">filter</code> will unhelpfully&#xA0;coerce to <code class="inline">false</code>. Instead of throwing an error, it will silently return an empty array!&#xA0;</p><p>If you go the other route, and return something that's&#xA0;<em></em>isn't&#xA0;explicitly&#xA0;<code class="inline">true</code>&#xA0;or <code class="inline">false</code>, then&#xA0;<code class="inline">filter</code> will try to figure out what you meant by applying <a href="https://github.com/getify/You-Dont-Know-JS/blob/master/types%20&amp;%20grammar/ch4.md" target="_self">JavaScript's coercion rules</a>. More often than not, this is&#xA0;a bug. And, just like forgetting your&#xA0;return statement, it'll be a&#xA0;silent one.&#xA0;</p><p><em>Always</em> make sure your callbacks include an explicit&#xA0;return statement. And <em>always</em> make sure your callbacks in&#xA0;<em></em><code class="inline">filter</code>&#xA0;return <code class="inline">true</code> or <code class="inline">false</code>.&#xA0;Your sanity will thank you.</p><h3>Implementation</h3><p>Once again, the best way to understand a piece of code is... well, to write it. Let's roll our own lightweight <code class="inline">filter</code>. The good folks at Mozilla have an <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter" target="_self">industrial-strength&#xA0;polyfill</a> for you to read, too.</p><pre class="brush: javascript noskimlinks noskimwords">var filter = function (array, callback) {
+
+ var filtered_array = [];
+
+ array.forEach(function (element, index, array) {
+ if (callback(element, index, array)) {
+ filtered_array.push(element); 
+ }
+ });
+
+ return filtered_array;
+
+};</pre><h2>Reducing Arrays</h2><p><code class="inline">map</code> creates a new array by transforming every element in an array, individually. <code class="inline">filter</code> creates a new array by removing elements that don't belong.&#xA0;<code class="inline">reduce</code>, on the other hand, takes all of the elements in an array, and <em>reduces</em> them into a single value.</p><p>Just like <code class="inline">map</code> and&#xA0;<code class="inline">filter</code>,&#xA0;<code class="inline">reduce</code>&#xA0;is defined on&#xA0;<code class="inline">Array.prototype</code> and so available on&#xA0;any array, and you pass a callback as its first argument. But it also takes an optional second argument: the value to start combining all your array elements into.&#xA0;</p><p><code class="inline">reduce</code> passes your callback four arguments:<br></p><ol>
+<li>The <em>current value</em>
+</li>
+<li>The <em>previous value</em><em>&#xA0;</em>
+</li>
+<li>The <em>current index</em>
+</li>
+<li>The <em>array</em> you called&#xA0;<code class="inline">reduce</code> on</li>
+</ol><p>Notice that the callback gets a&#xA0;<em>previous value</em> on each iteration.&#xA0;On the first iteration, there&#xA0;<em>is</em> no previous value.&#xA0;This is why you have&#xA0;the option to&#xA0;pass&#xA0;<code class="inline">reduce</code> an initial value: It acts as&#xA0;the "previous value" for&#xA0;the first iteration, when there otherwise wouldn't be one.</p><p>Finally, bear in mind that&#xA0;<code class="inline">reduce</code> returns a&#xA0;<em></em>single value,&#xA0;<em>not</em> an array containing a single item. This is more important than it might seem, and I'll come back to it in the examples.</p><h3>
+<code class="inline">reduce</code> in Practice</h3><p>Since <code class="inline">reduce</code>&#xA0;is the function that people&#xA0;find most alien at first, we'll start by&#xA0;walking step by step through something simple.<br></p><p>Let's say we want to find the sum of a list of numbers. Using a loop, that looks like this:</p><pre class="brush: javascript noskimlinks noskimwords">var numbers = [1, 2, 3, 4, 5],
+ total = 0;
+ 
+numbers.forEach(function (number) {
+ total += number;
+});</pre><p>While this isn't a bad use case for&#xA0;<code class="inline">forEach</code>,&#xA0;<code class="inline">reduce</code> still&#xA0;has the advantage of allowing us to avoid mutation. With <code class="inline">reduce</code>, we would&#xA0;write:</p><pre class="brush: javascript noskimlinks noskimwords">var total = [1, 2, 3, 4, 5].reduce(function (previous, current) {
+ return previous + current;
+}, 0);</pre><p>First, we call&#xA0;<code class="inline">reduce</code>&#xA0;on our list of&#xA0;<code class="inline">numbers.</code>&#xA0;We pass it a&#xA0;callback, which accepts the previous value and current value as arguments, and returns the result of adding them together. &#xA0;Since we passed&#xA0;<code class="inline">0</code> as a second argument to&#xA0;<code class="inline">reduce</code>, it'll use that as the value of&#xA0;<code class="inline">previous</code> on the first iteration.<br></p><p>If we take it step by step, it looks like this:</p><table>
+<thead><tr>
+<th>Iteration&#xA0;</th>
+<th>Previous</th>
+<th>Current</th>
+<th>Total</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+</tr>
+<tr>
+<td>3</td>
+<td>3</td>
+<td>3</td>
+<td>6</td>
+</tr>
+<tr>
+<td>4</td>
+<td>6</td>
+<td>4</td>
+<td>10</td>
+</tr>
+<tr>
+<td>5</td>
+<td>10</td>
+<td>5</td>
+<td>15</td>
+</tr>
+</tbody>
+</table><p>If you're not a fan of tables, run this snippet in the console:</p><pre class="brush: javascript noskimlinks noskimwords">var total = [1, 2, 3, 4, 5].reduce(function (previous, current, index) {
+ var val = previous + current;
+ console.log("The previous value is " + previous + 
+ "; the current value is " + current +
+ ", and the current iteration is " + (index + 1));
+ return val;
+}, 0);
+
+console.log("The loop is done, and the final value is " + total + ".");</pre><p>To recap:&#xA0;<code class="inline">reduce</code> iterates over all the elements of an array, combining them however you specify in your callback. On every iteration, your callback has access to the&#xA0;<em>previous</em>&#xA0;<em>value</em>, which is the&#xA0;<em>total-so-far</em>, or&#xA0;<em>accumulated value</em>; the&#xA0;<em>current value</em>; the&#xA0;<em>current index;</em> and the entire&#xA0;<em>array</em>, if you need them.</p><p>Let's turn back to our tasks example. We've gotten a list of task names from&#xA0;<code class="inline">map</code>, and a filtered list of tasks that took a long time with... well,&#xA0;<code class="inline">filter</code>.&#xA0;</p><p>What if we wanted to know the total amount of time we spent working today?</p><p>Using a&#xA0;<code class="inline">forEach</code>&#xA0;loop, you'd write:</p><pre class="brush: plain noskimlinks noskimwords">var total_time = 0;
+ 
+tasks.forEach(function (task) {
+ // The plus sign just coerces 
+ // task.duration from a String to a Number
+ total_time += (+task.duration);
+});</pre><p>With&#xA0;<code class="inline">reduce</code>, that becomes:</p><pre class="brush: plain noskimlinks noskimwords">var total_time = tasks.reduce(function (previous, current) {
+ return previous + current;
+}, 0);
+
+// Using arrow functions
+var total_time = tasks.reduce((previous, current) previous + current );</pre><p>Easy.&#xA0;</p><p>That's almost all there is to it. Almost, because JavaScript provides us with one more little-known method, called&#xA0;<code class="inline">reduceRight</code>. In the examples above,&#xA0;<code class="inline">reduce</code> started at the <em>first</em> item in the array, iterating from left to right:</p><pre class="brush: javascript noskimlinks noskimwords">var array_of_arrays = [[1, 2], [3, 4], [5, 6]];
+var concatenated = array_of_arrays.reduce( function (previous, current) {
+ return previous.concat(current);
+});
+
+console.log(concatenated); // [1, 2, 3, 4, 5, 6];</pre><p><code class="inline">reduceRight</code> does the same thing, but in the opposite direction:</p><pre class="brush: plain noskimlinks noskimwords">var array_of_arrays = [[1, 2], [3, 4], [5, 6]];
+var concatenated = array_of_arrays.reduceRight( function (previous, current) {
+ return previous.concat(current);
+});
+
+console.log(concatenated); // [5, 6, 3, 4, 1, 2];</pre><p>I use&#xA0;<code class="inline">reduce</code> every day, but I've never&#xA0;needed&#xA0;<code class="inline">reduceRight</code>. I reckon you probably won't, either. But in the event you ever do, now you know it's there.</p><h3>Gotchas</h3><p>The three big gotchas with&#xA0;<code class="inline">reduce</code> are:</p><ol>
+<li>Forgetting to&#xA0;<code class="inline">return</code>
+</li>
+<li>Forgetting an initial value</li>
+<li>Expecting an array when <code class="inline">reduce</code> returns a&#xA0;single&#xA0;value</li>
+</ol><p>Fortunately, the first two are easy to avoid. Deciding what your initial value should be&#xA0;depends on what you're doing, but you'll get the hang of it quickly.</p><p>The last one might seem a bit strange. If&#xA0;<code class="inline">reduce</code> only ever returns a single value, why would you expect an array?</p><p>There are a few good reasons for that. First, <code class="inline">reduce</code>&#xA0;always returns a single&#xA0;<em>value</em>, not always a single&#xA0;<em>number</em>. If you reduce an array of arrays, for instance, it will&#xA0;return a single array. If you're in the habit or reducing arrays, it would be fair to&#xA0;expect that an array containing a single item wouldn't be a special case.</p><p>Second, if&#xA0;<code class="inline">reduce</code> <em>did</em> return an array with a single value, it would naturally play nice with&#xA0;<code class="inline">map</code> and&#xA0;<code class="inline">filter</code>, and other functions on arrays that you're likely to be using with it.&#xA0;</p><h3>Implementation</h3><p>Time for our last look under the hood. As usual, Mozilla has a <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/Reduce" target="_self">bulletproof polyfill for reduce</a>&#xA0;if you want to check it out.</p><pre class="brush: javascript noskimlinks noskimwords">var reduce = function (array, callback, initial) {
+ var accumulator = initial || 0;
+ 
+ array.forEach(function (element) {
+ accumulator = callback(accumulator, array[i]);
+ });
+ 
+ return accumulator;
+};</pre><p>Two things to note, here:</p><ol>
+<li>This time, I used the name&#xA0;<code class="inline">accumulator</code> instead of&#xA0;<code class="inline">previous</code>. This is what you'll usually see in the wild.</li>
+<li>I assign <code class="inline">accumulator</code> an initial value,&#xA0;if a user provides one, and default to <code class="inline">0</code>, if not. This is how the real&#xA0;<code class="inline">reduce</code> behaves, as well.</li>
+</ol><h2>Putting It Together: Map, Filter, Reduce, and Chainability</h2><p>At this point, you might not be&#xA0;<em>that</em>&#xA0;impressed.&#xA0;</p><p>Fair enough:&#xA0;<code class="inline">map</code>, <code class="inline">filter</code>, and <code class="inline">reduce</code>, on their own, aren't awfully interesting.&#xA0;</p><p>After all, their true power&#xA0;lies in their chainability.&#xA0;</p><p>Let's say I want to do the following:<br></p><ol>
+<li>Collect two days' worth of tasks.</li>
+<li>Convert the task durations to hours, instead of minutes.</li>
+<li>Filter out everything that took&#xA0;two hours or more.</li>
+<li>Sum it all up.</li>
+<li>Multiply the result by a per-hour rate for billing.</li>
+<li>Output a formatted dollar amount.</li>
+</ol><p>First, let's define our tasks for Monday and Tuesday:</p><pre class="brush: javascript noskimlinks noskimwords">var monday = [
+ {
+ 'name' : 'Write a tutorial',
+ 'duration' : 180
+ },
+ {
+ 'name' : 'Some web development',
+ 'duration' : 120
+ }
+ ];
+
+var tuesday = [
+ {
+ 'name' : 'Keep writing that tutorial',
+ 'duration' : 240
+ },
+ {
+ 'name' : 'Some more web development',
+ 'duration' : 180
+ },
+ {
+ 'name' : 'A whole lot of nothing',
+ 'duration' : 240
+ }
+ ];
+ 
+var tasks = [monday, tuesday];</pre><p>And now, our lovely-looking transformation:</p><pre class="brush: javascript noskimlinks noskimwords"> var result = tasks.reduce(function (accumulator, current) {
+ return accumulator.concat(current);
+ }).map(function (task) {
+ return (task.duration / 60);
+ }).filter(function (duration) {
+ return duration &gt;= 2;
+ }).map(function (duration) {
+ return duration data.json data_ml developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.epub developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.md devops docker embedded from_zero_to_frontend_hero_part_1_—_free_code_camp.epub from_zero_to_frontend_hero_part_1_—_free_code_camp.md gaming gdb-example-ncurses.epub github go how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.epub how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.md how_to_check_diskspace_with_the_ncdu_utility.epub how_to_check_diskspace_with_the_ncdu_utility.md html immutable_collections_for_javascript.epub immutable_collections_for_javascript.md javascript linux mobile node-hero-tutorials.epub png programming research_paper_categorization_using_machine_learning_and_nlp.epub research_paper_categorization_using_machine_learning_and_nlp.md science social task_automation_with_npm_run.md tidy understanding_javascript_promises_pt_i_background__basics.epub understanding_javascript_promises_pt_i_background__basics.md understanding_object_streams.epub understanding_object_streams.md url_to_filename.csv web_dev writing_a_javascript_framework__execution_timing_beyond_settimeout.epub writing_a_javascript_framework__execution_timing_beyond_settimeout.md writing_a_javascript_framework__project_structuring.epub writing_a_javascript_framework__project_structuring.md 25;
+ }).reduce(function (accumulator, current) {
+ return [(+accumulator) + (+current)];
+ }).map(function (dollar_amount) {
+ return '$' + dollar_amount.toFixed(2);
+ }).reduce(function (formatted_dollar_amount) {
+ return formatted_dollar_amount;
+ });</pre><p>Or, more concisely:</p><pre class="brush: javascript noskimlinks noskimwords"> // Concatenate our 2D array into a single list
+var result = tasks.reduce((acc, current) =&gt; acc.concat(current))
+ // Extract the task duration, and convert minutes to hours
+ .map((task) =&gt; task.duration / 60)
+ // Filter out any task that took less than two hours
+ .filter((duration) =&gt; duration &gt;= 2)
+ // Multiply each tasks' duration by our hourly rate
+ .map((duration) =&gt; duration data.json data_ml developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.epub developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.md devops docker embedded from_zero_to_frontend_hero_part_1_—_free_code_camp.epub from_zero_to_frontend_hero_part_1_—_free_code_camp.md gaming gdb-example-ncurses.epub github go how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.epub how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.md how_to_check_diskspace_with_the_ncdu_utility.epub how_to_check_diskspace_with_the_ncdu_utility.md html immutable_collections_for_javascript.epub immutable_collections_for_javascript.md javascript linux mobile node-hero-tutorials.epub png programming research_paper_categorization_using_machine_learning_and_nlp.epub research_paper_categorization_using_machine_learning_and_nlp.md science social task_automation_with_npm_run.md tidy understanding_javascript_promises_pt_i_background__basics.epub understanding_javascript_promises_pt_i_background__basics.md understanding_object_streams.epub understanding_object_streams.md url_to_filename.csv web_dev writing_a_javascript_framework__execution_timing_beyond_settimeout.epub writing_a_javascript_framework__execution_timing_beyond_settimeout.md writing_a_javascript_framework__project_structuring.epub writing_a_javascript_framework__project_structuring.md 25)
+ // Combine the sums into a single dollar amount
+ .reduce((acc, current) =&gt; [(+acc) + (+current)])
+ // Convert to a "pretty-printed" dollar amount
+ .map((amount) =&gt; '$' + amount.toFixed(2))
+ // Pull out the only element of the array we got from map
+ .reduce((formatted_amount) =&gt;formatted_amount); </pre><p>If you've made it this far, this should be pretty straightforward. There are two&#xA0;bits of weirdness to explain, though.&#xA0;</p><p>First, on line 10, I have to write:</p><pre class="brush: javascript noskimlinks noskimwords">// Remainder omitted
+reduce(function (accumulator, current) {
+ return [(+accumulator) + (+current_];
+})</pre><p>Two things to explain here:</p><ol>
+<li>The plus signs in front of&#xA0;<code class="inline">accumulator</code> and&#xA0;<code class="inline">current</code> coerce their values to numbers. If you don't do this, the return value will be the rather useless string,&#xA0;<code class="inline">"12510075100"</code>.</li>
+<li>If don't wrap that sum in brackets,&#xA0;<code class="inline">reduce</code>&#xA0;will spit out a single value,&#xA0;<em>not</em>&#xA0;an array. That would end up throwing a&#xA0;<code class="inline">TypeError</code>, because you can only use&#xA0;<code class="inline">map</code>&#xA0;on an array!&#xA0;<br>
+</li>
+</ol><p>The second bit that might make you a bit uncomfortable is the last <code class="inline">reduce</code>, namely:</p><pre class="brush: javascript noskimlinks noskimwords">// Remainder omitted
+map(function (dollar_amount) {
+ return '$' + dollar_amount.toFixed(2);
+}).reduce(function (formatted_dollar_amount) {
+ return formatted_dollar_amount;
+});</pre><p>That call to&#xA0;<code class="inline">map</code> returns an array containing a single value. Here,&#xA0;we call&#xA0;<code class="inline">reduce</code> to pull out that value.</p><p>The other way to do this would be to remove the call to reduce, and index into&#xA0;the array that&#xA0;<code class="inline">map</code> spits out:</p><pre class="brush: javascript noskimlinks noskimwords">var result = tasks.reduce(function (accumulator, current) {
+ return accumulator.concat(current);
+ }).map(function (task) {
+ return (task.duration / 60);
+ }).filter(function (duration) {
+ return duration &gt;= 2;
+ }).map(function (duration) {
+ return duration data.json data_ml developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.epub developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.md devops docker embedded from_zero_to_frontend_hero_part_1_—_free_code_camp.epub from_zero_to_frontend_hero_part_1_—_free_code_camp.md gaming gdb-example-ncurses.epub github go how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.epub how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.md how_to_check_diskspace_with_the_ncdu_utility.epub how_to_check_diskspace_with_the_ncdu_utility.md html immutable_collections_for_javascript.epub immutable_collections_for_javascript.md javascript linux mobile node-hero-tutorials.epub png programming research_paper_categorization_using_machine_learning_and_nlp.epub research_paper_categorization_using_machine_learning_and_nlp.md science social task_automation_with_npm_run.md tidy understanding_javascript_promises_pt_i_background__basics.epub understanding_javascript_promises_pt_i_background__basics.md understanding_object_streams.epub understanding_object_streams.md url_to_filename.csv web_dev writing_a_javascript_framework__execution_timing_beyond_settimeout.epub writing_a_javascript_framework__execution_timing_beyond_settimeout.md writing_a_javascript_framework__project_structuring.epub writing_a_javascript_framework__project_structuring.md 25;
+ }).reduce(function (accumulator, current) {
+ return [(+accumulator) + (+current)];
+ }).map(function (dollar_amount) {
+ return '$' + dollar_amount.toFixed(2);
+ })[0];</pre><p>That's perfectly correct. If you're more comfortable using an array index, go right ahead.</p><p>But I encourage you not to. One of the most powerful ways to use these functions is in the realm of reactive programming, where you won't be free to use array indices. Kicking that habit now will make learning reactive techniques much easier down the line.</p><p>Finally, let's see how our friend the&#xA0;<code class="inline">forEach</code> loop would get it done:</p><pre class="brush: plain noskimlinks noskimwords">var concatenated = monday.concat(tuesday),
+ fees = [],
+ formatted_sum,
+ hourly_rate = 25,
+ total_fee = 0;
+
+concatenated.forEach(function (task) {
+ var duration = task.duration / 60;
+ 
+ if (duration &gt;= 2) {
+ fees.push(duration data.json data_ml developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.epub developing_a_street_basketball_game_part_i_getting_workflow_ready_—_whitestormjs_framework.md devops docker embedded from_zero_to_frontend_hero_part_1_—_free_code_camp.epub from_zero_to_frontend_hero_part_1_—_free_code_camp.md gaming gdb-example-ncurses.epub github go how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.epub how_i_learned_to_stop_worrying_and_love_ephemeral_storage__silicon_valley_data_science.md how_to_check_diskspace_with_the_ncdu_utility.epub how_to_check_diskspace_with_the_ncdu_utility.md html immutable_collections_for_javascript.epub immutable_collections_for_javascript.md javascript linux mobile node-hero-tutorials.epub png programming research_paper_categorization_using_machine_learning_and_nlp.epub research_paper_categorization_using_machine_learning_and_nlp.md science social task_automation_with_npm_run.md tidy understanding_javascript_promises_pt_i_background__basics.epub understanding_javascript_promises_pt_i_background__basics.md understanding_object_streams.epub understanding_object_streams.md url_to_filename.csv web_dev writing_a_javascript_framework__execution_timing_beyond_settimeout.epub writing_a_javascript_framework__execution_timing_beyond_settimeout.md writing_a_javascript_framework__project_structuring.epub writing_a_javascript_framework__project_structuring.md hourly_rate);
+ }
+});
+
+fees.forEach(function (fee) {
+ total_fee += fee
+});
+
+
+var formatted_sum = '$' + total_fee.toFixed(2);</pre><p>Tolerable, but noisy.</p><h2>Conclusion &amp; Next Steps</h2><p>In this tutorial, you've learned how&#xA0;<code class="inline">map</code>,&#xA0;<code class="inline">filter</code>, and&#xA0;<code class="inline">reduce</code> work; how to use them; and roughly how they're implemented. You've seen that they all allow you to avoid mutating state, which using&#xA0;<code class="inline">for</code> and&#xA0;<code class="inline">forEach</code> loops requires, and you&#xA0;should now&#xA0;have a good idea of how to chain them all together.&#xA0;</p><p>By now, I'm sure you're eager for practice and further reading. Here are my top three suggestions for where to head next:</p><p>
+
+JavaScript has become one of the de-facto languages of working on the web. It&#x2019;s not without its learning curves, and there are plenty of frameworks and libraries to keep you busy, as well.&#xA0;If you&#x2019;re looking for additional resources to study or to use in your work, check out what we have available in the&#xA0;<a href="http://codecanyon.net/category/javascript" rel="external" target="_blank">Envato marketplace</a>.<br></p><p>If you want more on this sort of thing,&#xA0;<a href="https://tutsplus.com/authors/peleke-sengstacke" target="_self">check my profile</a> from time to time; catch me on Twitter (<a href="http://twitter.com/PelekeS" target="_self">@PelekeS</a>);&#xA0;or hit&#xA0;my blog at&#xA0;<a href="http://peleke.me" target="_self">http://peleke.me.</a> </p><p>Questions, comments,&#xA0;or confusions? Leave them below, and I'll do my best to get back to each one individually.</p></div></div>
+</body></html>
