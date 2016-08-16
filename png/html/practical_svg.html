@@ -1,0 +1,385 @@
+<!DOCTYPE html><html><head><title>Practical SVG</title></head><body>
+<h1>Practical SVG</h1><p><a href="http://alistapart.com/article/practical-svg?utm_source=codropscollective" target="_new">Original URL</a></p>
+<p><blockquote>You&#x2019;ll probably want to exert some sizing control over any graphic you put on a website. Hey! You! Logo! You should be this size: &lt;img src="logo.png" class="logo" /&gt; .logo { width:&hellip;</blockquote></p>
+<div><div class="main-content">
+
+				
+
+					
+
+					
+
+					<p>You&#x2019;ll probably want to exert some sizing control over any graphic you put on a website. <i>Hey! You! Logo! You should be this size:</i></p>
+
+<pre><code class="language-markup">&lt;img src="logo.png" class="logo" /&gt;
+</code></pre>
+
+<pre><code class="language-css">.logo {
+ width: 220px;
+ height: 80px;
+}</code></pre>
+
+
+				<p class="aside-breaker"><b>Article Continues Below</b></p>
+
+				<aside class="content-minutiae">
+
+					
+ <a href="http://alistapart.com/article/practical-svg?utm_source=codropscollective#comments" class="comment-bubble comment-bubble-articles">
+ 
+ <span>3 comments</span>
+ 
+ </a>
+
+					
+
+	
+
+
+
+
+
+
+					 
+
+				</aside>
+
+
+											
+						
+
+						
+<p>And so shall it be. </p>
+
+<p>But if the element you are resizing happens to be <code>svg</code>, the result might not be exactly what you expect. Sizing <code>svg</code> is a little more complicated than sizing an <code>img</code>. I&#x2019;m not saying this to scare you. It&#x2019;s almost complicated in a <em>good</em> way, because it gives you more control and opens up some interesting possibilities. </p>
+
+<p>Keep these two concepts in mind when you&#x2019;re working with the size of SVG images:</p>
+
+<ul>
+<li>The viewport is simply the height and width of the element: the visible area of the SVG image. It&#x2019;s often set as <var>width</var> and <var>height</var> attributes right on the SVG itself, or through CSS.</li>
+<li>The <code>viewBox</code> is an attribute of <code>svg</code> that determines the coordinate system and aspect ratio. The four values are <var>x</var>, <var>y</var>, <var>width</var>, and <var>height</var>.</li>
+</ul>
+
+<p>Say we&#x2019;re working with some SVG like this:</p>
+
+<pre><code class="language-markup">&lt;svg width="100" height="100" viewBox="0 0 100 100"&gt;
+
+&lt;!-- alternatively: viewBox="0, 0 100, 100" --&gt;</code></pre>
+
+<p>In this case, the viewport and <code>viewBox</code> are in perfect harmony (<b>Fig 6.1</b>). The SVG will be drawn in the exact area it visually occupies.</p>
+
+<figure>
+<p class="codepen">See the Pen <a href="http://codepen.io/chriscoyier/pen/adqEmQ/">adqEmQ</a> by Chris Coyier (<a href="http://codepen.io/chriscoyier">@chriscoyier</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+
+<p><figcaption>Fig 6.1: Viewport and <code>viewBox</code> in perfect harmony. This happens when you apply no width or height to the <code>svg</code> (either via attribute or CSS), or if you do, they match the aspect ratio of the <code>viewBox</code>.</figcaption></p>
+</figure>
+
+<p>Now say we double the width and height, like this:</p>
+
+<pre><code class="language-markup">&lt;svg width="200" height="200" viewBox="0 0 100 100"&gt;</code></pre>
+
+<p>Will the <code>svg</code> just draw in a 100 by 100 space in the upper left side of the 200 by 200 element? Nope. Everything inside the <code>svg</code> will scale up perfectly to be drawn in the new, larger space (<b>Fig 6.2</b>). </p>
+
+<figure>
+<p class="codepen">See the Pen <a href="http://codepen.io/chriscoyier/pen/VeQyQY/">VeQyQY</a> by Chris Coyier (<a href="http://codepen.io/chriscoyier">@chriscoyier</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+
+<p><figcaption>Fig 6.2: With the viewport enlarged and <code>viewBox</code> kept the same, the graphic scales up to fit the viewport.</figcaption></p>
+</figure>
+
+<p>The square aspect ratio still matches perfectly. That&#x2019;s why it&#x2019;s not particularly useful to think of the numbers anywhere in SVG as pixels, because they aren&#x2019;t pixels; they&#x2019;re just numbers on an arbitrary coordinate system.</p>
+
+<p>What if the aspect ratios don&#x2019;t match, though?</p>
+
+<pre><code class="language-markup">&lt;svg width="300" height="75" viewBox="0 0 100 100"&gt;</code></pre>
+
+<p>What happens now, by default, is that the SVG will draw itself as large as it can, centered along the longest dimension (<b>Fig 6.3</b>).</p>
+
+<figure>
+<p class="codepen">See the Pen <a href="http://codepen.io/chriscoyier/pen/vLdpdN/">vLdpdN</a> by Chris Coyier (<a href="http://codepen.io/chriscoyier">@chriscoyier</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+
+<p><figcaption>Fig 6.3: The viewport is enlarged, but no longer matches the aspect ratio of the <code>viewBox</code>. So by default, the image is drawn as large as possible without being cut off, and centered on the long dimension.</figcaption></p>
+</figure>
+
+<p>If you want to regain some control over this behavior, there&#x2019;s an attribute for the <code>svg</code> element that can help! </p>
+
+<h2><code>preserveAspectRatio</code></h2>
+
+<p>It looks like this:</p>
+
+<pre><code class="language-markup">&lt;svg preserveAspectRatio="xMaxYMax"&gt;</code></pre>
+
+<p>The <code>x</code> and <code>Y</code> parts of that value are followed by <code>Min</code>, <code>Mid</code>, or <code>Max</code>. The reason SVG normally centers in the viewport is because it has a default value of <code>xMidYMid</code>. If you change that to <code>xMaxYMax</code>, it tells the SVG: <i>Make sure you go horizontally as far to the right as you can, and vertically as far to the bottom as you can. Then be as big as you can be without cutting off.</i></p>
+
+<p>The &#x201C;without cutting off&#x201D; part is another aspect of <code>preserveAspectRatio</code>. The default value is <code>xMidYMid meet</code>&#x2014;note the &#x201C;meet.&#x201D; You can replace <code>meet</code> with <code>slice</code> to say instead: <i>Fill the area entirely; cutting off is okay.</i></p>
+
+<p>There are nine possible alignment values combined with <code>meet</code> (<b>Fig 6.4</b>).</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.4preserveAspectRatio.jpg" alt="Several images representing rectangle pairs, demonstrating placement variations for smiley face graphics found in each rectangle.">
+<figcaption>Fig 6.4: Examples of <code>preserveAspectRatio</code> values with <code>meet</code>.</figcaption>		
+</figure>
+
+<p>There are also nine possible alignment values combined with <code>slice</code> (<b>Fig 6.5</b>).</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.5preserveAspectRatio-slice.jpg" alt="Several images representing rectangle pairs, demonstrating placement variations for smiley face graphics found in each rectangle. Each also exceeds the height and width of the rectangle's frame.">
+<figcaption>Fig 6.5: Examples of <code>preserveAspectRatio</code> values with <code>slice</code>.</figcaption>		
+</figure>
+
+<p>I made a <a href="http://bkaprt.com/psvg/06-01/">testing tool</a> for playing with this idea. Sara Soueidan also wrote an in-depth article on this subject, where she makes an excellent observation <a href="http://bkaprt.com/psvg/06-02/">relating this idea to CSS</a>. The <code>background-size</code> property has two keywords it can take: <code>contain</code> and <code>cover</code>. The <code>contain</code> value means &#x201C;make sure this entire image is viewable, even if you have to shrink it,&#x201D; which makes it just like <code>meet</code>. The <code>cover</code> value means &#x201C;make sure this covers the entire area, even if you have to cut parts off,&#x201D; which makes it just like <code>slice</code>. </p>
+
+<p>Even the alignment part of the value has a matching CSS counterpart: <code>background-position</code>. The default <code>background-position</code> is <code>0 0</code>, meaning &#x201C;top left.&#x201D; That&#x2019;s just like <code>xMinYMin</code>. If you were to change that to, say, <code>50% 100%</code>, that would be like <code>xMidYMax</code>!</p>
+
+<p><b>Fig 6.6</b> has some examples to make that connection a little clearer.</p>
+
+<figure>
+<table class="zebraless">
+<caption><code>preserveAspectRatio</code> values and CSS properties</caption>
+<thead>
+</thead>
+<tbody>
+<tr>
+<td class="bg"><code>preserveAspectRatio= "xMinYmax meet"</code></td>
+<td><code>background-position: 0 100%; background-size: contain;</code></td>
+</tr>
+<tr>
+<td class="bg"><code>preserveAspectRatio= "xMidYMid meet"</code></td>
+<td><code>background-position: 50% 50%; background-size: contain;</code></td>
+</tr>
+<tr>
+<td class="bg"><code>preserveAspectRatio= "xMinYmax slice"</code></td>
+<td><code>background-position: 100% 0; background-size: cover;</code></td>
+</tr>
+<tr>
+<td class="bg"><code>preserveAspectRatio= "xMidYMid slice"</code></td>
+<td><code>background-position: 50% 100%; background-size: cover;</code></td>
+</tr>
+</tbody>
+</table>
+<p><figcaption>Fig 6.6: <code>preserveAspectRatio</code> values and the CSS properties they are similar to.</figcaption></p>
+</figure>
+
+<p>Remember: these aren&#x2019;t interchangeable bits of code; they are just conceptually related.</p>
+
+<p>What if you want to throw aspect ratio out the window and have SVG scale to the viewport, like a raster image would? Turn <code>preserveAspectRatio</code> off (<b>Fig 6.7</b>)!</p>
+
+<pre><code class="language-markup">&lt;svg preserveAspectRatio="none" viewBox="0 0 100 100"&gt;</code></pre>
+
+<figure>
+<p class="codepen">See the Pen <a href="http://codepen.io/chriscoyier/pen/yevpvj/">yevpvj</a> by Chris Coyier (<a href="http://codepen.io/chriscoyier">@chriscoyier</a>) on <a href="http://codepen.io">CodePen</a>.</p>
+
+<p><figcaption>Fig 6.7: Example of <code>preserveAspectRatio="none"</code>. Poor little buggers.</figcaption></p>
+</figure>
+
+<p>Amelia Bellamy-Royds wrote a <a href="http://bkaprt.com/psvg/06-03/">comprehensive article on scaling SVG</a>, in which she covers things like the fact that <code>svg</code> can essentially contain other <code>svg</code> with different aspect ratios and behavior, so you can make some parts of an image scale and others not, which is pretty cool and unique to SVG.</p>
+
+<h3>Approaches to artboard sizing</h3>
+
+<p>When you draw SVG in editing software, that software likely gives you some kind of artboard to draw on. That&#x2019;s not a technical SVG term; it&#x2019;s essentially a visual metaphor for <code>viewBox</code>. </p>
+
+<p>Let&#x2019;s say you&#x2019;re working with a whole set of icons for a site. One approach is to make all artboards hug each edge of the icon (<b>Fig 6.8</b>).</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.8cropped.jpg" alt="Adobe Illustrator graphics cropped to their edges">
+<figcaption>Fig 6.8: Example of graphics in Adobe Illustrator cropped to their edges.</figcaption>		
+</figure>
+
+<p>Here&#x2019;s a quick trick to get that artboard cropping in Illustrator: select the Artboard tool and then &#x201C;Fit to Artwork Bounds&#x201D; from the Presets menu (<b>Fig 6.9</b>).</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.9fit-to-bounds.jpg" alt="Cropped view of Adobe Illustrator menu option for resizing an artboard to the edges of a graphic">
+<figcaption>Fig 6.9: The menu option in Adobe Illustrator for resizing an artboard to the edges of a graphic.</figcaption>		
+</figure>
+
+<p>The big advantage to this technique is alignment (<b>Fig 6.10</b>). If you want to align any edge of any of these icons to anything else, that&#x2019;s easy to do. There is no mysterious space you need to contend with, or tweaky positional CSS. </p>
+
+<pre><code class="language-css">.icon.nudge {
+ position: relative;
+ right: -2px; /bin /boot /cdrom /core /dev /etc /home /initrd.img /initrd.img.old /lacie /lib /lib32 /lib64 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /sys /tmp /usr /var /vmlinuz /vmlinuz.old /vol UGHCKKADKDKJ */
+}</code></pre>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.10corner-positioning.jpg" alt="Icons aligned to corners of graphics">
+<figcaption>Fig 6.10: Icons aligning to edges without little bits of extra space you have to account for.</figcaption>		
+</figure>
+
+<p>The big disadvantage to the cropping technique is relative sizing. Imagine you take the practical step of sizing your icon&#x2019;s width and height, like this:</p>
+
+<pre><code class="language-css">.icon {
+ width: 1em;
+ height: 1em;
+}</code></pre>
+
+<p>A tall, skinny icon will shrink to fit in that space and potentially appear awkwardly small. Or perhaps you&#x2019;re trying to have an intentionally small star shape as an icon, except the star has a squarish aspect ratio and thus grows to fill the space, appearing bigger than you want it to.</p>
+
+<p>Here&#x2019;s an example where two icons are sized identically as a square (<b>Fig 6.11</b>). The &#x201C;expand&#x201D; icon looks right at home, since it has a square aspect ratio to match. But the &#x201C;zap it&#x201D; icon has a tall and narrow aspect ratio, so it looks wimpy, like it&#x2019;s floating in the same square area.</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.11AwkwardIconSizes.jpg" alt="Two button samples; one example has a nicely-balanced scale of icon to text, the other has an icon that is too small for the space and size of text">
+<figcaption>Fig 6.11: Two icons sized in the same square space within a button. The top one fits nicely, but the bottom one floats awkwardly in space.</figcaption>	
+</figure>
+
+<p>The other approach here is to make consistently sized artboards (<b>Fig 6.12</b>):</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.12same-size.jpg" alt="Several similarly-sized graphics">
+<figcaption>Fig 6.12: Example of Illustrator graphics whose artboards are equal in size.</figcaption>		
+</figure>
+
+<p>The advantages and disadvantages are exactly inverse here. You might have alignment issues, because not all edges of the icons touch the edge of the <code>viewBox</code>, which can be frustrating and might require tweaking sometimes (<b>Fig 6.13</b>). </p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/6.13RelativeSizing.jpg" alt="Graphics with icons sized to be comparable to one another">
+<figcaption>Fig 6.13: You can adjust icons&#x2019; relative sizing, but that can make alignment more difficult.</figcaption>		
+</figure>
+
+<p>You won&#x2019;t have relative sizing issues, though, because the <code>viewBox</code> is the same for all of them. If any particular icon looks too big or small, you can adjust the artwork to bring it more in line with the set.</p>
+
+<p>Since we&#x2019;re learning about sizing, now is the perfect time to bring up how SVG fits into the flexible world of responsive design.</p>
+
+<h2>Responsive SVG</h2>
+
+<p>One of the hallmarks of responsive design is fluid layout. Content&#x2014;images included&#x2014;is designed to fit its containers and the screen. If responsive design is new to you, <a href="http://alistapart.com/article/responsive-web-design">Ethan Marcotte&#x2019;s seminal 2010 article</a> on the subject is a fine place to start learning about it. SVG jibes extremely well with responsive design:</p>
+
+<ul>
+<li>Responsive designs are flexible. So is SVG! It renders well at any size.</li>
+<li>Responsive web design is a philosophy of caring about how a website looks and behaves in any browser. Comparatively smaller SVG files and performance-responsible tactics like an SVG icon system can be a part of that.</li>
+</ul>
+
+<p>But perhaps SVG&#x2019;s most obvious connection to responsive design is the possibility to react to CSS <code>@media</code> queries. Media queries move, hide, or show elements with CSS based on things like the width or height of the browser window. Those elements can be anything: sidebars, navigation, ads, what have you. They can be SVG elements as well.</p>
+
+<p>Imagine a logo that displays different levels of detail depending on how much space is available. That&#x2019;s exactly what Joe Harrison was thinking when he created a really neat <a href="http://bkaprt.com/psvg/06-05/">demo using well-known logos</a>, (<b>Fig 6.14</b>).</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.14responsive-logos.jpg" alt="Modified versions of the Disney logo, progressing to greater and greater simplification">
+<figcaption>Fig 6.14: Joe Harrison&#x2019;s demo of the Disney logo at different sizes.</figcaption>		
+</figure>
+
+<p>On the web, we&#x2019;ve always had the ability to swap out images with other ones. What&#x2019;s appealing here is that we aren&#x2019;t <em>swapping out</em> images; these are all the <em>same</em> image. Or at least they could be. That signature &#x201C;D&#x201D; all by itself could be the same exact &#x201C;D&#x201D; used in the most complex version of the logo. Easy-cheesy in CSS. </p>
+
+<p>Say we organize the SVG like so:</p>
+
+<pre><code class="language-markup">&lt;svg class="disney-logo"&gt;
+ &lt;g class="magic-castle"&gt;
+ &lt;!-- paths, etc --&gt;
+ &lt;/g&gt;
+ &lt;g class="walt"&gt;
+ &lt;!-- paths, etc --&gt;
+ &lt;/g&gt;
+ &lt;g class="disney"&gt;
+ &lt;path class="d" /&gt;
+ &lt;!-- paths, etc --&gt;
+ &lt;/g&gt;
+&lt;/svg&gt;</code></pre>
+
+<p>This, by the way, is pretty easy to do in Illustrator (<b>Fig 6.15</b>). The groups and names you create there turn into IDs in the SVG output, and you can use those IDs to do the styling. Personally, though, I prefer using classes because they aren&#x2019;t unique (so you don&#x2019;t accidentally end up with multiple identical IDs on the page) and because classes have a lower and more manageable level of CSS specificity. It&#x2019;s easy enough to change IDs to classes with a bit of find-and-replace maneuvering in a code editor.</p>
+
+<figure>
+<img src="http://alistapart.com/d/practical-svg/Fig6.15NamedLayers.jpg" alt="Adobe Illustrator interface showing vector paths and layers for Walt Disney logo">
+<figcaption>Fig 6.15: Named layers and named shapes in Adobe Illustrator.</figcaption>		
+</figure>
+
+<p>The corresponding CSS could be something like this:</p>
+
+<pre><code class="language-css">@media (max-width: 1000px) {
+ .magic-castle {
+ display: none;
+ }
+}
+@media (max-width: 800px) {
+ .walt {
+ display: none;
+ }
+}
+@media (max-width: 600px) {
+ .disney &gt; *:not(.d) {
+ display: none;
+ }
+}</code></pre>
+
+<p>Mind you, this is a contrived example of hiding parts of the images at different breakpoints, but that&#x2019;s exactly how you would do it, along with some likely sizing adjustments. Anything you can do with CSS is on the table here. Perhaps some animation is appropriate at some breakpoints but not at others. Perhaps you change stroke sizes to beef up or trim down icons at different sizes. Perhaps you change some fill colors to simplify adjacent shapes.</p>
+
+<p>And things can get even fancier! Depending on how the SVG is used, those media queries might actually be different. SVG used as <code>img</code>, <code>iframe</code>, or <code>object</code> has its own viewport. That means CSS <em>embedded inside of it</em> reacts to media queries based on that, rather than the whole browser window viewport. That means you would write, say, width-based media queries based on the width of the image, not of the entire page. </p>
+
+<p>That&#x2019;s a very appealing idea: an element that arranges itself based on attributes of itself, rather than the page. <i>Am I this wide? Do this. Am I this tall? Do this.</i> That way, the SVG reacts to the situation it&#x2019;s in rather than the arbitrary document it happens to be part of.</p>
+
+<p>As I write, this is referred to as &#x201C;element queries&#x201D; in CSS, but it doesn&#x2019;t actually exist yet in regular HTML/CSS. Once again, SVG is ahead of the curve.</p>
+
+<h2>Graduation into animation</h2>
+
+<p>Speaking of things SVG is good at, let&#x2019;s move into animation next. Everything we have been building on so far has prepared us for this. Hang on tight!</p>
+
+					
+
+					
+
+				 
+
+				
+
+				
+				
+				
+				
+				<aside id="related" class="sidebar var1 nocontent">
+				<i class="widget-branding ala"></i>
+				
+				
+				
+					
+							
+
+							
+							
+				
+				
+				
+				
+				
+					
+	
+ <section class="related-articles">
+
+
+
+ 
+
+ <article>
+
+
+
+<h2><a href="http://alistapart.com/blog/post/responsive-web-design-second-ed">The Only Constant is Change: A Q&amp;A with Ethan Marcotte</a></h2>
+ <p>A new edition of Responsive Web Design is here. To celebrate, A List Apart&#x2019;s editor-in-chief, Sara Wachter-Boettcher, sat down&#x2026;</p><h2><a href="http://alistapart.com/article/frameworks">Frameworks</a></h2>
+ <p>In this excerpt, Ethan Marcotte examines frameworks for thinking about responsive design principles and applying them to our work.</p>
+
+ </article>
+
+</section>
+ 
+ 
+
+
+				
+				
+					
+				
+				</aside>
+				
+				
+
+				<footer class="entry-footer nocontent">
+				<h2>About the Author</h2>
+
+				
+
+				</footer>
+
+				
+<aside class="promo-box email-promo">
+ <b>Get our latest articles in your inbox.</b> <a href="http://alistapart.com/email-signup">Sign up for email alerts</a>.
+</aside>
+
+			</div>
+
+			</div>
+</body></html>

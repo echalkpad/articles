@@ -1,0 +1,326 @@
+<!DOCTYPE html><html><head><title>OpenStreetMap city blocks as GeoJSON polygons</title></head><body>
+<h1>OpenStreetMap city blocks as GeoJSON polygons</h1><p><a href="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/" target="_new">Original URL</a></p>
+<p><blockquote>The other day I wanted to find out how much it costs to rent an apartment in each city block. When taking a quick look at available OpenStreetMap data, I was able to get the locations and boundaries&hellip;</blockquote></p>
+<div><div><p>The other day I wanted to find out how much it costs to rent an apartment in each city block.</p>
+<p>When taking a quick look at available <a href="http://openstreetmap.org/">OpenStreetMap</a> data, I was able to get the locations and boundaries of administrative regions,
+buildings and streets but not boundaries of each individual block within a city.</p>
+<p>Simply plot the streets and convert them to polygons at intersections? It was not as straightforward as I thought it would be.</p>
+<p>In this blog post, I'll talk about using <a href="https://www.qgis.org">QGIS</a> software to explore and visualize LARGE maps and
+provide a Python script (you don't need QGIS for this) for converting lines that represent streets to polygons that represent city blocks.
+The script will use the <a href="http://toblerity.org/shapely/manual.html#shapely.ops.polygonize"><code>polygonize</code></a> function from <a href="https://pypi.python.org/pypi/Shapely">Shapely</a> but you need to preprocess the OSM data first which is the secret sauce.</p>
+<p>Throughout this post I will be using the <a href="http://geojson.org/">GeoJSON</a> format since it's easy to use with JavaScript maps libraries.
+I didn't know about GeoJSON before and I never looked at the spec and you don't have to either.</p>
+<nav class="toc"></nav>
+
+<p>Go to <a href="https://mapzen.com/data/metro-extracts/">Mapzen Metro Extracts</a>
+and search for the city of interest.</p>
+<p>In my case, I'm using <a href="https://mapzen.com/data/metro-extracts/metro/riga_latvia/">the data for Riga, Latvia</a></p>
+<p>Download the dataset split by geometry type in GeoJSON format.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/mapzen-metro.png" alt=""></p>
+<p>Extract the zip file. You will have three files.</p>
+<pre><code class="lang-text">riga_latvia_osm_line.geojson
+riga_latvia_osm_point.geojson
+riga_latvia_osm_polygon.geojson
+</code></pre>
+<p>The <code>riga_latvia_osm_line.geojson</code> file is the one we are going to use.</p>
+<h2 id="qgis"><p class="site-width">QGIS</p></h2><p><a href="http://www.qgis.org/">QGIS</a> is an open source desktop software package for editing maps on your computer.</p>
+<p>You don't strictly need it (you can skip this section and scroll down to the code). </p>
+<p>In fact, I found about it at the end of my journey and was using <a href="http://geojson.io">geojson.io</a> to visually see polygons in my browser.
+But geojson.io will struggle with any substantial amount of data so QGIS is much better suited for playing with this data.</p>
+<p><a href="http://www.qgis.org/en/site/forusers/download.html">Download and install QGIS desktop</a>.
+It is cross-platform software.</p>
+<h3 id="open-file"><p class="site-width">Open file</p></h3><p>Launch QGIS Desktop.</p>
+<p>Create a new project with <code>Project</code> -&gt; <code>New</code>.</p>
+<p>Drag &amp; drop the <code>riga_latvia_osm_line.geojson</code> onto the blank canvas in QGIS.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/qgis-lines.png" alt=""></p>
+<p>That's way too many lines.</p>
+<h3 id="filter-lines"><p class="site-width">Filter lines</p></h3><p>In the <code>Layers Panel</code>, right click on the only layer that you have and choose <code>Filter...</code>.</p>
+<p>In the <code>Query Builder</code> window, find <code>highway</code> in the <code>Fields</code> listbox and click on the <code>All</code> button in the <code>Values</code> section.
+You will see all possible values for the field <code>highway</code>.</p>
+<p>We are going to filter out lines that are not roads and we are only going to use major roads and exclude pedestrian paths and service roads, etc.</p>
+<p>Here is a sample query that you can play with. You could also include railways, other roads, etc.</p>
+<pre><code class="lang-text">"highway" IN ('primary', 'secondary', 'tertiary', 'residential', 'trunk')
+</code></pre>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/qgis-filter.png" alt=""></p>
+<p>Now our map has much less detail and you can clearly see the city blocks.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/qgis-lines-filtered.png" alt=""></p>
+<h3 id="add-real-map-layer"><p class="site-width">Add real map layer</p></h3><p>First, go to <code>Plugins</code> -&gt; <code>Manage and Install Plugins...</code>, search for <code>OpenLayers Plugin</code> and install it.</p>
+<p>Then go to <code>Web</code> -&gt; <code>OpenLayers plugin</code> -&gt; <code>OpenStreetMap</code> -&gt; <code>OpenStreetMap</code>.</p>
+<p>It will add a layer with OpenStreetMap. 
+Make sure to move your layer in the <code>Layers Panel</code> above the OpenStreetMap layer,
+so that the lines are on top of the map and you can see them.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/qgis-osm-layer.png" alt=""></p>
+<p>You could also use Google Maps or Bing Maps but I found that the streets were a little bit off.</p>
+<p>If the lines are hard to see, you can change the line color to, say, blue to make it possible to see them better.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/qgis-style.png" alt=""></p>
+<p>Or just toggle the OSM layer on or off.</p>
+<h3 id="lines-to-polygons"><p class="site-width">Lines to polygons</p></h3><p>There is a tool under <code>Vector</code> -&gt; <code>Geometry Tools</code> -&gt; <code>Lines to polygons</code>.</p>
+<p>But it will likely give you poor results with OSM data.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/qgis-lines-to-polygons.png" alt=""></p>
+<h2 id="script"><p class="site-width">Script</p></h2><p>We are going to use the <a href="http://toblerity.org/shapely/manual.html#shapely.ops.polygonize"><code>polygonize</code></a> function from the <a href="https://pypi.python.org/pypi/Shapely">Shapely</a> library for Python.</p>
+<p>But we can't use it with the downloaded data. 
+We first need to prepare the data.</p>
+<p>The first step is to exclude certain lines so that we don't end up with too many polygons,
+just likely we did with the filter function in QGIS earlier.</p>
+<p>Then we are going to split <code>LineString</code>s with many points to many <code>LineString</code>s with just two points.
+This is the secret sauce to make the <code>polygonize</code> function to work properly.
+If you skip this step, the result may have many missing polygons or in the worst case look just as patchy
+as the <code>Lines to polygons</code> tool in QGIS.</p>
+<h3 id="dependencies"><p class="site-width">Dependencies</p></h3><p>Install Shapely with pip</p>
+<pre><code class="lang-bash">pip install shapely
+</code></pre>
+<p>If you are on Windows like me, this is not going to work.</p>
+<p>Instead, <a href="http://www.lfd.uci.edu/~gohlke/pythonlibs/#shapely">go here</a> and download the <code>whl</code> file for your Python version.</p>
+<p>Then install it</p>
+<pre><code class="lang-bash">python.exe -m pip install Shapely-<span class="hljs-number">1.5</span>.<span class="hljs-number">16</span>-cp35-cp35m-win_amd64.whl
+</code></pre>
+<h3 id="filter-lines"><p class="site-width">Filter lines</p></h3><p>This is similar to what we did earlier in QGIS</p>
+<pre><code class="lang-python"><span class="hljs-keyword">import</span> sys, json
+
+<span class="hljs-keyword">if</span> __name__ == <span class="hljs-string">'__main__'</span>:
+
+ input_filename = sys.argv[<span class="hljs-number">1</span>]
+ output_filename = sys.argv[<span class="hljs-number">2</span>]
+
+ highway_whitelist = {<span class="hljs-string">'primary'</span>, <span class="hljs-string">'secondary'</span>, <span class="hljs-string">'tertiary'</span>, <span class="hljs-string">'residential'</span>, <span class="hljs-string">'trunk'</span>}
+
+ streets = json.load(open(input_filename, encoding=<span class="hljs-string">'utf-8'</span>))
+ streets[<span class="hljs-string">'features'</span>] = [feat <span class="hljs-keyword">for</span> feat <span class="hljs-keyword">in</span> streets[<span class="hljs-string">'features'</span>] <span class="hljs-keyword">if</span> feat[<span class="hljs-string">'properties'</span>][<span class="hljs-string">'highway'</span>] <span class="hljs-keyword">in</span> highway_whitelist]
+
+ json.dump(streets, open(output_filename, <span class="hljs-string">'w'</span>))
+</code></pre>
+<p>Run it</p>
+<pre><code class="lang-bash">python filter.py riga_latvia_osm_line.geojson riga_streets.tmp.geojson
+</code></pre>
+<p>The original file was 112 MB and the filtered file is now 17 MB.</p>
+<p>If you cleared the <code>properties</code> (which you may not need anymore) of every feature, the file size would be even smaller. </p>
+<h3 id="convert-lines"><p class="site-width">Convert lines</p></h3><p>This is the secret sauce.</p>
+<p>The length of lines that represent streets are arbitrary. I guess they were added by humans manually.
+Which means that a street can span multiple intersections which is my theory why the <code>polygonize</code> function gets confused and you get few or patchy polygons.</p>
+<p>The solution was to split each line that consists of multiple points into multiple lines with just two points (beginning and end).</p>
+<pre><code class="lang-python"><span class="hljs-keyword">import</span> sys, json
+
+<span class="hljs-keyword">if</span> __name__ == <span class="hljs-string">'__main__'</span>:
+
+ input_filename = sys.argv[<span class="hljs-number">1</span>]
+ output_filename = sys.argv[<span class="hljs-number">2</span>]
+
+ data = json.load(open(input_filename, encoding=<span class="hljs-string">'utf-8'</span>))
+
+ geojson = {
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"FeatureCollection"</span>,
+ <span class="hljs-string">"features"</span>: []
+ }
+
+ <span class="hljs-keyword">for</span> feature <span class="hljs-keyword">in</span> data[<span class="hljs-string">'features'</span>]:
+ coords = feature[<span class="hljs-string">'geometry'</span>][<span class="hljs-string">'coordinates'</span>]
+ <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> range(<span class="hljs-number">0</span>, len(coords) - <span class="hljs-number">1</span>):
+ geojson[<span class="hljs-string">'features'</span>].append({
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"Feature"</span>,
+ <span class="hljs-string">"properties"</span>: feature[<span class="hljs-string">'properties'</span>], 
+ <span class="hljs-string">"geometry"</span>: {
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"LineString"</span>,
+ <span class="hljs-string">"coordinates"</span>: [coords[i], coords[i+<span class="hljs-number">1</span>]]
+ }
+ })
+
+ json.dump(geojson, open(output_filename, <span class="hljs-string">'w'</span>))
+</code></pre>
+<p>Run it</p>
+<pre><code class="lang-bash">python split-lines.py riga_streets.tmp.geojson riga_streets.geojson
+</code></pre>
+<p>The file size grew from 17 MB to 98 MB.</p>
+<p>If you uncomment the line that clears the <code>properties</code> field, the file size will be just 12 MB.</p>
+<h3 id="polygonize-lines"><p class="site-width">Polygonize lines</p></h3><p>This script <code>polygonize.py</code> will read all lines from a GeoJSON file,
+call the <code>polygonize</code> function from Shapely
+and save all polygons to a GeoJSON file.</p>
+<pre><code class="lang-python"><span class="hljs-keyword">import</span> sys
+<span class="hljs-keyword">import</span> json
+<span class="hljs-keyword">from</span> shapely.ops <span class="hljs-keyword">import</span> polygonize
+<span class="hljs-keyword">from</span> shapely.geometry <span class="hljs-keyword">import</span> asShape
+<span class="hljs-keyword">from</span> shapely.geometry <span class="hljs-keyword">import</span> mapping
+
+<span class="hljs-keyword">if</span> __name__ == <span class="hljs-string">'__main__'</span>:
+
+ input_filename = sys.argv[<span class="hljs-number">1</span>]
+ output_filename = sys.argv[<span class="hljs-number">2</span>]
+
+ streets = json.load(open(input_filename))
+
+ lines = []
+ <span class="hljs-keyword">for</span> feature <span class="hljs-keyword">in</span> streets[<span class="hljs-string">'features'</span>]:
+ lines.append(asShape(feature[<span class="hljs-string">'geometry'</span>]))
+
+ polys = list(polygonize(lines))
+
+ geojson = {
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"FeatureCollection"</span>,
+ <span class="hljs-string">"features"</span>: []
+ }
+
+ <span class="hljs-keyword">for</span> poly <span class="hljs-keyword">in</span> polys:
+ geojson[<span class="hljs-string">'features'</span>].append({
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"Feature"</span>,
+ <span class="hljs-string">"properties"</span>: {},
+ <span class="hljs-string">"geometry"</span>: mapping(poly)
+ })
+
+ json.dump(geojson, open(output_filename, <span class="hljs-string">'w'</span>))
+</code></pre>
+<p>Run it</p>
+<pre><code class="lang-bash">python polygonize.py riga_streets.geojson riga_polys.geojson
+</code></pre>
+<p>The final file size is just 3 MB.</p>
+<h2 id="results"><p class="site-width">Results</p></h2><p>If you load the polygons in QGIS, it'll look like this.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/qgis-polys.png" alt=""></p>
+<p>You can make the polygon layer fill color transparent by changing the opacity/alpha of the fill color under style properties.</p>
+<p>This file is small enough so that you can open it in <a href="http://geojson.io">geojson.io</a> 
+which means you can also use <a href="http://leafletjs.com/">Leaflet</a> (a JS library for interactive maps) 
+to add these polygons from a GeoJSON file to your map in JS.</p>
+<p><img src="https://peteris.rocks/blog/openstreetmap-city-blocks-as-geojson-polygons/geojson.io-polys.png" alt=""></p>
+<p>I actually found geojson.io to be much easier to use to add and delete polygons than QGIS.</p>
+<p>Here are some polygons from <a href="https://mapzen.com/data/metro-extracts/metro/brooklyn_new-york/">Brooklyn, New York, US</a>.</p>
+
+
+<p>You can download the <code>map.geojson</code> file from <a href="https://gist.github.com/pdonald/223e42b491eb42ba99b8e10ef1ae2072#file-map-geojson">this gist</a> and 
+open it in <a href="http://geojson.io">geojson.io</a> for more interactivity.</p>
+<p>In the beginning, I attempted to do this with node.js since my visualization and data crawling was also written in JavaScript.</p>
+<p>There is <a href="http://turfjs.org/">turfjs</a> for node.js which is a collection of functions for working with GeoJSON data.</p>
+<p>Here are some of the code that I threw out but may be useful.</p>
+<h3 id="filtering-lines-by-distance"><p class="site-width">Filtering lines by distance</p></h3><p>If your downloaded map is too large and you have too many lines to show
+(if you are not using QGIS but sticking with geojson.io only, for example),
+you can exclude lines that are a certain distance from the city center.</p>
+<pre><code class="lang-js"><span class="hljs-keyword">var</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">'fs'</span>)
+<span class="hljs-keyword">var</span> distance = <span class="hljs-built_in">require</span>(<span class="hljs-string">'turf-distance'</span>)
+<span class="hljs-keyword">var</span> centroid = <span class="hljs-built_in">require</span>(<span class="hljs-string">'turf-centroid'</span>)
+
+<span class="hljs-keyword">var</span> s = fs.readFileSync(<span class="hljs-string">'riga_latvia_osm_line.geojson'</span>)
+<span class="hljs-keyword">var</span> geo = <span class="hljs-built_in">JSON</span>.parse(s)
+
+<span class="hljs-keyword">var</span> cityCenter = {
+ type: <span class="hljs-string">"Feature"</span>,
+ geometry: { type: <span class="hljs-string">"Point"</span>, coordinates: [<span class="hljs-number">24.1153139</span>,<span class="hljs-number">56.9570109</span>] }
+}
+
+<span class="hljs-keyword">var</span> highwayWhitelist = {
+ <span class="hljs-string">"primary"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"primary_link"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"secondary"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"secondary_link"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"residential"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"service"</span>: <span class="hljs-literal">false</span>,
+ <span class="hljs-string">"tertiary"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"tertiary_link"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"trunk"</span>: <span class="hljs-literal">true</span>,
+ <span class="hljs-string">"trunk_link"</span>: <span class="hljs-literal">true</span>,
+}
+
+<span class="hljs-keyword">for</span> (<span class="hljs-keyword">var</span> key <span class="hljs-keyword">in</span> geo.features) {
+ <span class="hljs-keyword">var</span> feat = geo.features[key]
+ <span class="hljs-keyword">var</span> keep = <span class="hljs-literal">false</span>
+
+ <span class="hljs-keyword">if</span> (highwayWhitelist[feat.properties.highway]) {
+ <span class="hljs-keyword">var</span> lineCenter = centroid(feat)
+ <span class="hljs-keyword">var</span> d = distance(cityCenter, lineCenter) 
+ <span class="hljs-keyword">if</span> (d &lt;= <span class="hljs-number">3.5</span>) {
+ keep = <span class="hljs-literal">true</span>
+ }
+ }
+
+ <span class="hljs-keyword">if</span> (!keep) {
+ <span class="hljs-keyword">delete</span> geo.features[key]
+ } <span class="hljs-keyword">else</span> {
+ <span class="hljs-keyword">delete</span> feat.properties
+ feat.properties = {}
+ }
+}
+
+<span class="hljs-keyword">var</span> lines = geo.features.filter(f =&gt; !!f) 
+</code></pre>
+<p>The same code In Python with Shapely.</p>
+<pre><code class="lang-python"><span class="hljs-keyword">from</span> shapely.geometry <span class="hljs-keyword">import</span> Point
+<span class="hljs-keyword">from</span> shapely.geometry <span class="hljs-keyword">import</span> asShape, mapping
+<span class="hljs-keyword">import</span> json
+
+center = Point(<span class="hljs-number">24.1153139</span>, <span class="hljs-number">56.9570109</span>)
+max_distance_from_center = <span class="hljs-number">0.033</span> 
+highway_whitelist = {<span class="hljs-string">'primary'</span>, <span class="hljs-string">'secondary'</span>, <span class="hljs-string">'tertiary'</span>, <span class="hljs-string">'residential'</span>, <span class="hljs-string">'trunk'</span>}
+
+data = json.load(open(<span class="hljs-string">'riga_latvia_osm_line.geojson'</span>, encoding=<span class="hljs-string">'utf-8'</span>))
+
+<span class="hljs-keyword">for</span> feature <span class="hljs-keyword">in</span> data[<span class="hljs-string">'features'</span>]:
+ <span class="hljs-keyword">if</span> feature[<span class="hljs-string">'properties'</span>][<span class="hljs-string">'highway'</span>] <span class="hljs-keyword">in</span> highway_whitelist:
+ line = asShape(feature[<span class="hljs-string">'geometry'</span>]) 
+ distance = center.distance(line.centroid)
+ <span class="hljs-keyword">if</span> distance &lt; max_distance_from_center:
+ lines.append(feature)
+
+
+</code></pre>
+<h3 id="filtering-lines-by-polygon"><p class="site-width">Filtering lines by polygon</p></h3><p>This piece of code will filter out lines that are not part of a polygon
+(an administrative boundary within a city, for instance).</p>
+<p>That's accomplished by splitting each line into 100 meter segments
+and checking if the center point of a segment is within that polygon.
+I couldn't find a function that checks if a line intersects with a polygon
+so this was my quick workaround.</p>
+<pre><code class="lang-js"><span class="hljs-keyword">var</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">'fs'</span>)
+<span class="hljs-keyword">var</span> centroid = <span class="hljs-built_in">require</span>(<span class="hljs-string">'turf-centroid'</span>)
+<span class="hljs-keyword">var</span> lineChunk = <span class="hljs-built_in">require</span>(<span class="hljs-string">'turf-line-chunk'</span>)
+<span class="hljs-keyword">var</span> gju = <span class="hljs-built_in">require</span>(<span class="hljs-string">'geojson-utils'</span>)
+
+<span class="hljs-keyword">var</span> region = {
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"FeatureCollection"</span>,
+ <span class="hljs-string">"features"</span>: [
+ {
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"Feature"</span>,
+ <span class="hljs-string">"properties"</span>: {},
+ <span class="hljs-string">"geometry"</span>: {
+ <span class="hljs-string">"type"</span>: <span class="hljs-string">"Polygon"</span>,
+ <span class="hljs-string">"coordinates"</span>: [
+ [
+ [ <span class="hljs-number">24.011306762695312</span>, <span class="hljs-number">57.07750772096635</span> ],
+ ...
+ ]
+ }
+ }
+ ]
+}.features[<span class="hljs-number">0</span>]
+
+<span class="hljs-keyword">for</span> (<span class="hljs-keyword">var</span> key <span class="hljs-keyword">in</span> geo.features) {
+ <span class="hljs-keyword">var</span> feat = geo.features[key]
+ <span class="hljs-keyword">var</span> keep = <span class="hljs-literal">false</span>
+
+ <span class="hljs-keyword">if</span> (highwayWhitelist[feat.properties.highway]) {
+ <span class="hljs-keyword">var</span> segments = lineChunk(feat, <span class="hljs-number">0.1</span>, <span class="hljs-string">'kilometers'</span>)
+ segments.features.forEach(seg =&gt; {
+ <span class="hljs-keyword">if</span> (keep) <span class="hljs-keyword">return</span>
+ <span class="hljs-keyword">var</span> lineCenter = centroid(seg)
+ <span class="hljs-keyword">if</span> (gju.pointInPolygon(lineCenter.geometry, region.geometry)) {
+ keep = <span class="hljs-literal">true</span>
+ }
+ }
+ }
+
+ <span class="hljs-keyword">if</span> (!keep) {
+ <span class="hljs-keyword">delete</span> geo.features[key]
+ } <span class="hljs-keyword">else</span> {
+ <span class="hljs-keyword">delete</span> feat.properties
+ feat.properties = {}
+ }
+}
+</code></pre>
+<ul>
+<li>Download GeoJSON files from Mapzen Metro Extracts</li>
+<li>Filter lines with <code>filter.py</code></li>
+<li>Split <code>LineString</code>s with multiple points to <code>LineStrings</code> with two points with <code>split-lines.py</code></li>
+<li>Create polygons with <code>polygonize.py</code></li>
+<li>Look at results with QGIS or geojson.io</li>
+</ul>
+<p>So this may not be perfect and if you have any suggestions I am open to them.</p>
+
+ </div>
+ 
+ 
+ 
+ </div>
+</body></html>

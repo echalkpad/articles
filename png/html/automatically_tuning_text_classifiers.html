@@ -1,0 +1,146 @@
+<!DOCTYPE html><html><head><title>Automatically Tuning Text Classifiers</title></head><body>
+<h1>Automatically Tuning Text Classifiers</h1><p><a href="http://blog.sigopt.com/post/133089144983/sigopt-for-ml-automatically-tuning-text" target="_new">Original URL</a></p>
+<p><blockquote>By: Ian Dewancker, Research EngineerIn this first post on integrating SigOpt with machine learning frameworks, we&#x2019;ll show you how to use SigOpt and scikit-learn to train and tune a model for&hellip;</blockquote></p>
+<div><div class="body-text">
+ <p>By: <a href="https://sigopt.com/about">Ian Dewancker, Research Engineer</a><br></p><p>In this first post on integrating <a href="https://sigopt.com/">SigOpt</a> with machine learning frameworks, we&#x2019;ll show you how to use SigOpt and <a href="http://scikit-learn.org/">scikit-learn</a> to train and tune a model for text sentiment classification in under <a href="https://github.com/sigopt/sigopt-examples/tree/master/text_classifier">50 lines of Python</a>. We show that SigOpt outperforms both <a href="http://scikit-learn.org/stable/modules/grid_search.html">strategies scikit-learn recommends</a> for hyperparameter optimization on this task. &#xA0;We&#x2019;ll also walk through the two fundamental aspects of this (and any) SigOpt experiment: the objective metric and the set of tunable parameters. &#xA0;&#xA0;</p><p>Text classification problems appear quite often in modern information systems, and you might imagine building a small document/tweet/blogpost classifier for any number of purposes. &#xA0;In this example, the classification task is to label <a href="http://www.cs.jhu.edu/~mdredze/datasets/sentiment/">Amazon product reviews</a> [1] as either favorable or not. &#xA0;The objective is to find a classifier that is accurate in its predictions, but also one that gives us confidence it will generalize to data it hasn&#x2019;t been trained on. &#xA0;We employ the Swiss army knife of machine learning, <a href="https://en.wikipedia.org/wiki/Logistic_regression">logistic regression</a> (LR), as our model in this experiment. &#xA0;While the LR model might be conceptually simple and implemented in many statistics and machine learning software packages, <b>valuable engineering time and resources are often wasted</b> experimenting with feature representation and parameter tuning via trial and error. &#xA0;SigOpt can automatically and intelligently optimize your objective, letting you get back to working on other tasks. </p><h2>Show Me The Code</h2><p>If you&#x2019;d like to try running this example, <a href="https://sigopt.com/signup">sign up</a> for a free SigOpt trial and find your newly created credentials on your <a href="https://sigopt.com/user/profile">profile page</a>. &#xA0;To quickly set up an environment to run this example, we recommend using a Mac OS X (with brew) or an Ubuntu machine having <i>at least 4GB of RAM</i>. &#xA0;Once you have a suitable machine (<a href="https://aws.amazon.com/ec2/pricing/">t2.mediums</a> in EC2 are cheap and work great) this script should be all you need to get to get started:</p>
+
+<pre class="prettyprint lang-bash"># on Mac OS X or Ubuntu machine
+git clone <a href="https://github.com/sigopt/sigopt-examples.git">https://github.com/sigopt/sigopt-examples.git</a>
+cd sigopt-examples/text_classifier/
+sudo ./setup_env.sh
+# insert your CLIENT_ID, CLIENT_TOKEN, USER_TOKEN into sigopt_creds.py
+# otherwise you'll see "This endpoint requires an authenticated user" errors
+nohup python sentiment_classifier.py &amp;
+</pre><p>
+
+Without further ado, here is the short Python snippet to train and tune the LR sentiment classifier (you can also <a href="https://github.com/sigopt/sigopt-examples/tree/master/text_classifier">find it here</a>)</p>
+<pre class="prettyprint lang-python">import json, math, numpy, datetime
+import sigopt.interface
+from sigopt_creds import USER_TOKEN, CLIENT_TOKEN, CLIENT_ID
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.linear_model import SGDClassifier
+from sklearn import cross_validation
+
+#load text training data
+POSITIVE_TEXT = json.load(open("POSITIVE_list.json"))
+NEGATIVE_TEXT = json.load(open("NEGATIVE_list.json"))
+
+# optimization metric
+def sentiment_metric(POS_TEXT, NEG_TEXT, params):
+ min_ngram = params['min_n_gram']
+ max_ngram = min_ngram + params['n_gram_offset']
+ min_doc_freq = math.exp(params['log_min_df'])
+ max_doc_freq = min_doc_freq + params['df_offset']
+ vectorizer = CountVectorizer(min_df=min_doc_freq, max_df=max_doc_freq,
+ ngram_range=(min_ngram, max_ngram))
+ X = vectorizer.fit_transform(POS_TEXT+NEG_TEXT)
+ y = [1]*len(POS_TEXT) + [-1]*len(NEG_TEXT)
+ clf = SGDClassifier(loss='log', penalty='elasticnet',
+ alpha=math.exp(params['log_reg_coef']),
+ l1_ratio=params['l1_coef'])
+ cv = cross_validation.ShuffleSplit(X.shape[0], n_iter=5, test_size=0.3,
+ random_state=0)
+ cv_scores = cross_validation.cross_val_score(clf, X, y, cv=cv)
+ return numpy.mean(cv_scores)
+
+conn = sigopt.interface.Connection(user_token=USER_TOKEN,
+ client_token=CLIENT_TOKEN)
+experiment = conn.experiments.create(client_id=CLIENT_ID, data={
+ 'name': 'Sentiment LR Classifier',
+ 'parameters': [
+ { 'name':'l1_coef',
+ 'type': 'double',
+ 'bounds': { 'min': 0, 'max': 1.0 }},
+ { 'name':'log_reg_coef',
+ 'type': 'double',
+ 'bounds': { 'min': math.log(0.000001), 'max': math.log(100.0) }},
+ { 'name':'min_n_gram',
+ 'type': 'int',
+ 'bounds': { 'min': 1, 'max': 2 }},
+ { 'name':'n_gram_offset',
+ 'type': 'int',
+ 'bounds': { 'min': 0, 'max': 2 }},
+ { 'name':'log_min_df',
+ 'type': 'double',
+ 'bounds': { 'min': math.log(0.00000001), 'max': math.log(0.1) }},
+ { 'name':'df_offset',
+ 'type': 'double',
+ 'bounds': { 'min': 0.01, 'max': 0.25 }}
+ ],
+}).experiment
+
+# run experimentation loop
+for _ in range(60):
+ suggestion = conn.experiments(experiment.id).suggest().suggestion
+ opt_metric = sentiment_metric(POSITIVE_TEXT, NEGATIVE_TEXT,
+ suggestion.assignments)
+ conn.experiments(experiment.id).report(data={
+ 'assignments': suggestion.assignments,
+ 'value': opt_metric,
+ })
+# track progress on your experiment : <a href="https://sigopt.com/experiment/list">https://sigopt.com/experiment/list</a>
+</pre>
+<p>Behold the power of abstraction! &#xA0;It&#x2019;s pretty amazing that we can build and tune a model in so few lines of code. &#xA0;It should be noted however that this experiment <b>takes about 40 min</b> to complete (and costs about $0.052 if you use a t2.medium) so letting it run in a background session on a remote machine allows you to safely start it and get back to working on other things. &#xA0;You can periodically check in on the progress using the SigOpt <a href="https://sigopt.com/experiment/list">experiment dashboard</a>.<b><br></b></p>
+
+<h2>Objective Metric : $f(&#x3BB;)$</h2>
+
+<p>SigOpt finds parameter configurations that <b>maximize</b> any metric, so we need to pick one that is appropriate for this classification task. We&#x2019;ll use $ f(\lambda) $ to denote our objective metric function and \lambda to represent the set of tunable parameters, which we discuss in the following section. &#xA0;In designing our objective metric, <a href="https://en.wikipedia.org/wiki/Accuracy_and_precision">accuracy</a>, the number of correctly classified reviews, is obviously important, but we also want assurance that our model generalizes and can perform well on data on which it was not trained. &#xA0;This is where the idea of <a href="https://en.wikipedia.org/wiki/Cross-validation_(statistics)">cross-validation</a> comes into play. &#xA0;</p><p>Cross-validation requires us to split up our entire labeled dataset $ \mathcal{D} $ into two distinct sets: one to train on $ \mathcal{D}_{\text{train}} $ and one to validate our trained classifier on $ \mathcal{D}_{\text{valid}} $. &#xA0;We then consider metrics like accuracy on only the validation set. &#xA0;Taking this further and considering not one, but many possible splits of the labeled data is the idea of <a href="https://en.wikipedia.org/wiki/Cross-validation_(statistics)#k-fold_cross-validation">k-fold cross-validation</a> where multiple training, validation sets are generated and validation metrics can be aggregated in several ways (e.g., mean, min, max) to give a single estimation of performance.</p><p>In this case, we&#x2019;ll use the mean of the k-folded cross-validation accuracies [2]. &#xA0;In our case, $ k = 5 $ folds are used and the train and validation sets are split randomly using 70% and 30% of the entire dataset, respectively.</p>
+<p>
+$$ 
+\mathcal{L}(\pmb{\lambda}, \mathcal{D}_{\text{t}}, \mathcal{D}_{\text{v}}) = \text{acc. of LR}(\pmb{\lambda}, \mathcal{D}_{\text{t}}) \text{ on } \mathcal{D}_{\text{v}}
+$$
+$$
+f(\pmb{\lambda} ) = \frac{1}{k} \sum_{i=1}^{k} \mathcal{L}(\pmb{\lambda}, \mathcal{D}^{(i)}_{\text{train}}, \mathcal{D}^{(i)}_{\text{valid}})
+$$
+</p>
+<p>This objective metric $ f(\lambda) $ takes on values in the range [0, 1.0], where 0 represents a mis-classification of every example in all validation folds and 1.0 represents perfect classification on all validation folds. The higher the cross-validation metric, the better our classifier is doing. </p><p>Using many folds might not be practical if <b>training takes an very long time</b> (you might have to settle for 1 or 2 folds only); indeed, <b>SigOpt is the perfect tool</b> for tuning these time consuming and expensive to evaluate functions! </p>
+
+<h2>Tunable Parameters : $ &#x3BB; $</h2>
+
+<p>The objective metric is controlled by a set of parameters that potentially influence its performance. &#xA0;<a href="https://sigopt.com/docs/objects/parameter">Parameters</a> can be defined on integer, continuous, or categorical domains. The parameters used in this experiment can be split into two groups: those governing the feature representation of the review text (<code>min_n_gram</code>, <code>ngram_offset</code>, <code>log_min_df</code>, <code>df_offset</code>) and those governing the cost function of logistic regression (<code>log_reg_coef</code>, <code>l1_coef</code>). We explain these parameters in more detail below. &#xA0;&#xA0;</p>
+
+<h2>Feature Representation Parameters </h2>
+
+<p>The <a href="http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.CountVectorizer.html">CountVectorizer</a> class in scikit-learn is a convenient mechanism for transforming a corpus of text documents into vectors using <a href="https://en.wikipedia.org/wiki/Bag-of-words_model">bag of words representations (BOW)</a>. &#xA0;scikit-learn offers quite a bit of control in determining which <a href="https://en.wikipedia.org/wiki/N-gram">n-grams</a> make up the vocabulary for your BOW vectors. &#xA0;As a quick refresher, n-grams are sequences of text tokens as shown in the example below: </p>
+<br><table cellpadding="10"><tr><td><b>Original Text</b></td>
+ <td>&#x201C;SigOpt optimizes any complicated system&#x201D;</td>		
+ </tr><tr><td><b>1-grams</b></td>
+ <td>{ &#x201C;SigOpt&#x201D;, &#x201C;optimizes&#x201D;, &#x201C;any&#x201D;, &#x201C;complicated&#x201D;, &#x201C;system&#x201D;}</td>	
+ </tr><tr><td><b>2-grams</b></td>
+ <td>{ &#x201C;SigOpt_optimizes&#x201D;, &#x201C;optimizes_any&#x201D;, &#x201C;any_complicated&#x201D; &#x2026; }</td>	
+ </tr><tr><td><b>3-grams</b></td>
+ <td>{ &#x201C;SigOpt_optimizes_any&#x201D;, &#x201C;optimizes_any_complicated&#x201D; &#x2026; }</td>	
+ </tr></table><br><p>The number of times each n-gram appears in a given piece of text is then encoded in the BOW vector describing that text. &#xA0;CountVectorizer allows you to control the range of n-grams that are included in the vocabulary (<code>min_n_gram</code>, <code>ngram_offset</code> in our experiment), as well as filtering n-grams outside a specified <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf">document-frequency</a> range (<code>log_min_df</code>, <code>df_offset</code> in our experiment). For example, if a rare 3-gram like &#x201C;hi_diddly_ho&#x201D; doesn&#x2019;t appear with at least min-df frequency in the corpus, it is not included in the vocabulary. &#xA0;Similarly, n-grams that occur in nearly every document (1-grams like &#x201C;the&#x201D;, &#x201C;a&#x201D; etc) can also be filtered using the max-df parameter. &#xA0;Often when the range of the parameter is very large or very small, it makes sense to look at the parameter on the <a href="https://en.wikipedia.org/wiki/Logarithmic_scale">log scale</a>, as we do with the <code>log_min_df</code> parameter.</p><p>Which n-gram vocabulary performs best on this classification problem? &#xA0;Including these vocabulary parameters in our experiment gives SigOpt the power to explore this important question automatically.</p><h2>Logistic Regression Error Cost Parameters</h2><p>Using the <a href="http://scikit-learn.org/stable/modules/generated/sklearn.linear_model.SGDClassifier.html">SGDClassifier</a> class in scikit-learn, we can succinctly formulate and solve the logistic regression learning problem. &#xA0;The error function for logistic regression, two-class classification is defined in the following way: </p>
+<p>
+$$
+E(\pmb{\theta}) = \frac{1}{M}\sum_{i=1}^{M}\log\left( 1.0 + e^{-y_i(\pmb{\theta}^T\mathbf{x_i}) }\right ) + \alpha\left( \frac{1-\rho}{2}\|\pmb{\theta}\|_2^{2} + \rho\|\pmb{\theta}\|_1\right)
+$$
+</p>
+<p>Where </p><p>$M$ = number of training examples<br>$\theta$ = vector of weights the algorithm will learn for each n-gram in vocabulary<br>$y_{i}$ - training data label : {-1, 1} for our two class problem<br>$x_{i}$ - training data input vector: &#xA0;BOW vectors described in previous section <br>$\alpha$ - weight of regularization term (<code>log_reg_coef</code> in our experiment)<br>$\rho$ - weight of l1 norm term (<code>l1_coef</code> in our experiment)</p><p>The first term of the cost function penalizes weights that do not fit the training data while the second term penalizes model complexity (how far are the feature weights away from zero). &#xA0;scikit-learn performs <a href="https://en.wikipedia.org/wiki/Stochastic_gradient_descent">stochastic gradient descent</a> on this error function with respect to the weights in an attempt to find those that minimize this function. &#xA0;Check out another one of our blog posts where we discuss in more detail the <a href="http://blog.sigopt.com/post/132959177928/sigopt-fundamentals-approximation-of-data">trade off between fidelity and regularization</a> &#xA0;&#xA0;</p><p>Should we use <a href="https://en.wikipedia.org/wiki/Regularization_(mathematics)">l1 or l2 regularization</a>, or perhaps a <a href="https://en.wikipedia.org/wiki/Elastic_net_regularization">weighted mixture</a>? &#xA0;How much should the entire regularization term be weighted? &#xA0;With this error formulation, and the $ \alpha $ and $ \rho $ parameters exposed to our experiment, SigOpt can quickly find these answers to these important questions.</p>
+
+<h2>Optimization Performance</h2>
+
+<p>SigOpt offers one solution to the <a href="https://en.wikipedia.org/wiki/Hyperparameter_optimization">hyperparameter optimization</a> problem, however there are other existing techniques. &#xA0;In particular, <a href="http://scikit-learn.org/stable/modules/grid_search.html">random search and grid search</a> are two commonly employed strategies. &#xA0;Random search, as you might guess, simply selects parameter configurations at random, while grid search sweeps through a selected subset of the parameter space. &#xA0;</p><p>How should we evaluate the performance of these alternative optimization strategies? &#xA0;One criterion that makes sense is to consider the <b>best found</b> (max) value of the objective metric. &#xA0;Better performing strategies will find better configurations over the duration of their search. &#xA0;Due to the stochastic nature of these systems however, we must consider the variation in our best found measurements over several runs to make fair comparisons. &#xA0;</p><p>To ground our discussion, we also report the performance when no hyperparameter optimization is performed, and we simply take the default values for CountVectorizer and SGDClassifier as provided by scikit-learn. &#xA0;For grid search, we consider 64 evenly spaced parameter configurations (order shuffled randomly) across our domain and analyze the best seen after 60 evaluations to be consistent with our limit on the total number of evaluations for this experiment. Exhaustive grid search is usually prohibitive because the number of possible configurations grows exponentially. &#xA0;For example if we considered 10 configurations for each parameter in a problem like ours with 6 parameters, we would have 1 million ( $ 10^{6} $ ) total joint configurations to evaluate. &#xA0;</p><p>Results averaged over 20 runs, each run consisting of 60 function evaluations</p>
+<br><table cellpadding="10"><tr><td></td>
+ <td>SigOpt</td>
+ <td>Rnd. Search</td>
+ <td>Grid Search</td>
+ <td>No Tuning (Baseline)</td>		
+ </tr><tr><td>Best Found</td>
+ <td><b>0.8760</b> <b>(+5.72%)</b></td>
+ <td>0.8673 (+4.67%)</td>
+ <td>0.8680 (+4.76%)</td>
+ <td>0.8286</td>		
+ </tr></table><br><p>These are promising results! <b>SigOpt finds the best configuration</b> with statistical significance over the other two approaches (p = 0.0001, using the unpaired <a href="https://en.wikipedia.org/wiki/Mann%E2%80%93Whitney_U_test">Mann-Whitney U test</a>) and improves the performance as compared to the baseline by 5.72%. &#xA0;</p>
+
+<h2>Closing Remarks</h2>
+
+<p>This short example scratches the surface of the types of ML related experiments one could conduct using SigOpt. &#xA0;For example, SGDClassifier has lots of variations from which to select&#x2013; another experiment might be to treat the loss function as a <a href="https://sigopt.com/docs/objects/parameter">categorical variable</a>. &#xA0;What sort of models are you building that could benefit from better experimentation or optimization? &#xA0;Stay tuned for more posts in our series on integrating SigOpt with various ML frameworks to <b>solve real problems more efficiently!</b> </p><p>Get <a href="https://github.com/sigopt/sigopt-examples/tree/master/text_classifier">the code</a> from this example and <a href="https://sigopt.com/signup">sign up for SigOpt</a> for free to try out this experiment yourself! </p>
+
+<h2>References</h2>
+
+<p>[1]: John Blitzer, Mark Dredze, Fernando Pereira. <i>Biographies, Bollywood, Boom-boxes and Blenders: Domain Adaptation for Sentiment Classification.</i> Association of Computational Linguistics (ACL), 2007. [<a href="http://www.cs.jhu.edu/~mdredze/publications/sentiment_acl07.pdf">PDF</a>] </p><p>[2]: Eggensperger, K., Feurer, M., Hutter F., et al. <i>Towards an Empirical Foundation for Assessing Bayesian Optimization of Hyperparameters.</i> &#xA0;NIPS workshop on Bayesian Optimization in Theory and Practice, 2013. [<a href="http://www.cs.ubc.ca/~hutter/papers/13-BayesOpt_EmpiricalFoundation.pdf">PDF</a>]</p>
+ </div>
+ 
+ </div>
+</body></html>

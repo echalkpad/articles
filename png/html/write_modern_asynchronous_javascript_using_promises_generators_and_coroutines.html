@@ -1,0 +1,276 @@
+<!DOCTYPE html><html><head><title>Write Modern Asynchronous Javascript Using Promises, Generators, and Coroutines</title></head><body>
+<h1>Write Modern Asynchronous Javascript Using Promises, Generators, and Coroutines</h1><p><a href="http://blog.originate.com/blog/2016/06/29/write-modern-asynchronous-javascript-using-promises-generators-and-coroutines/" target="_new">Original URL</a></p>
+<p><blockquote>Over the years, &#x201C;Callback Hell&#x201D; has been cited as one of the most common anti-patterns in Javascript to manage concurrency. Just in case you&#x2019;ve forgotten what that looks like,&hellip;</blockquote></p>
+<div><div class="entry-content"><p>Over the years, &#x201C;Callback Hell&#x201D; has been cited as one of the most common anti-patterns in Javascript to manage concurrency. Just in case you&#x2019;ve forgotten what that looks like, here is an example of verifying and processing a transaction in Express:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+</pre></td><td class="code"><pre><code class="js"><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s2">"/purchase"</span><span class="p">,</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOne</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">,</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">userData</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="k">return</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">permissions</span><span class="p">.</span><span class="nx">findAll</span><span class="p">(</span><span class="nx">userData</span><span class="p">,</span> <span class="p">(</span><span class="nx">err2</span><span class="p">,</span> <span class="nx">permissions</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err2</span><span class="p">)</span> <span class="k">return</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err2</span><span class="p">);</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">isAllowed</span><span class="p">(</span><span class="nx">permissions</span><span class="p">))</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">transaction</span><span class="p">.</span><span class="nx">process</span><span class="p">(</span><span class="nx">userData</span><span class="p">,</span> <span class="p">(</span><span class="nx">err3</span><span class="p">,</span> <span class="nx">confirmNum</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">err3</span><span class="p">)</span> <span class="k">return</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err3</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">"Your purchase was successful!"</span><span class="p">);</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Promises were supposed to save us&#x2026;</h3>
+
+<p>I was told that promises would allow us Javascript developers to write asynchronous code as if it were synchronous by wrapping our async functions in a special object. In order to access the value of the Promise, we call either <code>.then</code> or&#xA0;<code>.catch</code> on the Promise object. But what happens when we try to refactor the above example using Promises?</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+</pre></td><td class="code"><pre><code class="js"><span class="line"><span class="c1">// all asynchronous methods have been promisified</span>
+</span><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s2">"/purchase"</span><span class="p">,</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">)</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">then</span><span class="p">(</span> <span class="nx">userData</span> <span class="o">=&gt;</span> <span class="nx">permissions</span><span class="p">.</span><span class="nx">findAllAsync</span><span class="p">(</span><span class="nx">userData</span><span class="p">)</span> <span class="p">)</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">then</span><span class="p">(</span> <span class="nx">permissions</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">isAllowed</span><span class="p">(</span><span class="nx">permissions</span><span class="p">))</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">transaction</span><span class="p">.</span><span class="nx">processAsync</span><span class="p">(</span><span class="nx">userData</span><span class="p">);</span>
+</span><span class="line"> <span class="c1">// userData is not defined! It's not in the proper scope!</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">})</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">then</span><span class="p">(</span> <span class="nx">confirmNum</span> <span class="o">=&gt;</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">"Your purchase was successful!"</span><span class="p">)</span> <span class="p">)</span>
+</span><span class="line"> <span class="p">.</span><span class="k">catch</span><span class="p">(</span> <span class="nx">err</span> <span class="o">=&gt;</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">)</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Since each function inside of the callback has its own scope, we cannot access the user object inside of the second&#xA0;<code>.then</code> callback. So after a little digging, I couldn&#x2019;t find an elegant solution, but I did find a frustrating one:</p>
+
+<blockquote><p>Just indent your promises so that they have proper scoping.</p></blockquote>
+
+<p>Indent my promises!? So its back to the Pyramid of Doom now?</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+</pre></td><td class="code"><pre><code class="js"><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s2">"/purchase"</span><span class="p">,</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">)</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">then</span><span class="p">(</span> <span class="nx">userData</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">permissions</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">findAllAsync</span><span class="p">(</span><span class="nx">userData</span><span class="p">)</span>
+</span><span class="line"> <span class="p">.</span><span class="nx">then</span><span class="p">(</span> <span class="nx">permissions</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">isAllowed</span><span class="p">(</span><span class="nx">permissions</span><span class="p">))</span> <span class="p">{</span>
+</span><span class="line"> <span class="k">return</span> <span class="nx">transaction</span><span class="p">.</span><span class="nx">processAsync</span><span class="p">(</span><span class="nx">userData</span><span class="p">);</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"> <span class="p">}).</span><span class="nx">then</span><span class="p">(</span> <span class="nx">confirmNum</span> <span class="o">=&gt;</span> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">"Your purchase was successful!"</span><span class="p">))</span>
+</span><span class="line"> <span class="p">.</span><span class="k">catch</span><span class="p">(</span> <span class="nx">err</span> <span class="o">=&gt;</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">)</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>I would argue that the nested callback version looks cleaner and is easier to reason about than the nested promise version.</p>
+
+<h3>Async Await Will Save Us!</h3>
+
+<p>The <code>async</code> and <code>await</code> keywords will finally allow us to write our javascript code as though it is synchronous. Here is code written using those keywords coming in ES7:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class="js"><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s2">"/purchase"</span><span class="p">,</span> <span class="nx">async</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="nx">userData</span> <span class="o">=</span> <span class="nx">await</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">);</span>
+</span><span class="line"> <span class="kr">const</span> <span class="nx">permissions</span> <span class="o">=</span> <span class="nx">await</span> <span class="nx">permissions</span><span class="p">.</span><span class="nx">findAllAsync</span><span class="p">(</span><span class="nx">userData</span><span class="p">);</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">isAllowed</span><span class="p">(</span><span class="nx">permissions</span><span class="p">))</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="nx">confirmNum</span> <span class="o">=</span> <span class="nx">await</span> <span class="nx">transaction</span><span class="p">.</span><span class="nx">processAsync</span><span class="p">(</span><span class="nx">userData</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">"Your purchase was successful!"</span><span class="p">)</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Unfortunately the majority of ES7 features including <code>async/await</code> have not been implemented in Javascript runtimes and therefore, require the use of a transpiler. However, you can write code that looks exactly like the code above using ES6 features that have been implemented in most modern browsers as well as Node version 4+.</p>
+
+<h3>The Dynamic Duo: Generators and Coroutines</h3>
+
+<p>Generators are a great metaprogramming tool. They can be used for things like lazy evaluation, iterating over memory intensive data sets and on demand data processing from multiple data sources using a library like <a href="https://github.com/Reactive-Extensions/RxJS">RxJs</a>. However, we wouldn&#x2019;t want to use generators alone in production code because it forces us to reason about a process over time and each time we call next, we jump back to our generator like a GOTO statement. Coroutines understand this and remedy this situation by wrapping a generator and abstracting away all of the complexity.</p>
+
+<h3>The ES6 version using Coroutines</h3>
+
+<p>Coroutines allow us to use <code>yield</code> to execute our asynchronous functions line by line, making our code look synchronous.&#xA0;It&#x2019;s important to note that I am using the Co library. Co&#x2019;s coroutine will execute the generator immediately where as Bluebird&#x2019;s coroutine will return a function that you must invoke to run the generator.</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+</pre></td><td class="code"><pre><code class="js"><span class="line"><span class="kr">import</span> <span class="nx">co</span> <span class="nx">from</span> <span class="s1">'co'</span><span class="p">;</span>
+</span><span class="line"><span class="nx">app</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s2">"/purchase"</span><span class="p">,</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">co</span><span class="p">(</span><span class="kd">function</span><span class="o">*</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="nx">person</span> <span class="o">=</span> <span class="nx">yield</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">);</span>
+</span><span class="line"> <span class="kr">const</span> <span class="nx">permissions</span> <span class="o">=</span> <span class="nx">yield</span> <span class="nx">permissions</span><span class="p">.</span><span class="nx">findAllAsync</span><span class="p">(</span><span class="nx">person</span><span class="p">);</span>
+</span><span class="line"> <span class="k">if</span> <span class="p">(</span><span class="nx">isAllowed</span><span class="p">(</span><span class="nx">permissions</span><span class="p">))</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="nx">confirmNum</span> <span class="o">=</span> <span class="nx">yield</span> <span class="nx">transaction</span><span class="p">.</span><span class="nx">processAsync</span><span class="p">(</span><span class="nx">user</span><span class="p">);</span>
+</span><span class="line"> <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="s2">"Your transaction was successful!"</span><span class="p">)</span>
+</span><span class="line"> <span class="p">}</span>
+</span><span class="line"> <span class="p">}).</span><span class="k">catch</span><span class="p">(</span><span class="nx">err</span> <span class="o">=&gt;</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">))</span>
+</span><span class="line"><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If there is an error at any step in the generator, the coroutine will stop execution and return a rejected promise. Let&#x2019;s establish some basic rules to using coroutines:</p>
+
+<ul>
+<li>Any function to the right of a yield must return a Promise.</li>
+<li>If you want to execute your code now, use <code>co</code>.</li>
+<li>If you want to execute your code later, use <code>co.wrap</code>.</li>
+<li>Make sure to chain a <code>.catch</code> at the end of your coroutine to handle errors. Otherwise, you should wrap your code in a try/catch block.</li>
+<li>Bluebird&#x2019;s <code>Promise.coroutine</code> is the equivalent to Co&#x2019;s <code>co.wrap</code> and not <code>co</code> on it&#x2019;s own.</li>
+</ul>
+
+
+<h3>What if I want to run multiple processes concurrently?</h3>
+
+<p>You can either use objects or arrays with the yield keyword and then destructure the result.</p>
+
+<p>With the Co library:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+</pre></td><td class="code"><pre><code class="js"><span class="line"><span class="kr">import</span> <span class="nx">co</span> <span class="nx">from</span> <span class="s1">'co'</span><span class="p">;</span>
+</span><span class="line"><span class="c1">// with objects</span>
+</span><span class="line"><span class="nx">co</span><span class="p">(</span><span class="kd">function</span><span class="o">*</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="p">{</span><span class="nx">user1</span><span class="p">,</span> <span class="nx">user2</span><span class="p">,</span> <span class="nx">user3</span><span class="p">}</span> <span class="o">=</span> <span class="nx">yield</span> <span class="p">{</span>
+</span><span class="line"> <span class="nx">user1</span><span class="o">:</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Will"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user2</span><span class="o">:</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Adam"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user3</span><span class="o">:</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Ben"</span><span class="p">})</span>
+</span><span class="line"> <span class="p">};</span>
+</span><span class="line"><span class="p">).</span><span class="k">catch</span><span class="p">(</span><span class="nx">err</span> <span class="o">=&gt;</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">))</span>
+</span><span class="line"><span class="c1">// with arrays</span>
+</span><span class="line"><span class="nx">co</span><span class="p">(</span><span class="kd">function</span><span class="o">*</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="p">[</span><span class="nx">user1</span><span class="p">,</span> <span class="nx">user2</span><span class="p">,</span> <span class="nx">user3</span><span class="p">]</span> <span class="o">=</span> <span class="nx">yield</span> <span class="p">[</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Will"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Adam"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Ben"</span><span class="p">})</span>
+</span><span class="line"> <span class="p">];</span>
+</span><span class="line"><span class="p">).</span><span class="k">catch</span><span class="p">(</span><span class="nx">err</span> <span class="o">=&gt;</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">))</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>With the Bluebird library:</p>
+
+<figure class="code"><figcaption></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+</pre></td><td class="code"><pre><code class="js"><span class="line"><span class="c1">// with the Bluebird library</span>
+</span><span class="line"><span class="kr">import</span> <span class="p">{</span><span class="nx">props</span><span class="p">,</span> <span class="nx">all</span><span class="p">,</span> <span class="nx">coroutine</span><span class="p">}</span> <span class="nx">from</span> <span class="s1">'bluebird'</span><span class="p">;</span>
+</span><span class="line"><span class="c1">// with objects</span>
+</span><span class="line"><span class="nx">coroutine</span><span class="p">(</span><span class="kd">function</span><span class="o">*</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="p">{</span><span class="nx">user1</span><span class="p">,</span> <span class="nx">user2</span><span class="p">,</span> <span class="nx">user3</span><span class="p">}</span> <span class="o">=</span> <span class="nx">yield</span> <span class="nx">props</span><span class="p">({</span>
+</span><span class="line"> <span class="nx">user1</span><span class="o">:</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Will"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user2</span><span class="o">:</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Adam"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user3</span><span class="o">:</span> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Ben"</span><span class="p">})</span>
+</span><span class="line"> <span class="p">});</span>
+</span><span class="line"><span class="p">)().</span><span class="k">catch</span><span class="p">(</span><span class="nx">err</span> <span class="o">=&gt;</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">))</span>
+</span><span class="line"><span class="c1">// with arrays</span>
+</span><span class="line"><span class="nx">coroutine</span><span class="p">(</span><span class="kd">function</span><span class="o">*</span><span class="p">()</span> <span class="p">{</span>
+</span><span class="line"> <span class="kr">const</span> <span class="p">[</span><span class="nx">user1</span><span class="p">,</span> <span class="nx">user2</span><span class="p">,</span> <span class="nx">user3</span><span class="p">]</span> <span class="o">=</span> <span class="nx">yield</span> <span class="nx">all</span><span class="p">([</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Will"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Adam"</span><span class="p">}),</span>
+</span><span class="line"> <span class="nx">user</span><span class="p">.</span><span class="nx">findOneAsync</span><span class="p">({</span><span class="nx">name</span><span class="o">:</span> <span class="s2">"Ben"</span><span class="p">})</span>
+</span><span class="line"> <span class="p">]);</span>
+</span><span class="line"><span class="p">)().</span><span class="k">catch</span><span class="p">(</span><span class="nx">err</span> <span class="o">=&gt;</span> <span class="nx">handleError</span><span class="p">(</span><span class="nx">err</span><span class="p">))</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Libraries that you can use today:</p>
+
+<ul>
+<li>
+<li><p><a href="http://bluebirdjs.com/docs/api/promise.coroutine.html">Bluebird</a></p></li>
+<li><p><a href="https://babeljs.io/">Babel</a></p></li>
+<li><p><a href="https://www.npmjs.com/package/asyncawait">Asyncawait</a></p></li>
+</ul>
+
+</div>
+
+
+ </div>
+</body></html>
