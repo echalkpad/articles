@@ -1,0 +1,227 @@
+<!DOCTYPE html><html><head><title>Model evaluation, model selection, and algorithm selection in machine learning - Part I</title></head><body>
+<h1>Model evaluation, model selection, and algorithm selection in machine learning - Part I</h1><p><a href="http://sebastianraschka.com/blog/2016/model-evaluation-selection-part1.html" target="_new">Original URL</a></p>
+<p><blockquote>Introduction Machine learning has become a central part of our life &#x2013; as consumers, customers, and hopefully as researchers and practitioners! Whether we are applying predictive modeling&hellip;</blockquote></p>
+<div><article class="post-content">
+ <h2 id="introduction">Introduction</h2>
+
+<p>Machine learning has become a central part of our life &#x2013; as consumers, customers, and hopefully as researchers and practitioners! Whether we are applying predictive modeling techniques to our research or business problems, I believe we have one thing in common: We want to make &#x201C;good&#x201D; predictions! Fitting a model to our training data is one thing, but how do we know that it generalizes well to unseen data? How do we know that it doesn&#x2019;t simply memorize the data we fed it and fails to make good predictions on future samples, samples that it hasn&#x2019;t seen before? And how do we select a good model in the first place? Maybe a different learning algorithm could be better-suited for the problem at hand?</p>
+
+<p><img src="http://sebastianraschka.com/images/blog/2016/model-evaluation-selection-part1/intro.svg" alt="Holdout method"></p>
+
+<p>Model evaluation is certainly not just the end point of our machine learning pipeline. Before we handle any data, we want to plan ahead and use techniques that are suited for our purposes. In this article, we will go over a selection of these <em>techniques</em>, and we will see how they fit into the bigger picture, a typical machine learning workflow.</p>
+
+
+
+<p>Let&#x2019;s start this section with a simple Q&amp;A:</p>
+
+<p>Q: &#x201C;How do we estimate the performance of a machine learning model?&#x201D;</p>
+
+<p>A: &#x201C;First, we feed the training data to our learning algorithm to learn a model. Second, we predict the labels of our test labels. Third, we count the number of wrong predictions on the test dataset to compute the model&#x2019;s error rate.&#x201D;</p>
+
+<p>Not so fast! Depending on our goal, estimating the performance of a model is not <em>that</em> trivial, unfortunately. Maybe we should address the previous question from another angle: <strong><em>&#x201C;Why do we care about performance estimates at all?&#x201D;</em></strong> Ideally, the estimated performance of a model tells how well it performs on unseen data &#x2013; making predictions on future data is often the main problem we want to solve in applications of machine learning or the development of novel algorithms. Typically, machine learning involves a lot of experimentation, though &#x2014; for example, the tuning of the internal knobs of a learning algorithm, the so-called hyperparameters. Running a learning algorithm over a training dataset with different hyperparameter settings will result in different models. Since we are typically interested in selecting the best-performing model from this set, we need to find a way to estimate their respective performances in order to rank them against each other. Going one step beyond mere algorithm fine-tuning, we are usually not only experimenting with the one single algorithm that we <em>think</em> would be the &#x201C;best solution&#x201D; under the given circumstances. More often than not, we want to compare different algorithms to each other, oftentimes in terms of predictive <em>and</em> computational performance.</p>
+
+<p>Let us summarize the main points why we evaluate the predictive performance of a model:</p>
+
+<ol>
+ <li>We want to estimate the generalization error, the predictive performance of our model on future (unseen) data.</li>
+ <li>We want to increase the predictive performance by tweaking the learning algorithm and selecting the best performing model from a given hypothesis space.</li>
+ <li>We want to identify the machine learning algorithm that is best-suited for the problem and hand; thus, we want to compare different algorithms, selecting the best-performing one as well as the best performing model from the algorithm&#x2019;s hypothesis space.</li>
+</ol>
+
+<p>Although these three sub-tasks listed above have all in common that we want to estimate the performance of a model, they all require different approaches. We will discuss some of the different methods for tackling these sub-tasks in this article.</p>
+
+<p>Of course, we want to estimate the future performance of as accurately as possible. However, if there&#x2019;s one key-take away message from this article, it is that biased performance estimates are perfectly okay in model selection and algorithm selection if the bias affects all models equally. If we rank different models or algorithms against each other in order to select the best-performing one, we only need to know the &#x201C;relative&#x201D; performance. For example, if all our performance estimates are pessimistically biased, and we underestimate their performances by 10%, it wouldn&#x2019;t affect the ranking order. More concretely, if we have three models with prediction accuracy estimates such as</p>
+
+<p>M2: 75% &gt; M1: 70% &gt; M3: 65%,</p>
+
+<p>we would still rank them the same way if we add a 10% pessimistic bias:</p>
+
+<p>M2: 65% &gt; M1: 60% &gt; M3: 55%.</p>
+
+<p>On the contrary, if we report the future performance of the best ranked model (M2) to be 65%, this would obviously be quite inaccurate. Estimating the true performance of a model is probably one of the most challenging tasks in machine learning.</p>
+
+<h3 id="assumptions-and-terminology">Assumptions and Terminology</h3>
+
+<p>Model evaluation is certainly a complex topic. To make sure that we don&#x2019;t diverge too much from the core message, let us make certain assumptions and go over some of the technical terms that we will use throughout this article.</p>
+
+<p><strong><em>i.i.d.</em></strong></p>
+
+<p>We assume that our samples are <em>i.i.d</em> (<strong>i</strong>ndependent and <strong>i</strong>dentically <strong>d</strong>istributed), which means that all samples have been drawn from the same probability distribution and are statistically independent from each other. A scenario where samples are not-independent would be working with temporal data or time-series data.</p>
+
+<p><strong><em>Supervised learning and classification</em></strong></p>
+
+<p>This article will focus on supervised learning, a subcategory of machine learning where our target values are known in our available dataset. Although many concepts also apply to regression analysis, we will focus on classification, the assignment of categorical target labels to the samples.</p>
+
+<p><strong><em>0-1 loss and prediction accuracy</em></strong></p>
+
+<p>In the following article, we will focus on the prediction accuracy, which is defined as the number of all correct predictions divided by the number of samples. Sometimes, I will also use the term &#x201C;error,&#x201D; since the term &#x201C;generalization error&#x201D; may sound more natural than &#x201C;generalization accuracy.&#x201D; We compute the prediction error as 1-accuracy or the number of incorrect predictions divided by the number of samples n. Or in more formal terms, we define the 0-1 loss </p>
+
+
+
+<p>where is the <em>i</em>th true class label and the <em>i</em>th predicted class label, respectively. Then, we compute the accuracy as the average 0-1 loss over all <em>n</em> samples in a dataset <em>S</em>:</p>
+
+
+
+<p>Our objective is to learn a model <em>h</em> that has a good generalization performance. Such a model maximizes the prediction accuracy or, vice versa, minimizes the probability, <em>E(h)</em>, of making a wrong prediction or error</p>
+
+
+
+<p>where is the generating distribution our data has been drawn from, is the feature vectors of a sample with class label .</p>
+
+<p><strong><em>Bias</em></strong></p>
+
+<p>When we use the term bias in this article, we refer to the <em>statistical</em> bias (in contrast to the bias in a machine learning system). In general terms, the bias of an estimator is the difference between its expected value and the true value of a parameter being estimated.</p>
+
+
+
+<p>So, if , then is an unbiased estimator of . More concretely, we compute the prediction bias as the difference between the expected prediction of our model and the correct prediction. For example, if we compute the accuracy on the training set, this would be an optimistically biased estimate of the true accuracy of our model.</p>
+
+<p><strong><em>Variance</em></strong></p>
+
+<p>The variance is simply the statistical variance of the estimated value and its expected value </p>
+
+
+
+<p>The variance is a measure of the variability of our model&#x2019;s predictions if we repeat the learning process multiple times with small fluctuations in the training set. The more sensitive the model-building process is towards these fluctuations, the higher the variance.</p>
+
+<p>Finally, let us disambiguate the terms <em>model</em>, <em>hypothesis</em>, <em>classifier</em>, <em>learning algorithms</em>, and <em>parameters</em>:</p>
+
+<ul>
+ <li>
+ <p><strong><em>Target function:</em></strong> In predictive modeling, we are typically interested in modeling a particular process; we want to learn or approximate a specific, unknown function. The target function is the true function that we want to model.</p>
+ </li>
+ <li>
+ <p><strong><em>Hypothesis:</em></strong> A hypothesis is a certain function that we believe (or hope) is similar to the true function, the target function that we want to model. In context of <em>spam</em> classification, it would be a classification rule we came up with that allows us to separate spam from non-spam emails.</p>
+ </li>
+ <li>
+ <p><strong><em>Model:</em></strong> In the machine learning field, the terms <em>hypothesis</em> and <em>model</em> are often used interchangeably. In other sciences, they can have different meanings: A hypothesis could be the &#x201C;educated guess&#x201D; by the scientist, and the model would be the manifestation of this guess to test this hypothesis.</p>
+ </li>
+ <li>
+ <p><strong><em>Learning algorithm:</em></strong> Again, our goal is to find or approximate the target function, and the learning algorithm is a set of instructions that tries to model the target function using our training dataset. A learning algorithm comes with a hypothesis space, the set of possible hypotheses it explores to model the unknown target function by formulating the final hypothesis.</p>
+ </li>
+ <li>
+ <p><strong><em>Classifier:</em></strong> A classifier is a special case of a hypothesis (nowadays, often learned by a machine learning algorithm). A classifier is a hypothesis or discrete-valued function that is used to assign (categorical) class labels to particular data points. In an email classification example, this classifier could be a hypothesis for labeling emails as spam or non-spam. Yet, a hypothesis must not necessarily be synonymous to a classifier. In a different application, our hypothesis could be a function for mapping study time and educational backgrounds of students to their future, continuous-valued, SAT scores &#x2013; a continuous target variable, suited for regression analysis.</p>
+ </li>
+ <li>
+ <p><strong><em>Hyperparameters:</em></strong> Hyperparameters are the <em>tuning parameters</em> of a machine learning algorithm &#x2014; for example, the regularization strength of an L2 penalty in the mean squared error cost function of linear regression, or a value for setting the maximum depth of a decision tree. In contrast, model parameters are the parameters that a learning algorithm fits to the training data &#x2013; the parameters of the model itself. For example, the weight coefficients (or slope) of a linear regression line and its bias (or y-axis intercept) term are <em>model parameters</em>.</p>
+ </li>
+</ul>
+
+
+
+<p>The holdout method is inarguably the simplest model evaluation technique. We take our labeled dataset and split it into two parts: A training set and a test set. Then, we fit a model to the training data and predict the labels of the test set. And the fraction of correct predictions constitutes our estimate of the prediction accuracy &#x2014; we withhold the true test labels during prediction, of course. We really don&#x2019;t want to train and evaluate our model on the same training dataset (this is called <em>resubstitution evaluation</em>), since it would introduce a very optimistic bias due to overfitting. In other words, we can&#x2019;t tell whether the model simply memorized the training data or not, or whether it generalizes well to new, unseen data. (On a side note, we can estimate this so called <em>optimism bias</em> as the difference between the training accuracy and the test accuracy.)</p>
+
+<p>Typically, the splitting of a dataset into training and test sets is a simple process of <em>random subsampling</em>. We assume that all our data has been drawn from the same probability distribution (with respect to each class). And we randomly choose ~2/3 of these samples for our training set and ~1/3 of the samples for our test set. Notice the two problems here?</p>
+
+<h3 id="stratification">Stratification</h3>
+
+<p>We have to keep in mind that our dataset represents a random sample drawn from a probability distribution; and we typically assume that this sample is representative of the true population &#x2013; more or less. Now, further subsampling without replacement alters the statistic (mean, proportion, and variance) of the sample. The degree to which subsampling without replacement affects the statistic of a sample is inversely proportional to the size of the sample. Let&#x2019;s have a look at an example using the <a href="https://archive.ics.uci.edu/ml/datasets/Iris">Iris dataset</a>, which we randomly divide into 2/3 training data and 1/3 test data:</p>
+
+<p><img src="http://sebastianraschka.com/images/blog/2016/model-evaluation-selection-part1/iris-dist.svg" alt=""></p>
+
+<p>(The source code can be found <a href="http://nbviewer.jupyter.org/url/sebastianraschka.com/ipynb/iris-random-dist.ipynb">here</a>.)</p>
+
+<p>When we randomly divide the dataset into training and test sets, we violate the assumption of <em>statistical independence</em>. The Iris dataset consists of 50 Setosa, 50 Versicolor, and 50 Virginica flowers; the flower species are distributed uniformly:
+- 33.3% Setosa
+- 33.3% Versicolor
+- 33.3% Virginia</p>
+
+<p>If our random function assigns 2/3 of the flowers (100) to the training set and 1/3 of the flowers (50) to the test set, it may yield the following:</p>
+
+<ul>
+ <li>training set &#x2192; 38 x Setosa, 28 x Versicolor, 34 x Virginica</li>
+ <li>test set &#x2192; 12 x Setosa, 22 x Versicolor, 16 x Virginica</li>
+</ul>
+
+<p>Assuming that the <em>Iris</em> dataset is representative of the true population (for instance, assuming that flowers are distributed uniformly in nature), we just created two imbalanced datasets with non-uniform class distributions. The class ratio that the learning algorithms uses to learn the model is &#x201C;38.0% / 28.0% / 34.0%&#x201D;. Then, we evaluate a model on a dataset with a class ratio that is imbalanced in the &#x201C;opposite&#x201D; direction: &#x201C;24.0% / 44.0% / 32.0%&#x201D;. Unless our learning algorithm is completely insensitive to these small perturbations, this is certainly not ideal. The problem becomes even worse if our dataset has a high class imbalance upfront. In the worst-case scenario, the test set may not contain any instance of a minority class at all. Thus, the common practice is to divide the dataset in a stratified fashion. <strong><em>Stratification</em></strong> simply means that we randomly split the dataset so that each class is correctly represented in the resulting subsets &#x2014; the training and the test set.</p>
+
+<p>Random subsampling in non-stratified fashion is usually not a big concern if we are working with relatively large and balanced datasets. However, in my opinion, stratified resampling is usually (only) beneficial in machine learning applications. Moreover, stratified sampling is incredibly easy to implement, and Ron Kohavi provides empirical evidence (Kohavi 1995) that stratification has a positive effect on the variance and bias of the estimate in k-fold cross-validation, a technique we will discuss later in this article.</p>
+
+<h3 id="holdout">Holdout</h3>
+
+<p>Before we dive deeper into the pros and cons of the holdout validation method, let&#x2019;s take a look at a visual summary of the whole process:</p>
+
+<p><img src="http://sebastianraschka.com/images/blog/2016/model-evaluation-selection-part1/testing.svg" alt="Holdout method"></p>
+
+<p>&#x2460; In the first step, we randomly divide our available data into two subsets: a training and a test set. Setting test data aside is our work-around for dealing with the imperfections of a non-ideal world, such as limited data and resources, and the inability to collect more data from the generating distribution. Here, the test set shall represent new, unseen data to our learning algorithm; it&#x2019;s important that we only touch the test set once to make sure we don&#x2019;t introduce any bias when we estimate the generalization error. Typically, we assign 2/3 to the training set, and 1/3 of the data to the test set. Other common training/test splits are 60/40, 70/30, 80/20, or even 90/10.</p>
+
+<p>&#x2461; After we set our test samples aside, we pick a learning algorithm that we think could be appropriate for the given problem. Now, what about the <em>Hyperparameter Values</em> depicted in the figure above? As a quick reminder, hyperparameters are the parameters of our learning algorithm, or meta-parameters if you will. And we have to specify these hyperparameter values <em>manually</em> &#x2013; the learning algorithm doesn&#x2019;t <em>learn</em> them from the training data in contrast to the actual model parameters.</p>
+
+<p>Since hyperparameters are not learned during model fitting, we need some sort of &#x201C;extra procedure&#x201D; or &#x201C;external loop&#x201D; to optimize them separately &#x2013; this holdout approach is ill-suited for the task. So, for now, we have to go with some fixed hyperparameter values &#x2013; we could use our intuition or the default parameters of an off-the-shelf algorithm if we are using an existing machine learning library.</p>
+
+<p>&#x2462; Our learning algorithm fit a model in the previous step. The next question is: How &#x201C;good&#x201D; is the model that it came up with? That&#x2019;s where our test set comes into play. Since our learning algorithm hasn&#x2019;t &#x201C;seen&#x201D; this test set before, it should give us a pretty unbiased estimate of its performance on new, unseen data! So, what we do is to take this test set and use the model to predict the class labels. Then, we take the predicted class labels and compare it to the &#x201C;ground truth,&#x201D; the correct class labels to estimate its generalization error.</p>
+
+<p>&#x2463; Finally, we have an estimate of how well our model performs on unseen data. So, there is no reason for with-holding it from the algorithm any longer.</p>
+
+<p>Since we assume that our samples are i.i.d., there is no reason to assume the model would perform worse after feeding it all the available data. As a rule of thumb, the model will have a better generalization performance if the algorithms uses more informative data &#x2013; given that it hasn&#x2019;t reached its capacity, yet.</p>
+
+<h3 id="pessimistic-bias">Pessimistic Bias</h3>
+
+<p>Remember that we mentioned <strong><em>two</em></strong> problems when we talked about the test and training split earlier? The first problem was the violation of independence and the changing class proportions upon subsampling. We touched upon the second problem when we walked through the holdout illustration. And in step four, we talked about the capacity of the model, and whether additional data could be useful or not. To follow up on the capacity issue: If our model has NOT reached its capacity, our performance estimate would be pessimistically biased. Assuming that the algorithm could learn a better model from more data, we withheld valuable data that we set aside for estimating the generalization performance (i.e., the test dataset). In the fourth step, we fit a model to the complete dataset, though; however, we can&#x2019;t estimate its generalization performance, since we&#x2019;ve now &#x201C;burned&#x201D; the test dataset. It&#x2019;s a dilemma that we cannot really avoid in real-world application, but we should be aware that our estimate of the generalization performance may be pessimistically biased.</p>
+
+<h3 id="confidence-intervals">Confidence Intervals</h3>
+
+<p>Using the holdout method as described above, we computed a point estimate of the generalization error of our model. Certainly, a confidence interval around this estimate would not only be more informative and desirable in certain applications, but our point estimate could be quite sensitive to the particular training/test split (i.e., suffering from high variance).</p>
+
+<p>Another, &#x201C;simpler,&#x201D; approach, which is often used in practice (although, I personally do not recommend it), may be using the <em>familiar equation</em> assuming a <a href="https://en.wikipedia.org/wiki/Normal_distribution">Normal Distribution</a> to compute the confidence interval on the mean on a single training-test split under the central limit theorem.</p>
+
+<blockquote>
+ <p>In probability theory, the central limit theorem (CLT) states that, given certain conditions, the arithmetic mean of a sufficiently large number of iterates of independent random variables, each with a well-defined expected value and well-defined variance, will be approximately normally distributed, regardless of the underlying distribution. [Source: <a href="https://en.wikipedia.org/wiki/Central_limit_theorem">https://en.wikipedia.org/wiki/Central_limit_theorem</a>]</p>
+</blockquote>
+
+<p>This rather naive approach is the so-called &#x201C;<a href="https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval">Normal approximation interval</a>.&#x201D;How does that work? Remember, we compute the prediction accuracy as follows</p>
+
+
+
+<p>where is a 0-1 loss function and is the number of samples in the test set; is the predicted class label and is the true class label of the <em>i</em>th sample, respectively. So, we could now consider each prediction as a Bernoulli trial, and the number of correct predictions is following a <a href="https://en.wikipedia.org/wiki/Binomial_distribution">binomial distribution</a> with samples and trials, where :</p>
+
+
+
+<p>for , where</p>
+
+
+
+<p>(Remember, is the probability of success, and is the probability of failure &#x2013; a wrong prediction.)</p>
+
+<p>Now, the expected number of successes is computed as , or more concretely, if the estimator has 50% success rate, we expect 20 out of 40 predictions to be correct. The estimate has a variance of and a standard deviation of</p>
+
+
+
+<p>Since we are interested in the <em>average</em> number of successes, not its absolute value, we compute the variance of the accuracy estimate as</p>
+
+
+
+<p>and the respective standard deviation</p>
+
+
+
+<p>Under the normal approximation, we can then compute the confidence interval as</p>
+
+
+
+<p>where is the error quantile and is the quantile of a standard normal distribution. For a typical confidence interval of 95% (alpha=5%), we have z=1.96.</p>
+
+<p>In practice, however, I&#x2019;d rather recommend repeating the training-test split multiple times to compute the confidence interval on the mean estimate (i.e., averaging the individual runs). In any case, one interesting take-away is that having fewer samples in the test set increases the variance (see <em>n</em> in the denominator above), and thus widens the confidence interval.</p>
+
+<h2 id="references">References</h2>
+
+<ul>
+ <li>Kohavi, R., 1995. <em>A study of cross-validation and bootstrap for accuracy estimation and model selection</em>. In Ijcai (Vol. 14, No. 2, pp. 1137-1145). [<a href="http://dl.acm.org/citation.cfm?id=1643047">Citation source</a>] [<a href="http://web.cs.iastate.edu/~jtian/cs573/Papers/Kohavi-IJCAI-95.pdf">PDF</a>]</li>
+ <li>Efron, B. and Tibshirani, R.J., 1994. <em>An introduction to the bootstrap</em>. CRC press. [<a href="https://books.google.com/books?hl=en&amp;lr=&amp;id=gLlpIUxRntoC&amp;oi=fnd&amp;pg=PR14&amp;dq=n+introduction+to+the+bootstrap&amp;ots=A8AwZ9JcH1&amp;sig=JiAKSg-rhFMnVGf01YcqFlwJJOM#v=onepage&amp;q=n%20introduction%20to%20the%20bootstrap&amp;f=false">Citation source</a>] [<a href="http://www.hms.harvard.edu/bss/neuro/bornlab/nb204/statistics/bootstrap.pdf">PDF</a>]</li>
+</ul>
+
+<h2 id="whats-next">What&#x2019;s next</h2>
+
+<p>Since the whole article turned out to be quite lengthy, I decided to split it into multiple parts. Next, we will talk about</p>
+
+<ul>
+ <li>Holdout validation: Splitting a dataset into three parts for hyperparameter tuning: a training, test, and validation set .</li>
+ <li>k-fold cross-validation: A better approach to model selection compared to the holdout validation method.</li>
+ <li>Nested cross-validation: Probably the most common technique for algorithm selection.</li>
+</ul>
+
+ </article>
+
+
+</div>
+</body></html>

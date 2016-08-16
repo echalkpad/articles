@@ -1,0 +1,140 @@
+<!DOCTYPE html><html><head><title>Recursions without names: Introduction to the Y combinator in javascript</title></head><body>
+<h1>Recursions without names: Introduction to the Y combinator in javascript</h1><p><a href="http://blog.klipse.tech/lambda/2016/08/10/almost-y-combinator-javascript.html" target="_new">Original URL</a></p>
+<p><blockquote>This is an introductory article to the Y combinator from lambda-calculus. But we won&#x2019;t mention the Y combinator in this article. In this article, we are going to show how to write recursive&hellip;</blockquote></p>
+<div><div class="post-content">
+ <p>This is an introductory article to the <a href="https://en.wikipedia.org/wiki/Fixed-point_combinator">Y combinator</a> from <code class="highlighter-rouge">lambda-calculus</code>. But we won&#x2019;t mention the <code class="highlighter-rouge">Y combinator</code> in this article.</p>
+
+<p>This article is the first one of a serie about the Y combinator in <code class="highlighter-rouge">javascript</code>:</p>
+
+
+
+<p>In this article, we are going to show how to write recursive functions in <code class="highlighter-rouge">javascript</code> (<code class="highlighter-rouge">EcmaScript6</code>) without giving names to any function.</p>
+
+<p>(If you are curious to see it in other languages, there is <a href="http://blog.klipse.tech/lambda/2016/08/07/almost-y-combinator.html">a version of the code</a> in <code class="highlighter-rouge">clojure</code> and <code class="highlighter-rouge">ruby</code>.)</p>
+
+<p>At first glance it seems impossible: how could we refer to something that we are currently defining without using its name?</p>
+
+<p><img src="http://blog.klipse.tech/assets/escher_hand.jpg" alt="Escher"></p>
+
+<p>All the code snippets of this page are <strong>live</strong> and <strong>interactive</strong> powered by the <a href="https://github.com/viebel/klipse">klipse plugin</a>:</p>
+
+<ol>
+ <li><strong>Live</strong>: The code is executed in your browser</li>
+ <li><strong>Interactive</strong>: You can modify the code and it is evaluated as you type</li>
+</ol>
+
+<p>It will work only if your browser supports <code class="highlighter-rouge">EcmaScript6</code> <a href="https://kangax.github.io/compat-table/es6/">arrow functions</a>.</p>
+
+<h2 id="begin-with-the-end-in-mind">Begin with the end in mind</h2>
+
+<p>The end result of this article is the recursive implementation of the <code class="highlighter-rouge">factorial</code> function without using neither names nor loops.</p>
+
+<p>Here is the code:</p>
+
+<pre><code class="language-klipse-eval-js">((f =&gt; f(f)))
+(func =&gt; n =&gt; (n === 0) ? 1 : (n can_psychiatry_turn_itself_around.epub can_psychiatry_turn_itself_around.md data.json data_ml devops distributed_logging_architecture_in_the_container_era.epub distributed_logging_architecture_in_the_container_era.md docker el_chapo_and_the_secret_history_of_the_heroin_crisis.epub el_chapo_and_the_secret_history_of_the_heroin_crisis.md embedded gaming github go hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.epub hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.md html implementing_a_debugger_the_fundamentals.epub implementing_a_debugger_the_fundamentals.md javascript linux mobile png programming science social tidy url_to_filename.csv web_dev func(func)(n - 1)))
+(19)
+</code></pre>
+
+<p>As you can check, no mention of any names.</p>
+
+<p>At first, it feels like magic.</p>
+
+<p>Now, we are going to show the 4 step process that leads to this wonderful piece of code.</p>
+
+<p>(We were inspired by this <a href="http://mvanier.livejournal.com/2897.html">long but awesome article</a> by <a href="http://users.cms.caltech.edu/~mvanier/">Mike Vanier</a>.)</p>
+
+<h2 id="the-process">The process</h2>
+
+<h2 id="step-0-recursive-function">Step 0: recursive function</h2>
+
+<p>Let&#x2019;s start with the recursive implementation of <code class="highlighter-rouge">factorial</code>:</p>
+
+<pre><code class="language-klipse-eval-js">factorial = n =&gt; (n === 0)? 1 : n can_psychiatry_turn_itself_around.epub can_psychiatry_turn_itself_around.md data.json data_ml devops distributed_logging_architecture_in_the_container_era.epub distributed_logging_architecture_in_the_container_era.md docker el_chapo_and_the_secret_history_of_the_heroin_crisis.epub el_chapo_and_the_secret_history_of_the_heroin_crisis.md embedded gaming github go hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.epub hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.md html implementing_a_debugger_the_fundamentals.epub implementing_a_debugger_the_fundamentals.md javascript linux mobile png programming science social tidy url_to_filename.csv web_dev factorial(n - 1)
+</code></pre>
+
+<pre><code class="language-klipse-eval-js">factorial(10)
+</code></pre>
+
+<h2 id="step-1-simple-generator">Step 1: simple generator</h2>
+
+<p>Let&#x2019;s write a function that is a generator of the <code class="highlighter-rouge">factorial</code> function:</p>
+
+<pre><code class="language-klipse-eval-js">factorial_gen = f =&gt; (n =&gt; ((n === 0) ? 1 : n can_psychiatry_turn_itself_around.epub can_psychiatry_turn_itself_around.md data.json data_ml devops distributed_logging_architecture_in_the_container_era.epub distributed_logging_architecture_in_the_container_era.md docker el_chapo_and_the_secret_history_of_the_heroin_crisis.epub el_chapo_and_the_secret_history_of_the_heroin_crisis.md embedded gaming github go hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.epub hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.md html implementing_a_debugger_the_fundamentals.epub implementing_a_debugger_the_fundamentals.md javascript linux mobile png programming science social tidy url_to_filename.csv web_dev f(n - 1)))
+</code></pre>
+
+<p>One one hand, <code class="highlighter-rouge">factorial-gen</code> is not recursive.</p>
+
+<p>On the other hand, <code class="highlighter-rouge">factorial-gen</code> is not the <code class="highlighter-rouge">factorial</code> function.</p>
+
+<p>But the interesting thing is that if we pass <code class="highlighter-rouge">factorial</code> to <code class="highlighter-rouge">factorial-gen</code> it returns the <code class="highlighter-rouge">factorial</code> function:</p>
+
+<pre><code class="language-klipse-eval-js">factorial_gen(factorial)(19)
+</code></pre>
+
+<p>Before going on reading make sure you understand why it is true that:</p>
+
+<blockquote>
+ <p><code class="highlighter-rouge">factorial-gen(factorial)</code> is equivalent to <code class="highlighter-rouge">factorial</code></p>
+</blockquote>
+
+<h2 id="step-2-weird-generator">Step 2: weird generator</h2>
+
+<p>Now, we are going to do something very weird: instead of using <code class="highlighter-rouge">func</code>, we are going to use <code class="highlighter-rouge">(func func)</code>. Like this:</p>
+
+<pre><code class="language-klipse-eval-js">factorial_weird = f =&gt; (n =&gt; ((n === 0) ? 1 : n can_psychiatry_turn_itself_around.epub can_psychiatry_turn_itself_around.md data.json data_ml devops distributed_logging_architecture_in_the_container_era.epub distributed_logging_architecture_in_the_container_era.md docker el_chapo_and_the_secret_history_of_the_heroin_crisis.epub el_chapo_and_the_secret_history_of_the_heroin_crisis.md embedded gaming github go hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.epub hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.md html implementing_a_debugger_the_fundamentals.epub implementing_a_debugger_the_fundamentals.md javascript linux mobile png programming science social tidy url_to_filename.csv web_dev f(f)(n - 1)))
+</code></pre>
+
+<p>The funny thing now is that if we apply <code class="highlighter-rouge">factorial-weird</code> to itself we get the <code class="highlighter-rouge">factorial</code> function:</p>
+
+<pre><code class="language-klipse-eval-js">factorial_weird(factorial_weird)(19)
+</code></pre>
+
+<p>Before going on reading make sure you understand why it is true that:</p>
+
+<blockquote>
+ <p><code class="highlighter-rouge">factorial-weird(factorial-weird)</code> is equivalent to <code class="highlighter-rouge">factorial</code></p>
+</blockquote>
+
+<h2 id="step-3-recursion-without-names">Step 3: Recursion without names</h2>
+
+<p>Now, let&#x2019;s write down the application of <code class="highlighter-rouge">factorial_weird</code> to itself, using the body of <code class="highlighter-rouge">factorial_weird</code> instead of its name:</p>
+
+<pre><code class="language-klipse-eval-js">factorial_no_names = (f =&gt; (n =&gt; ((n === 0) ? 1 : n can_psychiatry_turn_itself_around.epub can_psychiatry_turn_itself_around.md data.json data_ml devops distributed_logging_architecture_in_the_container_era.epub distributed_logging_architecture_in_the_container_era.md docker el_chapo_and_the_secret_history_of_the_heroin_crisis.epub el_chapo_and_the_secret_history_of_the_heroin_crisis.md embedded gaming github go hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.epub hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.md html implementing_a_debugger_the_fundamentals.epub implementing_a_debugger_the_fundamentals.md javascript linux mobile png programming science social tidy url_to_filename.csv web_dev f(f)(n - 1))))((f =&gt; (n =&gt; ((n === 0) ? 1 : n can_psychiatry_turn_itself_around.epub can_psychiatry_turn_itself_around.md data.json data_ml devops distributed_logging_architecture_in_the_container_era.epub distributed_logging_architecture_in_the_container_era.md docker el_chapo_and_the_secret_history_of_the_heroin_crisis.epub el_chapo_and_the_secret_history_of_the_heroin_crisis.md embedded gaming github go hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.epub hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.md html implementing_a_debugger_the_fundamentals.epub implementing_a_debugger_the_fundamentals.md javascript linux mobile png programming science social tidy url_to_filename.csv web_dev f(f)(n - 1)))))
+</code></pre>
+
+<p>And we got a recursive implementation of <code class="highlighter-rouge">factorial</code> without using any names!</p>
+
+<p>We gave it a name just for the convenience of using it.</p>
+
+<p>As you can check, this is a completely valid implementation of <code class="highlighter-rouge">factorial</code>:</p>
+
+<pre><code class="language-klipse-eval-js">[1,2,3,4,5,6,7,8,9,10,11].map(factorial_no_names)
+</code></pre>
+
+<p>Do you understand why this is equivalent to the code we shown in the beginning of the article?</p>
+
+<pre><code class="language-klipse-eval-js">((f =&gt; f(f)))
+(func =&gt; n =&gt; (n === 0) ? 1 : (n can_psychiatry_turn_itself_around.epub can_psychiatry_turn_itself_around.md data.json data_ml devops distributed_logging_architecture_in_the_container_era.epub distributed_logging_architecture_in_the_container_era.md docker el_chapo_and_the_secret_history_of_the_heroin_crisis.epub el_chapo_and_the_secret_history_of_the_heroin_crisis.md embedded gaming github go hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.epub hacker_unlocks_‘high_security’_electronic_safes_without_a_trace.md html implementing_a_debugger_the_fundamentals.epub implementing_a_debugger_the_fundamentals.md javascript linux mobile png programming science social tidy url_to_filename.csv web_dev func(func)(n - 1)))
+(19)
+</code></pre>
+
+<p>Can you write your own implementation of other recursive functions without names?</p>
+
+<p>Share in the comments your implementation for:</p>
+
+<ul>
+ <li>Fibonacci</li>
+ <li>Quicksort</li>
+ <li>max</li>
+ <li>min</li>
+ <li>&#x2026;</li>
+</ul>
+
+<p>In our <a href="http://blog.klipse.tech/lambda/2016/08/10/pure-y-combinator-javascript.html">next article</a>, we are going to show the Y combinator in action in <code class="highlighter-rouge">javascript</code>.</p>
+
+
+ </div>
+
+</div>
+</body></html>

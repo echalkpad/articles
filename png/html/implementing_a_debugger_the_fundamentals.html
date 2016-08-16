@@ -1,0 +1,616 @@
+<!DOCTYPE html><html><head><title>Implementing a Debugger: The Fundamentals</title></head><body>
+<h1>Implementing a Debugger: The Fundamentals</h1><p><a href="http://backtrace.io/blog/blog/2016/08/11/debugger-internals/" target="_new">Original URL</a></p>
+<p><blockquote>This is the first of a two-part series describing the implementation of a generic debugging tool. Part one covers the core internals of a debugger; part two will focus on extending a debugger to&hellip;</blockquote></p>
+<div><div class="entry-content"><p><em>This is the first of a two-part series describing the implementation of a
+generic debugging tool. Part one covers the core internals of a debugger; part
+two will focus on extending a debugger to support a specific programming
+language &#x2013; Go.</em></p>
+
+<p>Implementing a debugging tool may seem like a monumental task.
+<code>gdb</code>, one of the most popular debuggers, is over 500,000
+<a href="https://en.wikipedia.org/wiki/Source_lines_of_code">SLOC</a> (according to
+<code>cloc</code>); it&#x2019;s not exactly easy to pick up and read through, and it has many
+auxiliary features not fundamental to a debugger&#x2019;s purpose. Engineers
+aren&#x2019;t required to understand a debugger&#x2019;s internals to use one, and rightfully
+so &#x2013; if we had to fundamentally understand something in order to use it,
+we&#x2019;d use precious few things. We&#x2019;re more familiar with a debugger&#x2019;s features:
+print a backtrace, hex dump some memory, set some watchpoints, or write some
+macros combining these simpler tasks.</p>
+
+<blockquote><p>Any sufficiently advanced technology is indistinguishable from magic.</p></blockquote>
+
+<p>&#x2013; Arthur C. Clarke</p>
+
+<p>Let&#x2019;s make the world a less magical place. Read on and dive into
+the guts of debuggers and systems programming.</p>
+
+
+
+
+<h2>In this article</h2>
+
+<p>Content:</p>
+
+<ul>
+<li>Explanation of how debuggers work</li>
+</ul>
+
+
+<p>Helpful background knowledge:</p>
+
+<ul>
+<li>Basic knowledge of Unix/Linux operating systems</li>
+<li>Basic knowledge of programming with languages like C or Go</li>
+<li>Basic experience using a debugger like <code>gdb</code></li>
+</ul>
+
+
+<p>Target audience:</p>
+
+<ul>
+<li>Software engineers who use debuggers</li>
+</ul>
+
+
+<h2>Magnets. How do they work?</h2>
+
+<p>To really understand what&#x2019;s involved in creating a debugging tool for a
+language like Go, we must first understand general debuggers.</p>
+
+<p>What is a debugger?</p>
+
+<p>It&#x2019;s a tool that indicates what a program is doing during execution (otherwise
+known as introspection); some debuggers let you control the program&#x2019;s
+execution without recompiling or restarting it (commonly deemed interaction).</p>
+
+<p>From the introspective perspective, a debugger extracts the state of an
+application &#x2013; which functions your threads are executing, or the values of
+variables, or the data contained in arbitrary memory locations.</p>
+
+<p>On the interactive front, one might use a debugger to set a breakpoint,
+which stops execution of an application before it reaches a certain point.
+<code>break a_crashing_function</code> tells the debugger that the program should execute
+as normal until it&#x2019;s about to execute instructions from that function.
+At that point, the debugger will stop execution and transfer control back to
+the user, who can then inspect state using the aforementioned introspection
+features.</p>
+
+<p>We&#x2019;ll explore the introspective aspect in this article, which covers much of
+the architecture and interesting features of debuggers.</p>
+
+<p><strong>For simplicity, we will focus on the flow of debugging a live process on an
+x86_64 Linux operating system &#x2013; qualify everything below with &#x201C;for a live
+process on Linux.&#x201D; Some differences arise in other environments, but many of the
+techniques are similar. We will also ignore many edge cases.</strong></p>
+
+<h3>The introspective guts</h3>
+
+<p>You have a long-running process and want to see what it&#x2019;s currently doing. You
+execute a debugging tool on it and receive output describing, among other
+things, callstacks for every thread and local variable data for each function.</p>
+
+<p>How do we, the debugger, extract this information?</p>
+
+<h4>The sauces</h4>
+
+<p>We use two major data sources: the <code>/proc</code> pseudo-filesystem and the
+executable file of the process itself.</p>
+
+<p>The <code>/proc</code> filesystem (hereafter <code>procfs</code>) contains, among other things,
+a representation of processes currently running on the system. This
+representation is comprised of pseudo-files organized into a
+hierarchy providing access to each process' memory and its various attributes,
+such as executable path, thread list, and resource utilization.</p>
+
+<p>They&#x2019;re called pseudo-files because they aren&#x2019;t real files
+stored on disk; they&#x2019;re just nice interfaces to kernel memory that allow for
+normal filesystem calls such as <code>open</code> and <code>pread</code>. One such pseudo-file is
+<code>/proc/[pid]/mem</code>. This is what provides direct access to the process' memory.</p>
+
+<p>The alternative to <code>procfs</code> would be using heavier-weight
+system calls such as <code>ptrace</code> &#x2013; which we still use for a small subset of
+process state, as we&#x2019;ll see later.</p>
+
+<p>Our second data source, the executable for a process, is also retrieved from
+<code>procfs</code>. In the simple case, we can use the <code>/proc/[pid]/exe</code> file, which is
+a symbolic link to the path of the executable. We call <code>open</code> on the executable
+file itself and parse it to retrieve its debug information.</p>
+
+<p>This changes slightly when a process is
+linked to shared libraries; each shared object will also have its own debug
+information. We use <code>/proc/[pid]/maps</code> in this case. It provides descriptions
+for each region of memory mapped into the process, such as the address range,
+permission bits (read-write-execute-shared) for that range, and, most
+importantly for a debugger, the file backing the memory region. This file can be
+the aforementioned executable file or a shared library object file. When we&#x2019;re
+interested in a particular instruction address, we search for a range containing
+it in <code>/proc/[pid]/maps</code> and parse the associated backing file, if any, for
+debug information, as we did above with just the executable file. We&#x2019;ll assume
+we&#x2019;re working with the executable file for the remainder of this article.</p>
+
+<p>The debug information stored in the executable file tells us how to
+translate raw memory locations into recognizable program objects such as
+functions, variables, and types. This is what debuggers like <code>gdb</code> use. Debug
+information includes:</p>
+
+<ul>
+<li>The locations of the program&#x2019;s functions and global variables</li>
+<li>The stack layout of each function, dependent on the current location of
+execution within the function &#x2013; i.e., the instruction pointer
+
+<ul>
+<li>Expressions that evaluate to the locations of local variables and
+parameters on each function&#x2019;s stack</li>
+</ul>
+</li>
+<li>The types of the variables, which, combined with the above location
+information, indicate the memory range to read for any particular variable</li>
+</ul>
+
+
+<p>We&#x2019;ll explore debug information in more detail later.</p>
+
+<p>There are other sources of data we use to provide more complete snapshots
+of a system, but the above two are the most relevant.</p>
+
+
+
+<p>The data sources:</p>
+
+<ul>
+<li>The process' memory through <code>procfs</code></li>
+<li>The debugging information contained in the process' executable file</li>
+</ul>
+
+
+
+
+<h4>Be like water</h4>
+
+<p>Now that we&#x2019;ve identified our data sources, we can focus on the overall flow
+of a debugger. We&#x2019;ll go from the initial step of attaching a debugger to a
+process to the final stage of generating the debugger&#x2019;s output. Throughout
+these steps, we&#x2019;ll always read from the two major data sources using some
+mechanism.</p>
+
+<p>First, we must identify the process to debug using this process' <code>pid</code>,
+or process id, which is a system-wide unique integer identifier. This is
+assigned to each process by the kernel and can be retrieved by running a
+command on a running executable&#x2019;s name, such as <code>pgrep a_buggy_process</code>.</p>
+
+<h5>Attach and stop</h5>
+
+<p>Before we can extract any data from the process, we need to pause its
+execution. Failing to do so would cause data and liveness races
+throughout the debugging process &#x2013; for example, we could try to read data
+from a thread as it&#x2019;s exiting and afterwards. There are strategies for
+minimizing stop duration, but those will be the subject of a future post.</p>
+
+<p>To stop a process, we use the monolithic <code>ptrace</code> syscall.</p>
+
+<blockquote><p>The ptrace() system call provides a means by which one process
+(the &#x201C;tracer&#x201D;) may observe and control the execution of another process
+(the &#x201C;tracee&#x201D;), and examine and change the tracee&#x2019;s memory and registers.
+It is primarily used to implement breakpoint debugging and system call
+tracing.</p></blockquote>
+
+<p>&#x2013; <code>ptrace</code> man page</p>
+
+<p>Though <code>ptrace</code> provides means to affect many aspects of a process' execution,
+memory, and register state, the only operations we&#x2019;ll need for now are
+<code>PTRACE_ATTACH</code> and <code>PTRACE_DETACH</code>.</p>
+
+<p><code>PTRACE_ATTACH</code> establishes the tracer(debugger)-tracee(target process)
+relationship and does a few useful things for us, some being:</p>
+
+<ul>
+<li>Stops the target process. Note &#x2013; <code>ptrace(PTRACE_ATTACH, ...)</code> must be called
+on all target threads; it stops only the single thread provided to the command.
+The main process thread is stopped first.</li>
+<li>Allows the debugger to read from process memory/registers.</li>
+</ul>
+
+
+<p><code>PTRACE_DETACH</code> simply reverses these effects and allows the target process
+to continue executing. Debuggers call <code>ptrace(PTRACE_DETACH, ...)</code> after they
+finish their operations.</p>
+
+<h5>Extract the thread list</h5>
+
+<p>We&#x2019;ve now attached to and stopped the target process. The next step is data
+extraction.</p>
+
+<p>Let&#x2019;s assume we want just the state of the application at the time of the
+snapshot request. The minimum set of information required to be useful is the
+stacktrace of each running thread &#x2013; the series of calls leading up to the
+currently executing function of the thread, beginning with the thread&#x2019;s start
+function.</p>
+
+<p>To do this, we&#x2019;ll need the list of threads owned by the process and the current
+execution contexts of these threads, which is represented by their register sets.
+The most important registers in such a set are <code>rip</code>, or <code>instruction pointer</code>,
+and <code>rsp</code>, or <code>stack pointer</code>. The former is the memory location of the
+instruction about to be executed on the thread; the latter is the current memory
+location of the top (bottom, really, since the stack typically grows downwards)
+of the stack.</p>
+
+<p>To get the thread list, debuggers commonly use a library called <code>libthread_db</code>,
+which essentially traverses and extracts information from the in-memory
+representations of the threads of a given process. This isn&#x2019;t always viable;
+some applications don&#x2019;t use threading libraries which create the data structures
+<code>libthread_db</code> expects. There are operating system-dependent alternatives in
+such cases (like <code>procfs</code>), as we&#x2019;ll see later with Go. For now, assume
+<code>libthread_db</code> has worked. This will read data directly from the target
+process' memory &#x2013; think of it as using <code>procfs</code>.</p>
+
+<h5>Copy the registers</h5>
+
+<p>So we&#x2019;ve made a few calls to this thread debugging library and now have a list
+of thread objects for the process we&#x2019;re debugging. We need their register sets
+to begin determining what the threads are doing. For this, we&#x2019;ll again use the
+<code>ptrace</code> syscall.</p>
+
+<p><code>PTRACE_GETREGS</code> and <code>PTRACE_GETFPREGS</code> are the <code>ptrace</code> actions we&#x2019;re
+interested in; they will retrieve copies of the specified thread&#x2019;s
+general-purpose and floating-point registers, respectively. As mentioned
+previously, with respect to debugging flow, we really just need the <code>rip</code>
+and <code>rsp</code> registers from these sets.</p>
+
+<h5>Unwind</h5>
+
+<p>Now we have the current register sets for each thread. The <code>rip</code> specifically
+indicates the currently executing function. Remember, we want the entire
+callstack for each thread, not just the currently executing function. Raw
+register values are also of little use to an end-user; people know their
+functions' names, not their functions' locations in memory. We&#x2019;ll need to
+translate these instruction addresses to their associated symbols.</p>
+
+<p>This is where debugging information finally makes its entrance. It&#x2019;s used to
+translate raw addresses and memory values to program elements familiar to the
+programmer, such as function names.</p>
+
+<p>Let&#x2019;s quickly go through generating the callstack for a specific thread. This
+is generally referred to as unwinding (another topic for a future post).</p>
+
+<p>To unwind a callstack, we want to know which function called the currently
+executing function, and which function called the caller, and so on, up until
+we hit the thread&#x2019;s starting function. We use the return address for this.
+It&#x2019;ll be within the range of instruction addresses for the calling function
+(we&#x2019;re ignoring edge cases &#x2013; like tail call optimization &#x2013; remember?).</p>
+
+<p>When a function is called, the return address &#x2013; i.e., the address of the
+instruction to execute after the called function completes &#x2013; is saved on the
+stack before the callee executes anything. As this callee function executes,
+it pushes and pops data onto and from the stack &#x2013; this data being the values
+(like variables) the function uses to perform its work. Thus, depending on
+where in a function execution is, the return address is stored at different
+offsets relative to the current stack pointer.</p>
+
+<p>The executable&#x2019;s debug information tells us what these offsets are at each
+point the stack grows or shrinks. This is organized into a matrix of offsets
+relative to a known register value, such as the current <code>rsp</code>, for a range of
+addresses. We can find the matrix associated with a function by searching for
+an entry &#x2013; called a Frame Description Entry, or <code>FDE</code> &#x2013; whose address range
+contains the current <code>rip</code>.</p>
+
+<p>As an example, consider the first few assembly instructions for a simple
+<code>strtol</code> wrapper function:</p>
+
+<div class="bogus-wrapper"><notextile><figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class=""><span class="line">0000000000405450 &lt;strtol_wrapper&gt;:
+</span><span class="line"> 405450: 41 55 push %r13
+</span><span class="line"> 405452: 41 54 push %r12
+</span><span class="line"> 405454: 49 89 f5 mov %rsi,%r13
+</span><span class="line"> 405457: 55 push %rbp
+</span><span class="line"> 405458: 53 push %rbx
+</span><span class="line">...</span></code></pre></td></tr></table></div></figure></notextile></div>
+
+
+<p>Assume the <code>rip</code> is <code>0x405458</code>. Searching the debug information for that (I
+usually use <code>readelf --debug-dump=frames-interp &lt;executable_path&gt;</code> when
+searching manually), we see this:</p>
+
+<div class="bogus-wrapper"><notextile><figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+</pre></td><td class="code"><pre><code class=""><span class="line">000000f0 000000000000004c 000000c4 FDE cie=00000030 pc=0000000000405450..00000000004054ce
+</span><span class="line"> LOC CFA rbx rbp r12 r13 ra
+</span><span class="line">0000000000405450 rsp+8 u u u u c-8
+</span><span class="line">0000000000405452 rsp+16 u u u c-16 c-8
+</span><span class="line">0000000000405454 rsp+24 u u c-24 c-16 c-8
+</span><span class="line">0000000000405458 rsp+32 u c-32 c-24 c-16 c-8
+</span><span class="line">...</span></code></pre></td></tr></table></div></figure></notextile></div>
+
+
+<p>Each row in the debug output is the state of the stack before that particular
+instruction executes (which is why there&#x2019;s no entry for <code>0x405457</code>). The values
+we&#x2019;re interested in here are <code>CFA</code> and <code>ra</code>. The other register values are
+useful for reasons we&#x2019;ll see soon, but they can be ignored for unwinding.</p>
+
+<p><code>CFA</code> stands for Canonical Frame Address, which is the value of <code>rsp</code> when the
+calling function called the current function. Put more simply, the <code>CFA</code> is
+the <code>rsp</code> for the calling function, which we&#x2019;ll need when we continue
+unwinding from that function.</p>
+
+<p><code>ra</code> stands for Return Address. In the above case, it&#x2019;s been specified as an
+offset relative to <code>c</code>, which is the current frame&#x2019;s <code>CFA</code> we&#x2019;ve just
+extracted above. This is where the return address is stored, not the return
+address itself, so we&#x2019;ll need to read this value from the process' memory
+through <code>procfs</code>.</p>
+
+<p>Match the instruction addresses from the assembly snippet to the ones in the
+debug snippet, and you&#x2019;ll see the offsets change as expected. When we push
+an 8-byte register, such as <code>%r12</code>, onto the stack, the offsets increase in
+magnitude by 8 bytes. The starting offset from <code>rsp</code> to the <code>CFA</code> is <code>+8</code>
+because the return address is stored in the first 8 bytes of the stack before
+anything in the function executes and modifies the stack. Thus, the function&#x2019;s
+starting rsp is already 8 bytes past its beginning. The offset of <code>ra</code> always
+being <code>-8</code> (from the <code>CFA</code>) confirms this.</p>
+
+<p>We now use the return address value and search this debug information again for
+the frame description entry including that address. We use the <code>CFA</code> we&#x2019;ve
+just derived as the new <code>rsp</code> and repeat the above process, stopping when
+there&#x2019;s no return address (or we can&#x2019;t derive a valid one).</p>
+
+<p>Unwinding is thus summarized as:</p>
+
+<ol>
+<li>Use a thread&#x2019;s current instruction address to find the frame description in
+the debug information.</li>
+<li>Use that description to find the calling frame&#x2019;s next instruction address
+and current stack pointer.</li>
+<li>Use this caller&#x2019;s information to repeat this process until we reach a
+stopping point.</li>
+</ol>
+
+
+<h5>Variables</h5>
+
+<p>Now we have the instructions representing the callstacks for all threads.
+Translated to their actual function names, these stacks are already useful
+when debugging a program &#x2013; how often have you run a crashing application under
+<code>gdb</code> and found the issue immediately after printing the backtrace with <code>bt</code>?</p>
+
+<p>We&#x2019;ll often need more, however. A function could look fine even after reading
+its code knowing there&#x2019;s a crash condition there. To go further, we&#x2019;ll need
+variable data.</p>
+
+<p>To get that, we again turn to the debugging information found in the executable
+file. When evaluating the variables for each frame in a callstack, we use the
+frame&#x2019;s <code>rip</code> and search for associated data, this time looking
+for entries describing the function and its local variables (rather than the
+frame&#x2019;s unwinding instructions). These entries indicate which local variables
+the function creates; in which address ranges they are in scope; the types of
+the variables, which specify their sizes in memory; the locations of the
+variables, which can be expressions comprised of memory locations, registers,
+and offsets; the names of everything as they appear in the source code; and so
+on, giving us a complete picture of the state of a function. With this
+information, a debugger can read what it needs to from specific regions of a
+process' memory space and translate that into what is familiar to the
+programmer.</p>
+
+<p>We&#x2019;ll see some examples of function and variable debug information below, but
+knowing the specifics of this isn&#x2019;t important for understanding the overall
+flow.</p>
+
+<h4>And then&#x2026;</h4>
+
+<p>That&#x2019;s it. We now have all callstacks for all threads with full
+local variable information. There&#x2019;s much more a debugger can do to provide
+further introspection, but these are the fundamentals.</p>
+
+
+
+<p>The flow condensed:</p>
+
+<ul>
+<li>Use <code>ptrace</code> to attach to and stop a process</li>
+<li>Extract the thread list using <code>libthread_db</code> or <code>procfs</code></li>
+<li>Use <code>ptrace</code> to extract the current register set of each thread</li>
+<li>Use the debugging information in the executable file to unwind each thread&#x2019;s
+callstack from the initial <code>rip</code> to the thread&#x2019;s starting function</li>
+<li>Use the debugging information to retrieve variable state</li>
+</ul>
+
+
+
+
+<h4>And my axe</h4>
+
+<p>Beyond the fundamentals, it&#x2019;s important to know the specifics of some
+major components of debug information; without such knowledge, it&#x2019;s difficult
+to understand what debuggers are capable of and how language internals affect
+those capabilities. We&#x2019;ve already seen some of these components above, but
+there are a few more to cover. First, however, some introductions are in order.</p>
+
+<p>DWARF is the most widely used specification of debug information on Unix
+systems.</p>
+
+<p>Compilers and linkers emit DWARF debug information and store it in
+specific sections in an executable, assuming it is compiled with debug
+information enabled. If you&#x2019;re on a system using the
+<a href="https://en.wikipedia.org/wiki/Executable_and_Linkable_Format">ELF</a> object
+file format, these sections are typically prefixed with <code>.debug_</code>.</p>
+
+<p>(Debug information may sometimes live elsewhere &#x2013; see
+<a href="https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html">.gnu_debuglink</a>.)</p>
+
+<p>There are several (mostly compatible)
+<a href="http://dwarfstd.org/Download.php">standards</a> for DWARF. Some differences
+between standards can result in some hairy bugs in debuggers themselves, as
+we will see in a future post.</p>
+
+<p>From the perspective of a programmer, the main structure in DWARF debug
+information is the debugging information entry, or <code>DIE</code>. These represent
+elements of the source program &#x2013; types, variables, functions, compilation
+units, etc. Each DIE has an identifying tag, which defines the type of
+the entry (e.g. variable vs. function), and an attribute set, which defines
+the specific fields describing the entry (e.g. this particular variable entry
+has an <code>external</code> attribute, which means variables described by this entry
+are visible outside of their enclosing compilation units).</p>
+
+<p>As an example, consider the following function:</p>
+
+<div class="bogus-wrapper"><notextile><figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+</pre></td><td class="code"><pre><code class=""><span class="line">static int
+</span><span class="line">simple_function(bool a_parameter)
+</span><span class="line">{
+</span><span class="line"> int a_variable;
+</span><span class="line"> int another_variable;
+</span><span class="line"> a_variable = 3;
+</span><span class="line"> another_variable = a_variable + 2;
+</span><span class="line"> if (a_parameter == true)
+</span><span class="line"> return a_variable + another_variable;
+</span><span class="line"> return a_variable - another_variable;
+</span><span class="line">}</span></code></pre></td></tr></table></div></figure></notextile></div>
+
+
+<p>The DIE for this function, retrieved with
+<code>readelf --debug-dump=info &lt;executable&gt;</code>:</p>
+
+<div class="bogus-wrapper"><notextile><figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+<span class="line-number">5</span>
+<span class="line-number">6</span>
+<span class="line-number">7</span>
+<span class="line-number">8</span>
+<span class="line-number">9</span>
+<span class="line-number">10</span>
+<span class="line-number">11</span>
+<span class="line-number">12</span>
+<span class="line-number">13</span>
+<span class="line-number">14</span>
+<span class="line-number">15</span>
+<span class="line-number">16</span>
+<span class="line-number">17</span>
+<span class="line-number">18</span>
+<span class="line-number">19</span>
+<span class="line-number">20</span>
+<span class="line-number">21</span>
+<span class="line-number">22</span>
+<span class="line-number">23</span>
+<span class="line-number">24</span>
+<span class="line-number">25</span>
+<span class="line-number">26</span>
+<span class="line-number">27</span>
+<span class="line-number">28</span>
+<span class="line-number">29</span>
+<span class="line-number">30</span>
+</pre></td><td class="code"><pre><code class=""><span class="line"> &lt;1&gt;&lt;73&gt;: Abbrev Number: 4 (DW_TAG_subprogram)
+</span><span class="line"> &lt;74&gt; DW_AT_name : (indirect string, offset: 0x48): simple_function
+</span><span class="line"> &lt;78&gt; DW_AT_decl_file : 1
+</span><span class="line"> &lt;79&gt; DW_AT_decl_line : 5
+</span><span class="line"> &lt;7a&gt; DW_AT_prototyped : 1
+</span><span class="line"> &lt;7a&gt; DW_AT_type : &lt;0x57&gt;
+</span><span class="line"> &lt;7e&gt; DW_AT_low_pc : 0x400536
+</span><span class="line"> &lt;86&gt; DW_AT_high_pc : 0x31
+</span><span class="line"> &lt;8e&gt; DW_AT_frame_base : 1 byte block: 9c (DW_OP_call_frame_cfa)
+</span><span class="line"> &lt;90&gt; DW_AT_GNU_all_call_sites: 1
+</span><span class="line"> &lt;90&gt; DW_AT_sibling : &lt;0xbf&gt;
+</span><span class="line"> &lt;2&gt;&lt;94&gt;: Abbrev Number: 5 (DW_TAG_formal_parameter)
+</span><span class="line"> &lt;95&gt; DW_AT_name : (indirect string, offset: 0x76): a_parameter
+</span><span class="line"> &lt;99&gt; DW_AT_decl_file : 1
+</span><span class="line"> &lt;9a&gt; DW_AT_decl_line : 5
+</span><span class="line"> &lt;9b&gt; DW_AT_type : &lt;0xbf&gt;
+</span><span class="line"> &lt;9f&gt; DW_AT_location : 2 byte block: 91 5c (DW_OP_fbreg: -36)
+</span><span class="line"> &lt;2&gt;&lt;a2&gt;: Abbrev Number: 6 (DW_TAG_variable)
+</span><span class="line"> &lt;a3&gt; DW_AT_name : (indirect string, offset: 0x9b): a_variable
+</span><span class="line"> &lt;a7&gt; DW_AT_decl_file : 1
+</span><span class="line"> &lt;a8&gt; DW_AT_decl_line : 7
+</span><span class="line"> &lt;a9&gt; DW_AT_type : &lt;0x57&gt;
+</span><span class="line"> &lt;ad&gt; DW_AT_location : 2 byte block: 91 68 (DW_OP_fbreg: -24)
+</span><span class="line"> &lt;2&gt;&lt;b0&gt;: Abbrev Number: 6 (DW_TAG_variable)
+</span><span class="line"> &lt;b1&gt; DW_AT_name : (indirect string, offset: 0x29): another_variable
+</span><span class="line"> &lt;b5&gt; DW_AT_decl_file : 1
+</span><span class="line"> &lt;b6&gt; DW_AT_decl_line : 8
+</span><span class="line"> &lt;b7&gt; DW_AT_type : &lt;0x57&gt;
+</span><span class="line"> &lt;bb&gt; DW_AT_location : 2 byte block: 91 6c (DW_OP_fbreg: -20)
+</span><span class="line"> &lt;2&gt;&lt;be&gt;: Abbrev Number: 0</span></code></pre></td></tr></table></div></figure></notextile></div>
+
+
+<p>Ignore most of the specific attributes; we are looking for a 1:1 mapping between
+program elements and DIEs. The first DIE is the function, <code>simple_function</code>,
+as we&#x2019;d expect &#x2013; this is the scope containing other program elements, like
+local variables. This function DIE has several child DIEs, one for each
+of its parameters and variables.</p>
+
+<p>DIEs are organized into a graph. The portion of the graph representing ownership
+(e.g. compilation units owning functions owning variables) is really represented
+as a tree, with each compilation unit being a root node owning subprogram
+(function) and global variable DIEs. Certain DIEs may reference others in a
+non-ownership-related manner &#x2013; a variable DIE may reference a common type DIE
+representing a <code>struct</code> used in multiple places.</p>
+
+<p>We can see this graph in the <code>readelf</code> output above. Each DIE is prefixed by
+its depth &#x2013; the <code>simple_function</code> DIE has a depth of 1, the <code>a_parameter</code>
+parameter has a depth of 2, and so on. Each increase in depth indicates the
+aforementioned parent-child ownership relationship. The <code>DW_AT_type</code> attribute
+of the variable DIEs is an example non-ownership edge. Consider the
+<code>a_variable</code> and <code>another_variable</code> DIEs. Their <code>DW_AT_type</code> attributes both
+reference the location <code>0x57</code>, which is:</p>
+
+<div class="bogus-wrapper"><notextile><figure class="code"><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class="line-number">1</span>
+<span class="line-number">2</span>
+<span class="line-number">3</span>
+<span class="line-number">4</span>
+</pre></td><td class="code"><pre><code class=""><span class="line"> &lt;1&gt;&lt;57&gt;: Abbrev Number: 3 (DW_TAG_base_type)
+</span><span class="line"> &lt;58&gt; DW_AT_byte_size : 4
+</span><span class="line"> &lt;59&gt; DW_AT_encoding : 5 (signed)
+</span><span class="line"> &lt;5a&gt; DW_AT_name : int</span></code></pre></td></tr></table></div></figure></notextile></div>
+
+
+<p>As both variables are <code>int</code> types in the source code, their types both
+reference the common <code>int</code> type DIE.</p>
+
+<p>To save space, DIEs are stored by writing just the values of their attributes;
+the identifiers for each individual attribute are not written. Instead, the
+entire DIE is preceded by an abbreviation code; these codes are defined as
+attribute sets (with identifying information) stored in a separate debug section
+of the executable file. Abbreviation codes are shared amongst DIEs. Any
+identifying tag, like <code>DW_TAG_variable</code>, may have more than one abbreviation
+code/attribute set &#x2013; for example, only some variables have an <code>external</code>
+attribute, and so those variables would use a different attribute set while
+still using <code>DW_TAG_variable</code>.</p>
+
+<p>Though there are other structures in addition to DIEs, they aren&#x2019;t necessary
+to understand to do significant work with debuggers.</p>
+
+<h2>Fin</h2>
+
+<p>With the information we&#x2019;ve discussed thus far, we now have a good framework
+for understanding the introspective tasks debuggers do and how they do it.
+In part two, we&#x2019;ll use this framework to investigate some of the specific work
+involved in extending a debugger to support a
+<a href="http://backtrace.io/blog/blog/2016/07/21/go-support/">new language</a>.</p>
+</div>
+
+
+ </div>
+</body></html>
