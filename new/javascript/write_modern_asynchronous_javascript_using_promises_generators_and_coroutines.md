@@ -6,69 +6,43 @@
 
 Over the years, "Callback Hell" has been cited as one of the most common anti-patterns in Javascript to manage concurrency. Just in case you've forgotten what that looks like, here is an example of verifying and processing a transaction in Express:
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14``` | ```
+```js
 app.post("/purchase", (req, res) => {
- user.findOne(req.body, (err, userData) => {
- if (err) return handleError(err);
- permissions.findAll(userData, (err2, permissions) => {
- if (err2) return handleError(err2);
- if (isAllowed(permissions)) {
- transaction.process(userData, (err3, confirmNum) => {
- if (err3) return handleError(err3);
- res.send("Your purchase was successful!");
- });
- }
- });
- });
-});```
---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  user.findOne(req.body, (err, userData) => {
+    if (err) return handleError(err);
+    permissions.findAll(userData, (err2, permissions) => {
+      if (err2) return handleError(err2);
+      if (isAllowed(permissions)) {
+        transaction.process(userData, (err3, confirmNum) => {
+          if (err3) return handleError(err3);
+          res.send("Your purchase was successful!");
+        });
+      }
+    });
+  });
+});
+```
 
 ## Promises were supposed to save us...
 
 I was told that promises would allow us Javascript developers to write asynchronous code as if it were synchronous by wrapping our async functions in a special object. In order to access the value of the Promise, we call either `.then` or `.catch` on the Promise object. But what happens when we try to refactor the above example using Promises?
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13``` | ```
+```js
 // all asynchronous methods have been promisified
 app.post("/purchase", (req, res) => {
- user.findOneAsync(req.body)
- .then( userData => permissions.findAllAsync(userData) )
- .then( permissions => {
- if (isAllowed(permissions)) {
- return transaction.processAsync(userData);
- // userData is not defined! It's not in the proper scope!
- }
- })
- .then( confirmNum => res.send("Your purchase was successful!") )
- .catch( err => handleError(err) )
-});```
------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  user.findOneAsync(req.body)
+    .then( userData => permissions.findAllAsync(userData) )
+    .then( permissions => {
+      if (isAllowed(permissions)) {
+        return transaction.processAsync(userData);
+        // userData is not defined! It's not in the proper scope!
+      }
+    })
+    .then( confirmNum => res.send("Your purchase was successful!") )
+    .catch( err => handleError(err) )
+});
+```
+
 
 Since each function inside of the callback has its own scope, we cannot access the user object inside of the second `.then` callback. So after a little digging, I couldn't find an elegant solution, but I did find a frustrating one:
 
@@ -76,34 +50,21 @@ Since each function inside of the callback has its own scope, we cannot access t
 
 Indent my promises!? So its back to the Pyramid of Doom now?
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13``` | ```
+```js
 app.post("/purchase", (req, res) => {
- user.findOneAsync(req.body)
- .then( userData => {
- return permissions
- .findAllAsync(userData)
- .then( permissions => {
- if (isAllowed(permissions)) {
- return transaction.processAsync(userData);
- }
- });
- }).then( confirmNum => res.send("Your purchase was successful!"))
- .catch( err => handleError(err) )
-});```
------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  user.findOneAsync(req.body)
+    .then( userData => {
+      return permissions
+        .findAllAsync(userData)
+        .then( permissions => {
+          if (isAllowed(permissions)) {
+            return transaction.processAsync(userData);
+          }
+        });
+  }).then( confirmNum => res.send("Your purchase was successful!"))
+    .catch( err => handleError(err) )
+});
+```
 
 I would argue that the nested callback version looks cleaner and is easier to reason about than the nested promise version.
 
@@ -111,24 +72,16 @@ I would argue that the nested callback version looks cleaner and is easier to re
 
 The `async` and `await` keywords will finally allow us to write our javascript code as though it is synchronous. Here is code written using those keywords coming in ES7:
 
-```
-1
-2
-3
-4
-5
-6
-7
-8``` | ```
+```js
 app.post("/purchase", async function (req, res) {
- const userData = await user.findOneAsync(req.body);
- const permissions = await permissions.findAllAsync(userData);
- if (isAllowed(permissions)) {
- const confirmNum = await transaction.processAsync(userData);
- res.send("Your purchase was successful!")
- }
-});```
----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  const userData = await user.findOneAsync(req.body);
+  const permissions = await permissions.findAllAsync(userData);
+  if (isAllowed(permissions)) {
+    const confirmNum = await transaction.processAsync(userData);
+    res.send("Your purchase was successful!")
+  }
+});
+```
 
 Unfortunately the majority of ES7 features including `async/await` have not been implemented in Javascript runtimes and therefore, require the use of a transpiler. However, you can write code that looks exactly like the code above using ES6 features that have been implemented in most modern browsers as well as Node version 4+.
 
@@ -140,30 +93,19 @@ Generators are a great metaprogramming tool. They can be used for things like la
 
 Coroutines allow us to use `yield` to execute our asynchronous functions line by line, making our code look synchronous. It's important to note that I am using the Co library. Co's coroutine will execute the generator immediately where as Bluebird's coroutine will return a function that you must invoke to run the generator.
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11``` | ```
+```js
 import co from 'co';
 app.post("/purchase", (req, res) => {
- co(function* () {
- const person = yield user.findOneAsync(req.body);
- const permissions = yield permissions.findAllAsync(person);
- if (isAllowed(permissions)) {
- const confirmNum = yield transaction.processAsync(user);
- res.send("Your transaction was successful!")
- }
- }).catch(err => handleError(err))
-});```
------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  co(function* () {
+    const person = yield user.findOneAsync(req.body);
+    const permissions = yield permissions.findAllAsync(person);
+    if (isAllowed(permissions)) {
+      const confirmNum = yield transaction.processAsync(user);
+      res.send("Your transaction was successful!")
+    }
+  }).catch(err => handleError(err))
+});
+```
 
 If there is an error at any step in the generator, the coroutine will stop execution and return a rejected promise. Let's establish some basic rules to using coroutines:
 
@@ -179,75 +121,54 @@ You can either use objects or arrays with the yield keyword and then destructure
 
 With the Co library:
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18``` | ```
+```js
 import co from 'co';
 // with objects
-co(function_() { const {user1, user2, user3} = yield { user1: user.findOneAsync({name: "Will"}), user2: user.findOneAsync({name: "Adam"}), user3: user.findOneAsync({name: "Ben"}) }; ).catch(err => handleError(err)) // with arrays co(function_() {
- const [user1, user2, user3] = yield [
- user.findOneAsync({name: "Will"}),
- user.findOneAsync({name: "Adam"}),
- user.findOneAsync({name: "Ben"})
- ];
-).catch(err => handleError(err))```
---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+co(function*() {
+  const {user1, user2, user3} = yield {
+    user1: user.findOneAsync({name: "Will"}),
+    user2: user.findOneAsync({name: "Adam"}),
+    user3: user.findOneAsync({name: "Ben"})
+  };
+).catch(err => handleError(err))
+
+// with arrays
+co(function*() {
+  const [user1, user2, user3] = yield [
+    user.findOneAsync({name: "Will"}),
+    user.findOneAsync({name: "Adam"}),
+    user.findOneAsync({name: "Ben"})
+  ];
+).catch(err => handleError(err))
+```
 
 With the Bluebird library:
 
-```
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20``` | ```
+```js
 // with the Bluebird library
 import {props, all, coroutine} from 'bluebird';
+
 // with objects
-coroutine(function_() { const {user1, user2, user3} = yield props({ user1: user.findOneAsync({name: "Will"}), user2: user.findOneAsync({name: "Adam"}), user3: user.findOneAsync({name: "Ben"}) }); )().catch(err => handleError(err)) // with arrays coroutine(function_() {
- const [user1, user2, user3] = yield all([
- user.findOneAsync({name: "Will"}),
- user.findOneAsync({name: "Adam"}),
- user.findOneAsync({name: "Ben"})
- ]);
-)().catch(err => handleError(err))```
---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+coroutine(function*() {
+  const {user1, user2, user3} = yield props({
+    user1: user.findOneAsync({name: "Will"}),
+    user2: user.findOneAsync({name: "Adam"}),
+    user3: user.findOneAsync({name: "Ben"})
+  });
+)().catch(err => handleError(err))
+
+// with arrays
+coroutine(function*() {
+  const [user1, user2, user3] = yield all([
+    user.findOneAsync({name: "Will"}),
+    user.findOneAsync({name: "Adam"}),
+    user.findOneAsync({name: "Ben"})
+  ]);
+)().catch(err => handleError(err))
+```
 
 Libraries that you can use today:
 
-- - [Bluebird](http://bluebirdjs.com/docs/api/promise.coroutine.html)
-
+- [Bluebird](http://bluebirdjs.com/docs/api/promise.coroutine.html)
 - [Babel](https://babeljs.io/)
-
 - [Asyncawait](https://www.npmjs.com/package/asyncawait)
