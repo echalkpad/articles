@@ -1,8 +1,6 @@
-# From Zero to Front-end Hero (Part 1) -- Free Code Camp
+# From Zero to Front-end Hero Part 1
 
 [Original URL](https://medium.freecodecamp.com/from-zero-to-front-end-hero-part-1-7d4f7f0bff02)
-
-> So far what you've been learning are the basics of HTML and CSS. The next step is to learn best practices. Best practices are a set of informal rules that improve the quality of your code.One...
 
 So far what you've been learning are the basics of HTML and CSS. The next step is to learn best practices. Best practices are a set of informal rules that improve the quality of your code.
 
